@@ -109,12 +109,12 @@ func TestNormalizeCommandPrefix_DispatchEquivalence(t *testing.T) {
 // --- findCommand routing tests ---
 
 func TestFindCommand_SingleWordTrigger(t *testing.T) {
-	cmd, _, params := builtTestApp.findCommand("!help")
+	cmd, _, params := builtTestApp.findCommand("!version")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
-	if cmd.Trigger != "!help" {
-		t.Errorf("got trigger %q, want !help", cmd.Trigger)
+	if cmd.Trigger != "!version" {
+		t.Errorf("got trigger %q, want !version", cmd.Trigger)
 	}
 	if len(params) != 0 {
 		t.Errorf("unexpected params: %v", params)
@@ -152,6 +152,19 @@ func TestFindCommand_BangHelloListsCommands(t *testing.T) {
 	}
 	if bare.Trigger != "hello" {
 		t.Errorf("bare hello routed to %q, want hello", bare.Trigger)
+	}
+}
+
+// "!help" lists the command surface rather than answering with one rotating
+// tip. Pinned because the reply a viewer gets from it is the whole point of the
+// alias, and nothing else in the registry would show it moving.
+func TestFindCommand_HelpListsCommands(t *testing.T) {
+	cmd, _, _ := builtTestApp.findCommand("!help")
+	if cmd == nil {
+		t.Fatal("expected a command, got nil")
+	}
+	if cmd.Trigger != "!commands" {
+		t.Errorf("!help routed to %q, want !commands", cmd.Trigger)
 	}
 }
 
@@ -481,14 +494,14 @@ func TestRunCommand_RecordsCommandRun(t *testing.T) {
 	rec := &recordingEvents{}
 	app.Events = rec
 
-	app.runCommand(context.Background(), newTestUser("viewer1"), "!help")
+	app.runCommand(context.Background(), newTestUser("viewer1"), "!version")
 
 	if len(rec.Runs) != 1 {
 		t.Fatalf("runs = %d, want 1", len(rec.Runs))
 	}
 	got := rec.Runs[0]
-	if got.Command != "!help" || got.Username != "viewer1" {
-		t.Errorf("run = %+v, want command !help by viewer1", got)
+	if got.Command != "!version" || got.Username != "viewer1" {
+		t.Errorf("run = %+v, want command !version by viewer1", got)
 	}
 	if got.Typed != "" {
 		t.Errorf("typed = %q, want empty when the canonical trigger was typed", got.Typed)

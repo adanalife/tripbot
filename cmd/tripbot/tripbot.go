@@ -787,10 +787,8 @@ func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Durati
 }
 
 // startBackgroundAudio constructs this instance's bed store and hands it to the
-// console API. The seed bed mirrors the OBS entrypoint's per-platform default;
-// Detect then reads the source's real settings so a tripbot restart reports
-// what's actually playing rather than the default. Detect dials OBS, so it runs
-// in the background — a slow or absent OBS must not hold up startup.
+// console API. The seed bed stands in until the audio watchdog reads the real
+// bed off OBS — on its first tick, and again after every OBS restart.
 func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	seed := beds.CarHum
 	if t.platformIsTwitch() {
@@ -799,7 +797,6 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
-	go t.beds.Detect(ctx)
 }
 
 // startBackgroundAudioWatchdog launches the volume-meter connection + the

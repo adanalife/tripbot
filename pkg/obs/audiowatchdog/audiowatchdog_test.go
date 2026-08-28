@@ -2,6 +2,7 @@ package audiowatchdog
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,6 +22,8 @@ type tick struct {
 	// console, if set, runs before this tick is evaluated: an operator action
 	// that repoints the source without telling the watchdog.
 	console func(*fakeDeps)
+	// obsDown makes MediaState fail, as it does while OBS is restarting.
+	obsDown bool
 }
 
 // fakeDeps drives Watch with a scripted sequence of ticks and counts the swaps
@@ -41,6 +44,7 @@ type fakeDeps struct {
 	toSomaFM   atomic.Int32
 	advances   atomic.Int32
 	probes     atomic.Int32
+	resyncs    atomic.Int32
 
 	// bed is the selected background-audio bed; the SomaFM outage machinery
 	// only runs while it's SomaFM.
@@ -93,8 +97,12 @@ func (f *fakeDeps) deps() Deps {
 		MediaState: func(context.Context) (string, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
+			if f.current.obsDown {
+				return "", errors.New("obs websocket unreachable")
+			}
 			return f.current.state, nil
 		},
+		Resync: func(context.Context) { f.resyncs.Add(1) },
 		SwapToFallback: func(context.Context) error {
 			f.mu.Lock()
 			defer f.mu.Unlock()
@@ -257,6 +265,18 @@ func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
 	}
 }
 
+func TestWatch_ResyncsBedWhenOBSComesBack(t *testing.T) {
+	// OBS restarts mid-stream and boots onto its own default bed. The Store's
+	// remembered bed is now wrong, so the watchdog re-reads it once OBS answers
+	// again — once at start, once after the outage, not on every tick.
+	down := tick{obsDown: true}
+	deps := newFakeDeps([]tick{playing, playing, down, down, playing, playing})
+	runUntilExhausted(t, deps, cfg(3, 4, time.Minute))
+	if got := deps.resyncs.Load(); got != 2 {
+		t.Fatalf("bed resyncs: want 2, got %d", got)
+	}
+}
+
 func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 	// The probe opens a fresh connection to SomaFM's edge every time it runs, so
 	// it must only run on a tick whose outcome depends on the answer: stranded on
@@ -291,6 +311,48 @@ func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 			t.Fatal("no probe while stranded on the fallback: SomaFM can never be seen to recover")
 		}
 	})
+}
+
+// The probe backs off as an outage wears on. Without it a fallback that never
+// ends is a probe that never stops — ~12k connections a day to one edge, from
+// the one state whose whole problem may be that the edge has firewalled us.
+func TestWatch_ProbeBacksOffWhileTheOutageLasts(t *testing.T) {
+	const ticks = 60 // 3 to strand us, 57 stranded
+	script := make([]tick, ticks)
+	for i := range script {
+		script[i] = ended
+	}
+	deps := newFakeDeps(script)
+	runUntilExhausted(t, deps, cfg(3, 4, time.Minute))
+
+	// Sitting out 1, 3, 7, 15 then 31 ticks between attempts, 57 stranded ticks
+	// are 6 probes. The bound is loose because the loop keeps ticking against
+	// the held last tick until the runner cancels it.
+	if got := deps.probes.Load(); got > 10 {
+		t.Fatalf("probes over %d stranded ticks: want a handful, got %d (no backoff would be one per tick)", ticks-3, got)
+	}
+	if got := deps.probes.Load(); got < 2 {
+		t.Fatalf("probes: want the edge polled at least a few times, got %d", got)
+	}
+}
+
+// A backed-off probe that finally answers must not make the swap back wait out
+// another four of its own intervals — the edge is up and the stream should
+// follow it within a few ticks.
+func TestWatch_RecoveryIsPromptAfterABackedOffOutage(t *testing.T) {
+	up := tick{state: obs.MediaStatePlaying, reachable: true, db: -18, fresh: true}
+	script := make([]tick, 0, 40)
+	for range 30 {
+		script = append(script, ended)
+	}
+	for range 10 {
+		script = append(script, up)
+	}
+	deps := newFakeDeps(script)
+	runUntilExhausted(t, deps, cfg(3, 4, 0))
+	if got := deps.toSomaFM.Load(); got != 1 {
+		t.Fatalf("to_somafm swaps: want 1, got %d — a backed-off probe stranded the stream past the recovery", got)
+	}
 }
 
 func TestWatch_AdvancesTheFallbackAlbumWhileStranded(t *testing.T) {

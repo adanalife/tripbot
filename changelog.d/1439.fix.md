@@ -1,0 +1,1 @@
+The audio watchdog's SomaFM recovery probe backs off as an outage wears on — every tick, then up to every ~3.7 minutes — instead of opening a fresh connection to the edge every 7 seconds for as long as the stream is stranded on the fallback bed.

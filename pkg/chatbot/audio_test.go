@@ -53,7 +53,7 @@ type fakeBeds struct {
 
 const testTrack = "/opt/tripbot/assets/music/fifty-horizons/Colorado Sunrise.mp3"
 
-func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+func (f *fakeBeds) Playing() (beds.Bed, string) { return f.bed, f.track }
 
 func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
 	f.feeds++

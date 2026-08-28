@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -175,10 +174,6 @@ func validate(dashStr string) error {
 		return errors.New("dash string too short")
 	}
 	shortened := dashStr[:20]
-
-	if strings.HasPrefix(".", shortened) {
-		return errors.New("dash string can't be a hidden file")
-	}
 
 	if !validDashStr.MatchString(shortened) {
 		return errors.New("dash string did not match regex")
