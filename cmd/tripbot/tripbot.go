@@ -817,7 +817,7 @@ func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(
 		audiowatchdog.BackgroundAudioInputName, 30*time.Second, t.beds.Advance)
 	go meter.Run(ctx)
-	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
+	go audiowatchdog.Watch(ctx, t.cfg.Platform, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
