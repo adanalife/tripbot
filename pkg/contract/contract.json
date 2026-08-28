@@ -30,6 +30,11 @@
     "mediamtx_tiktok": "mediamtx-tiktok",
     "mediamtx_facebook": "mediamtx-facebook",
     "mediamtx_instagram": "mediamtx-instagram",
+    "gateway_twitch": "gateway-twitch",
+    "gateway_youtube": "gateway-youtube",
+    "gateway_tiktok": "gateway-tiktok",
+    "gateway_facebook": "gateway-facebook",
+    "gateway_instagram": "gateway-instagram",
     "nats": "nats",
     "postgres": "postgres"
   },
@@ -42,6 +47,7 @@
     "onscreens_http": 8080,
     "tripbot_http": 8080,
     "mediamtx_rtsp": 8554,
+    "gateway_http": 8080,
     "nats": 4222,
     "postgres": 5432
   },

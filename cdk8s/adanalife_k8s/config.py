@@ -56,6 +56,16 @@ def nats_url(env_name: str) -> str:
     )
 
 
+def gateway_url(platform: str, namespace: str) -> str:
+    """The in-namespace platform-gateway URL a tripbot instance dials for that
+    platform (its <PLATFORM>_API_URL). The Service name and port are contract
+    vocabulary — the platform-gateway repo's cdk8s authors the Services from its
+    own synced copy of the same file — while the namespace is env topology and
+    belongs here."""
+    c = load_contract()
+    return f"http://{c.svc(f'gateway_{platform}')}.{namespace}.svc.cluster.local:{c.port('gateway_http')}"
+
+
 @dataclass(frozen=True)
 class EnvConfig:
     name: str  # prod-1 | stage-1 | development | local
@@ -269,21 +279,21 @@ ENVS: dict[str, EnvConfig] = {
         # Route prod tripbot-youtube's outbound chat sends through the in-namespace
         # gateway-youtube (the gateway owns the YouTube token). Mirrors stage.
         # Sends fail if the prod gateway is missing its YouTube token.
-        youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        youtube_api_url=gateway_url("youtube", "prod-1"),
         # Route prod tripbot-facebook's chat sends through the in-namespace
         # gateway-facebook (the gateway owns the Page token). Mirrors stage.
-        facebook_api_url="http://gateway-facebook.prod-1.svc.cluster.local:8080",
+        facebook_api_url=gateway_url("facebook", "prod-1"),
         # Wire prod tripbot-{instagram,tiktok} to their in-namespace gateway,
         # required for inbound chat to come up at all — without it the instance
         # boots chat-less and never polls the gateway. Both are read-only
         # (inbound webcast/Graph comments; no chat-post API), so viewers get
         # command effects through onscreens/playout, not chat replies.
-        instagram_api_url="http://gateway-instagram.prod-1.svc.cluster.local:8080",
-        tiktok_api_url="http://gateway-tiktok.prod-1.svc.cluster.local:8080",
+        instagram_api_url=gateway_url("instagram", "prod-1"),
+        tiktok_api_url=gateway_url("tiktok", "prod-1"),
         # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
         # the gateway is the unconditional single Helix caller, with no
         # in-process fallback.
-        twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
+        twitch_api_url=gateway_url("twitch", "prod-1"),
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv) under node pressure. The playback
         # decode/encode CPU requests live in the playout and obs repos.
@@ -332,16 +342,16 @@ ENVS: dict[str, EnvConfig] = {
         platforms=SUPPORTED_PLATFORMS,
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
-        twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
+        twitch_api_url=gateway_url("twitch", "stage-1"),
         # Route both of stage tripbot-youtube's chat directions through the
         # in-namespace gateway-youtube.
-        youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
+        youtube_api_url=gateway_url("youtube", "stage-1"),
         # The parked platform instances point at their in-namespace gateway
         # the same way, so a hand scale-up is a working bring-up rather than
         # a chat-less pod waiting on a config edit.
-        facebook_api_url="http://gateway-facebook.stage-1.svc.cluster.local:8080",
-        instagram_api_url="http://gateway-instagram.stage-1.svc.cluster.local:8080",
-        tiktok_api_url="http://gateway-tiktok.stage-1.svc.cluster.local:8080",
+        facebook_api_url=gateway_url("facebook", "stage-1"),
+        instagram_api_url=gateway_url("instagram", "stage-1"),
+        tiktok_api_url=gateway_url("tiktok", "stage-1"),
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.
