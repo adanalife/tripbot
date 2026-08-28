@@ -71,6 +71,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// the pod must stay routable even when the bot is offline. Chat-connection is
 	// surfaced via the tripbot_twitch_connected gauge.
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
+	// /deps reports the same verdict readiness deliberately doesn't gate on:
+	// whether Postgres and NATS are actually usable right now. Non-gating, so
+	// a wedged dep shows up in the console's status table instead of removing
+	// the pod that would let anyone look at it.
+	hp.Handle("/deps", tagged("/health/deps", httpmw.ReadinessHandler(s.depChecks()...)))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
