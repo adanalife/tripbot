@@ -14,7 +14,6 @@ data:
   ENV: production
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
   INSTAGRAM_API_URL: http://gateway-instagram.prod-1.svc.cluster.local:8080
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-instagram:8080
   OBS_WEBSOCKET_ADDR: obs-instagram:4455
@@ -45,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 53d9c13675
+        adanalife.dev/config-hash: 0fbd44bd94
       labels:
         app: tripbot-instagram
     spec:
@@ -72,7 +71,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.3.1
+          image: adanalife/tripbot:5.4.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +119,7 @@ spec:
                 name: tripbot-instagram-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.3.1
+          image: adanalife/tripbot:5.4.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:

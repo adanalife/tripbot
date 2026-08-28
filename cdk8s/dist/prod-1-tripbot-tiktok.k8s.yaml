@@ -13,7 +13,6 @@ data:
   DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
   ENV: production
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-tiktok:8080
   OBS_WEBSOCKET_ADDR: obs-tiktok:4455
@@ -45,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 7bb9f1bdfb
+        adanalife.dev/config-hash: 9c34c752ac
       labels:
         app: tripbot-tiktok
     spec:
@@ -72,7 +71,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.3.1
+          image: adanalife/tripbot:5.4.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +119,7 @@ spec:
                 name: tripbot-tiktok-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.3.1
+          image: adanalife/tripbot:5.4.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
