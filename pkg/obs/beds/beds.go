@@ -328,8 +328,10 @@ func (s *Store) SomaFMTrack(ctx context.Context) (artist, title string, err erro
 }
 
 // Detect reads the source's settings and records which bed OBS actually booted
-// on, so a tripbot restart doesn't report a stale guess. A failure here is not
-// fatal — the configured default stands and the next switch corrects it.
+// on, so neither a tripbot restart nor an OBS restart leaves the store
+// reporting a stale guess. The audio watchdog calls it each time OBS comes
+// (back) up. A failure here is not fatal — the current bed stands and the next
+// call corrects it.
 func (s *Store) Detect(ctx context.Context) {
 	settings, err := s.obs.Settings(ctx, InputName)
 	if err != nil {
@@ -370,7 +372,7 @@ func (s *Store) Detect(ctx context.Context) {
 		slog.WarnContext(ctx, "background audio: album is live but its play order is empty",
 			"err", loadErr)
 	}
-	slog.InfoContext(ctx, "background audio: detected bed at startup", "bed", bed, "station", station)
+	slog.InfoContext(ctx, "background audio: detected bed", "bed", bed, "station", station)
 }
 
 // bedFromSettings maps an ffmpeg_source's settings back to the bed that would

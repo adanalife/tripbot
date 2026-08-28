@@ -13,11 +13,6 @@ covered here:
   3. bare `remoteRef` — one parameter → one Secret key (obs stream-key).
      `data=[ESData(secret_key, key)]`.
 
-SecretStore stays a `cdk8s.ApiObject`: its CRD bundles every ESO provider and one
-(`keepersecurity.getByTitleFallback`) trips jsii's getXxx-name check, so the CRD
-can't be imported. We only use the AWS provider and emit one SecretStore, so the
-untyped path costs little — see cdk8s.yaml's import note.
-
 The keybase-bootstrapped `eso-aws-credentials` Secret lives outside cdk8s —
 cdk8s never creates it; the SecretStore just references it by name.
 """
@@ -26,7 +21,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import cdk8s
 from constructs import Construct
 
 import imports.io.external_secrets as esx
@@ -55,49 +49,6 @@ class ESData:
     secret_key: str  # key in the materialized Secret
     key: str  # SSM parameter path
     property: str | None = None  # JSON property within the value (pattern 2)
-
-
-def secret_store(
-    scope: Construct, id: str = "secret-store", *, namespace: str | None = None
-):
-    """Per-namespace `aws-secretsmanager` SecretStore. Byte-identical across
-    envs (the in-namespace eso-aws-credentials routes to the right account)."""
-    store = cdk8s.ApiObject(
-        scope,
-        id,
-        api_version="external-secrets.io/v1",
-        kind="SecretStore",
-        metadata={
-            "name": "aws-secretsmanager",
-            **({"namespace": namespace} if namespace else {}),
-        },
-    )
-    store.add_json_patch(
-        cdk8s.JsonPatch.add(
-            "/spec",
-            {
-                "provider": {
-                    "aws": {
-                        "service": "SecretsManager",
-                        "region": "us-east-1",
-                        "auth": {
-                            "secretRef": {
-                                "accessKeyIDSecretRef": {
-                                    "name": "eso-aws-credentials",
-                                    "key": "AWS_ACCESS_KEY_ID",
-                                },
-                                "secretAccessKeySecretRef": {
-                                    "name": "eso-aws-credentials",
-                                    "key": "AWS_SECRET_ACCESS_KEY",
-                                },
-                            }
-                        },
-                    }
-                },
-            },
-        )
-    )
-    return store
 
 
 def external_secret(
