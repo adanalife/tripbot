@@ -7,6 +7,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/obs"
 )
 
 // watchInterval is the tick the watchdog runs at under test. synctest puts the
@@ -18,7 +20,7 @@ const watchInterval = time.Second
 // step is one tick's worth of scripted answers from OBS and the platform,
 // including how a restart fired on this tick resolves.
 type step struct {
-	obsActive  bool
+	obsState   obs.StreamState
 	live       bool
 	obsErr     error
 	liveErr    error
@@ -28,13 +30,33 @@ type step struct {
 // The scripted answers the tests compose runs out of. A miss is the case the
 // watchdog exists for: OBS happily pushing at a channel nobody can watch.
 var (
-	miss      = step{obsActive: true}
-	healthy   = step{obsActive: true, live: true}
-	obsIdle   = step{}
-	unknown   = step{obsActive: true, liveErr: errors.New("live-check transient")}
+	miss      = step{obsState: obs.StreamSteady}
+	healthy   = step{obsState: obs.StreamSteady, live: true}
+	obsIdle   = step{obsState: obs.StreamInactive}
+	unknown   = step{obsState: obs.StreamSteady, liveErr: errors.New("live-check transient")}
 	obsDown   = step{obsErr: errors.New("obs websocket unreachable")}
-	missNoFix = step{obsActive: true, restartErr: errors.New("StartStream: OutputRunning (500)")}
+	missNoFix = step{obsState: obs.StreamSteady, restartErr: errors.New("StartStream: OutputRunning (500)")}
+	// OBS knows the session failed and is retrying, with the channel dark —
+	// the 2026-08-28 state. Distinct from `miss` only in what OBS admits.
+	reconnecting = step{obsState: obs.StreamReconnecting}
+	// A reconnect that landed: OBS still reports reconnecting, but the channel
+	// is back. Recovery working is exactly what the grace protects.
+	reconnectingLive = step{obsState: obs.StreamReconnecting, live: true}
 )
+
+// graceTicks is how many ticks of the test interval fit in reconnectGrace — the
+// stand-down the watchdog owes OBS's own retry before it intervenes.
+var graceTicks = int(reconnectGrace / watchInterval)
+
+// repeat is n copies of one step, for scripting spans measured in the
+// production-scale reconnectGrace rather than in handfuls of ticks.
+func repeat(s step, n int) []step {
+	out := make([]step, n)
+	for i := range out {
+		out[i] = s
+	}
+	return out
+}
 
 // fixture answers the watchdog's hooks from the currently-staged step and
 // counts restart attempts — a restart the staged step fails still counts, which
@@ -74,10 +96,10 @@ func (f *fixture) hookCalls() ([]error, int) {
 
 func (f *fixture) deps() WatchdogDeps {
 	return WatchdogDeps{
-		OBSActive: func(context.Context) (bool, error) {
+		OBSState: func(context.Context) (obs.StreamState, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
-			return f.cur.obsActive, f.cur.obsErr
+			return f.cur.obsState, f.cur.obsErr
 		},
 		ChannelLive: func(context.Context) (bool, error) {
 			f.mu.Lock()
@@ -385,4 +407,68 @@ func TestWatchSilentDisconnect_NilHooks(t *testing.T) {
 			t.Fatalf("restart count: want 1, got %d", f.restartCount())
 		}
 	})
+}
+
+// The 2026-08-28 outage in miniature: OBS's RTMP session dies, OBS announces a
+// reconnect and then stops trying, and the channel stays dark. Before the
+// grace, a reconnecting output zeroed the miss counter on every tick, so no
+// amount of elapsed time ever reached the threshold and the stream stayed dark
+// until a human intervened.
+func TestReconnectingOutputIsRecoveredOnceTheGraceExpires(t *testing.T) {
+	script := append(repeat(reconnecting, graceTicks), repeat(reconnecting, 3)...)
+	if got := run(t, script, 3, time.Minute); got != 1 {
+		t.Errorf("restarts = %d, want 1 — a wedged reconnect must be recovered", got)
+	}
+}
+
+// The other half of the same bargain: OBS's own reconnect is left alone while
+// it still has a chance to land. A watchdog that forced a Stop+Start into the
+// first seconds of a retry would race the recovery it is waiting for.
+func TestReconnectingOutputIsLeftAloneInsideTheGrace(t *testing.T) {
+	if got := run(t, repeat(reconnecting, graceTicks-1), 3, time.Minute); got != 0 {
+		t.Errorf("restarts = %d, want 0 — OBS's own reconnect owns this window", got)
+	}
+}
+
+// A reconnect that works ends the matter: the channel comes back, the live
+// answer clears the misses, and the grace never matters. Sitting in
+// reconnecting for hours is fine as long as the stream is watchable.
+func TestReconnectingWithTheChannelLiveNeverRestarts(t *testing.T) {
+	script := repeat(reconnectingLive, graceTicks*2)
+	if got := run(t, script, 3, time.Minute); got != 0 {
+		t.Errorf("restarts = %d, want 0 — a landed reconnect is not a fault", got)
+	}
+}
+
+// Misses collected before OBS admits the failure are held, not forgotten. The
+// old boolean zeroed them, so a divergence that decayed into a reconnect reset
+// all the evidence for it — the outage got *quieter* the worse it became.
+func TestMissesSurviveAReconnectAppearingMidDivergence(t *testing.T) {
+	// Two misses (threshold 3, so no restart yet), then the full grace of
+	// reconnecting, then one more miss to cross the line.
+	script := append([]step{miss, miss}, repeat(reconnecting, graceTicks)...)
+	script = append(script, miss)
+	if got := run(t, script, 3, time.Minute); got != 1 {
+		t.Errorf("restarts = %d, want 1 — misses must survive a reconnect", got)
+	}
+}
+
+// An inactive output still stands down unconditionally, which is the case
+// folding the two into one boolean was protecting. A scaled-to-0 or
+// operator-stopped instance is not an outage and must never be restarted.
+func TestInactiveOutputStillStandsDownForever(t *testing.T) {
+	if got := run(t, repeat(obsIdle, graceTicks*2), 3, time.Minute); got != 0 {
+		t.Errorf("restarts = %d, want 0 — a stopped output is not a fault", got)
+	}
+}
+
+// The grace is measured per reconnect, not cumulatively: an output that
+// recovers and later fails again gets the full stand-down the second time.
+func TestGraceRestartsWithEachNewReconnect(t *testing.T) {
+	script := repeat(reconnecting, graceTicks-1)
+	script = append(script, healthy)
+	script = append(script, repeat(reconnecting, graceTicks-1)...)
+	if got := run(t, script, 3, time.Minute); got != 0 {
+		t.Errorf("restarts = %d, want 0 — each reconnect earns its own grace", got)
+	}
 }
