@@ -135,7 +135,7 @@ func runUntilExhausted(t *testing.T, deps *fakeDeps, cfg Config) {
 	cfg.Interval = 2 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go Watch(ctx, deps.deps(), cfg)
+	go Watch(ctx, "twitch", deps.deps(), cfg)
 	select {
 	case <-deps.doneCh:
 	case <-time.After(2 * time.Second):
