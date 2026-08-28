@@ -75,6 +75,12 @@ type Deps struct {
 	// AdvanceAlbum queues the next album track. Called when OBS reports the
 	// media ended while the album bed is live.
 	AdvanceAlbum func(context.Context) error
+	// Resync re-reads the live bed off OBS. Called on the first tick OBS
+	// answers after it didn't: a restarted OBS boots onto its own default bed,
+	// and a Store still holding the pre-restart bed reports the wrong gauge and
+	// — worse — declines to advance an album it doesn't know is playing, so the
+	// boot track ends and the stream goes silent (prod youtube, 2026-08-08).
+	Resync func(context.Context)
 }
 
 // Config holds the watchdog's timing + threshold knobs.
@@ -109,6 +115,7 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 			return bed
 		},
 		AdvanceAlbum: store.Advance,
+		Resync:       store.Detect,
 		MediaState: func(ctx context.Context) (string, error) {
 			return obs.GetMediaInputState(ctx, BackgroundAudioInputName)
 		},
@@ -207,6 +214,7 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 		failMisses  int
 		recoverHits int
 		lastSwap    time.Time
+		synced      bool // the Store has read the bed off this OBS process
 	)
 
 	for {
@@ -230,7 +238,12 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				// gauge / OBS-streaming alert carry it; don't advance counters
 				// on a blind tick.
 				slog.WarnContext(ctx, "audio watchdog: obs media state unavailable", "err", err)
+				synced = false
 				continue
+			}
+			if !synced {
+				deps.Resync(ctx)
+				synced = true
 			}
 			playing := state == obs.MediaStatePlaying
 			instrumentation.OBSBackgroundAudio.SetPlaying(playing)

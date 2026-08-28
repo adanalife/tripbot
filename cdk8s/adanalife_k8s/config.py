@@ -95,6 +95,9 @@ class EnvConfig:
     # app namespace can't drop the database. Apps reach it cross-namespace via the
     # postgres_host FQDN.
     data_namespace: str = ""
+    # Service name of the Postgres primary inside the data namespace: the legacy
+    # StatefulSet's "postgres", or CNPG's read-write Service "pg-rw".
+    postgres_service: str = "postgres"
     external_dns_role_arn: str = (
         ""  # cert-manager DNS-01 Route53 role (per AWS account)
     )
@@ -209,9 +212,9 @@ class EnvConfig:
         """DATABASE_HOST apps connect to: the bare Service name when co-located
         (parity), the cross-namespace FQDN when the DB is isolated."""
         return (
-            f"postgres.{self.data_namespace}.svc.cluster.local"
+            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local"
             if self.data_isolated
-            else "postgres"
+            else self.postgres_service
         )
 
 
@@ -314,6 +317,9 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
+        # Stage runs on the CloudNativePG cluster `pg`; prod is still the legacy
+        # StatefulSet until its own cutover.
+        postgres_service="pg-rw",
         # Every stage platform is present but births parked at replicas:0 — the
         # resting state is everything-off, and a platform comes online via the
         # console's scale-up button (Argo ignores .spec.replicas, so the hand
