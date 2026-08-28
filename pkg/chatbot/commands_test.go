@@ -276,46 +276,18 @@ func TestLifetimeMilesLeaderboardCmd_ReadsSessions(t *testing.T) {
 	}
 }
 
-// --- helpCmd ---
+// shutdownCmd ultimately calls os.Exit(0), so we can't drive the whole
+// command end-to-end in a unit test. The Sessions.Shutdown wiring is
+// covered indirectly: realSessions.Shutdown is a thin adapter, and the
+// recordingSessions implementation is exercised here as a contract check
+// so future refactors of !shutdown can pivot to it without re-deriving
+// the call shape.
+func TestRecordingSessions_ShutdownIsRecorded(t *testing.T) {
+	rec := &recordingSessions{}
+	rec.Shutdown(context.Background())
 
-func TestHelpCmd_SaysSomething(t *testing.T) {
-	app := newTestApp(video.Video{})
-	out, says := captureSay(t, app)
-
-	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if out() == "" {
-		t.Fatal("expected a help message, got empty output")
-	}
-	if says() != 1 {
-		t.Errorf("expected exactly one Say() call, got %d", says())
-	}
-}
-
-func TestHelpCmd_MessageContainsCount(t *testing.T) {
-	app := newTestApp(video.Video{})
-	out, _ := captureSay(t, app)
-
-	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	// message format: "<help text> (N of M)"
-	if !strings.Contains(out(), " of ") {
-		t.Errorf("expected count like '(N of M)', got %q", out())
-	}
-}
-
-func TestHelpCmd_AdvancesIndex(t *testing.T) {
-	app := newTestApp(video.Video{})
-	out, _ := captureSay(t, app)
-
-	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
-	first := out()
-
-	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
-	second := out()
-
-	if first == second {
-		t.Errorf("expected different messages on successive calls, got %q twice", first)
+	if len(rec.Calls) != 1 || rec.Calls[0] != "Shutdown()" {
+		t.Errorf("expected single Shutdown() recording, got %v", rec.Calls)
 	}
 }
 
@@ -1461,5 +1433,34 @@ func TestUnBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
 
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
+	}
+}
+
+// --- Chatter ---
+
+// The rotating tip set is Chatter's alone now that !help lists commands
+// instead, so this is the only place left that walks the index. Successive
+// posts have to differ and then wrap, or a timer firing all day either says the
+// same thing all day or walks off the end.
+//
+// The rotation is installed rather than taken from the config: what survives
+// enabledHelpMessages depends on which commands this App has, and testConf is
+// shared, so the real set is only as long as the tests running before this one
+// left it.
+func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingChat{}
+	app.Chat = rec
+	app.helpMessages = []string{"first tip", "second tip"}
+	app.helpIndex = 0
+
+	for range 3 {
+		app.Chatter(context.Background())
+	}
+
+	// The "/me " prefix is what renders the line as an emote on Twitch.
+	want := []string{"/me first tip", "/me second tip", "/me first tip"}
+	if !slices.Equal(rec.Says, want) {
+		t.Errorf("posts = %q, want %q", rec.Says, want)
 	}
 }
