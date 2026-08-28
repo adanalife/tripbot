@@ -192,8 +192,9 @@ func (c *Client) SendChat(ctx context.Context, identity, text string) error {
 }
 
 // Chatters returns the channel's current chatter logins and the authoritative
-// total (GET /v1/chatters). The total can exceed len(logins) when the channel
-// has more chatters than the API returns in one page.
+// total (GET /v1/chatters). The gateway walks the platform's pagination, so
+// logins is the whole set and callers can treat an absent login as absent —
+// which is what pkg/users does when it logs a session out.
 func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err error) {
 	var body struct {
 		Count    int      `json:"count"`
