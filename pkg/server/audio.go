@@ -15,6 +15,7 @@ import (
 // *beds.Store; an interface so the handlers test without an OBS WebSocket.
 type BedStore interface {
 	Current() (beds.Bed, string)
+	Playing() (beds.Bed, string)
 	Station() string
 	Album() string
 	PlayingAlbum() string
@@ -45,10 +46,16 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	// are — nothing about SomaFM's lineup is duplicated in the console.
 	body := map[string]any{"ok": false, "beds": options, "stations": beds.Stations}
 	if s.beds != nil {
-		bed, track := s.beds.Current()
+		bed, _ := s.beds.Current()
+		playing, track := s.beds.Playing()
 		body["ok"] = true
 		body["bed"] = string(bed)
-		body["track"] = s.track(r.Context(), bed, track)
+		// The picker highlights the selected bed, but the now-playing line has to
+		// name what's audible: mid-outage the watchdog has another bed on air and
+		// the selection still reads SomaFM, whose feed would name a track nobody
+		// is hearing.
+		body["on_fallback"] = playing != bed
+		body["track"] = s.track(r.Context(), playing, track)
 		body["station"] = s.beds.Station()
 		// The album list ships for the same reason the stations do, but it's read
 		// off the share per request rather than from a constant: new music appears
@@ -170,14 +177,15 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	current, track := s.beds.Current()
+	current, _ := s.beds.Current()
+	playing, track := s.beds.Playing()
 	slog.InfoContext(r.Context(), "background audio switched via console",
 		"bed", current, "station", s.beds.Station(), "album", s.beds.Album())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":            true,
 		"bed":           string(current),
-		"track":         s.track(r.Context(), current, track),
+		"track":         s.track(r.Context(), playing, track),
 		"station":       s.beds.Station(),
 		"album":         s.beds.Album(),
 		"playing_album": s.beds.PlayingAlbum(),

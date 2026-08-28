@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.3.1] — 2026-08-24
+
+### Fixes
+
+- Bank in-flight session miles to the database every 5 minutes, so a crash no longer discards a whole session's accrual and sends `!miles` totals backwards. ([#1428](https://github.com/adanalife/tripbot/pull/1428))
+
 ## [v5.3.0] — 2026-08-23
 
 ### Chatbot

@@ -9,12 +9,11 @@ metadata:
 data:
   BOT_USERNAME: tripbot4001
   CHANNEL_NAME: adanalife_staging
-  DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
   FACEBOOK_API_URL: http://gateway-facebook.stage-1.svc.cluster.local:8080
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-facebook:8080
   OBS_WEBSOCKET_ADDR: obs-facebook:4455
@@ -45,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: b740e9df82
+        adanalife.dev/config-hash: cce2e140dc
       labels:
         app: tripbot-facebook
     spec:

@@ -8,6 +8,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 )
 
 // TestSessions_ConcurrentAccess hammers the session map and the leaderboard
@@ -33,6 +34,7 @@ func TestSessions_ConcurrentAccess(t *testing.T) {
 		func() { _ = s.isLoggedIn("alice") },
 		func() { _ = s.LoggedInCount() },
 		func() { s.LogoutIfNecessary(ctx, "ghost") },
+		func() { s.CheckpointMiles(ctx) },
 	} {
 		wg.Add(1)
 		go func() {
@@ -240,4 +242,116 @@ func TestCorrectMiles(t *testing.T) {
 			t.Errorf("expected 12 miles persisted, got %v", stored.Miles)
 		}
 	})
+
+	t.Run("the monthly scoreboard moves with the lifetime total", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "restored", Miles: 100})
+
+		s := New(testConf, noopChatterSource{})
+		s.CorrectMiles(ctx, "restored", 20)
+
+		stored, err := Find(ctx, testConf.Platform, "restored")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 120 {
+			t.Errorf("expected 120 lifetime miles, got %v", stored.Miles)
+		}
+		if got := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); got != 20 {
+			t.Errorf("expected 20 miles on the monthly board, got %v", got)
+		}
+	})
+
+	t.Run("a clawback larger than the month is clamped at zero", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "clawback", Miles: 500})
+
+		s := New(testConf, noopChatterSource{})
+		// 5 of this month's miles against a 500-mile lifetime: the rest was
+		// earned in earlier months, so the month can only give back what it has.
+		s.CorrectMiles(ctx, "clawback", 5)
+		s.CorrectMiles(ctx, "clawback", -50)
+
+		stored, err := Find(ctx, testConf.Platform, "clawback")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 455 {
+			t.Errorf("expected the full -50 off the lifetime total, got %v", stored.Miles)
+		}
+		if got := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); got != 0 {
+			t.Errorf("expected the monthly board floored at 0, got %v", got)
+		}
+	})
+}
+
+// CheckpointMiles banks the session's accrual mid-session so a crash can't take
+// it, and the banked miles are then neither double-counted by the live totals
+// nor re-banked by the eventual logout.
+func TestCheckpointMiles(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "parked")
+	// ten hours in chat at 0.1mi/3min is ~20 miles accrued but unbanked
+	s.mu.Lock()
+	s.loggedIn["parked"].LoggedIn = time.Now().Add(-10 * time.Hour)
+	s.mu.Unlock()
+
+	live, _ := s.get("parked")
+	before := s.CurrentMonthlyMiles(ctx, *live)
+
+	s.CheckpointMiles(ctx)
+
+	stored, err := Find(ctx, testConf.Platform, "parked")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if stored.Miles < 15 || stored.Miles > 25 {
+		t.Errorf("expected ~20 miles banked to the DB, got %v", stored.Miles)
+	}
+	if score := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); score < 15 || score > 25 {
+		t.Errorf("expected ~20 miles banked to the monthly scoreboard, got %v", score)
+	}
+
+	// The reported totals don't move: what the checkpoint added to the DB it
+	// subtracted from the in-flight half.
+	live, _ = s.get("parked")
+	if after := s.CurrentMonthlyMiles(ctx, *live); after-before > 0.1 || before-after > 0.1 {
+		t.Errorf("monthly miles moved across the checkpoint: %v -> %v", before, after)
+	}
+	// An other-user lookup reads a fresh DB row, which must not re-count them.
+	if after := s.CurrentMonthlyMiles(ctx, stored); after-before > 0.1 || before-after > 0.1 {
+		t.Errorf("monthly miles differ for a DB-loaded copy: %v -> %v", before, after)
+	}
+
+	// A second checkpoint with no time passed banks nothing more.
+	s.CheckpointMiles(ctx)
+	twice, err := Find(ctx, testConf.Platform, "parked")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if twice.Miles-stored.Miles > 0.1 {
+		t.Errorf("second checkpoint re-banked miles: %v -> %v", stored.Miles, twice.Miles)
+	}
+
+	// Nor does logout, which only owes the remainder.
+	s.LogoutIfNecessary(ctx, "parked")
+	final, err := Find(ctx, testConf.Platform, "parked")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if final.Miles-stored.Miles > 0.1 {
+		t.Errorf("logout re-banked checkpointed miles: %v -> %v", stored.Miles, final.Miles)
+	}
+	var logoutEvents []events.Event
+	if err := db.Where("username = ? AND event = ?", "parked", "logout").Find(&logoutEvents).Error; err != nil {
+		t.Fatalf("reading events: %v", err)
+	}
+	if len(logoutEvents) != 1 {
+		t.Fatalf("expected 1 logout event, got %d", len(logoutEvents))
+	}
 }

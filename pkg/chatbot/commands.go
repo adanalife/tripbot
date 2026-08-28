@@ -80,15 +80,6 @@ var currentVersion string
 // "dev". Overridable in tests.
 var versionFilePath = "/etc/tripbot/version"
 
-func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	n := len(a.helpMessages)
-	// a.help() advances the index, so capture the displayed line's number first.
-	pos := a.helpIndex + 1
-	msg := fmt.Sprintf("%s (%d of %d)", a.help(), pos, n)
-	a.Chat.Say(msg)
-}
-
 // commandsCmd lists a curated set of featured commands — filtered to the ones
 // actually dispatchable on this App's platform, so a YouTube instance doesn't
 // suggest commands that would silently no-op.
@@ -752,9 +743,10 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
-// manual miles correction (amount may be negative) and logs a correction event
-// so the rollup folds it into user_rollups.extra_miles. Admin-only for now
-// (broadcaster); widen the gate to mods once a mod-status source exists.
+// manual miles correction (amount may be negative) to both the lifetime total
+// and the current monthly scoreboard, and logs a correction event so the rollup
+// folds it into user_rollups.extra_miles. Admin-only for now (broadcaster);
+// widen the gate to mods once a mod-status source exists.
 func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
 	if !a.Cfg.UserIsAdmin(user.Username) {

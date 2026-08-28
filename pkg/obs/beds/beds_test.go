@@ -1055,3 +1055,53 @@ func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
 		t.Errorf("bed = %q after the tune landed, want somafm", bed)
 	}
 }
+
+// Everything that names what a viewer is hearing — !song, !audio, the console's
+// now-playing line — reads Playing, and during an outage that is not the
+// selection: the watchdog puts the album on air and leaves SomaFM selected, so
+// a reader of the selection announces a station, and a SomaFM track, nobody is
+// hearing.
+func TestPlaying_NamesTheFallbackWhileTheSelectionStandsSomaFM(t *testing.T) {
+	dir := shareDir(t, 3)
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, dir, "twitch")
+	ctx := context.Background()
+	if bed, _ := s.Playing(); bed != SomaFM {
+		t.Fatalf("playing bed before the outage: want %s, got %s", SomaFM, bed)
+	}
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bed, track := s.Playing()
+	if bed != Album {
+		t.Fatalf("playing bed on the fallback: want %s, got %s", Album, bed)
+	}
+	if track != o.file {
+		t.Fatalf("playing track %q, want the one on air %q", track, o.file)
+	}
+	if s.PlayingAlbum() != "fifty-horizons" {
+		t.Fatalf("playing album on the fallback: got %q", s.PlayingAlbum())
+	}
+	if sel, _ := s.Current(); sel != SomaFM {
+		t.Fatalf("selected bed: want %s, got %s", SomaFM, sel)
+	}
+	if err := s.SwapToSomaFM(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if bed, track := s.Playing(); bed != SomaFM || track != "" {
+		t.Fatalf("playing after recovery: want %s with no track, got %s %q", SomaFM, bed, track)
+	}
+}
+
+// The drone is the fallback whenever the share can't supply a track, and it
+// misnames the audio in exactly the same way.
+func TestPlaying_NamesTheDroneFallback(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, t.TempDir(), "twitch")
+	if err := s.SwapToFallback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if bed, track := s.Playing(); bed != CarHum || track != "" {
+		t.Fatalf("playing on the drone fallback: want %s with no track, got %s %q", CarHum, bed, track)
+	}
+}

@@ -787,10 +787,8 @@ func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Durati
 }
 
 // startBackgroundAudio constructs this instance's bed store and hands it to the
-// console API. The seed bed mirrors the OBS entrypoint's per-platform default;
-// Detect then reads the source's real settings so a tripbot restart reports
-// what's actually playing rather than the default. Detect dials OBS, so it runs
-// in the background — a slow or absent OBS must not hold up startup.
+// console API. The seed bed stands in until the audio watchdog reads the real
+// bed off OBS — on its first tick, and again after every OBS restart.
 func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	seed := beds.CarHum
 	if t.platformIsTwitch() {
@@ -799,7 +797,6 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
-	go t.beds.Detect(ctx)
 }
 
 // startBackgroundAudioWatchdog launches the volume-meter connection + the
@@ -820,7 +817,7 @@ func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(
 		audiowatchdog.BackgroundAudioInputName, 30*time.Second, t.beds.Advance)
 	go meter.Run(ctx)
-	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
+	go audiowatchdog.Watch(ctx, t.cfg.Platform, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
@@ -1018,7 +1015,10 @@ func (t *Tripbot) findInitialVideo() {
 	v := t.player.Current()
 	_, err := video.LoadOrCreate(context.Background(), v.String())
 	if err != nil {
-		slog.Error("error loading initial video, is there a video playing?", "err", err)
+		// Warn rather than error: playout having nothing to report is an
+		// ordinary state at boot, and the video is filled in by the first cron
+		// run regardless.
+		slog.Warn("no initial video, is there a video playing?", "err", err)
 	}
 }
 
@@ -1227,6 +1227,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		return
 	}
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
+	// Session miles are otherwise only written at logout, so anything that
+	// kills the process mid-session loses them all. Banking on a timer bounds
+	// that loss to one interval.
+	t.addJob(5*time.Minute, "users.CheckpointMiles", t.sessions.CheckpointMiles)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
 	// Derived-state reconciler over the events table (all platforms' events,
 	// but only one instance should run it — the twitch gate above covers that).

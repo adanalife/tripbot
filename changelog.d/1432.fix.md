@@ -1,0 +1,1 @@
+Boot-time races against NATS and playout now log as warnings instead of errors. The onscreens rotator/middle-text restores and tripbot's initial-video lookup are all best-effort and self-heal on the next publish or cron run, so reporting them as errors only filled Sentry with noise from every restart.

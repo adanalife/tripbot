@@ -1,0 +1,1 @@
+`!song`, `!audio` and the console's now-playing line name the bed that's actually on air. While the audio watchdog rides out a SomaFM outage on the album (or the car hum), SomaFM stays *selected* — so every one of them was reading the selection and announcing a SomaFM track nobody was hearing.

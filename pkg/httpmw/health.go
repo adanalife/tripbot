@@ -38,12 +38,16 @@ func LivenessHandler() http.HandlerFunc {
 // 200 if all pass, 503 if any fail. The JSON body lists per-check
 // status so a failing probe is debuggable from `kubectl describe pod`'s
 // probe output. With no checks, the handler always reports 200 —
-// equivalent to LivenessHandler but distinguishable on the URL. tripbot
-// registers it with no checks on purpose: its HTTP surface (the /api/*
-// endpoints the console proxies, /metrics, /version) doesn't depend on the
-// Twitch connection, so the pod must stay in the Service even when the bot is
-// offline — otherwise the console loses the instance exactly when it's needed
-// to diagnose why.
+// equivalent to LivenessHandler but distinguishable on the URL.
+//
+// Two mount points, and the difference matters. On /health/ready the verdict
+// gates Service membership, so a check belongs there only if the pod is
+// genuinely no good to route to. tripbot mounts /ready with no checks on
+// purpose: its HTTP surface (the /api/* endpoints the console proxies,
+// /metrics, /version) doesn't depend on Postgres or NATS, and dropping out of
+// the Service would take the console's whole diagnostic view of the instance
+// with it — exactly when it's needed to find out why. The dependency verdict
+// goes on /health/deps instead, where it can be honest without being fatal.
 func ReadinessHandler(checks ...ReadyCheck) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), readyCheckTimeout)
