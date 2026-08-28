@@ -113,12 +113,13 @@ type Store struct {
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
 	lastStart time.Time // when a track was last pointed at OBS; see Advance
-	// fallbackAlbum says the audio watchdog has the album playing while SomaFM
-	// is still the selected bed. The bed itself can't say so — the watchdog's
-	// outage machinery only runs while the store reads SomaFM — so this is what
-	// keeps Advance walking the fallback album instead of letting one track end
-	// in the silence the fallback exists to prevent.
-	fallbackAlbum bool
+	// fallback is the bed the audio watchdog has playing while SomaFM is still
+	// the selected one, and "" when nothing is standing in. The selected bed
+	// can't say so — the watchdog's outage machinery only runs while the store
+	// reads SomaFM — so this is what keeps Advance walking the fallback album
+	// instead of letting one track end in the silence the fallback exists to
+	// prevent, and what lets Playing name audio the selection doesn't.
+	fallback Bed
 
 	// The switch waiting out switchDelay, and the timer that will apply it. gen
 	// rises with every request so a timer that fires after being superseded can
@@ -178,14 +179,44 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 	}
 }
 
-// Current reports the live bed and, on the album, the track file playing.
+// Current reports the selected bed and, on the album, the track file playing.
+// This is the choice, not always the audio: during a SomaFM outage the watchdog
+// puts another bed on air without changing the selection, which is what keeps
+// the outage machinery running. Callers naming what a viewer hears want Playing.
 func (s *Store) Current() (Bed, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.bed != Album || s.idx >= len(s.tracks) {
-		return s.bed, ""
+	return s.bed, s.trackOnAirLocked(s.bed)
+}
+
+// Playing reports the bed actually on air and, on the album, its track file —
+// the answer to "what is this?". It differs from Current only during a SomaFM
+// outage, where the watchdog swaps the album (or the drone) onto the source and
+// leaves SomaFM selected: reading the selection there names a station nobody is
+// hearing, and on the album a SomaFM track nobody is hearing either.
+func (s *Store) Playing() (Bed, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bed := s.playingLocked()
+	return bed, s.trackOnAirLocked(bed)
+}
+
+// playingLocked is the bed on air: the fallback while one is standing in, and
+// otherwise the selection. Caller holds s.mu.
+func (s *Store) playingLocked() Bed {
+	if s.fallback != "" {
+		return s.fallback
 	}
-	return s.bed, s.tracks[s.idx]
+	return s.bed
+}
+
+// trackOnAirLocked is the track file for bed, which only the album has. Caller
+// holds s.mu.
+func (s *Store) trackOnAirLocked(bed Bed) string {
+	if bed != Album || s.idx >= len(s.tracks) {
+		return ""
+	}
+	return s.tracks[s.idx]
 }
 
 // Station reports the SomaFM channel the SomaFM bed plays. Always a station,
@@ -217,10 +248,11 @@ func (s *Store) Album() string {
 func (s *Store) PlayingAlbum() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.bed != Album || s.idx >= len(s.tracks) {
+	track := s.trackOnAirLocked(s.playingLocked())
+	if track == "" {
 		return ""
 	}
-	return albumFromFile(s.tracks[s.idx], s.musicDir)
+	return albumFromFile(track, s.musicDir)
 }
 
 // Shuffle reports whether the play order is shuffled rather than sequential.
@@ -466,7 +498,7 @@ func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	s.lastStart = time.Now()
 	// A chosen bed ends any outage fallback: what's audible is now what was
 	// asked for, whichever bed the watchdog had put there.
-	s.fallbackAlbum = false
+	s.fallback = ""
 	s.mu.Unlock()
 	s.record()
 	// Counted here rather than at the callers so a console switch and a chat
@@ -600,7 +632,7 @@ func (s *Store) Pending() (Switch, bool) {
 // and would otherwise be stepped over by the outgoing track's own ending.
 func (s *Store) Advance(ctx context.Context) error {
 	s.mu.Lock()
-	if (s.bed != Album && !s.fallbackAlbum) || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
+	if s.playingLocked() != Album || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
 		s.mu.Unlock()
 		return nil
 	}
@@ -630,9 +662,10 @@ func (s *Store) Advance(ctx context.Context) error {
 // actual music, so it's the better degraded state; the drone covers an empty or
 // unmounted share, where it's the only bed left.
 //
-// The selected bed is deliberately left alone. The watchdog runs its outage
-// machinery only while the store reads SomaFM, so recording the fallback here
-// would switch the watchdog off and strand the stream on the fallback for good.
+// The selection is deliberately left alone — the fallback is recorded beside it
+// instead. The watchdog runs its outage machinery only while the store reads
+// SomaFM, so selecting the fallback here would switch the watchdog off and
+// strand the stream on it for good.
 // That is also why the album's play order is (re)built here: nothing else on
 // this path builds one, and without it the album plays a single track and falls
 // silent — the album=1 / tracks=0 state record() exists to expose.
@@ -660,7 +693,10 @@ func (s *Store) SwapToFallback(ctx context.Context) error {
 	}
 
 	s.mu.Lock()
-	s.fallbackAlbum = track != ""
+	s.fallback = CarHum
+	if track != "" {
+		s.fallback = Album
+	}
 	s.lastStart = time.Now()
 	s.mu.Unlock()
 	s.record()
@@ -669,15 +705,15 @@ func (s *Store) SwapToFallback(ctx context.Context) error {
 }
 
 // SwapToSomaFM points the source back at the tuned station once the edge is
-// serving again, ending any album fallback — the album stops advancing because
-// it has stopped playing. The counterpart of SwapToFallback; the selected bed is
+// serving again, ending the fallback — a fallback album stops advancing because
+// it has stopped playing. The counterpart of SwapToFallback; the selection is
 // untouched here too, since on this path it never stopped being SomaFM.
 func (s *Store) SwapToSomaFM(ctx context.Context) error {
 	if err := s.obs.SetNetwork(ctx, InputName, StreamURL(s.Station())); err != nil {
 		return fmt.Errorf("swap back to somafm: %w", err)
 	}
 	s.mu.Lock()
-	s.fallbackAlbum = false
+	s.fallback = ""
 	s.mu.Unlock()
 	return nil
 }
