@@ -81,6 +81,14 @@ func newTestApp(vid video.Video) *App {
 		Events:      noopEvents{},
 	}
 	a.indexCommands() // build the registry, same as New() does in production
+	// indexCommands starts the tip rotation at a random index so every restart
+	// doesn't lead with the same line. That draw comes off the global rand, so
+	// a test that reads the rotation sees a different starting point depending
+	// on how much randomness the tests before it consumed — it passes alone and
+	// fails in the full run. Tests that care about the rotation set their own
+	// messages; pinning the index here keeps the ones that don't from
+	// inheriting a coin flip.
+	a.helpIndex = 0
 	return a
 }
 
@@ -88,6 +96,19 @@ func newTestApp(vid video.Video) *App {
 // the registry-inspection and findCommand-routing tests (read-only — they
 // inspect command definitions / routing, never dispatch).
 var builtTestApp = newTestApp(video.Video{})
+
+// A test App's tip rotation starts at a fixed index. In production
+// indexCommands draws it off the global rand so every restart leads with a
+// different tip, which makes anything reading the rotation depend on how much
+// randomness ran before it — the shape that passes alone and fails in the full
+// run.
+func TestNewTestApp_TipRotationStartsDeterministically(t *testing.T) {
+	for range 5 {
+		if got := newTestApp(video.Video{}).helpIndex; got != 0 {
+			t.Fatalf("helpIndex = %d, want 0 — the rotation must not start on a coin flip", got)
+		}
+	}
+}
 
 // --- App.Chat seam ---
 //
@@ -1443,10 +1464,10 @@ func TestUnBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
 // posts have to differ and then wrap, or a timer firing all day either says the
 // same thing all day or walks off the end.
 //
-// The rotation is installed rather than taken from the config: what survives
-// enabledHelpMessages depends on which commands this App has, and testConf is
-// shared, so the real set is only as long as the tests running before this one
-// left it.
+// The rotation is installed rather than taken from the config so the assertion
+// reads against a set it controls: enabledHelpMessages filters the config's
+// tips down to the commands this App can dispatch, which is a detail this test
+// has no stake in.
 func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingChat{}
