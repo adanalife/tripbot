@@ -498,9 +498,9 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 // with no ids — so the column fills in as people talk rather than all at once.
 func (a *App) chatUser(ctx context.Context, username, platformUserID string) *users.User {
 	if platformPersistsUsers[a.platform()] {
-		user := a.UserSessions.LoginIfNecessary(ctx, username)
-		users.RecordPlatformUserID(ctx, user, platformUserID)
-		return user
+		user := a.UserSessions.RecordPlatformUserID(
+			ctx, a.UserSessions.LoginIfNecessary(ctx, username), platformUserID)
+		return &user
 	}
 	return &users.User{Username: strings.ToLower(username)}
 }
