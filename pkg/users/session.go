@@ -3,7 +3,6 @@ package users
 import (
 	"context"
 	"log/slog"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -138,12 +137,25 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
-func (s *Sessions) LoginIfNecessary(ctx context.Context, username string) *User {
+func (s *Sessions) LoginIfNecessary(ctx context.Context, username string) User {
 	if user, ok := s.get(username); ok {
 		return user
 	}
 	// they weren't logged in, so note in the DB
 	return s.login(ctx, username)
+}
+
+// RecordPlatformUserID persists u's platform-side ID and keeps the live
+// session entry in step, so later messages from the same chatter short-circuit
+// on the already-set field instead of re-issuing the write every time.
+func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUserID string) User {
+	RecordPlatformUserID(ctx, &u, platformUserID)
+	s.mu.Lock()
+	if live, ok := s.loggedIn[u.Username]; ok {
+		live.PlatformUserID = u.PlatformUserID
+	}
+	s.mu.Unlock()
+	return u
 }
 
 // LogoutIfNecessary will log out the user if it finds them in the session
@@ -153,28 +165,36 @@ func (s *Sessions) LogoutIfNecessary(ctx context.Context, username string) {
 	}
 }
 
-// get returns the logged-in *User for username, if present. It takes mu;
-// callers must not already hold it.
-func (s *Sessions) get(username string) (*User, bool) {
+// get returns a copy of the logged-in User for username, if present. It takes
+// mu; callers must not already hold it. The copy is what makes it safe: the
+// map holds *User, and handing that pointer out would let a caller read the
+// entry while a miles grant writes it under mu.
+func (s *Sessions) get(username string) (User, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	user, ok := s.loggedIn[username]
-	return user, ok
+	if !ok {
+		return User{}, false
+	}
+	return *user, true
 }
 
-// sessionSnapshot returns a copy of the loggedIn map, so callers can iterate
-// (and do slow DB work per entry) without holding mu.
-func (s *Sessions) sessionSnapshot() map[string]*User {
+// sessionSnapshot returns a copy of every logged-in User, so callers can
+// iterate (and do slow DB work per entry) without holding mu. The entries are
+// values for the reason described on get.
+func (s *Sessions) sessionSnapshot() map[string]User {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	snapshot := make(map[string]*User, len(s.loggedIn))
-	maps.Copy(snapshot, s.loggedIn)
+	snapshot := make(map[string]User, len(s.loggedIn))
+	for username, user := range s.loggedIn {
+		snapshot[username] = *user
+	}
 	return snapshot
 }
 
 // login will record the users presence in the DB
 // TODO: do we want to make a DB update here? we could do it on logout()
-func (s *Sessions) login(ctx context.Context, username string) *User {
+func (s *Sessions) login(ctx context.Context, username string) User {
 	now := time.Now()
 
 	user, err := FindOrCreate(ctx, s.cfg.Platform, username)
@@ -187,7 +207,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	// the next tick retries FindOrCreate and self-heals once the DB recovers.
 	if user.ID == 0 {
 		slog.WarnContext(ctx, "could not find or create user, skipping login", "username", username)
-		return &user
+		return user
 	}
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
@@ -217,13 +237,13 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
-	return &user
+	return user
 }
 
 // logout removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
-func (s *Sessions) logout(ctx context.Context, u *User) {
-	sessionMiles := s.sessionMiles(ctx, *u)
+func (s *Sessions) logout(ctx context.Context, u User) {
+	sessionMiles := s.sessionMiles(ctx, u)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -232,13 +252,13 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
 			"session_miles", sessionMiles,
-			"monthly_miles", s.CurrentMonthlyMiles(ctx, *u),
+			"monthly_miles", s.CurrentMonthlyMiles(ctx, u),
 			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
 		)
 	}
 
 	// update miles
-	u.Miles = s.CurrentMiles(ctx, *u)
+	u.Miles = s.CurrentMiles(ctx, u)
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -252,8 +272,8 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	// subscriber bonus, computed the same way the live award was. Recorded at
 	// source; left NULL when zero (most sessions).
 	extra := float64(u.sessionExtraMiles)
-	if s.IsSubscriber(*u) {
-		extra += float64(s.BonusMiles(*u))
+	if s.IsSubscriber(u) {
+		extra += float64(s.BonusMiles(u))
 	}
 	var extraMiles *float64
 	if extra > 0 {
@@ -281,7 +301,7 @@ func (s *Sessions) CheckpointMiles(ctx context.Context) {
 		if !ok {
 			continue
 		}
-		miles := s.sessionMiles(ctx, *user)
+		miles := s.sessionMiles(ctx, user)
 		if miles <= 0 {
 			continue
 		}
