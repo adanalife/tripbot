@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.5.0] — 2026-08-30
+
+### Fixes
+
+- Fix a data race on logged-in user records. The session's lock guarded the login map but not the entries behind it, so reading a user's miles while the gift or checkpoint cron wrote them was unsynchronized — on the chat path as well as the crons. ([#1448](https://github.com/adanalife/tripbot/pull/1448))
+
+### Misc
+
+- `pkg/contract` now owns the per-platform `gateway-<platform>` Service names and the gateway HTTP port. They were agreed across tripbot's cdk8s, the platform-gateway repo's cdk8s and infra's Argo without any generated contract holding them, so a rename would have broken consumers silently instead of failing a drift test. tripbot's own cdk8s reads the nine `<PLATFORM>_API_URL` values through the contract instead of hardcoding the FQDNs; the rendered manifests are byte-identical. ([#1441](https://github.com/adanalife/tripbot/pull/1441))
+
 ## [v5.4.0] — 2026-08-28
 
 ### Chatbot
