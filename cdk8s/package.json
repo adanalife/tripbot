@@ -3,6 +3,6 @@
   "private": true,
   "description": "Lockfile host for the cdk8s CLI. Not a published package — package-lock.json is the point, so cdk8s-cli's transitive tree (jsii, jsii-pacmak, jsii-rosetta) is pinned instead of floating on every CI install.",
   "devDependencies": {
-    "cdk8s-cli": "2.207.52"
+    "cdk8s-cli": "2.207.56"
   }
 }
