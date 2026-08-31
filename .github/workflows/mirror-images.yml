@@ -57,3 +57,28 @@ jobs:
           docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
           docker.io/python:3.13-slim-bookworm ghcr.io/adanalife/mirror/python:3.13-slim-bookworm
           EOF
+
+  # A weekly cron nobody watches: this refresh failed silently for eleven
+  # straight weeks on one image, so every build FROM it kept an unpatched base.
+  # The mirrors exist to keep base images current, which is only true if a
+  # failure to refresh them is visible.
+  #
+  # Best-effort, like the release announcement -- a failure to report a
+  # failure should not become a second failure.
+  alert:
+    needs: [mirror]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Alert Discord on failure
+        continue-on-error: true
+        uses: Ilshidur/action-discord@0.4.0
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_ALERTS }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          # Points at the log rather than naming the image: the failing copy
+          # varies, and a package that lost its write grant reads the same as
+          # an upstream tag that moved.
+          args: 'Base-image mirror refresh failed for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [run log]({{ RUN_URL }})'
