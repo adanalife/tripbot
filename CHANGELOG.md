@@ -9,6 +9,48 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.5.0] — 2026-08-30
+
+### Fixes
+
+- Fix a data race on logged-in user records. The session's lock guarded the login map but not the entries behind it, so reading a user's miles while the gift or checkpoint cron wrote them was unsynchronized — on the chat path as well as the crons. ([#1448](https://github.com/adanalife/tripbot/pull/1448))
+
+### Misc
+
+- `pkg/contract` now owns the per-platform `gateway-<platform>` Service names and the gateway HTTP port. They were agreed across tripbot's cdk8s, the platform-gateway repo's cdk8s and infra's Argo without any generated contract holding them, so a rename would have broken consumers silently instead of failing a drift test. tripbot's own cdk8s reads the nine `<PLATFORM>_API_URL` values through the contract instead of hardcoding the FQDNs; the rendered manifests are byte-identical. ([#1441](https://github.com/adanalife/tripbot/pull/1441))
+
+## [v5.4.0] — 2026-08-28
+
+### Chatbot
+
+- `!help` lists the commands you can run. It used to answer with one line out of a rotating set of tips, numbered `(3 of 11)` — which told a viewer there were eight more and gave them no way to reach any of them except by running it again. It is now an alias of `!commands`, alongside `!command`, `!controls` and `!hello`. The rotation itself is unchanged and still runs on the Chatter timer, where one line at a time is the whole idea. ([#1413](https://github.com/adanalife/tripbot/pull/1413))
+- `!givemiles` now applies its correction to the current monthly scoreboard as well as the lifetime total, since a correction restores miles the viewer should have earned by watching. A clawback larger than the month's score is clamped at zero rather than pushing the leaderboard negative. Gifted miles (the per-sub bonus) stay lifetime-only. ([#1430](https://github.com/adanalife/tripbot/pull/1430))
+
+### Fixes
+
+- Boot-time races against NATS and playout now log as warnings instead of errors. The onscreens rotator/middle-text restores and tripbot's initial-video lookup are all best-effort and self-heal on the next publish or cron run, so reporting them as errors only filled Sentry with noise from every restart. ([#1432](https://github.com/adanalife/tripbot/pull/1432))
+- Re-read the background-audio bed off OBS whenever OBS comes back, so an OBS restart no longer leaves tripbot reporting a stale bed and letting an unlooped album fall silent after its boot track. ([#1435](https://github.com/adanalife/tripbot/pull/1435))
+- `!song`, `!audio` and the console's now-playing line name the bed that's actually on air. While the audio watchdog rides out a SomaFM outage on the album (or the car hum), SomaFM stays *selected* — so every one of them was reading the selection and announcing a SomaFM track nobody was hearing. ([#1438](https://github.com/adanalife/tripbot/pull/1438))
+- The audio watchdog's SomaFM recovery probe backs off as an outage wears on — every tick, then up to every ~3.7 minutes — instead of opening a fresh connection to the edge every 7 seconds for as long as the stream is stranded on the fallback bed. ([#1439](https://github.com/adanalife/tripbot/pull/1439))
+- The background-audio metrics now say which platform they came from, so a single platform going silent is visible instead of being averaged away with the ones that are fine. ([#1445](https://github.com/adanalife/tripbot/pull/1445))
+- The silent-disconnect watchdog now recovers an OBS output whose reconnect has wedged. OBS's streaming state is read as three values instead of a boolean, so a reconnecting output is left to OBS's own retry for three minutes and then treated like any other active output — where previously it reset the watchdog's miss counter on every tick, and a reconnect that stopped retrying could keep the stream dark indefinitely. ([#1446](https://github.com/adanalife/tripbot/pull/1446))
+
+### Deploy / Infra
+
+- stage-1 tripbot now connects to the CloudNativePG `pg-rw` Postgres service; prod-1 is unchanged. ([#1436](https://github.com/adanalife/tripbot/pull/1436))
+
+### Cleanup
+
+- Drop the dead hidden-file guard in video dash-string validation; the filename regex already rejects a leading dot. ([#1434](https://github.com/adanalife/tripbot/pull/1434))
+
+### Misc
+
+- Dropped `file-list.txt` (62,823 lines of 2019 corpus listing, unreferenced since it was written) and three unreferenced image assets. ([#1442](https://github.com/adanalife/tripbot/pull/1442))
+- Dropped the unread `VIDEO_DIR` and `MAPS_OUTPUT_DIR` config, including the `MAPS_OUTPUT_DIR` entry every rendered tripbot ConfigMap carried. ([#1442](https://github.com/adanalife/tripbot/pull/1442))
+- Dropped seven exported functions with no caller: `eventbus`'s five `*StreamName` accessors, `helpers.RunningOnLinux`, and `onscreensServer.Server.Lookup`. ([#1442](https://github.com/adanalife/tripbot/pull/1442))
+- `gateway.Chatters` no longer documents a short chatters list as expected — the gateway pages the read to the end as of platform-gateway 1.26. ([#1443](https://github.com/adanalife/tripbot/pull/1443))
+- New `/health/deps` endpoint reports whether Postgres and NATS are usable, so a wedged dependency is visible without dropping the pod out of its Service the way a readiness failure would. ([#1444](https://github.com/adanalife/tripbot/pull/1444))
+
 ## [v5.3.1] — 2026-08-24
 
 ### Fixes

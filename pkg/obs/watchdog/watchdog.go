@@ -31,7 +31,11 @@ type WatchdogDeps struct {
 	// — the same reason every OBS metric stamps it. Empty defaults to twitch.
 	Platform string
 
-	OBSActive func(context.Context) (bool, error)
+	// OBSState reports OBS's streaming output as steady / reconnecting /
+	// inactive. Three states rather than a boolean because the loop treats
+	// reconnecting differently from both: see the reconnect grace in
+	// WatchSilentDisconnect.
+	OBSState func(context.Context) (obs.StreamState, error)
 	// ChannelLive reports whether the channel is live. Injected by cmd/tripbot,
 	// which routes it through the platform-gateway — this package must not reach
 	// a platform API itself (package-boundary-init-discipline), so
@@ -54,17 +58,10 @@ type WatchdogDeps struct {
 
 // DefaultWatchdogDeps wires WatchSilentDisconnect's OBS + restart hooks. The
 // caller injects ChannelLive (the gateway live-check).
-//
-// OBSActive uses GetStreamActiveSteady (not GetStreamStatus) so the
-// watchdog skips counting misses when OBS already knows the stream is
-// failing — outputReconnecting=true means OBS will handle recovery
-// itself, and a watchdog-forced restart there would just race OBS's
-// reconnect. Only the truly silent half-open (outputActive=true AND
-// outputReconnecting=false AND Twitch offline) needs intervention.
 func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
-		OBSActive: obs.GetStreamActiveSteady,
-		Restart:   RestartOBSOutput,
+		OBSState: obs.GetStreamState,
+		Restart:  RestartOBSOutput,
 	}
 }
 
@@ -109,9 +106,9 @@ const (
 // the retry re-stops an output that was already going down.
 //
 // active is obs.GetStreamStatus in production, injected so the poll is
-// testable without an OBS WebSocket. GetStreamActiveSteady is deliberately not
-// used here: it reads false while OBS is reconnecting, which is a still-active
-// output and would let StartStream race the very teardown this waits out.
+// testable without an OBS WebSocket. It must be the raw outputActive read and
+// not a steady-state one: a reconnecting output is still active, and treating
+// it as stopped would let StartStream race the very teardown this waits out.
 func awaitOutputStopped(ctx context.Context, active func(context.Context) (bool, error)) error {
 	deadline := time.Now().Add(stopTimeout)
 	for {
@@ -133,6 +130,16 @@ func awaitOutputStopped(ctx context.Context, active func(context.Context) (bool,
 	}
 }
 
+// reconnectGrace is how long OBS's own reconnect is left alone before the
+// watchdog starts treating a reconnecting output as an active one. It exists
+// because OBS's reconnect is not guaranteed to retry: on 2026-08-28 the Twitch
+// RTMP session died, OBS logged one "Reconnecting in 2.00 seconds..", never
+// attempted again, and the stream stayed dark for 31 minutes while the watchdog
+// zeroed its counter every tick. Three minutes is well clear of a genuine
+// reconnect — those land in seconds — and still bounded well inside the time it
+// took anyone to notice by hand.
+const reconnectGrace = 3 * time.Minute
+
 // WatchSilentDisconnect detects the state where OBS reports outputActive=true
 // but the platform reports the channel offline, and calls deps.Restart after
 // `threshold` consecutive misalignments. `cooldown` bounds how often recovery
@@ -152,7 +159,7 @@ func awaitOutputStopped(ctx context.Context, active func(context.Context) (bool,
 // divergence is only visible from outside OBS.
 func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time.Duration, threshold int, cooldown time.Duration) {
 	misses, liveStreak := 0, 0
-	var lastRestart, lastAnswer time.Time
+	var lastRestart, lastAnswer, reconnectingSince time.Time
 	// How long collected misses outlive the last definite live/offline answer:
 	// the same span it takes to declare a death, so evidence never survives
 	// longer than it would have taken to act on it.
@@ -168,7 +175,7 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			obsActive, err := deps.OBSActive(ctx)
+			obsState, err := deps.OBSState(ctx)
 			if err != nil {
 				// OBS unreachable — let PollStreamingActive's gauge be the
 				// alert signal. Reset misses so a transient OBS blip doesn't
@@ -177,12 +184,33 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 				misses = 0
 				continue
 			}
-			if !obsActive {
+			if obsState == obs.StreamInactive {
 				// OBS itself isn't streaming — nothing for the watchdog to
 				// do. The operator-driven "start streaming" gesture is
 				// outside our scope.
-				misses = 0
+				misses, reconnectingSince = 0, time.Time{}
 				continue
+			}
+			if obsState == obs.StreamReconnecting {
+				// OBS has admitted the session failed and is retrying. Stand
+				// down only for as long as its own retry deserves the chance:
+				// past reconnectGrace, treat the output like any other active
+				// one and let the live-check decide, because a reconnect that
+				// has not landed by now is not recovery in progress.
+				if reconnectingSince.IsZero() {
+					reconnectingSince = time.Now()
+				}
+				if since := time.Since(reconnectingSince); since < reconnectGrace {
+					// Misses are held rather than zeroed: a reconnect arriving
+					// mid-divergence is more evidence of a dark channel, not a
+					// reason to forget what was already counted.
+					slog.WarnContext(ctx, "watchdog: obs reconnecting, holding",
+						"reconnecting_for", since, "grace", reconnectGrace,
+						"misses", misses)
+					continue
+				}
+			} else {
+				reconnectingSince = time.Time{}
 			}
 			live, err := deps.ChannelLive(ctx)
 			if err != nil {
@@ -242,6 +270,10 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			// resulting StartStream rejection retried 24 times in 9 hours,
 			// each attempt re-stopping an output already mid-teardown.
 			lastRestart = time.Now()
+			// A forced Stop+Start replaces whatever reconnect was in flight, so
+			// the next one starts its grace over rather than inheriting this
+			// one's age.
+			reconnectingSince = time.Time{}
 			restartErr := deps.Restart(ctx)
 			// Recorded before the error check, so a recovery that keeps failing
 			// is visible. Counting only successes made the worse outage the

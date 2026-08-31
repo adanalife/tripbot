@@ -497,12 +497,3 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
 	return nil
 }
-
-// The *StreamName functions expose the stream names so consumers (the admin
-// hub, the standalone console) can bind ordered consumers to them without
-// re-deriving the constants.
-func ChatStreamName() string              { return chatStreamName }
-func VideoStreamName() string             { return videoStreamName }
-func AuthStreamName() string              { return authStreamName }
-func YoutubeBroadcastStreamName() string  { return youtubeStreamName }
-func FacebookBroadcastStreamName() string { return facebookStreamName }

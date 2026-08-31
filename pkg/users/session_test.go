@@ -104,9 +104,6 @@ func TestLogin_SelfHealsAfterFindOrCreateFailure(t *testing.T) {
 	cancel()
 
 	user := s.LoginIfNecessary(failing, "flaky")
-	if user == nil {
-		t.Fatal("login must still return a User when the lookup fails")
-	}
 	if user.ID != 0 {
 		t.Errorf("expected a zero User for an unreachable DB, got %+v", user)
 	}
@@ -302,7 +299,7 @@ func TestCheckpointMiles(t *testing.T) {
 	s.mu.Unlock()
 
 	live, _ := s.get("parked")
-	before := s.CurrentMonthlyMiles(ctx, *live)
+	before := s.CurrentMonthlyMiles(ctx, live)
 
 	s.CheckpointMiles(ctx)
 
@@ -320,7 +317,7 @@ func TestCheckpointMiles(t *testing.T) {
 	// The reported totals don't move: what the checkpoint added to the DB it
 	// subtracted from the in-flight half.
 	live, _ = s.get("parked")
-	if after := s.CurrentMonthlyMiles(ctx, *live); after-before > 0.1 || before-after > 0.1 {
+	if after := s.CurrentMonthlyMiles(ctx, live); after-before > 0.1 || before-after > 0.1 {
 		t.Errorf("monthly miles moved across the checkpoint: %v -> %v", before, after)
 	}
 	// An other-user lookup reads a fresh DB row, which must not re-count them.

@@ -135,7 +135,7 @@ func runUntilExhausted(t *testing.T, deps *fakeDeps, cfg Config) {
 	cfg.Interval = 2 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go Watch(ctx, deps.deps(), cfg)
+	go Watch(ctx, "twitch", deps.deps(), cfg)
 	select {
 	case <-deps.doneCh:
 	case <-time.After(2 * time.Second):
@@ -311,6 +311,48 @@ func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 			t.Fatal("no probe while stranded on the fallback: SomaFM can never be seen to recover")
 		}
 	})
+}
+
+// The probe backs off as an outage wears on. Without it a fallback that never
+// ends is a probe that never stops — ~12k connections a day to one edge, from
+// the one state whose whole problem may be that the edge has firewalled us.
+func TestWatch_ProbeBacksOffWhileTheOutageLasts(t *testing.T) {
+	const ticks = 60 // 3 to strand us, 57 stranded
+	script := make([]tick, ticks)
+	for i := range script {
+		script[i] = ended
+	}
+	deps := newFakeDeps(script)
+	runUntilExhausted(t, deps, cfg(3, 4, time.Minute))
+
+	// Sitting out 1, 3, 7, 15 then 31 ticks between attempts, 57 stranded ticks
+	// are 6 probes. The bound is loose because the loop keeps ticking against
+	// the held last tick until the runner cancels it.
+	if got := deps.probes.Load(); got > 10 {
+		t.Fatalf("probes over %d stranded ticks: want a handful, got %d (no backoff would be one per tick)", ticks-3, got)
+	}
+	if got := deps.probes.Load(); got < 2 {
+		t.Fatalf("probes: want the edge polled at least a few times, got %d", got)
+	}
+}
+
+// A backed-off probe that finally answers must not make the swap back wait out
+// another four of its own intervals — the edge is up and the stream should
+// follow it within a few ticks.
+func TestWatch_RecoveryIsPromptAfterABackedOffOutage(t *testing.T) {
+	up := tick{state: obs.MediaStatePlaying, reachable: true, db: -18, fresh: true}
+	script := make([]tick, 0, 40)
+	for range 30 {
+		script = append(script, ended)
+	}
+	for range 10 {
+		script = append(script, up)
+	}
+	deps := newFakeDeps(script)
+	runUntilExhausted(t, deps, cfg(3, 4, 0))
+	if got := deps.toSomaFM.Load(); got != 1 {
+		t.Fatalf("to_somafm swaps: want 1, got %d — a backed-off probe stranded the stream past the recovery", got)
+	}
 }
 
 func TestWatch_AdvancesTheFallbackAlbumWhileStranded(t *testing.T) {

@@ -106,6 +106,17 @@ const (
 	ServiceMediaMTXTikTok    = "mediamtx-tiktok"
 	ServiceMediaMTXFacebook  = "mediamtx-facebook"
 	ServiceMediaMTXInstagram = "mediamtx-instagram"
+	// ServiceGateway* name the per-platform platform-gateway Services — the
+	// only holder of each platform's API credential, and the host tripbot's
+	// <PLATFORM>_API_URL dials for chat and Helix. The adanalife/platform-gateway
+	// repo's cdk8s authors the Services; the names live here because tripbot's
+	// own cdk8s, the gateway's cdk8s, and infra's Argo all have to agree on
+	// them, and nothing else fails when they drift.
+	ServiceGatewayTwitch    = "gateway-twitch"
+	ServiceGatewayYouTube   = "gateway-youtube"
+	ServiceGatewayTikTok    = "gateway-tiktok"
+	ServiceGatewayFacebook  = "gateway-facebook"
+	ServiceGatewayInstagram = "gateway-instagram"
 )
 
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
@@ -130,6 +141,9 @@ const (
 	// PortMediaMTXRTSP is the RTSP port on the MediaMTX relay pods — the port
 	// playout publishes to and OBS reads from.
 	PortMediaMTXRTSP = 8554
+	// PortGatewayHTTP is the platform-gateway HTTP API port — the port behind
+	// every <PLATFORM>_API_URL and the consent Ingress backend.
+	PortGatewayHTTP = 8080
 	// PortNATS is the NATS client port.
 	PortNATS = 4222
 	// PortPostgres is the Postgres port.
@@ -211,6 +225,11 @@ func Current() Contract {
 			{"mediamtx_tiktok", ServiceMediaMTXTikTok},
 			{"mediamtx_facebook", ServiceMediaMTXFacebook},
 			{"mediamtx_instagram", ServiceMediaMTXInstagram},
+			{"gateway_twitch", ServiceGatewayTwitch},
+			{"gateway_youtube", ServiceGatewayYouTube},
+			{"gateway_tiktok", ServiceGatewayTikTok},
+			{"gateway_facebook", ServiceGatewayFacebook},
+			{"gateway_instagram", ServiceGatewayInstagram},
 			{"nats", ServiceNATS},
 			{"postgres", ServicePostgres},
 		},
@@ -223,6 +242,7 @@ func Current() Contract {
 			{"onscreens_http", PortOnscreensHTTP},
 			{"tripbot_http", PortTripbotHTTP},
 			{"mediamtx_rtsp", PortMediaMTXRTSP},
+			{"gateway_http", PortGatewayHTTP},
 			{"nats", PortNATS},
 			{"postgres", PortPostgres},
 		},
