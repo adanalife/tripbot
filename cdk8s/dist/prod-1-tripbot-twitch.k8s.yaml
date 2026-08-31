@@ -10,7 +10,7 @@ data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
   COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
-  DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local
   ENV: production
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
@@ -43,7 +43,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: a82dc69052
+        adanalife.dev/config-hash: 0472fd126d
       labels:
         app: tripbot-twitch
     spec:
