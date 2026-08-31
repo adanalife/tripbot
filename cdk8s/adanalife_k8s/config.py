@@ -260,6 +260,8 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
+        # prod runs on the CloudNativePG cluster `pg` in prod-1-data.
+        postgres_service="pg-rw",
         # Every platform's app stack (tripbot / onscreens) is emitted and Argo
         # manages it, but births parked at replicas:0 — a console scale-up brings
         # one live (Argo ignores .spec.replicas, so the scale sticks). Only twitch
@@ -327,8 +329,7 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
-        # Stage runs on the CloudNativePG cluster `pg`; prod is still the legacy
-        # StatefulSet until its own cutover.
+        # Stage runs on the CloudNativePG cluster `pg` in stage-1-data.
         postgres_service="pg-rw",
         # Every stage platform is present but births parked at replicas:0 — the
         # resting state is everything-off, and a platform comes online via the
