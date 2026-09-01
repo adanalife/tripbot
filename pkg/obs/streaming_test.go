@@ -35,7 +35,9 @@ func TestPollConnectFailureStaysBelowError(t *testing.T) {
 	defer slog.SetDefault(prev)
 
 	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
-	poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second)
+	if poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
+		t.Fatal("poll reported a connection to a refused port")
+	}
 
 	if rec.max >= slog.LevelError {
 		t.Fatalf("connect failure logged at %v; must stay below ERROR to keep it out of Sentry", rec.max)
@@ -72,5 +74,41 @@ func TestStreamStateFromEvent(t *testing.T) {
 				t.Fatalf("active = %v, want %v", active, tc.wantActive)
 			}
 		})
+	}
+}
+
+// The dial backoff is what keeps a parked platform's OBS off the error feed: it
+// retried every 10s forever and each attempt logged. A dropped connection still
+// reconnects at the base wait, so a genuine blip is not penalised.
+func TestReconnectWait(t *testing.T) {
+	for _, tc := range []struct {
+		failures int
+		want     time.Duration
+	}{
+		{0, 10 * time.Second},
+		{1, 20 * time.Second},
+		{2, 40 * time.Second},
+		{4, 160 * time.Second},
+		{5, maxReconnectWait},
+		{99, maxReconnectWait},
+	} {
+		if got := reconnectWait(tc.failures); got != tc.want {
+			t.Errorf("reconnectWait(%d) = %v, want %v", tc.failures, got, tc.want)
+		}
+	}
+}
+
+// Repeat failures within one outage drop to DEBUG — the first is the one worth
+// seeing, and a scaled-to-zero OBS otherwise emits an identical WARN forever.
+func TestPollRepeatConnectFailureIsQuiet(t *testing.T) {
+	rec := &levelRecorder{Handler: slog.Default().Handler(), max: slog.LevelDebug}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(rec))
+	defer slog.SetDefault(prev)
+
+	poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
+
+	if rec.max >= slog.LevelWarn {
+		t.Fatalf("repeat connect failure logged at %v; expected below WARN", rec.max)
 	}
 }
