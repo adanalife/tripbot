@@ -12,7 +12,7 @@ const domain = "onscreens"
 // env's NATS, and each onscreens-server (onscreens-twitch, onscreens-youtube)
 // subscribes only to its own leaf, so a Twitch-triggered overlay (a
 // leaderboard, a timewarp) never renders on the YouTube stream — same shape as
-// tripbot.<env>.vlc.lastplayed.<platform>. Unexported so callers go through
+// tripbot.<env>.playout.lastplayed.<platform>. Unexported so callers go through
 // the typed constructors below, keeping the overlay/verb strings in one place
 // and out of reach of typos at the call site.
 func subject(env, platform, overlay, verb string) string {
@@ -27,7 +27,7 @@ func MiddleHideSubject(env, platform string) string { return subject(env, platfo
 // restores it (tripbot.<env>.onscreens.middle.state.<platform>). Unlike
 // middle.show / middle.hide (commands from tripbot) this is *state* the server
 // emits about itself — backed by a MaxMsgsPerSubject=1 stream, the same shape
-// as the vlc lastplayed cache (tripbot.<env>.vlc.lastplayed.<platform>). The
+// as the playout lastplayed cache (tripbot.<env>.playout.lastplayed.<platform>). The
 // platform leaf keeps onscreens-twitch and onscreens-youtube from clobbering
 // one another's restore cache.
 func MiddleStateSubject(env, platform string) string {

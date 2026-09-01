@@ -189,7 +189,7 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 		player: video.NewPlayer(
 			cfg,
 			onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
-			playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
+			playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
 		),
 		flagClient: feature.NewInMemoryClient(nil),
 		gateway:    newGatewayClient(cfg),
