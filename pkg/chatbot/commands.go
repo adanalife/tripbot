@@ -765,7 +765,15 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		}
 		return
 	}
-	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	newTotal, err := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	if err != nil {
+		slog.ErrorContext(ctx, "error correcting miles", "err", err, "username", target)
+		a.Chat.Say("Couldn't apply that right now, try again in a bit")
+		return
+	}
+	// The event only goes in once the correction has persisted: events is
+	// append-only, so a correction event with no matching users row is a
+	// permanent divergence in the rollups derived from it.
 	if err := a.Events.Correction(ctx, target, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}

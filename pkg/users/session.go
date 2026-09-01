@@ -376,7 +376,12 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 // should have earned by watching, and the monthly board is what !miles leads
 // with and the overlay rotates. Gifted miles are the other case and stay
 // lifetime-only — see GiveEveryoneMiles.
-func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+//
+// An error means the correction was not applied at all: the returned total is
+// meaningless, so callers must neither report it nor record a correction event
+// for it. events is append-only, so an event without the matching users write
+// is a permanent divergence in the rollups.
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) (float32, error) {
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
 	var updated User
@@ -386,20 +391,23 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 	}
 	s.mu.Unlock()
 	if ok {
+		// login() never caches an ID-less user, so this row is always saveable;
+		// and the live copy carries the delta either way, so logout re-persists
+		// it if this write hits a transient failure.
 		updated.save(ctx)
 		s.correctMonthly(ctx, updated, delta)
-		return updated.Miles
+		return updated.Miles, nil
 	}
 	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
 	if err != nil {
-		// save() refuses an ID-less user, so the correction is dropped rather
-		// than half-applied; the returned total reflects only the delta.
-		slog.ErrorContext(ctx, "error finding or creating user", "err", err, "username", username)
+		// save() refuses an ID-less user, so there is no total to report: the
+		// correction is dropped rather than half-applied.
+		return 0, err
 	}
 	u.Miles += delta
 	u.save(ctx)
 	s.correctMonthly(ctx, u, delta)
-	return u.Miles
+	return u.Miles, nil
 }
 
 // correctMonthly applies a correction's delta to the current monthly

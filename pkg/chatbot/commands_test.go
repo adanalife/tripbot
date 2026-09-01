@@ -1318,6 +1318,83 @@ func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
 	}
 }
 
+// A correction that didn't persist has no running total to report, so the reply
+// has to say so rather than post a number viewers would read as authoritative.
+func TestGiveMilesCmd_CorrectMilesFails_SaysFailureNotANumber(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{
+		FindResult:      users.User{ID: 7, Username: "target"},
+		Miles:           60,
+		CorrectMilesErr: users.ErrLookupFailed,
+	}
+	app.Sessions = rec
+
+	out, _ := captureSay(t, app)
+
+	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+
+	msg := out()
+	if !strings.Contains(msg, "try again in a bit") {
+		t.Errorf("expected a failure message, got %q", msg)
+	}
+	for _, unwanted := range []string{"now has", "50", "60"} {
+		if strings.Contains(msg, unwanted) {
+			t.Errorf("expected no total in the reply, got %q", msg)
+		}
+	}
+	want := []string{`Find("target")`, `CorrectMiles("target", 50)`}
+	if !slices.Equal(rec.Calls, want) {
+		t.Errorf("expected %v, got %v", want, rec.Calls)
+	}
+}
+
+// The correction event is the append-only audit trail the miles rollups derive
+// from, so it must exist exactly when the users row got the correction and
+// never otherwise — an orphan event is a permanent divergence.
+func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
+	t.Run("a persisted correction is reported and recorded", func(t *testing.T) {
+		app := newTestApp(video.Video{})
+		app.Sessions = &recordingSessions{
+			FindResult: users.User{ID: 7, Username: "target"},
+			Miles:      60,
+		}
+		rec := &recordingEvents{}
+		app.Events = rec
+		out, _ := captureSay(t, app)
+
+		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+
+		if msg := out(); msg != "@target now has 60.00mi" {
+			t.Errorf("expected the running total in the reply, got %q", msg)
+		}
+		want := []recordedCorrection{{Username: "target", Delta: 50}}
+		if !slices.Equal(rec.Corrections, want) {
+			t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
+		}
+	})
+
+	t.Run("a dropped correction records nothing", func(t *testing.T) {
+		app := newTestApp(video.Video{})
+		app.Sessions = &recordingSessions{
+			FindResult:      users.User{ID: 7, Username: "target"},
+			Miles:           60,
+			CorrectMilesErr: users.ErrCreateFailed,
+		}
+		rec := &recordingEvents{}
+		app.Events = rec
+		out, _ := captureSay(t, app)
+
+		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+
+		if msg := out(); strings.Contains(msg, "now has") {
+			t.Errorf("expected no total in the reply, got %q", msg)
+		}
+		if len(rec.Corrections) != 0 {
+			t.Errorf("expected no correction event, got %+v", rec.Corrections)
+		}
+	})
+}
+
 func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingSessions{}
