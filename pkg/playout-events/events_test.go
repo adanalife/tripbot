@@ -11,14 +11,14 @@ func TestSubjects(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"play.random", PlayRandomSubject("staging", "twitch"), "tripbot.staging.vlc.play.random.twitch"},
-		{"play.file", PlayFileSubject("prod", "youtube"), "tripbot.prod.vlc.play.file.youtube"},
-		{"play.at", PlayFileAtSubject("prod", "twitch"), "tripbot.prod.vlc.play.at.twitch"},
-		{"skip", SkipSubject("development", "youtube"), "tripbot.development.vlc.skip.youtube"},
-		{"back", BackSubject("staging", "twitch"), "tripbot.staging.vlc.back.twitch"},
-		{"seek", SeekSubject("production", "twitch"), "tripbot.production.vlc.seek.twitch"},
-		{"lastplayed", LastPlayedSubject("prod", "twitch"), "tripbot.prod.vlc.lastplayed.twitch"},
-		{"lastplayed wildcard", LastPlayedWildcard("prod"), "tripbot.prod.vlc.lastplayed.*"},
+		{"play.random", PlayRandomSubject("staging", "twitch"), "tripbot.staging.playout.play.random.twitch"},
+		{"play.file", PlayFileSubject("prod", "youtube"), "tripbot.prod.playout.play.file.youtube"},
+		{"play.at", PlayFileAtSubject("prod", "twitch"), "tripbot.prod.playout.play.at.twitch"},
+		{"skip", SkipSubject("development", "youtube"), "tripbot.development.playout.skip.youtube"},
+		{"back", BackSubject("staging", "twitch"), "tripbot.staging.playout.back.twitch"},
+		{"seek", SeekSubject("production", "twitch"), "tripbot.production.playout.seek.twitch"},
+		{"lastplayed", LastPlayedSubject("prod", "twitch"), "tripbot.prod.playout.lastplayed.twitch"},
+		{"lastplayed wildcard", LastPlayedWildcard("prod"), "tripbot.prod.playout.lastplayed.*"},
 	}
 	for _, tc := range cases {
 		if tc.got != tc.want {

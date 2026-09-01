@@ -21,12 +21,12 @@ data:
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
+  PLAYOUT_HOST: playout-tiktok:8080
   READ_ONLY: "false"
   SENTRY_ENVIRONMENT: stage-1
   STREAM_PLATFORM: tiktok
   TIKTOK_API_URL: http://gateway-tiktok.stage-1.svc.cluster.local:8080
   TRIPBOT_SERVER_PORT: "8080"
-  VLC_SERVER_HOST: playout-tiktok:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 4a250f4191
+        adanalife.dev/config-hash: d9aae9a3d5
       labels:
         app: tripbot-tiktok
     spec:

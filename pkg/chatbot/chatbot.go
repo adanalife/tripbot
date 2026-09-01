@@ -151,7 +151,7 @@ func New(cfg *c.TripbotConfig) *App {
 		Platform:    cfg.Platform,
 		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Playout:     realPlayout{c: playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Video:       realVideo{},
 		Chat:        disconnectedChat{},
 		Sessions:    realSessions{},

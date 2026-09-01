@@ -17,7 +17,7 @@ import (
 // over the single MiddleStateSubject. A restarted onscreens-server reads it
 // back to restore whatever text was on screen before the restart, so the
 // permanent middle overlay survives a reboot. Same shape as the playout
-// TRIPBOT_VLC_LASTPLAYED cache.
+// TRIPBOT_PLAYOUT_LASTPLAYED cache.
 const middleStateStreamName = "TRIPBOT_ONSCREENS_MIDDLE"
 
 // EnsureMiddleStateStream idempotently declares the middle-text state stream.

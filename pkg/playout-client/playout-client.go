@@ -19,7 +19,7 @@ import (
 // currently-playing file over HTTP. Construct via New(host, nats, env, platform).
 //
 // The four fire-and-forget commands (PlayRandom, PlayFileInPlaylist, Skip,
-// Back) publish to tripbot.<env>.vlc.<verb>.<platform>; playout's subscriber
+// Back) publish to tripbot.<env>.playout.<verb>.<platform>; playout's subscriber
 // acts on them. The HTTP command path (the mirror that preceded the peel) is
 // gone. nats may be nil (tests that don't exercise pubsub) — publishes no-op
 // then. CurrentlyPlaying is a read and stays on HTTP, so host is still required.
@@ -70,7 +70,7 @@ func (c *Client) publish(ctx context.Context, subject string, ev any) {
 
 // CurrentlyPlaying finds the currently-playing video path
 func (c *Client) CurrentlyPlaying(ctx context.Context) string {
-	response, err := c.get(ctx, c.serverURL+"/vlc/current")
+	response, err := c.get(ctx, c.serverURL+"/playout/current")
 	if err != nil {
 		slog.ErrorContext(ctx, "unable to determine current video", "err", err)
 		return ""
@@ -81,7 +81,7 @@ func (c *Client) CurrentlyPlaying(ctx context.Context) string {
 // lastPlayedStream is the JetStream last-value cache playout publishes its
 // now-playing state to. playout declares it; this side only reads, and a
 // reader that finds it missing degrades to its own fallback.
-const lastPlayedStream = "TRIPBOT_VLC_LASTPLAYED"
+const lastPlayedStream = "TRIPBOT_PLAYOUT_LASTPLAYED"
 
 // lastPlayedStaleAfter is how old a position report may be and still be worth
 // advancing by wall clock. playout ticks every 5 s, so past this it has stopped
