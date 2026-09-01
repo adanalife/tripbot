@@ -262,6 +262,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			}
 			if !synced {
 				deps.Resync(ctx)
+				instrumentation.OBSBackgroundAudio.IncResync(platform)
 				synced = true
 			}
 			playing := state == obs.MediaStatePlaying
