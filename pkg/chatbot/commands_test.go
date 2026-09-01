@@ -891,31 +891,7 @@ func TestGuessCmd_StatelessVideo_RecordsNoGuess(t *testing.T) {
 // adminUser matches CHANNEL_NAME in .env.testing, satisfying c.UserIsAdmin.
 const adminUser = "test"
 
-func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
-	app := newTestApp(video.Video{})
-	out, _ := captureSay(t, app)
-
-	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hello"})
-
-	if out() != "" {
-		t.Errorf("expected silence for non-admin, got %q", out())
-	}
-}
-
 // --- refreshOverlaysCmd ---
-
-func TestRefreshOverlaysCmd_NonAdminIsSilent(t *testing.T) {
-	app := newTestApp(video.Video{})
-	obs := &recordingOBS{Refreshed: 5}
-	app.OBS = obs
-	out, _ := captureSay(t, app)
-
-	app.refreshOverlaysCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if out() != "" {
-		t.Errorf("expected silence for non-admin, got %q", out())
-	}
-}
 
 func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
 	app := newTestApp(video.Video{})
@@ -992,20 +968,6 @@ func TestMiddleCmd_Text_DrivesShowOverlay(t *testing.T) {
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != `ShowMiddleText("hello everyone")` {
 		t.Errorf("expected ShowMiddleText with joined text, got %v", rec.Calls)
-	}
-}
-
-func TestMiddleCmd_NonAdmin_DoesNotDriveOverlay(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
-
-	// A non-admin's params should be ignored — no chat, no overlay call.
-	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hide"})
-	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hello"})
-
-	if len(rec.Calls) != 0 {
-		t.Errorf("expected no overlay calls for non-admin, got %v", rec.Calls)
 	}
 }
 
@@ -1340,18 +1302,6 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 
 // --- makeBotCmd / unBotCmd ---
 
-func TestGiveMilesCmd_NonAdmin_NoOp(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingSessions{}
-	app.Sessions = rec
-
-	app.giveMilesCmd(context.Background(), newTestUser("viewer1"), []string{"target", "50"})
-
-	if len(rec.Calls) != 0 {
-		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
-	}
-}
-
 func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
 	// missing amount, then non-numeric amount — both must bail before touching
 	// Sessions (Find/CorrectMiles), so no correction is applied.
@@ -1365,18 +1315,6 @@ func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
 		if len(rec.Calls) != 0 {
 			t.Errorf("params %v: expected no Sessions calls, got %v", params, rec.Calls)
 		}
-	}
-}
-
-func TestMakeBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingSessions{}
-	app.Sessions = rec
-
-	app.makeBotCmd(context.Background(), newTestUser("viewer1"), []string{"target"})
-
-	if len(rec.Calls) != 0 {
-		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
 	}
 }
 
@@ -1442,18 +1380,6 @@ func TestUnBotCmd_Admin_FlipsToFalse(t *testing.T) {
 	want := `SetBot("innocent", false)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
 		t.Errorf("expected %s, got %v", want, rec.Calls)
-	}
-}
-
-func TestUnBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingSessions{}
-	app.Sessions = rec
-
-	app.unBotCmd(context.Background(), newTestUser("viewer1"), []string{"target"})
-
-	if len(rec.Calls) != 0 {
-		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
 	}
 }
 

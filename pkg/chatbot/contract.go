@@ -31,6 +31,9 @@ type CommandSpec struct {
 	// subscriber signal — see (*Command).checkAccess.
 	RequiresFollow     bool `json:"requires_follow,omitempty"`
 	RequiresSubscriber bool `json:"requires_subscriber,omitempty"`
+	// RequiresAdmin marks a command only the broadcaster may run, so a
+	// consumer can render !makebot differently from !weather.
+	RequiresAdmin bool `json:"requires_admin,omitempty"`
 	// Platforms is where this command actually dispatches, already resolved
 	// from both gating rules (a command's own Platforms list, and the
 	// platform's command scope). It is the resolved answer rather than the two
@@ -57,6 +60,7 @@ func ChatCommands() []CommandSpec {
 			Aliases:            cmd.Aliases,
 			RequiresFollow:     cmd.RequiresFollow,
 			RequiresSubscriber: cmd.RequiresSubscriber,
+			RequiresAdmin:      cmd.RequiresAdmin,
 			Platforms:          enabledPlatforms(cmd, platforms),
 		})
 	}

@@ -621,10 +621,12 @@ func TestTargetUsername(t *testing.T) {
 type fakeUser struct {
 	follower   bool
 	subscriber bool
+	admin      bool
 }
 
 func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
 func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
+func (f *fakeUser) IsAdmin() bool                              { return f.admin }
 
 // sessionUser (a *users.User + the installed *Sessions) is the production
 // chatUser; this asserts it satisfies the seam.
@@ -730,5 +732,91 @@ func TestCheckAccess_RequiresSubscriber_PlatformWithoutSubscribers(t *testing.T)
 		if said != "" {
 			t.Errorf("%s: expected no denial message, got %q", platform, said)
 		}
+	}
+}
+
+// The admin gate declines in silence by default — an admin command shouldn't
+// advertise itself to the chat that can't run it.
+func TestCheckAccess_RequiresAdmin_NonAdmin(t *testing.T) {
+	cmd := &Command{Trigger: "!test", RequiresAdmin: true}
+	var said string
+	ok, refused := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{admin: false}, func(msg string) { said = msg })
+	if ok {
+		t.Error("expected false for non-admin")
+	}
+	if refused != events.RefusedAdminGate {
+		t.Errorf("refused = %q, want %q", refused, events.RefusedAdminGate)
+	}
+	if said != "" {
+		t.Errorf("expected no message, got %q", said)
+	}
+}
+
+func TestCheckAccess_RequiresAdmin_AdminDeniedMsg(t *testing.T) {
+	cmd := &Command{Trigger: "!test", RequiresAdmin: true, AdminDeniedMsg: "Nice try bucko"}
+	var said string
+	if ok, _ := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{admin: false}, func(msg string) { said = msg }); ok {
+		t.Error("expected false for non-admin")
+	}
+	if said != "Nice try bucko" {
+		t.Errorf("got %q, want the command's AdminDeniedMsg", said)
+	}
+}
+
+func TestCheckAccess_RequiresAdmin_Admin(t *testing.T) {
+	cmd := &Command{Trigger: "!test", RequiresAdmin: true, AdminDeniedMsg: "Nice try bucko"}
+	var said string
+	if ok, _ := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{admin: true}, func(msg string) { said = msg }); !ok {
+		t.Error("expected true for admin")
+	}
+	if said != "" {
+		t.Errorf("expected no message, got %q", said)
+	}
+}
+
+// Every command that used to gate itself inside its handler now declares it,
+// so a new admin command that forgets the field fails here rather than
+// shipping wide open.
+func TestRegistry_AdminCommandsDeclareRequiresAdmin(t *testing.T) {
+	want := map[string]bool{
+		"!shutdown": true, "!refreshoverlays": true, "!secretinfo": true,
+		"!middle": true, "!makebot": true, "!unbot": true, "!givemiles": true,
+	}
+	for _, cmd := range (&App{}).buildRegistry() {
+		if want[cmd.Trigger] && !cmd.RequiresAdmin {
+			t.Errorf("%s: RequiresAdmin = false, want true", cmd.Trigger)
+		}
+		delete(want, cmd.Trigger)
+	}
+	for trigger := range want {
+		t.Errorf("%s: missing from the registry", trigger)
+	}
+}
+
+// The admin gate has to bite in dispatch, not just read true in the registry:
+// a non-admin gets no chat, no side effect, and a recorded refusal.
+func TestDispatch_AdminGateRefusesAndRecords(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.UserSessions = users.New(testConf, stubChatterSource{})
+	rec := &recordingEvents{}
+	app.Events = rec
+	out, _ := captureSay(t, app)
+
+	var ran bool
+	cmd := &Command{
+		Trigger:       "!test",
+		RequiresAdmin: true,
+		Handler:       func(context.Context, *users.User, []string) { ran = true },
+	}
+	app.dispatch(context.Background(), cmd, "!test", newTestUser("viewer1"), nil)
+
+	if ran {
+		t.Error("handler ran despite the admin gate")
+	}
+	if out() != "" {
+		t.Errorf("expected silence for a non-admin, got %q", out())
+	}
+	if len(rec.Refusals) != 1 || rec.Refusals[0].Reason != events.RefusedAdminGate {
+		t.Errorf("refusals = %+v, want one %q", rec.Refusals, events.RefusedAdminGate)
 	}
 }

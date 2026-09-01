@@ -19,6 +19,12 @@ type Command struct {
 	Handler            HandlerFunc
 	RequiresFollow     bool
 	RequiresSubscriber bool
+	RequiresAdmin      bool
+
+	// AdminDeniedMsg is what chat hears when a non-admin runs this command.
+	// Empty is the default and the common case: an admin command declines in
+	// silence rather than advertising itself.
+	AdminDeniedMsg string
 
 	// Platforms restricts a command to specific streaming platforms. Leave it
 	// nil for a cross-platform command (the common case). Set it for a command

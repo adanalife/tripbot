@@ -309,6 +309,8 @@ const (
 	// RefusedSubGate — the command requires a subscription and the viewer
 	// isn't subscribed. Only reachable where the platform reports subscribers.
 	RefusedSubGate = "sub_gate"
+	// RefusedAdminGate — the command is admin-only and the viewer isn't one.
+	RefusedAdminGate = "admin_gate"
 	// RefusedCooldown — the viewer ran it too recently to run it again.
 	RefusedCooldown = "cooldown"
 )

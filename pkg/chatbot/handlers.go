@@ -50,6 +50,7 @@ func normalizeCommandPrefix(msg string) string {
 type chatUser interface {
 	HasCommandAvailable(ctx context.Context) bool
 	IsSubscriber() bool
+	IsAdmin() bool
 }
 
 // checkAccess returns true when the user is allowed to run cmd on platform.
@@ -63,7 +64,16 @@ type chatUser interface {
 // (platformHasSubscribers). Elsewhere it would reject every viewer forever, so
 // a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
 // instead.
+//
+// The admin gate is silent unless the command sets AdminDeniedMsg, where the
+// follower and subscriber gates always explain themselves.
 func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) (ok bool, refused string) {
+	if cmd.RequiresAdmin && !user.IsAdmin() {
+		if cmd.AdminDeniedMsg != "" {
+			say(cmd.AdminDeniedMsg)
+		}
+		return false, events.RefusedAdminGate
+	}
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		say(followerMsg)
 		return false, events.RefusedFollowGate
@@ -89,6 +99,9 @@ func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 }
 func (su sessionUser) IsSubscriber() bool {
 	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
+}
+func (su sessionUser) IsAdmin() bool {
+	return su.cfg.UserIsAdmin(su.u.Username)
 }
 
 // dispatch runs cmd for user. typed is the token that matched the command —
