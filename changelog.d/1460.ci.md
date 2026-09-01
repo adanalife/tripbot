@@ -1,0 +1,1 @@
+The release-please changelog build now recovers unnumbered changelog fragments (from a PR that merged while the numbering job was still queued) by reading the PR number off the squash commit that added them, instead of letting them publish with no PR link.
