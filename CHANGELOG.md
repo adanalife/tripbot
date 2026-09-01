@@ -9,6 +9,36 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.6.0] — 2026-09-01
+
+### Chatbot
+
+- Admin-only chat commands are now declared on the command itself (`RequiresAdmin`) and enforced by the single access gate, instead of an ad-hoc check inside each handler — and `chat-commands.json` now says which commands are admin-only. ([#1456](https://github.com/adanalife/tripbot/pull/1456))
+- A chat command that isn't supported on the current platform now replies saying so, instead of failing silently as if the bot were broken. ([#1457](https://github.com/adanalife/tripbot/pull/1457))
+
+### Playout
+
+- Speak the `playout` wire names: commands publish to `tripbot.<env>.playout.*`, the playhead reads `TRIPBOT_PLAYOUT_LASTPLAYED` and `/playout/current`, and tripbot dials playout via `PLAYOUT_HOST` (was `VLC_SERVER_HOST`). The contract drops the `vlc_twitch`/`vlc_youtube` aliases and renames `vlc_http` → `playout_http`, `vlc_server_host` → `playout_host`. ([#1461](https://github.com/adanalife/tripbot/pull/1461))
+
+### Fixes
+
+- `!givemiles` says so when a correction doesn't land, instead of posting a fabricated total and recording an event for it. `Sessions.CorrectMiles` returns `(float32, error)`; when the target's DB row can't be read or created there is no running total to report, so the reply is "Couldn't apply that right now, try again in a bit". The correction event goes in only once the correction has persisted — `events` is append-only, so an event with no matching `users` write left the miles rollups permanently diverged. ([#1222](https://github.com/adanalife/tripbot/pull/1222))
+- Back the OBS websocket dial off to 5 minutes when it keeps failing, and say so once per outage instead of every retry — a platform whose OBS is scaled to zero was filling 99.7% of the error feed. ([#1458](https://github.com/adanalife/tripbot/pull/1458))
+
+### Deploy / Infra
+
+- prod-1 tripbot connects to the CloudNativePG `pg-rw` Postgres service once prod-1-data is cut over. ([#1437](https://github.com/adanalife/tripbot/pull/1437))
+- prod-1 tripbot manifests re-rendered for the CNPG cutover: DATABASE_HOST now points at pg-rw.prod-1-data (release pin unchanged). ([#1455](https://github.com/adanalife/tripbot/pull/1455))
+
+### CI / Tooling
+
+- The weekly base-image mirror refresh now alerts Discord when it fails. ([#1453](https://github.com/adanalife/tripbot/pull/1453))
+- The release-please changelog build now recovers unnumbered changelog fragments (from a PR that merged while the numbering job was still queued) by reading the PR number off the squash commit that added them, instead of letting them publish with no PR link. ([#1460](https://github.com/adanalife/tripbot/pull/1460))
+
+### Misc
+
+- Count each time the audio watchdog re-reads the live background-audio bed off OBS (`tripbot_background_audio_resyncs_total`), so an OBS restart's bed recovery is visible as a series rather than only as a log line. ([#1459](https://github.com/adanalife/tripbot/pull/1459))
+
 ## [v5.5.0] — 2026-08-30
 
 ### Fixes
