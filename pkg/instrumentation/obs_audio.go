@@ -35,13 +35,16 @@ var (
 		"Total background-audio source swaps performed by the audio-fallback watchdog, labeled by direction (to_fallback|to_somafm). Any to_fallback increment means SomaFM dropped in prod.")
 	backgroundAudioBed = mustGauge("tripbot_background_audio_bed",
 		"1 for the background-audio bed on air, 0 for every other bed, labeled by bed (somafm|carhum|album) and platform. Exactly one bed per platform reads 1 at a time, so this is the 'what is the stream playing' series.")
+	backgroundAudioResyncs = mustCounter("tripbot_background_audio_resyncs_total",
+		"Total times the audio watchdog re-read the live bed off OBS, labeled by platform. The watchdog resyncs on the first tick OBS answers after a tick it didn't, so an increment means OBS went unanswerable and came back — an OBS restart, which boots the source onto its own default bed and used to leave the store reporting the pre-restart one. Exactly one increment per process is the initial read at startup rather than a restart, so read the first as the boot and the rest as recoveries.")
 	backgroundAudioAlbumTracks = mustGauge("tripbot_background_audio_album_tracks",
 		"Number of tracks in the album bed's play order, labeled by platform. 0 while the album bed is on air means nothing advances when the current track ends: the stream falls silent with no error, no log line, and OBS still reporting a healthy source. Alert on album=1 AND tracks=0.")
 )
 
-// OBSBackgroundAudio exposes the background-audio gauges + swap counter.
-// The audio-fallback watchdog records the gauges every tick and increments the
-// swap counter on each source change.
+// OBSBackgroundAudio exposes the background-audio gauges + counters.
+// The audio-fallback watchdog records the gauges every tick, increments the
+// swap counter on each source change, and the resync counter each time it
+// re-reads the live bed off OBS.
 // The bed store records SetBed / SetAlbumTracks whenever the live bed changes
 // or is re-read off OBS.
 var OBSBackgroundAudio = obsBackgroundAudioMetrics{
@@ -52,6 +55,7 @@ var OBSBackgroundAudio = obsBackgroundAudioMetrics{
 	swaps:       obsBackgroundAudioSwaps,
 	bed:         backgroundAudioBed,
 	albumTracks: backgroundAudioAlbumTracks,
+	resyncs:     backgroundAudioResyncs,
 }
 
 type obsBackgroundAudioMetrics struct {
@@ -62,6 +66,7 @@ type obsBackgroundAudioMetrics struct {
 	swaps       metric.Int64Counter
 	bed         metric.Int64Gauge
 	albumTracks metric.Int64Gauge
+	resyncs     metric.Int64Counter
 }
 
 // SetLevelDB records the latest peak output level (already floored at -60).
@@ -104,4 +109,9 @@ func (o obsBackgroundAudioMetrics) SetAlbumTracks(platform string, n int) {
 func (o obsBackgroundAudioMetrics) IncSwap(platform, direction string) {
 	o.swaps.Add(context.Background(), 1,
 		metric.WithAttributes(attribute.String("direction", direction)), platformAttr(platform))
+}
+
+// IncResync counts one re-read of the live bed off OBS.
+func (o obsBackgroundAudioMetrics) IncResync(platform string) {
+	o.resyncs.Add(context.Background(), 1, platformAttr(platform))
 }
