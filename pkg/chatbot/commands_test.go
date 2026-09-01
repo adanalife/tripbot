@@ -13,7 +13,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -1353,22 +1352,14 @@ func TestGiveMilesCmd_CorrectMilesFails_SaysFailureNotANumber(t *testing.T) {
 // from, so it must exist exactly when the users row got the correction and
 // never otherwise — an orphan event is a permanent divergence.
 func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
-	correctionEvents := func(t *testing.T, db *gorm.DB) []events.Event {
-		t.Helper()
-		var found []events.Event
-		if err := db.Where("username = ? AND event = ?", "target", "correction").Find(&found).Error; err != nil {
-			t.Fatalf("reading events: %v", err)
-		}
-		return found
-	}
-
 	t.Run("a persisted correction is reported and recorded", func(t *testing.T) {
-		db := testdb.New(t)
 		app := newTestApp(video.Video{})
 		app.Sessions = &recordingSessions{
 			FindResult: users.User{ID: 7, Username: "target"},
 			Miles:      60,
 		}
+		rec := &recordingEvents{}
+		app.Events = rec
 		out, _ := captureSay(t, app)
 
 		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
@@ -1376,23 +1367,21 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		if msg := out(); msg != "@target now has 60.00mi" {
 			t.Errorf("expected the running total in the reply, got %q", msg)
 		}
-		found := correctionEvents(t, db)
-		if len(found) != 1 {
-			t.Fatalf("expected 1 correction event, got %d", len(found))
-		}
-		if found[0].ExtraMilesEarned == nil || *found[0].ExtraMilesEarned != 50 {
-			t.Errorf("expected extra_miles_earned=50, got %v", found[0].ExtraMilesEarned)
+		want := []recordedCorrection{{Username: "target", Delta: 50}}
+		if !slices.Equal(rec.Corrections, want) {
+			t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
 		}
 	})
 
 	t.Run("a dropped correction records nothing", func(t *testing.T) {
-		db := testdb.New(t)
 		app := newTestApp(video.Video{})
 		app.Sessions = &recordingSessions{
 			FindResult:      users.User{ID: 7, Username: "target"},
 			Miles:           60,
 			CorrectMilesErr: users.ErrCreateFailed,
 		}
+		rec := &recordingEvents{}
+		app.Events = rec
 		out, _ := captureSay(t, app)
 
 		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
@@ -1400,8 +1389,8 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		if msg := out(); strings.Contains(msg, "now has") {
 			t.Errorf("expected no total in the reply, got %q", msg)
 		}
-		if found := correctionEvents(t, db); len(found) != 0 {
-			t.Errorf("expected no correction event, got %d", len(found))
+		if len(rec.Corrections) != 0 {
+			t.Errorf("expected no correction event, got %+v", rec.Corrections)
 		}
 	})
 }
