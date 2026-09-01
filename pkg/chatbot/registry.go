@@ -71,13 +71,16 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger: "!shutdown",
-			Handler: a.shutdownCmd,
+			Trigger:        "!shutdown",
+			Handler:        a.shutdownCmd,
+			RequiresAdmin:  true,
+			AdminDeniedMsg: "Nice try bucko",
 		},
 		{
-			Trigger: "!refreshoverlays",
-			Aliases: []string{"!refreshoverlay"},
-			Handler: a.refreshOverlaysCmd,
+			Trigger:       "!refreshoverlays",
+			Aliases:       []string{"!refreshoverlay"},
+			Handler:       a.refreshOverlaysCmd,
+			RequiresAdmin: true,
 		},
 		{
 			Trigger: "!socialmedia",
@@ -190,8 +193,9 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger: "!secretinfo",
-			Handler: a.secretInfoCmd,
+			Trigger:       "!secretinfo",
+			Handler:       a.secretInfoCmd,
+			RequiresAdmin: true,
 		},
 		{
 			Trigger: "!gas",
@@ -201,16 +205,19 @@ func (a *App) buildRegistry() []Command {
 			},
 		},
 		{
-			Trigger: "!middle",
-			Handler: a.middleCmd,
+			Trigger:       "!middle",
+			Handler:       a.middleCmd,
+			RequiresAdmin: true,
 		},
 		{
-			Trigger: "!makebot",
-			Handler: a.makeBotCmd,
+			Trigger:       "!makebot",
+			Handler:       a.makeBotCmd,
+			RequiresAdmin: true,
 		},
 		{
-			Trigger: "!unbot",
-			Handler: a.unBotCmd,
+			Trigger:       "!unbot",
+			Handler:       a.unBotCmd,
+			RequiresAdmin: true,
 		},
 		{
 			Trigger:        "!miles",
@@ -219,9 +226,9 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			// admin-gated inside the handler (broadcaster-only)
-			Trigger: "!givemiles",
-			Handler: a.giveMilesCmd,
+			Trigger:       "!givemiles",
+			Handler:       a.giveMilesCmd,
+			RequiresAdmin: true,
 		},
 		{
 			Trigger:        "!km",

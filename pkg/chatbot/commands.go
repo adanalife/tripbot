@@ -727,9 +727,6 @@ func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !secretinfo", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	vid := a.Video.Current()
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, a.Video.CurrentProgress())
 	lat, lng, err := vid.Location()
@@ -749,9 +746,6 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 // widen the gate to mods once a mod-status source exists.
 func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	if len(params) < 2 {
 		a.Chat.Say("usage: !givemiles <user> <amount>")
 		return
@@ -784,9 +778,6 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 // — the hourly soft refresh can't revive a crashed CEF webpage.
 func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	n, err := a.OBS.RefreshBrowserSources(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "overlay refresh failed", "err", err)
@@ -798,10 +789,6 @@ func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []stri
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		a.Chat.Say("Nice try bucko")
-		return
-	}
 	a.Chat.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
 	if err := a.Cron.Shutdown(); err != nil {
@@ -819,11 +806,6 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)
-	// don't let strangers run this
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
-
 	// don't do anything if empty
 	if len(params) == 0 {
 		a.Chat.Say("What do you want to say?")
@@ -857,9 +839,6 @@ func (a *App) unBotCmd(ctx context.Context, user *users.User, params []string) {
 // in chat, logs the outcome for ops visibility.
 func (a *App) setBotFlag(ctx context.Context, user *users.User, params []string, isBot bool, trigger string) {
 	slog.InfoContext(ctx, "ran "+trigger, "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	if len(params) == 0 {
 		slog.WarnContext(ctx, trigger+" called with no target", "username", user.Username)
 		return
