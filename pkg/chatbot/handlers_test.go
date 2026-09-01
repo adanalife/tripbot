@@ -397,6 +397,7 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 	app.indexCommands()
 	rec := &recordingEvents{}
 	app.Events = rec
+	out, _ := captureSay(t, app)
 
 	// !somafm is in the registry but outside the v1 allowlist Facebook runs.
 	app.runCommand(context.Background(), newTestUser(adminUser), "!somafm")
@@ -406,6 +407,25 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 	}
 	if got := rec.Refusals[0].Reason; got != events.RefusedWrongPlatform {
 		t.Errorf("reason = %q, want %q", got, events.RefusedWrongPlatform)
+	}
+	// The viewer typed a real trigger, so they hear why nothing happened.
+	if !strings.Contains(out(), "!somafm") {
+		t.Errorf("say = %q, want it to name !somafm", out())
+	}
+}
+
+// A typo names no command at all, so there is nothing to explain — answering
+// it would let anyone make the bot echo arbitrary tokens into chat.
+func TestRunCommand_UnknownCommandStaysSilent(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+	out, _ := captureSay(t, app)
+
+	app.runCommand(context.Background(), newTestUser("viewer1"), "!definitelynotacommand")
+
+	if out() != "" {
+		t.Errorf("expected silence for an unknown command, got %q", out())
 	}
 }
 
