@@ -69,7 +69,7 @@ jobs:
             echo "cdk8s=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: astral-sh/setup-uv@v9.0.0 # no floating major tag published
+      - uses: astral-sh/setup-uv@v10.0.1 # no floating major tag published
 
       # Require every PR into main to add a towncrier changelog fragment under
       # changelog.d/ (see README "Changelog"). This is what keeps the release
