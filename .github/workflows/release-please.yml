@@ -80,6 +80,33 @@ jobs:
           VERSION=$(jq -r '."."' .release-please-manifest.json)
           echo "Release version: $VERSION"
 
+          # A fragment still named "+<slug>.<type>.md" here missed its PR-time
+          # rename: changelog-number.yml checks out the head branch, and a merge
+          # that lands while that job is queued deletes the branch out from under
+          # it. The squash commit that put the fragment on main carries the PR
+          # number in its subject, so recover it from there — this is the last
+          # moment before towncrier turns fragments into permanent changelog
+          # lines, and it needs no branch to still exist.
+          for f in changelog.d/+*.md; do
+            [ -e "$f" ] || continue
+            subject="$(git log --diff-filter=A --format=%s -1 -- "$f")"
+            pr="$(printf '%s' "$subject" | sed -nE 's/.*\(#([0-9]+)\)$/\1/p')"
+            if [ -z "$pr" ]; then
+              echo "::warning title=Unnumbered changelog fragment::${f} has no PR number in the commit that added it (\"${subject}\") — its entry will publish without a link."
+              continue
+            fi
+            base="$(basename "$f" .md)"
+            type="${base##*.}"
+            target="changelog.d/${pr}.${type}.md"
+            n=0
+            while [ -e "$target" ]; do
+              n=$((n + 1))
+              target="changelog.d/${pr}.${type}.${n}.md"
+            done
+            echo "::notice title=Recovered changelog fragment::${f} -> ${target} (from #${pr})."
+            git mv "$f" "$target"
+          done
+
           # Collate the towncrier fragments (if any) into CHANGELOG.md + delete
           # them. A release PR can exist with no fragments (a fix: whose entry
           # was skip-changelog'd) — that's not an error, just no changelog
