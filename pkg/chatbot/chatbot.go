@@ -174,6 +174,10 @@ func New(cfg *c.TripbotConfig) *App {
 const followerMsg = "Right now only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
+// wrongPlatformMsg answers a command that exists but isn't dispatchable here.
+// The %s is the trigger as the viewer typed it.
+const wrongPlatformMsg = "Sorry, %s doesn't work on this platform :("
+
 // followerGatingEnabled toggles the RequiresFollow access check in
 // checkAccess. Disabled for launch so first-time viewers aren't told to
 // follow before they can try commands. Flip back to true to re-enable.

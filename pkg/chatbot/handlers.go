@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -373,6 +374,9 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 			// separating: a viewer repeatedly reaching for a command their
 			// platform can't run is an argument for enabling it there.
 			reason = events.RefusedWrongPlatform
+			// Say so rather than swallowing it: the viewer typed a real
+			// trigger, and silence reads as a broken bot.
+			a.Chat.Say(fmt.Sprintf(wrongPlatformMsg, command))
 		}
 		slog.InfoContext(ctx, "unknown chat command", "command", command, "reason", reason)
 		a.recordRefusal(ctx, events.CommandRefusal{
