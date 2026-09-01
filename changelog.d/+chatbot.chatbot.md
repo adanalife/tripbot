@@ -1,0 +1,1 @@
+Admin-only chat commands are now declared on the command itself (`RequiresAdmin`) and enforced by the single access gate, instead of an ad-hoc check inside each handler — and `chat-commands.json` now says which commands are admin-only.
