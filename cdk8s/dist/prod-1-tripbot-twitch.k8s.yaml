@@ -21,11 +21,11 @@ data:
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
+  PLAYOUT_HOST: playout-twitch:8080
   READ_ONLY: "false"
   SENTRY_ENVIRONMENT: prod-1
   TRIPBOT_SERVER_PORT: "8080"
   TWITCH_API_URL: http://gateway-twitch.prod-1.svc.cluster.local:8080
-  VLC_SERVER_HOST: playout-twitch:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,7 +43,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 0472fd126d
+        adanalife.dev/config-hash: 2b3a2db3c8
       labels:
         app: tripbot-twitch
     spec:
@@ -72,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.5.0
+          image: adanalife/tripbot:5.6.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +120,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.5.0
+          image: adanalife/tripbot:5.6.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
