@@ -316,7 +316,9 @@ func TestRecordingSessions_ShutdownIsRecorded(t *testing.T) {
 
 func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 	app := newTestApp(video.Video{})
+	prevUptime := Uptime
 	Uptime = time.Now().Add(-5 * time.Minute)
+	t.Cleanup(func() { Uptime = prevUptime })
 	out, says := captureSay(t, app)
 
 	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -333,7 +335,9 @@ func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 
 func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 	app := newTestApp(video.Video{})
+	prevHello := lastHelloTime
 	lastHelloTime = time.Time{} // clear rate limiter
+	t.Cleanup(func() { lastHelloTime = prevHello })
 	out, says := captureSay(t, app)
 
 	// a fresh user with 0 miles gets the newcomer hint appended
@@ -353,7 +357,9 @@ func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 
 func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 	app := newTestApp(video.Video{})
+	prevHello := lastHelloTime
 	lastHelloTime = time.Now() // simulate a very recent greeting
+	t.Cleanup(func() { lastHelloTime = prevHello })
 	out, _ := captureSay(t, app)
 
 	app.helloCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -365,7 +371,9 @@ func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 
 func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 	app := newTestApp(video.Video{})
+	prevHello := lastHelloTime
 	lastHelloTime = time.Time{} // not rate limited
+	t.Cleanup(func() { lastHelloTime = prevHello })
 	out, _ := captureSay(t, app)
 
 	// "hello world" — has params so the bot stays quiet
