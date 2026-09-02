@@ -1,6 +1,6 @@
 module github.com/adanalife/tripbot
 
-go 1.26.5
+go 1.26.7
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
