@@ -21,6 +21,11 @@ type Command struct {
 	RequiresSubscriber bool
 	RequiresAdmin      bool
 
+	// Help is the one-line answer to "!help <trigger>": what the command does,
+	// in chat-sized viewer-facing prose. Every command sets it — the registry
+	// test fails on an empty one — so the man page can't lag the surface.
+	Help string
+
 	// AdminDeniedMsg is what chat hears when a non-admin runs this command.
 	// Empty is the default and the common case: an admin command declines in
 	// silence rather than advertising itself.

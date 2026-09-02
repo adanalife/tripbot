@@ -1,0 +1,1 @@
+`!help <command>` now explains a single command — `!help timewarp` answers with what it does, who can run it, and its aliases — while a bare `!help` still lists the command surface. Every command in the registry carries a one-line Help, and a test keeps that true for the next one added.
