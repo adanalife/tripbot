@@ -15,75 +15,89 @@ func (a *App) buildRegistry() []Command {
 	return []Command{
 		{
 			Trigger: "hello",
+			Help:    "Say hi and I'll say hi back",
 			Aliases: []string{"hi", "hey", "hallo", "!bot"},
 			Handler: a.helloCmd,
 		},
 		{
 			Trigger: "!audio",
+			Help:    "What's playing on the background audio; admins switch the bed or tune a SomaFM channel",
 			Aliases: []string{"!bed", "!carsound", "!carhum", "!radio"},
 			Handler: a.audioCmd,
 		},
 		{
 			Trigger: "!version",
+			Help:    "The bot's build version",
 			Handler: a.versionCmd,
 		},
 		{
 			Trigger: "!uptime",
+			Help:    "How long the stream and the bot have been up",
 			Handler: a.uptimeCmd,
 		},
 		{
 			Trigger: "!followage",
+			Help:    "How long you've been following the channel",
 			Aliases: []string{"!followtime"},
 			Handler: a.followageCmd,
 		},
 		{
 			Trigger:        "!timewarp",
+			Help:           "Jump to a random different video",
 			Aliases:        []string{"!timeskip", "!tw", "!warp"},
 			Handler:        a.timewarpCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!goto",
+			Help:           "Jump to footage from a specific state: !goto [state]",
 			Aliases:        []string{"!jump"},
 			Handler:        a.jumpCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:            "!find",
+			Help:               "Search the footage for a scene and jump to it: !find <a tunnel at sunset>",
 			Aliases:            []string{"!search"},
 			Handler:            a.findCmd,
 			RequiresSubscriber: true,
 		},
 		{
 			Trigger:        "!skip",
+			Help:           "Skip to the next video",
 			Handler:        a.skipCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!back",
+			Help:           "Go back to the previous video",
 			Handler:        a.backCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!daytime",
+			Help:           "Jump ahead to the next daytime footage",
 			Aliases:        []string{"!daylight", "!morning"},
 			Handler:        a.daytimeCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!shutdown",
+			Help:           "Shut the bot down",
 			Handler:        a.shutdownCmd,
 			RequiresAdmin:  true,
 			AdminDeniedMsg: "Nice try bucko",
 		},
 		{
 			Trigger:       "!refreshoverlays",
+			Help:          "Reload the on-screen overlays",
 			Aliases:       []string{"!refreshoverlay"},
 			Handler:       a.refreshOverlaysCmd,
 			RequiresAdmin: true,
 		},
 		{
 			Trigger: "!socialmedia",
+			Help:    "All the places to find me off-stream",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky")
@@ -91,18 +105,21 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!discord",
+			Help:    "The Discord invite link",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Join us on Discord: https://discord.gg/hKvNgZrk52")
 			},
 		},
 		{
 			Trigger: "!twitter",
+			Help:    "The Twitter link",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Follow on Twitter: https://twitter.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!instagram",
+			Help:    "The Instagram link",
 			Aliases: []string{"!ig", "!insta"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Follow on Instagram: https://instagram.com/adanalife_")
@@ -110,6 +127,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!facebook",
+			Help:    "The Facebook link",
 			Aliases: []string{"!fb"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
@@ -117,6 +135,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!youtube",
+			Help:    "The YouTube channel link",
 			Aliases: []string{"!yt"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
@@ -124,12 +143,14 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!tiktok",
+			Help:    "The TikTok link",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Follow on TikTok: https://tiktok.com/@adanalife")
 			},
 		},
 		{
 			Trigger: "!bluesky",
+			Help:    "The Bluesky link",
 			Aliases: []string{"!bsky"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Follow on Bluesky: https://bsky.app/profile/dana.lol")
@@ -137,6 +158,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!commands",
+			Help:    "List the commands you can try; !help <command> explains one",
 			// "!hello" lists commands rather than greeting: a viewer who types
 			// the bang is addressing the bot, and what they want next is the
 			// command surface. The bare "hello" trigger above still greets, so
@@ -151,33 +173,39 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:            "!bonusmiles",
+			Help:               "Your bonus miles earned this session, a subscriber perk",
 			Handler:            a.bonusMilesCmd,
 			RequiresSubscriber: true,
 		},
 		{
 			Trigger:        "!sunset",
+			Help:           "Sunset time at the current location",
 			Handler:        a.sunsetCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!weather",
+			Help:           "The weather at the current location",
 			Aliases:        []string{"!meteo"},
 			Handler:        a.weatherCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!time",
+			Help:           "Local time at the current location",
 			Handler:        a.timeCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!date",
+			Help:           "The date this footage was recorded",
 			Aliases:        []string{"is this live", "is this live?"},
 			Handler:        a.dateCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger: "!guess",
+			Help:    "Guess which state the van is in: !guess Utah",
 			// "!guis" stays: it's 2 edits from !guess, beyond fuzzyLookup's
 			// reach at that length (max 1 edit for inputs of 4-6 runes).
 			// "!guesss"/"!guesr" are equidistant from !guess and !guessr, so
@@ -189,16 +217,19 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!state",
+			Help:           "The state the van is in right now",
 			Handler:        a.stateCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:       "!secretinfo",
+			Help:          "Dump internal state to chat",
 			Handler:       a.secretInfoCmd,
 			RequiresAdmin: true,
 		},
 		{
 			Trigger: "!gas",
+			Help:    "How's the tank?",
 			Aliases: []string{"!fuel", "!petrol"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("About full, thanks for asking")
@@ -206,38 +237,45 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:       "!middle",
+			Help:          "Set the bottom-middle overlay text",
 			Handler:       a.middleCmd,
 			RequiresAdmin: true,
 		},
 		{
 			Trigger:       "!makebot",
+			Help:          "Flag a user as a bot so they leave the leaderboards",
 			Handler:       a.makeBotCmd,
 			RequiresAdmin: true,
 		},
 		{
 			Trigger:       "!unbot",
+			Help:          "Unflag a user as a bot",
 			Handler:       a.unBotCmd,
 			RequiresAdmin: true,
 		},
 		{
 			Trigger:        "!miles",
+			Help:           "Your accumulated miles",
 			Aliases:        []string{"!points"},
 			Handler:        a.milesCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:       "!givemiles",
+			Help:          "Grant a viewer miles: !givemiles @user <miles>",
 			Handler:       a.giveMilesCmd,
 			RequiresAdmin: true,
 		},
 		{
 			Trigger:        "!km",
+			Help:           "Your miles, in kilometres",
 			Aliases:        []string{"!kilometres", "!kilometers"},
 			Handler:        a.kilometresCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger: "!location",
+			Help:    "Where the van is: the town and state, with a map link",
 			// "!loclistion" stays: 3 edits from !location, beyond
 			// fuzzyLookup's max of 2
 			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loc", "!loclistion"},
@@ -246,41 +284,48 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!leaderboard",
+			Help:           "This month's top 10 by miles",
 			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!ldb", "!ldbd", "!top"},
 			Handler:        a.monthlyMilesLeaderboardCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!totalleaderboard",
+			Help:           "The all-time top 10 by miles",
 			Aliases:        []string{"!lifetimeleaderboard", "!tlb", "!llb"},
 			Handler:        a.lifetimeMilesLeaderboardCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!guessleaderboard",
+			Help:           "This month's top 10 by correct state guesses",
 			Aliases:        []string{"!glb", "!guesslb"},
 			Handler:        a.monthlyGuessLeaderboardCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!guessr",
+			Help:           "The dashcam guessing game leaderboard; add 'monthly' for the running total",
 			Aliases:        []string{"!guessrleaderboard", "!grlb"},
 			Handler:        a.guessrLeaderboardCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!report",
+			Help:           "Report a stream problem, like no audio or a frozen picture",
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
 			Handler:        a.reportCmd,
 			RequiresFollow: false,
 		},
 		{
 			Trigger: "!song",
+			Help:    "What's playing on the background audio right now",
 			Aliases: []string{"!music"},
 			Handler: a.songCmd,
 		},
 		{
 			Trigger: "!somafm",
+			Help:    "The SomaFM link, whose channels are the background audio",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("Stream music by SomaFM — https://somafm.com")
 			},

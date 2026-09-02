@@ -82,8 +82,13 @@ var versionFilePath = "/etc/tripbot/version"
 
 // commandsCmd lists a curated set of featured commands — filtered to the ones
 // actually dispatchable on this App's platform, so a YouTube instance doesn't
-// suggest commands that would silently no-op.
-func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
+// suggest commands that would silently no-op. With an argument ("!help
+// timewarp") it answers with that one command's Help line instead.
+func (a *App) commandsCmd(_ context.Context, user *users.User, params []string) {
+	if len(params) > 0 {
+		a.Chat.Say(a.helpFor(user, params[0]))
+		return
+	}
 	featured := []string{
 		"!location", "!guess", "!date", "!state",
 		"!sunset", "!timewarp", "!miles", "!leaderboard", "!guessr", "!song",
@@ -95,6 +100,37 @@ func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
 		}
 	}
 	a.Chat.Say("You can try: " + strings.Join(avail, ", ") + ", and many other hidden commands!")
+}
+
+// helpFor renders one command's Help line for "!help <name>". The name may
+// arrive with or without its bang. The lookup goes through singleWordLookup, so
+// a command disabled on this platform reads as unknown, and an admin command
+// stays unadvertised to anyone who couldn't run it — the same silence it keeps
+// when invoked.
+func (a *App) helpFor(user *users.User, name string) string {
+	trigger := "!" + strings.TrimPrefix(strings.ToLower(name), "!")
+	cmd, ok := a.singleWordLookup[trigger]
+	isAdmin := user != nil && a.Cfg != nil && a.Cfg.UserIsAdmin(user.Username)
+	if !ok || cmd.Help == "" || (cmd.RequiresAdmin && !isAdmin) {
+		return "I don't know " + trigger + " — try !commands"
+	}
+	msg := cmd.Trigger + ": " + cmd.Help
+	switch {
+	case cmd.RequiresSubscriber && platformHasSubscribers[a.platform()]:
+		msg += " (subscribers)"
+	case cmd.RequiresFollow && followerGatingEnabled:
+		msg += " (followers)"
+	}
+	var aliases []string
+	for _, al := range cmd.Aliases {
+		if strings.HasPrefix(al, "!") && !strings.Contains(al, " ") {
+			aliases = append(aliases, al)
+		}
+	}
+	if len(aliases) > 0 {
+		msg += " · also " + strings.Join(aliases, ", ")
+	}
+	return msg
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
