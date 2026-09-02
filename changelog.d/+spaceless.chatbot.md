@@ -1,0 +1,1 @@
+Spaceless command variants like `!gotowyoming` now run as `!goto wyoming` — the parser splits at the longest registered trigger instead of reporting an unknown command. Close misspellings still fuzzy-route first, and a word no trigger prefixes stays unknown.
