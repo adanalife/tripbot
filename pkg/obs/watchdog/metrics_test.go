@@ -109,3 +109,46 @@ func restartsByResult(t *testing.T, reader *metric.ManualReader) map[string]int6
 	}
 	return got
 }
+
+// The stood-down state is a gauge the alert reads directly, so it has to read 1
+// for exactly as long as the watchdog is stood down and 0 again once the
+// channel is back. A counter would go quiet within a window of the moment it
+// happened, and "still stood down 17 hours later" is the reading that matters.
+func TestWatchSilentDisconnect_ExhaustedGaugeTracksStandDown(t *testing.T) {
+	reader := meterReader()
+	runFixtureOn(t, "youtube", repeat(miss, 12), 3, 3*watchInterval)
+	if got := exhaustedByPlatform(t, reader)["youtube"]; got != 1 {
+		t.Errorf("exhausted gauge after the cap = %d, want 1", got)
+	}
+	runFixtureOn(t, "youtube", append(repeat(miss, 12), healthy, healthy, healthy), 3, 3*watchInterval)
+	if got := exhaustedByPlatform(t, reader)["youtube"]; got != 0 {
+		t.Errorf("exhausted gauge after the channel came back = %d, want 0", got)
+	}
+}
+
+// exhaustedByPlatform reads the stood-down gauge's current value per
+// service.platform.
+func exhaustedByPlatform(t *testing.T, reader *metric.ManualReader) map[string]int64 {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "tripbot_obs_recovery_exhausted" {
+				continue
+			}
+			g, ok := m.Data.(metricdata.Gauge[int64])
+			if !ok {
+				t.Fatalf("%s is %T, want an int64 Gauge", m.Name, m.Data)
+			}
+			for _, dp := range g.DataPoints {
+				platform, _ := dp.Attributes.Value("service.platform")
+				got[platform.AsString()] = dp.Value
+			}
+		}
+	}
+	return got
+}
