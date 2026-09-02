@@ -250,7 +250,7 @@ tasks:
       # change (its tag + any config delta this release introduced). DISTNAME
       # strips the -server suffix (onscreens-server -> onscreens); tripbot is
       # unchanged.
-      - mise exec -- uv run cdk8s synth
+      - mise exec -- uv run npx cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"
         others=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)' | grep -v "prod-1-${distname}-" || true)
