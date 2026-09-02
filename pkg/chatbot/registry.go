@@ -100,7 +100,7 @@ func (a *App) buildRegistry() []Command {
 			Help:    "All the places to find me off-stream",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky")
+				a.Chat.Say("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky — or play the dashcam guessing game at " + guessrGameURL)
 			},
 		},
 		{
