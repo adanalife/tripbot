@@ -36,8 +36,9 @@ type recordedCorrection struct {
 }
 
 type recordingEvents struct {
-	noopEvents
 	Follows   []string
+	Subs      []string
+	Unsubs    []string
 	Guesses   []events.GuessSubmission
 	Timewarps []events.Warp
 
@@ -65,6 +66,16 @@ func (r *recordingEvents) Timewarp(_ context.Context, w events.Warp) error {
 
 func (r *recordingEvents) Follow(_ context.Context, username string) error {
 	r.Follows = append(r.Follows, username)
+	return nil
+}
+
+func (r *recordingEvents) Subscribe(_ context.Context, username string) error {
+	r.Subs = append(r.Subs, username)
+	return nil
+}
+
+func (r *recordingEvents) Unsubscribe(_ context.Context, username string) error {
+	r.Unsubs = append(r.Unsubs, username)
 	return nil
 }
 
