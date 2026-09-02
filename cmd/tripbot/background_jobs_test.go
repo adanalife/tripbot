@@ -21,6 +21,7 @@ import (
 // video, posts the periodic chatter, and republishes the rotators' clip feed.
 var neutralJobs = []string{
 	"video.GetCurrentlyPlaying",
+	"video.TrackState",
 	"chatbot.Chatter",
 	"video.LocationFeed",
 }

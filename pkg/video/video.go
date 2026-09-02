@@ -4,6 +4,7 @@ import (
 	"context"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
@@ -33,6 +34,18 @@ type Player struct {
 	cfg              *c.TripbotConfig
 	onscreens        onscreens
 	playout          *playoutClient.Client
+
+	// airing is the US state the footage on screen was last seen in, and the
+	// clip it was seen in — what TrackState compares each tick against. Its own
+	// lock because TrackState runs on a faster cron than GetCurrentlyPlaying.
+	airingMu sync.Mutex
+	airing   airing
+}
+
+// airing is one observation of where the footage on screen is.
+type airing struct {
+	state string
+	vid   Video
 }
 
 // NewPlayer returns a Player with its own Onscreens + Playout clients. cfg
@@ -59,9 +72,6 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
-		// the outgoing clip, kept for the state-crossing comparison below
-		prev := p.CurrentlyPlaying
-
 		// reset the stopwatch
 		p.timeStarted = time.Now()
 
@@ -79,11 +89,6 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 			"state", helpers.StateToStateAbbrev(p.CurrentlyPlaying.State),
 		)
 
-		// Update the current-state gauge: set the new state's series to 1 and
-		// clear the prior one. A blank abbrev (unresolvable state) records as
-		// "unknown" so a stuck playhead is alertable.
-		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State), p.cfg.Platform)
-
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
@@ -98,16 +103,6 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
 			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
-		// Record the switch as a state_crossing event when it changes the
-		// airing state. Best-effort, like the RecordPlay above: a failed
-		// insert logs and drops the event rather than disturbing the tick.
-		if crossed, sequential := stateCrossing(prev, p.CurrentlyPlaying); crossed {
-			if err := events.StateCrossing(ctx, p.cfg, prev.State, p.CurrentlyPlaying.State,
-				p.CurrentlyPlaying.ID, sequential); err != nil {
-				slog.ErrorContext(ctx, "error recording state crossing", "err", err)
-			}
-		}
-
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
 			// the duration is ignored — the server owns the GPS overlay's duration
@@ -118,17 +113,55 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	}
 }
 
-// stateCrossing reports whether switching prev → cur changes the airing US
-// state, and whether the switch was sequential — cur follows prev in corpus
-// order (next_vid), meaning the van drove across the line rather than the
-// playhead jumping there. Never a crossing when either state is unresolvable
-// (""), which includes the first switch after boot: the previous clip was
-// never observed, so there is nothing to cross from.
-func stateCrossing(prev, cur Video) (crossed, sequential bool) {
-	if prev.State == "" || cur.State == "" || prev.State == cur.State {
-		return false, false
+// TrackState records a state_crossing event when the footage on screen has
+// entered a new US state, and keeps the current-state gauge on that state.
+//
+// It reads the playhead rather than the clip: video_coords knows which state
+// each moment of a clip is in, so a line crossed mid-clip is recorded at the
+// moment it happens — 48 clips in the corpus cross one — instead of at the
+// next clip switch. A clip with no track answers with its clip-level state,
+// which is what the switch-time comparison used to do; the first observation
+// after boot records nothing, since there is nothing to cross from.
+//
+// sequential says the van drove across the line: either the same clip is still
+// on screen, or the new clip follows the previous one in corpus order
+// (next_vid). Anything else is a playhead jump landing in another state.
+// ponytail: a !seek within one clip also reads as sequential; the seek is a
+// few seconds of the same road, so the answer is right often enough.
+//
+// Best-effort, like the video_plays write: a failed insert logs and drops the
+// event rather than disturbing the tick.
+func (p *Player) TrackState(ctx context.Context) {
+	vid, at := p.Playhead(ctx)
+	if vid.Slug == "" {
+		return
 	}
-	return true, prev.NextVid.Valid && int(prev.NextVid.Int64) == cur.ID
+	state, moment := vid.State, events.Airing{VideoID: vid.ID}
+	if m, ok := CoordAt(ctx, vid, at); ok && m.State != "" {
+		sec := at.Seconds()
+		state, moment.TsSec = m.State, &sec
+	}
+	if state == "" {
+		return
+	}
+
+	p.airingMu.Lock()
+	prev := p.airing
+	p.airing = airing{state: state, vid: vid}
+	p.airingMu.Unlock()
+
+	// A blank abbrev (unresolvable state) records as "unknown" so a stuck
+	// playhead is alertable.
+	instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(state), p.cfg.Platform)
+
+	if prev.state == "" || prev.state == state {
+		return
+	}
+	sequential := prev.vid.ID == vid.ID ||
+		(prev.vid.NextVid.Valid && int(prev.vid.NextVid.Int64) == vid.ID)
+	if err := events.StateCrossing(ctx, p.cfg, prev.state, state, moment, sequential); err != nil {
+		slog.ErrorContext(ctx, "error recording state crossing", "err", err)
+	}
 }
 
 // CurrentProgress represents how long the video has been playing
