@@ -69,7 +69,7 @@ var writers = []struct {
 		return WatchdogRecovered(ctx, cfg, "tiktok")
 	}},
 	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
-		return StateCrossing(ctx, cfg, "Utah", "Colorado", 42, true)
+		return StateCrossing(ctx, cfg, "Utah", "Colorado", Airing{VideoID: 42}, true)
 	}},
 	{"GuessSubmitted", "guess_submitted", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return GuessSubmitted(ctx, cfg, GuessSubmission{
@@ -232,7 +232,7 @@ func TestStateCrossingRow(t *testing.T) {
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
-	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 42, true); err != nil {
+	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", Airing{VideoID: 42}, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -407,7 +407,7 @@ func TestStateCrossingZeroVideoIDWritesNull(t *testing.T) {
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
-	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 0, false); err != nil {
+	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", Airing{}, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
