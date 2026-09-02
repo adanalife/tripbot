@@ -1247,8 +1247,8 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(authStatusInterval, "twitch.EmitAuthStatus", t.emitAuthStatus)
 	// The platform-gateway owns token refresh now; tripbot only reads the rows
 	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
-	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
-	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
+	// gateway's rotations — EventSub's redial token and the token-expiry gauge
+	// (both fed by LoadFromDB) — without tripbot ever refreshing itself.
 	t.addJob(tokenReloadInterval, "twitch.ReloadTokens", func(ctx context.Context) {
 		if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)

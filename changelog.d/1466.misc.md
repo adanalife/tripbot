@@ -1,0 +1,1 @@
+Corrected two comments that still described tripbot as holding a Twitch IRC client. The socket moved into gateway-twitch on 2026-08-01, so the token reload feeds EventSub's redial token and the expiry gauge, not an IRC `PASS` line.
