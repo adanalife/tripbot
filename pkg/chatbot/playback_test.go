@@ -33,10 +33,13 @@ func skipIfDarwin(t *testing.T) {
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern. Chat output goes to the App's IRC fake (noopChat by default).
+// concern, restoring it afterwards. Chat output goes to the App's IRC fake
+// (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
+	prevWarp := lastTimewarpTime
 	lastTimewarpTime = time.Time{}
+	t.Cleanup(func() { lastTimewarpTime = prevWarp })
 	fn()
 }
 
