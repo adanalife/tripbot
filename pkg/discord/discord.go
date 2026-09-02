@@ -7,6 +7,7 @@ package discord
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -38,10 +39,27 @@ func ShouldStart(cfg *c.TripbotConfig) (bool, string) {
 	// Terraform seeds the parameter with a placeholder until the real token is
 	// put. ESO syncs whatever is there faithfully, so without this an unseeded
 	// env would try to auth with the placeholder text.
-	if strings.HasPrefix(cfg.DiscordBotToken, "placeholder") {
-		return false, "token is SM placeholder"
+	if isPlaceholderToken(cfg.DiscordBotToken) {
+		return false, "token is the unset placeholder"
 	}
 	return true, ""
+}
+
+// isPlaceholderToken reports whether tok is one of the unset-token values the
+// secret store seeds rather than a real bot token. Those come in two shapes: a
+// bare string starting with "placeholder", and a JSON object carrying a
+// "placeholder" key, which is what a whole-parameter sync delivers. A real bot
+// token is never valid JSON, so decoding is a safe discriminator.
+func isPlaceholderToken(tok string) bool {
+	if tok == "" || strings.HasPrefix(tok, "placeholder") {
+		return true
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(tok), &obj); err != nil {
+		return false
+	}
+	_, ok := obj["placeholder"]
+	return ok
 }
 
 // Session wraps a discordgo session plus the guild we register
