@@ -4,24 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
-
-// Scoreboard represents a bucket of scores, and has a name to identify it.
-// Names are per-platform (miles_2026_07 exists once per platform): uniqueness
-// is (name, platform), and every lookup scopes by this instance's platform.
-type Scoreboard struct {
-	ID       uint16 `gorm:"primaryKey"`
-	Name     string
-	Platform string
-	// autoCreateTime stamps date_created on insert; the insert path doesn't set
-	// it, so without the tag GORM writes the 0001-01-01 zero value over the
-	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
-	DateCreated time.Time `gorm:"autoCreateTime"`
-}
 
 type topUserResult struct {
 	Username string
@@ -56,11 +42,4 @@ func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, 
 		leaderboard = append(leaderboard, []string{r.Username, valueAsString})
 	}
 	return leaderboard
-}
-
-// findOrCreateScoreboard will find a Scoreboard in the DB or create one
-func findOrCreateScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
-	var scoreboard Scoreboard
-	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: platform}).FirstOrCreate(&scoreboard)
-	return scoreboard, result.Error
 }

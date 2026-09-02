@@ -3,96 +3,58 @@ package scoreboards
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
-// Score represents a user's score on a scoreboard
-type Score struct {
-	ID           uint16 `gorm:"primaryKey"`
-	UserID       uint16
-	ScoreboardID uint16
-	Value        float32
-	// autoCreateTime stamps date_created on insert; the insert path doesn't set
-	// it, so without the tag GORM writes the 0001-01-01 zero value over the
-	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
-	DateCreated time.Time `gorm:"autoCreateTime"`
-}
-
-// GetScoreByName returns the score value for a given username and scoreboard name
-// TODO: this could be achieved with a single query
+// GetScoreByName returns the score value for a given username and scoreboard
+// name. One SELECT joins scores to its user and its scoreboard, both scoped to
+// the platform; an unknown user, an unknown board and a user who has never
+// scored on a known board all read as 0.
 func GetScoreByName(ctx context.Context, platform, username, scoreboardName string) (float32, error) {
-	userID, err := getUserIDByName(ctx, platform, username)
+	var result struct{ Value float32 }
+	err := database.GormDB().WithContext(ctx).Raw(`
+		SELECT scores.value
+		FROM scores
+		JOIN users ON users.id = scores.user_id
+		JOIN scoreboards ON scoreboards.id = scores.scoreboard_id
+		WHERE users.platform = ? AND users.username = ?
+		  AND scoreboards.platform = ? AND scoreboards.name = ?`,
+		platform, username, platform, scoreboardName,
+	).Scan(&result).Error
 	if err != nil {
-		slog.ErrorContext(ctx, "error getting user ID", "err", err)
+		slog.ErrorContext(ctx, "error getting score", "err", err)
 		return -1.0, err
 	}
-	scoreboard, err := findOrCreateScoreboard(ctx, platform, scoreboardName)
-	if err != nil {
-		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
-		return -1.0, err
-	}
-	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
-	if err != nil {
-		slog.ErrorContext(ctx, "error finding score", "err", err)
-		return -1.0, err
-	}
-	return score.Value, err
+	return result.Value, nil
 }
 
-// AddToScoreByName increases the score value for a given username and scoreboard name
-// TODO: this could be achieved with less queries
+// AddToScoreByName increases the score value for a given username and
+// scoreboard name, in one statement: the CTE find-or-creates the board for this
+// platform (the no-op DO UPDATE is what makes RETURNING yield the existing
+// row's id), then the score row is upserted onto (user_id, scoreboard_id) so
+// concurrent adds accumulate instead of racing into duplicate rows. An unknown
+// username selects no row, so nothing is scored.
 func AddToScoreByName(ctx context.Context, platform, username, scoreboardName string, scoreToAdd float32) error {
-	userID, err := getUserIDByName(ctx, platform, username)
+	err := database.GormDB().WithContext(ctx).Exec(`
+		WITH scoreboard AS (
+			INSERT INTO scoreboards (name, platform) VALUES (?, ?)
+			ON CONFLICT (name, platform) DO UPDATE SET name = EXCLUDED.name
+			RETURNING id
+		)
+		INSERT INTO scores (user_id, scoreboard_id, value)
+		SELECT users.id, scoreboard.id, ?
+		FROM users, scoreboard
+		WHERE users.platform = ? AND users.username = ?
+		ON CONFLICT (user_id, scoreboard_id)
+		DO UPDATE SET value = scores.value + EXCLUDED.value`,
+		scoreboardName, platform, scoreToAdd, platform, username,
+	).Error
 	if err != nil {
-		slog.ErrorContext(ctx, "error getting userID for user", "err", err)
-		return err
-	}
-	scoreboard, err := findOrCreateScoreboard(ctx, platform, scoreboardName)
-	if err != nil {
-		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
-		return err
-	}
-	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
-	if err != nil {
-		slog.ErrorContext(ctx, "error finding score", "err", err)
-		return err
-	}
-	score.Value += scoreToAdd
-	if err := score.save(ctx); err != nil {
+		slog.ErrorContext(ctx, "error adding to score", "err", err)
 		return err
 	}
 	instrumentation.ScoreboardWrites.Inc(scoreboardName)
 	return nil
-}
-
-// findOrCreateScore will look up the username in the DB, and return a Score if possible
-func findOrCreateScore(ctx context.Context, userID, scoreboardID uint16) (Score, error) {
-	var score Score
-	result := database.GormDB().WithContext(ctx).
-		Where(Score{UserID: userID, ScoreboardID: scoreboardID}).
-		FirstOrCreate(&score)
-	return score, result.Error
-}
-
-// save() will take the given score and store it in the DB
-func (s Score) save(ctx context.Context) error {
-	err := database.GormDB().WithContext(ctx).Model(&s).Update("value", s.Value).Error
-	if err != nil {
-		slog.ErrorContext(ctx, "error saving score", "err", err)
-	}
-	return err
-}
-
-// getUserIDByName fetches the user ID for a given username
-// TODO: this shouldn't be necessary, join the tables instead
-func getUserIDByName(ctx context.Context, platform, username string) (uint16, error) {
-	var result struct{ ID uint16 }
-	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE platform = ? AND username = ?", platform, username).Scan(&result).Error
-	if err != nil {
-		slog.ErrorContext(ctx, "error fetching user ID", "err", err)
-	}
-	return result.ID, err
 }

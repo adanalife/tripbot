@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// AddToScoreByName uses FirstOrCreate, so every user who has ever guessed
+// AddToScoreByName upserts a row, so every user who has ever guessed
 // keeps a row — most of them sitting at 0 early in the month. Rendering those
 // would fill the leaderboard with people who haven't scored, so the zero
 // filter is what makes the board mean anything.

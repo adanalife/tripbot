@@ -1185,8 +1185,7 @@ func TestMonthlyGuessLeaderboardCmd_CountMatchesRowsRendered(t *testing.T) {
 // --- milesCmd ---
 //
 // Self-lookup (no params) and other-user lookup (with params) both end up
-// calling user.CurrentMonthlyMiles, which runs the 3-query GetScore chain
-// (getUserIDByName → findOrCreateScoreboard → findOrCreateScore). The
+// calling user.CurrentMonthlyMiles, which runs the joined GetScore query. The
 // other-user path adds a Sessions.Find on top — staged via recordingSessions.
 
 func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
