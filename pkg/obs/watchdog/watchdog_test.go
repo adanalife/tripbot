@@ -472,3 +472,39 @@ func TestGraceRestartsWithEachNewReconnect(t *testing.T) {
 		t.Errorf("restarts = %d, want 0 — each reconnect earns its own grace", got)
 	}
 }
+
+// A recovery that mechanically succeeds but never holds — the 2026-08-23/24
+// YouTube shape, where the fault was in the broadcast and every bounce of the
+// output was a no-op — gets maxRecoveryRounds attempts and then none: the
+// watchdog stands down rather than churning the connection for hours.
+func TestWatchSilentDisconnect_StandsDownAfterMaxRounds(t *testing.T) {
+	// Threshold 3 and a 3-tick cooldown put one attempt every three ticks, so
+	// the cap lands on tick 9 and a script four times that long fires nothing
+	// more; without the cap it would fire twelve.
+	script := repeat(miss, 12*3)
+	if got := run(t, script, 3, 3*watchInterval); got != maxRecoveryRounds {
+		t.Fatalf("restart count: want %d (stands down at the cap), got %d", maxRecoveryRounds, got)
+	}
+}
+
+// A recovery that holds resets the run, so a platform that dies and is
+// recovered many times over a long stream never reaches the cap.
+func TestWatchSilentDisconnect_HeldRecoveryResetsTheRounds(t *testing.T) {
+	deaths := maxRecoveryRounds + 2
+	var script []step
+	for range deaths {
+		script = append(script, miss, miss, miss, healthy, healthy, healthy)
+	}
+	if got := run(t, script, 3, time.Hour); got != deaths {
+		t.Fatalf("restart count: want %d (a held recovery resets the rounds), got %d", deaths, got)
+	}
+}
+
+// Stopping the output re-arms a stood-down watchdog: the next session is a
+// fresh one and gets its recoveries back.
+func TestWatchSilentDisconnect_InactiveOutputRearmsAfterStandDown(t *testing.T) {
+	script := append(repeat(miss, 12), obsIdle, miss, miss, miss)
+	if got := run(t, script, 3, 3*watchInterval); got != maxRecoveryRounds+1 {
+		t.Fatalf("restart count: want %d (a stopped output re-arms the watchdog), got %d", maxRecoveryRounds+1, got)
+	}
+}

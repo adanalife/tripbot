@@ -39,6 +39,7 @@ var (
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
 	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total recoveries the silent-disconnect watchdog attempted because OBS reported outputActive=true while the platform reported the channel offline, labeled by service_platform and by result (ok, failed). The recovery is a StopStream+StartStream on Twitch and YouTube and an egress re-mint on TikTok")
+	obsRecoveryExhausted        = mustGauge("tripbot_obs_recovery_exhausted", "1 while the silent-disconnect watchdog has stood down on a platform: it forced its maximum run of consecutive recoveries and the channel stayed offline through every one, so the fault is upstream of anything a restart can fix and it has stopped bouncing the output. 0 otherwise, labeled by service_platform. Clears when the channel comes back or the OBS output is stopped. Drives the 'watchdog exhausted' alert.")
 
 	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by job")
 	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by job")
@@ -160,6 +161,18 @@ var GatewayConnection = gatewayConnectionGauge{gauge: gatewayUp}
 // 60s and failed every time, and this counter never moved, so the panel built
 // on it read a flat zero for the whole incident.
 var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsCounter{counter: obsSilentDisconnectRestarts}
+
+// OBSRecoveryExhausted exposes the watchdog's stood-down state. Set(true,
+// platform) when the watchdog stops forcing recoveries because a full run of
+// them changed nothing; Set(false, platform) at startup and whenever the
+// channel comes back or the output stops, so the series exists (an alert can
+// read 0) and clears on its own once the fault is gone.
+//
+// A gauge rather than a counter result because the alert wants the *state*:
+// on 2026-08-23/24 the watchdog bounced YouTube every 10 minutes for 17 hours
+// and every bounce was a no-op, so "still stood down" has to stay readable for
+// as long as it is true, not only within a window of the moment it happened.
+var OBSRecoveryExhausted = obsRecoveryExhaustedGauge{gauge: obsRecoveryExhausted}
 
 // Cron exposes cron job metrics. Observe(job, seconds) is called on every
 // completion (success or recovered panic); Panic(job) is additionally
@@ -319,6 +332,12 @@ func (o obsSilentDisconnectRestartsCounter) Attempt(platform string, restartErr 
 		platformAttr(platform),
 		metric.WithAttributes(attribute.String("result", result)),
 	)
+}
+
+type obsRecoveryExhaustedGauge struct{ gauge metric.Int64Gauge }
+
+func (o obsRecoveryExhaustedGauge) Set(exhausted bool, platform string) {
+	o.gauge.Record(context.Background(), b2i(exhausted), platformAttr(platform))
 }
 
 type cronMetrics struct {
