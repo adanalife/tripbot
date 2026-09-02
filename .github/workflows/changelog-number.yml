@@ -107,6 +107,15 @@ jobs:
           for f in "${mine[@]}"; do
             base="$(basename "$f" .md)"   # +slug.fix
             type="${base##*.}"            # fix
+            # `towncrier create` de-duplicates its own output by appending a
+            # counter before .md, so a second +ci.ci.md arrives as +ci.ci.1.md
+            # and the last segment is that counter rather than the type. Reading
+            # it as the type would produce <PR>.1.md, a name towncrier rejects,
+            # so strip the counter and read the type from the segment before it.
+            case "$type" in
+              *[!0-9]*) ;;                        # a real type, not a counter
+              *) stem="${base%.*}"; type="${stem##*.}" ;;
+            esac
             # towncrier reads <issue>.<type>.<counter>.md, so repeat types in one
             # PR get a counter rather than clobbering the first fragment.
             target="changelog.d/${PR}.${type}.md"
