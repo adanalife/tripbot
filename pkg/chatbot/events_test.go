@@ -36,7 +36,6 @@ type recordedCorrection struct {
 }
 
 type recordingEvents struct {
-	noopEvents
 	Follows   []string
 	Subs      []string
 	Unsubs    []string
