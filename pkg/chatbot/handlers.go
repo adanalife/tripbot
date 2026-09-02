@@ -286,8 +286,40 @@ func (a *App) findCommand(message string) (*Command, string, []string) {
 			slog.Info("fuzzy-routed misspelled command", "text", command, "command", cmd.Trigger)
 			return cmd, command, params
 		}
+
+		// spaceless variant: "!gotowyoming" is a registered trigger with its
+		// first param glued on. Runs after the fuzzy pass so a close
+		// misspelling ("!gotoo") stays a typo of !goto rather than becoming
+		// "!goto o".
+		if cmd, rest := a.splitSpaceless(command); cmd != nil {
+			slog.Info("split spaceless command", "text", command, "command", cmd.Trigger)
+			return cmd, command, append([]string{rest}, params...)
+		}
 	}
 	return nil, "", nil
+}
+
+// splitSpaceless finds the longest registered !-trigger that command starts
+// with and returns it with the glued-on remainder: "!gotowyoming" yields
+// !goto and "wyoming". Longest wins so "!guessrx" is !guessr + "x", not !guess
+// + "rx". Returns nil when no trigger is a proper prefix, so an unknown command
+// stays unknown — genuine typos are meant to stay visible in the logs, they
+// seed new commands. Bare-word triggers ("hello") are never split.
+func (a *App) splitSpaceless(command string) (*Command, string) {
+	var best *Command
+	bestLen := 0
+	for trigger, cmd := range a.singleWordLookup {
+		if !strings.HasPrefix(trigger, "!") || len(trigger) <= bestLen || len(command) <= len(trigger) {
+			continue
+		}
+		if strings.HasPrefix(command, trigger) {
+			best, bestLen = cmd, len(trigger)
+		}
+	}
+	if best == nil {
+		return nil, ""
+	}
+	return best, command[bestLen:]
 }
 
 // stateGuessParams returns the params to pass to !guess when command (a
