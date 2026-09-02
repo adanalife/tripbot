@@ -9,6 +9,38 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.7.0] — 2026-09-02
+
+### Chatbot
+
+- `!help <command>` now explains a single command — `!help timewarp` answers with what it does, who can run it, and its aliases — while a bare `!help` still lists the command surface. Every command in the registry carries a one-line Help, and a test keeps that true for the next one added. ([#1467](https://github.com/adanalife/tripbot/pull/1467))
+- State crossings are now recorded at the moment the footage crosses the line, not at the next clip switch. A new ten-second tick reads the playhead and the per-moment track, so the 48 clips that cross a state mid-clip write their `state_crossing` event with the exact offset into the clip (`video_ts_sec`); clips without a track still answer at clip level, as before. ([#1476](https://github.com/adanalife/tripbot/pull/1476))
+- Spaceless command variants like `!gotowyoming` now run as `!goto wyoming` — the parser splits at the longest registered trigger instead of reporting an unknown command. Close misspellings still fuzzy-route first, and a word no trigger prefixes stays unknown. ([#1478](https://github.com/adanalife/tripbot/pull/1478))
+- `!socialmedia` now points viewers at the dashcam guessing game at <https://guessr.dana.lol> alongside the usual social commands. ([#1482](https://github.com/adanalife/tripbot/pull/1482))
+
+### Fixes
+
+- `task cdk8s:prod:bump` runs cdk8s via `npx`, matching `cdk8s:synth`, so it works from a fresh checkout instead of dying with `Failed to spawn: cdk8s`. ([#1468](https://github.com/adanalife/tripbot/pull/1468))
+- The silent-disconnect watchdog stands down after three forced recoveries that the channel never came back from, instead of bouncing the OBS output every cooldown for as long as the outage lasts, and reports the stood-down state as `tripbot_obs_recovery_exhausted` so an alert can page on it. A recovery that holds, or the output being stopped, re-arms it. ([#1470](https://github.com/adanalife/tripbot/pull/1470))
+- The Discord connector now recognises the unset-token placeholder in the shape the secret store actually seeds, so switching Discord on with no token set stays a clean no-op instead of an auth loop. ([#1475](https://github.com/adanalife/tripbot/pull/1475))
+
+### CI / Tooling
+
+- Changelog fragments whose filename carries towncrier's de-duplication counter are now renamed to a valid `<PR>.<type>.md` instead of a name towncrier rejects. ([#1469](https://github.com/adanalife/tripbot/pull/1469))
+- The pull-request gates now name which gate failed, in the checks tab and in the run summary. ([#1474](https://github.com/adanalife/tripbot/pull/1474))
+- Drop the dead `cache_from: adanalife/tripbot` from the CI compose override — the image is pre-built and loaded before compose runs, so the cache key was never consulted. ([#1479](https://github.com/adanalife/tripbot/pull/1479))
+
+### Cleanup
+
+- Scoreboard reads and writes each run one query instead of three, and an unknown username no longer lands on another viewer's score row. ([#1473](https://github.com/adanalife/tripbot/pull/1473))
+- Chatbot tests restore the package globals they mutate, so the suite passes under `-shuffle=on`. ([#1477](https://github.com/adanalife/tripbot/pull/1477))
+
+### Misc
+
+- Corrected two comments that still described tripbot as holding a Twitch IRC client. The socket moved into gateway-twitch on 2026-08-01, so the token reload feeds EventSub's redial token and the expiry gauge, not an IRC `PASS` line. ([#1466](https://github.com/adanalife/tripbot/pull/1466))
+- Cover the eventbus JetStream stream setup and subscriber events with tests against an embedded NATS server. ([#1480](https://github.com/adanalife/tripbot/pull/1480))
+- Cover the subscriber, gift-sub, resub, and unsubscribe announcements with tests. ([#1481](https://github.com/adanalife/tripbot/pull/1481))
+
 ## [v5.6.0] — 2026-09-01
 
 ### Chatbot
