@@ -141,20 +141,18 @@ type stateCrossingMeta struct {
 }
 
 // StateCrossing records the aired footage entering a new US state. A system
-// event — no viewer did it — so Username is empty. Granularity is clip-level:
-// it fires when a clip switch changes the state, not at the exact frame the
-// line is crossed. Pass videoID 0 when the new clip has no DB row.
-func StateCrossing(ctx context.Context, cfg *c.TripbotConfig, from, to string, videoID int, sequential bool) error {
+// event — no viewer did it — so Username is empty. at is the footage the line
+// was crossed on: the clip, and the offset into it when the writer resolved the
+// state per moment (nil TsSec when it only knew the clip's state).
+func StateCrossing(ctx context.Context, cfg *c.TripbotConfig, from, to string, at Airing, sequential bool) error {
 	payload, err := json.Marshal(stateCrossingMeta{From: from, To: to, Sequential: sequential})
 	if err != nil {
 		return err
 	}
 	meta := string(payload)
-	var vid *int
-	if videoID != 0 {
-		vid = &videoID
-	}
-	return record(ctx, cfg, Event{Event: "state_crossing", Meta: &meta, VideoID: vid})
+	e := Event{Event: "state_crossing", Meta: &meta}
+	at.apply(&e)
+	return record(ctx, cfg, e)
 }
 
 // guessMeta is a guess_submitted event's meta payload. Guessed and Actual are

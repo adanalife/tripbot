@@ -3,11 +3,13 @@ package video
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"testing"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"gorm.io/gorm"
 )
 
 // These tests cover the *Player state-machine introduced in #600. The Player is
@@ -22,27 +24,156 @@ import (
 // ReadOnly false so the video_plays writes aren't skipped.
 var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
 
-func TestStateCrossing(t *testing.T) {
-	next := func(id int) sql.NullInt64 { return sql.NullInt64{Int64: int64(id), Valid: true} }
-	cases := []struct {
-		name                      string
-		prev, cur                 Video
-		wantCross, wantSequential bool
-	}{
-		{"sequential clips across a line", Video{State: "Utah", NextVid: next(42)}, Video{ID: 42, State: "Colorado"}, true, true},
-		{"jump lands in another state", Video{State: "Utah", NextVid: next(42)}, Video{ID: 7, State: "Colorado"}, true, false},
-		{"prev has no next_vid", Video{State: "Utah"}, Video{ID: 7, State: "Colorado"}, true, false},
-		{"same state", Video{State: "Utah", NextVid: next(42)}, Video{ID: 42, State: "Utah"}, false, false},
-		{"first switch after boot", Video{}, Video{ID: 42, State: "Colorado"}, false, false},
-		{"new state unresolvable", Video{State: "Utah", NextVid: next(42)}, Video{ID: 42}, false, false},
+// crossings returns the state_crossing rows written so far, oldest first.
+// VideoTsSec is nil where the writer only knew the clip.
+func crossings(t *testing.T, db *gorm.DB) []crossingRow {
+	t.Helper()
+	var rows []crossingRow
+	if err := db.Raw(`SELECT meta->>'from' AS from_state, meta->>'to' AS to_state,
+		(meta->>'sequential')::bool AS sequential, video_id, video_ts_sec
+		FROM events WHERE event = 'state_crossing' ORDER BY id`).Scan(&rows).Error; err != nil {
+		t.Fatalf("read state_crossing events: %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			crossed, sequential := stateCrossing(tc.prev, tc.cur)
-			if crossed != tc.wantCross || sequential != tc.wantSequential {
-				t.Errorf("stateCrossing() = (%v, %v), want (%v, %v)", crossed, sequential, tc.wantCross, tc.wantSequential)
-			}
-		})
+	return rows
+}
+
+type crossingRow struct {
+	FromState, ToState string
+	Sequential         bool
+	VideoID            *int
+	VideoTsSec         *float64
+}
+
+// crossed renders a row the way the assertions read it.
+func (r crossingRow) crossed() string {
+	return fmt.Sprintf("%s->%s sequential=%v", r.FromState, r.ToState, r.Sequential)
+}
+
+// insertTrack writes a dense OCR track for vid: one row every 2 s from 0 to
+// through, in state `state` up to and including crossAt and in `then` after.
+func insertTrack(t *testing.T, db *gorm.DB, vid Video, through int, state string, crossAt int, then string) {
+	t.Helper()
+	for ts := 0; ts <= through; ts += 2 {
+		st := state
+		if ts > crossAt {
+			st = then
+		}
+		if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source, state)
+			VALUES (?, ?, ?, 40, -110, 'ocr', ?)`, vid.ID, ts, ts, st).Error; err != nil {
+			t.Fatalf("insert coord: %v", err)
+		}
+	}
+}
+
+// airingPlayer returns a Player whose Playhead answers from its own clock —
+// there is no JetStream in a test, so Playhead falls back to CurrentlyPlaying
+// + CurrentProgress — showing vid at `at` into it.
+func airingPlayer(t *testing.T, vid Video, at time.Duration) *Player {
+	t.Helper()
+	playoutCurrent := ""
+	p := NewPlayer(testConf, &recordingOnscreens{}, fakePlayoutServer(t, &playoutCurrent))
+	p.show(vid, at)
+	return p
+}
+
+func (p *Player) show(vid Video, at time.Duration) {
+	p.CurrentlyPlaying = vid
+	p.timeStarted = time.Now().Add(-at)
+}
+
+func TestTrackState_MidClipCrossingLandsAtTheMoment(t *testing.T) {
+	db := testdb.New(t)
+	conf := 1.0
+	vid := insertVideo(t, db, Video{Slug: "2018_0801_120000_001", State: "Utah", CoordConfidence: &conf})
+	// Utah for the first 61 s of the track, Colorado from 62 s on.
+	insertTrack(t, db, vid, 180, "Utah", 60, "Colorado")
+
+	p := airingPlayer(t, vid, 10*time.Second)
+	p.TrackState(context.Background())
+	if got := crossings(t, db); len(got) != 0 {
+		t.Fatalf("first observation wrote %d crossings, want none", len(got))
+	}
+
+	p.show(vid, 50*time.Second)
+	p.TrackState(context.Background())
+	if got := crossings(t, db); len(got) != 0 {
+		t.Fatalf("still in Utah wrote %d crossings, want none", len(got))
+	}
+
+	p.show(vid, 90*time.Second)
+	p.TrackState(context.Background())
+	got := crossings(t, db)
+	if len(got) != 1 {
+		t.Fatalf("crossing into Colorado wrote %d rows, want 1", len(got))
+	}
+	if want := "Utah->Colorado sequential=true"; got[0].crossed() != want {
+		t.Errorf("crossing = %s, want %s", got[0].crossed(), want)
+	}
+	if got[0].VideoID == nil || *got[0].VideoID != vid.ID {
+		t.Errorf("video_id = %v, want %d", got[0].VideoID, vid.ID)
+	}
+	if got[0].VideoTsSec == nil || *got[0].VideoTsSec < 89 || *got[0].VideoTsSec > 92 {
+		t.Errorf("video_ts_sec = %v, want ~90 (the playhead when the crossing was seen)", got[0].VideoTsSec)
+	}
+
+	// Colorado from here on: no second row.
+	p.show(vid, 120*time.Second)
+	p.TrackState(context.Background())
+	if got := crossings(t, db); len(got) != 1 {
+		t.Errorf("staying in Colorado wrote %d rows total, want 1", len(got))
+	}
+}
+
+// A clip without a track answers at clip level, as the switch-time comparison
+// did: sequential when the new clip is the previous one's next_vid, a jump
+// otherwise, and no offset recorded because the moment isn't known.
+func TestTrackState_ClipLevelFallback(t *testing.T) {
+	db := testdb.New(t)
+	colorado := insertVideo(t, db, Video{Slug: "2018_0801_120300_002", State: "Colorado"})
+	kansas := insertVideo(t, db, Video{Slug: "2018_0801_120600_003", State: "Kansas"})
+	utah := insertVideo(t, db, Video{Slug: "2018_0801_120000_001", State: "Utah",
+		NextVid: sql.NullInt64{Int64: int64(colorado.ID), Valid: true}})
+
+	p := airingPlayer(t, utah, 30*time.Second)
+	p.TrackState(context.Background())
+	p.show(colorado, 5*time.Second) // the clip that follows in corpus order
+	p.TrackState(context.Background())
+	p.show(kansas, 5*time.Second) // not colorado's next_vid: a jump
+	p.TrackState(context.Background())
+
+	got := crossings(t, db)
+	if len(got) != 2 {
+		t.Fatalf("wrote %d crossings, want 2", len(got))
+	}
+	if want := "Utah->Colorado sequential=true"; got[0].crossed() != want {
+		t.Errorf("first crossing = %s, want %s", got[0].crossed(), want)
+	}
+	if want := "Colorado->Kansas sequential=false"; got[1].crossed() != want {
+		t.Errorf("second crossing = %s, want %s", got[1].crossed(), want)
+	}
+	for i, row := range got {
+		if row.VideoTsSec != nil {
+			t.Errorf("row %d video_ts_sec = %v, want NULL for a clip-level crossing", i, *row.VideoTsSec)
+		}
+	}
+}
+
+// An unresolvable state is not a crossing in either direction: nothing to
+// cross from, and nothing to cross into.
+func TestTrackState_UnresolvableStateIsNotACrossing(t *testing.T) {
+	db := testdb.New(t)
+	utah := insertVideo(t, db, Video{Slug: "2018_0801_120000_001", State: "Utah"})
+	blank := insertVideo(t, db, Video{Slug: "2018_0801_120300_002"})
+
+	p := airingPlayer(t, blank, 5*time.Second)
+	p.TrackState(context.Background())
+	p.show(utah, 5*time.Second)
+	p.TrackState(context.Background())
+	p.show(blank, 5*time.Second)
+	p.TrackState(context.Background())
+
+	if got := crossings(t, db); len(got) != 0 {
+		t.Errorf("wrote %d crossings, want none", len(got))
 	}
 }
 
