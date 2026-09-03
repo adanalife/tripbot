@@ -123,6 +123,13 @@ func TestLoadOrCreate_CreatesThenLoadsSameRow(t *testing.T) {
 	if loaded.ID != created.ID {
 		t.Errorf("second LoadOrCreate made a new row %d, want the existing %d", loaded.ID, created.ID)
 	}
+	// The create path returns the struct it inserted rather than re-reading it,
+	// so compare it against the row the load path reads back.
+	if loaded.Slug != created.Slug || loaded.Flagged != created.Flagged ||
+		loaded.CoordSource != created.CoordSource || loaded.State != created.State ||
+		!loaded.DateFilmed.Equal(created.DateFilmed) {
+		t.Errorf("created video = %+v, want the persisted %+v", created, loaded)
+	}
 }
 
 func TestFindRandomByState(t *testing.T) {

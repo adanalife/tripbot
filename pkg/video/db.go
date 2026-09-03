@@ -45,46 +45,28 @@ func load(ctx context.Context, conds ...any) (Video, error) {
 	return vid, result.Error
 }
 
-// create will create a new Video from a slug
-// TODO: this is kinda weird, we create an empty Video
-// and then we save it to the DB... maybe we could just
-// save right to the DB? It would take some refactoring.
+// create will create a new Video from a slug. The returned Video is the
+// inserted row: save() fills in the derived fields, the DB-assigned ID, and
+// the autoCreateTime date_created.
 func create(ctx context.Context, file string) (Video, error) {
-	var newVid Video
-	var blankDate time.Time
-
 	if file == "" {
-		return newVid, errors.New("no file provided")
+		return Video{}, errors.New("no file provided")
 	}
 	slug := slug(file)
 
 	// validate the dash string
-	err := validate(slug)
-	if err != nil {
-		return newVid, err
+	if err := validate(slug); err != nil {
+		return Video{}, err
 	}
 
-	// create new (mostly) empty vid. DateCreated is left unset so GORM's
-	// autoCreateTime stamps it on insert (see Video struct in type.go).
-	newVid = Video{
-		Slug:       slug,
-		Lat:        0,
-		Lng:        0,
-		Flagged:    false,
-		DateFilmed: blankDate,
-	}
-
-	// store the video in the DB
-	err = newVid.save(ctx)
-	if err != nil {
+	// DateCreated is left unset so GORM's autoCreateTime stamps it on insert
+	// (see Video struct in type.go).
+	newVid := Video{Slug: slug}
+	if err := newVid.save(ctx); err != nil {
 		slog.ErrorContext(ctx, "error saving to DB", "err", err)
+		return Video{}, err
 	}
-
-	// now fetch it from the DB
-	//TODO: this is an extra DB call, do we care?
-	dbVid, err := load(ctx, "slug = ?", slug)
-
-	return dbVid, err
+	return newVid, nil
 }
 
 // save() fills in the fields derived from the slug and the coords, then
