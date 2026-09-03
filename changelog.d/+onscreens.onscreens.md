@@ -1,0 +1,1 @@
+- **Leaderboard overlay: tighter username↔score gap, no parens.** The `.lb-grid` column gap drops from `0.4em` to `0.25em` and `renderLeaderboard` emits `<span class="lb-user">alice</span>` instead of `(alice)`. Scores keep their own right-aligned column, so digits still line up across rows.

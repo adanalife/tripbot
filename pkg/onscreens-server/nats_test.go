@@ -93,7 +93,7 @@ func TestHandleLeaderboardShow(t *testing.T) {
 	if !strings.Contains(s.Leaderboard.Content(), `<div class="lb-title">Monthly Miles</div>`) {
 		t.Errorf("Leaderboard.Content missing rendered title, got %q", s.Leaderboard.Content())
 	}
-	if !strings.Contains(s.Leaderboard.Content(), "(alice)") {
+	if !strings.Contains(s.Leaderboard.Content(), `<span class="lb-user">alice</span>`) {
 		t.Errorf("Leaderboard.Content missing user, got %q", s.Leaderboard.Content())
 	}
 }
