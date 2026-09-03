@@ -115,11 +115,11 @@
   }
   /* Leaderboard onscreen (RenderAsHTML): CSS grid auto-sizes the score
      column to the widest entry, so digits align across rows in any font.
-     LeaderboardContent in pkg/users emits the matching markup. */
+     renderLeaderboard emits the matching markup. */
   .lb-grid {
     display: inline-grid;
     grid-template-columns: auto auto;
-    column-gap: 0.4em;
+    column-gap: 0.25em;
     row-gap: 0.05em;
     text-align: left;
   }
@@ -129,6 +129,7 @@
     margin-bottom: 0.15em;
   }
   .lb-score, .lb-user { white-space: nowrap; }
+  .lb-score { text-align: right; }
 {{end}}
 </style>
 </head>
