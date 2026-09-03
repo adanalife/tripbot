@@ -23,9 +23,9 @@ func link(t *testing.T, from, to Video) {
 // struct, so a walk must start from the persisted state.
 func reload(t *testing.T, id int) Video {
 	t.Helper()
-	vid, err := loadById(context.Background(), int64(id))
+	vid, err := load(context.Background(), int64(id))
 	if err != nil {
-		t.Fatalf("loadById(%d): %v", id, err)
+		t.Fatalf("load(%d): %v", id, err)
 	}
 	return vid
 }
@@ -122,6 +122,13 @@ func TestLoadOrCreate_CreatesThenLoadsSameRow(t *testing.T) {
 	}
 	if loaded.ID != created.ID {
 		t.Errorf("second LoadOrCreate made a new row %d, want the existing %d", loaded.ID, created.ID)
+	}
+	// The create path returns the struct it inserted rather than re-reading it,
+	// so compare it against the row the load path reads back.
+	if loaded.Slug != created.Slug || loaded.Flagged != created.Flagged ||
+		loaded.CoordSource != created.CoordSource || loaded.State != created.State ||
+		!loaded.DateFilmed.Equal(created.DateFilmed) {
+		t.Errorf("created video = %+v, want the persisted %+v", created, loaded)
 	}
 }
 
