@@ -24,7 +24,7 @@ func FuzzSanitize(f *testing.F) {
 		{"", "", "", 0},
 		{"  padded  ", "\t\n", " ", -1},
 		{"$location", "$nothing", "$date", MaxWeight},
-		{"‮RTL", "\x00\x01\x02", "​", MaxWeight + 1},
+		{"\u202eRTL", "\x00\x01\x02", "​", MaxWeight + 1},
 		{strings.Repeat("x", 500), strings.Repeat("é", 200), strings.Repeat("$location", 40), 1},
 	}
 	for _, s := range seeds {
