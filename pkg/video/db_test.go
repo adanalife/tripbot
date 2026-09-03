@@ -144,6 +144,44 @@ func TestFindRandomByState(t *testing.T) {
 	}
 }
 
+func TestFindRandomByState_SpreadsAcrossTheStatesClips(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	want := map[int]bool{}
+	for _, slug := range []string{"2018_0514_224801_050", "2018_0514_224801_051", "2018_0514_224801_052"} {
+		want[insertVideo(t, db, Video{Slug: slug, State: "Wyoming"}).ID] = true
+	}
+
+	// Every draw is one of the state's clips, and 20 draws over 3 clips land on
+	// more than one of them unless the pick is stuck on a fixed row.
+	got := map[int]bool{}
+	for range 20 {
+		vid, err := FindRandomByState(ctx, "WY")
+		if err != nil {
+			t.Fatalf("FindRandomByState(\"WY\"): %v", err)
+		}
+		if !want[vid.ID] {
+			t.Fatalf("FindRandomByState(\"WY\") = id %d (state %q), want one of %v", vid.ID, vid.State, want)
+		}
+		got[vid.ID] = true
+	}
+	if len(got) < 2 {
+		t.Errorf("20 draws returned only %d distinct clip(s) %v, want a spread over %v", len(got), got, want)
+	}
+}
+
+func TestFindRandomByState_NoClipsForState(t *testing.T) {
+	db := testdb.New(t)
+
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_060", State: "Wyoming"})
+
+	_, err := FindRandomByState(context.Background(), "Alaska")
+	if !errors.Is(err, terrors.ErrNoFootageForState) {
+		t.Errorf("FindRandomByState(\"Alaska\") error = %v, want %v", err, terrors.ErrNoFootageForState)
+	}
+}
+
 func TestFindNextDaytime(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()

@@ -181,6 +181,16 @@ func validate(dashStr string) error {
 	return nil
 }
 
+// randomByStateQuery picks one clip filmed in a state by skipping a random
+// number of its rows, so the database reads a single row out of the match set
+// rather than sorting the whole set to take the first. The count and the skip
+// share one statement, so no clip can be added or removed between them.
+const randomByStateQuery = `
+	SELECT * FROM videos
+	WHERE state = @state
+	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state))
+	LIMIT 1`
+
 func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	var vid Video
 
@@ -194,14 +204,13 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	// title-case the state (it's stored in the DB like that)
 	state = helpers.TitlecaseState(state)
 
-	//TODO: ORDER BY random() will eventually get too slow
-	result := database.GormDB().WithContext(ctx).Where("state = ?", state).Order("random()").Limit(1).First(&vid)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return vid, terrors.ErrNoFootageForState
-	}
+	result := database.GormDB().WithContext(ctx).Raw(randomByStateQuery, sql.Named("state", state)).Scan(&vid)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return vid, terrors.ErrNoFootageForState
 	}
 	return vid, nil
 }
