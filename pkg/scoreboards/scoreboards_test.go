@@ -257,3 +257,41 @@ func TestAddToScoreByName_Accumulates(t *testing.T) {
 		t.Errorf("expected increments to land on one row, got %d rows", rows)
 	}
 }
+
+// insertSnapshot writes one frozen-board row the way the rollup tick does.
+func insertSnapshot(t *testing.T, db *gorm.DB, board, platform string, rank int, username string, value float32) {
+	t.Helper()
+	err := db.Exec(
+		`INSERT INTO scoreboard_snapshots (scoreboard_name, platform, rank, username, value) VALUES (?, ?, ?, ?, ?)`,
+		board, platform, rank, username, value,
+	).Error
+	if err != nil {
+		t.Fatalf("insert snapshot row: %v", err)
+	}
+}
+
+// TestSnapshotTopUsers covers the frozen-board read: rank order rather than
+// insertion order, the channel owner dropped, another platform's rows for the
+// same board invisible, and the size cap.
+func TestSnapshotTopUsers(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	const board = "miles_2026_08"
+
+	insertSnapshot(t, db, board, testConf.Platform, 2, "alice", 10.5)
+	insertSnapshot(t, db, board, testConf.Platform, 1, testConf.ChannelName, 999)
+	insertSnapshot(t, db, board, testConf.Platform, 3, "bob", 42.5)
+	insertSnapshot(t, db, board, "youtube", 1, "carol", 77)
+
+	got := SnapshotTopUsers(ctx, testConf, board, 10)
+	want := [][]string{{"alice", "10.5"}, {"bob", "42.5"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("SnapshotTopUsers = %v, want %v", got, want)
+	}
+	if got := SnapshotTopUsers(ctx, testConf, board, 1); !reflect.DeepEqual(got, [][]string{{"alice", "10.5"}}) {
+		t.Errorf("SnapshotTopUsers with size=1 = %v, want just the top row", got)
+	}
+	if got := SnapshotTopUsers(ctx, testConf, "miles_2026_07", 10); len(got) != 0 {
+		t.Errorf("SnapshotTopUsers for an unfrozen month = %v, want nothing", got)
+	}
+}
