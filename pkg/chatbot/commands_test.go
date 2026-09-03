@@ -653,6 +653,32 @@ func TestDateCmd_IncludesYear(t *testing.T) {
 	}
 }
 
+func TestDateCmd_IncludesHowLongAgo(t *testing.T) {
+	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
+	vid := newTestVideo("Colorado", 39.5, -105.0, date)
+	app := newTestApp(vid)
+	out, _ := captureSay(t, app)
+
+	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	msg := out()
+	if !strings.Contains(msg, "years") || !strings.HasSuffix(msg, "ago)") {
+		t.Errorf("expected a parenthesized years-ago suffix, got %q", msg)
+	}
+}
+
+func TestDateCmd_OmitsHowLongAgoForZeroDate(t *testing.T) {
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Time{})
+	app := newTestApp(vid)
+	out, _ := captureSay(t, app)
+
+	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if strings.Contains(out(), "ago") {
+		t.Errorf("expected no ago suffix for a zero timestamp, got %q", out())
+	}
+}
+
 // --- timeCmd ---
 
 func TestTimeCmd_SaysThisMomentWas(t *testing.T) {
@@ -682,6 +708,20 @@ func TestTimeCmd_IncludesAMPM(t *testing.T) {
 	msg := out()
 	if !strings.Contains(msg, "am") && !strings.Contains(msg, "pm") {
 		t.Errorf("expected am/pm in time output, got %q", msg)
+	}
+}
+
+func TestTimeCmd_IncludesHowLongAgo(t *testing.T) {
+	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
+	vid := newTestVideo("Colorado", 39.5, -105.0, date)
+	app := newTestApp(vid)
+	out, _ := captureSay(t, app)
+
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	msg := out()
+	if !strings.Contains(msg, "years") || !strings.HasSuffix(msg, "ago)") {
+		t.Errorf("expected a parenthesized years-ago suffix, got %q", msg)
 	}
 }
 
