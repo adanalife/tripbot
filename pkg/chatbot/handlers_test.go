@@ -11,7 +11,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
-	"github.com/adanalife/tripbot/pkg/viewstats"
 )
 
 func TestNormalizeCommandPrefix(t *testing.T) {
@@ -454,21 +453,6 @@ func TestRunCommand_RefusalStampsAiringClip(t *testing.T) {
 	}
 }
 
-// stubChatterSource is the minimum ChatterSource that lets a test build a real
-// users.Sessions: nobody is in chat, follows, or subscribes. Enough to drive
-// dispatch's access gates, which read a Sessions rather than the injectable
-// chatUser the checkAccess unit tests use.
-type stubChatterSource struct{}
-
-func (stubChatterSource) UpdateChatters()               {}
-func (stubChatterSource) Chatters() map[string]struct{} { return map[string]struct{}{} }
-func (stubChatterSource) ChatterCount() int             { return 0 }
-func (stubChatterSource) IsSubscriber(_ string) bool    { return false }
-func (stubChatterSource) SubscriberTier(_ string) int   { return 0 }
-func (stubChatterSource) IsFollower(_ string) bool      { return false }
-func (stubChatterSource) UpdateAudience()               {}
-func (stubChatterSource) Audience() viewstats.Audience  { return viewstats.Audience{} }
-
 // A gate refusal is a refusal too — the command existed and was reachable, and
 // still didn't run. Leaving the gates unrecorded would make any refusal rate
 // computed from the log quietly wrong, so this covers the dispatch emit site
@@ -476,7 +460,6 @@ func (stubChatterSource) Audience() viewstats.Audience  { return viewstats.Audie
 // follow gate always passes for a user with no command history).
 func TestDispatch_SubscriberGateRecordsRefusal(t *testing.T) {
 	app := newTestApp(video.Video{})
-	app.UserSessions = users.New(testConf, stubChatterSource{})
 	rec := &recordingEvents{}
 	app.Events = rec
 
@@ -817,7 +800,6 @@ func TestRegistry_AdminCommandsDeclareRequiresAdmin(t *testing.T) {
 // a non-admin gets no chat, no side effect, and a recorded refusal.
 func TestDispatch_AdminGateRefusesAndRecords(t *testing.T) {
 	app := newTestApp(video.Video{})
-	app.UserSessions = users.New(testConf, stubChatterSource{})
 	rec := &recordingEvents{}
 	app.Events = rec
 	out, _ := captureSay(t, app)
