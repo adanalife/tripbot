@@ -29,18 +29,46 @@ func PollStreamingActive(ctx context.Context, platform string, interval time.Dur
 	}
 
 	obsStats := instrumentation.NewOBSStats(platform)
+	// failures counts consecutive dial failures, and is what backs the retry
+	// off. A reached OBS resets it, so a genuine blip still reconnects in 10s.
+	failures := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		poll(ctx, obsStats, addr, passwd, interval)
-		// poll returned — connection lost. Wait before reconnecting.
+		if poll(ctx, obsStats, addr, passwd, interval, failures) {
+			failures = 0
+		} else {
+			failures++
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(10 * time.Second):
+		case <-time.After(reconnectWait(failures)):
 		}
 	}
+}
+
+// maxReconnectWait caps the dial backoff at ~5 minutes, reached after five
+// consecutive failures. The ceiling is a recovery latency: an OBS coming back
+// waits up to that long to be dialed, which is cheap against the alternative —
+// a platform whose OBS is scaled to zero (the console's chat-only mode is
+// exactly that shape) dials every 10s forever, and each attempt logs. That was
+// measured at 99.7% of tripbot's error/warn feed, ~26k lines a day.
+const maxReconnectWait = 5 * time.Minute
+
+// reconnectWait is how long to wait before the next dial after n consecutive
+// failures: 10s doubling to maxReconnectWait. n == 0 means the last connection
+// succeeded and merely dropped, so it gets the base wait.
+func reconnectWait(n int) time.Duration {
+	wait := 10 * time.Second
+	for range min(n, 6) {
+		wait *= 2
+		if wait >= maxReconnectWait {
+			return maxReconnectWait
+		}
+	}
+	return wait
 }
 
 // streamStateFromEvent reports the streaming-active flag carried by ev, and
@@ -57,18 +85,25 @@ func streamStateFromEvent(ev any) (active, isStreamState bool) {
 
 // poll connects once and loops until the context is cancelled or the
 // connection drops, publishing gauges off both the Outputs event stream and
-// the interval tick.
-func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration) {
+// the interval tick. failures is how many consecutive dials have already
+// failed, which decides how loudly another failure is logged. It reports
+// whether the connection was established.
+func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration, failures int) bool {
 	client, err := goobs.New(addr,
 		goobs.WithPassword(passwd),
 		goobs.WithEventSubscriptions(subscriptions.Outputs))
 	if err != nil {
 		// A platform whose OBS deployment is scaled to zero fails here every
 		// retry, forever. obs_streaming_active is the alertable signal — keep
-		// this off Sentry, same as the in-loop failures below.
-		slog.WarnContext(ctx, "obs websocket connect failed", "addr", addr, "err", err)
+		// this off Sentry, same as the in-loop failures below, and say it once
+		// per outage rather than on every retry.
+		level := slog.LevelWarn
+		if failures > 0 {
+			level = slog.LevelDebug
+		}
+		slog.Log(ctx, level, "obs websocket connect failed", "addr", addr, "err", err)
 		obsStats.SetStreaming(false)
-		return
+		return false
 	}
 	defer func() {
 		if err := client.Disconnect(); err != nil {
@@ -88,7 +123,7 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return true
 		case ev, ok := <-client.IncomingEvents:
 			if !ok {
 				// Channel closed — the connection dropped. The gauge going
@@ -96,7 +131,7 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 				// let the outer loop reconnect.
 				slog.WarnContext(ctx, "obs event stream closed")
 				obsStats.SetStreaming(false)
-				return
+				return true
 			}
 			active, isStreamState := streamStateFromEvent(ev)
 			if !isStreamState {
@@ -112,7 +147,7 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 				// is the alertable signal — keep this off Sentry.
 				slog.WarnContext(ctx, "obs GetStreamStatus error", "err", err)
 				obsStats.SetStreaming(false)
-				return // trigger reconnect
+				return true // trigger reconnect
 			}
 			obsStats.SetStreaming(resp.OutputActive)
 			obsStats.UpdateStream(instrumentation.OBSStreamSnapshot{

@@ -28,15 +28,30 @@ func (noopEvents) CommandRan(_ context.Context, _ events.CommandRun) error {
 
 // recordingEvents captures the event rows a run produced, so the emit sites
 // can be asserted on without a database.
+// recordedCorrection is one Correction call — the function takes loose args
+// rather than a struct, so the recorder names them here.
+type recordedCorrection struct {
+	Username string
+	Delta    float64
+}
+
 type recordingEvents struct {
-	noopEvents
 	Follows   []string
+	Subs      []string
+	Unsubs    []string
 	Guesses   []events.GuessSubmission
 	Timewarps []events.Warp
+
+	Corrections []recordedCorrection
 
 	Refusals []events.CommandRefusal
 	Raids    []events.Raid
 	Runs     []events.CommandRun
+}
+
+func (r *recordingEvents) Correction(_ context.Context, username string, delta float64) error {
+	r.Corrections = append(r.Corrections, recordedCorrection{username, delta})
+	return nil
 }
 
 func (r *recordingEvents) GuessSubmitted(_ context.Context, g events.GuessSubmission) error {
@@ -51,6 +66,16 @@ func (r *recordingEvents) Timewarp(_ context.Context, w events.Warp) error {
 
 func (r *recordingEvents) Follow(_ context.Context, username string) error {
 	r.Follows = append(r.Follows, username)
+	return nil
+}
+
+func (r *recordingEvents) Subscribe(_ context.Context, username string) error {
+	r.Subs = append(r.Subs, username)
+	return nil
+}
+
+func (r *recordingEvents) Unsubscribe(_ context.Context, username string) error {
+	r.Unsubs = append(r.Unsubs, username)
 	return nil
 }
 

@@ -38,7 +38,7 @@ func renderLeaderboard(title string, leaderboard [][]string) string {
 	for _, row := range leaderboard {
 		fmt.Fprintf(
 			&b,
-			`<span class="lb-score">%s</span><span class="lb-user">(%s)</span>`,
+			`<span class="lb-score">%s</span><span class="lb-user">%s</span>`,
 			html.EscapeString(row[1]),
 			html.EscapeString(row[0]),
 		)

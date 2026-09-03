@@ -159,3 +159,14 @@ func TestAiringWithVideoSource(t *testing.T) {
 		t.Errorf("TsSec = %v, want 12.5", got.TsSec)
 	}
 }
+
+// chatterSetSource reports a fixed chatter set while still counting the
+// subscriber lookups login() makes, so a test can tell an actual login from a
+// no-op.
+type chatterSetSource struct {
+	*recordingChatterSource
+	chatters map[string]struct{}
+}
+
+func (c chatterSetSource) Chatters() map[string]struct{} { return c.chatters }
+func (c chatterSetSource) ChatterCount() int             { return len(c.chatters) }

@@ -10,7 +10,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
-	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var Uptime time.Time
@@ -28,6 +27,10 @@ type App struct {
 	// the v1 allowlist. Empty is treated as Twitch. Set from cfg.Platform
 	// in New().
 	Platform string
+	// Version is the build-time version stamp (-X main.version), passed
+	// through New() by cmd/tripbot for !version to report. Empty on a
+	// directly-constructed App, which !version reports as "dev".
+	Version string
 	// botless, when true, makes the rotating Chatter / !help lines advertise
 	// promo copy (follow on Twitch, interactivity coming soon) instead of
 	// command ads — for a YouTube instance running with inbound chat disabled,
@@ -51,17 +54,11 @@ type App struct {
 	// installs. The provider-neutral seam: every platform's ChatClient drops in
 	// here without touching command code.
 	Chat ChatClient
-	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
-	// surface of pkg/users for command-time queries. Tests inject a
-	// recordingSessions to assert lookups and stage results; production
-	// uses the realSessions adapter built by NewSessionsAdapter.
+	// Sessions is the pkg/users surface: command-time queries plus the
+	// inbound login lifecycle and the follower/subscriber access reads. Tests
+	// inject a recordingSessions to assert lookups and stage results;
+	// production uses the realSessions adapter built by NewSessionsAdapter.
 	Sessions Sessions
-	// UserSessions is the concrete process-wide session state the inbound chat
-	// handlers (HandleMessage) and dispatch's access check use directly — the login/logout lifecycle + follower/subscriber + login-count
-	// reads that are intentionally off the narrow Sessions interface. cmd/tripbot
-	// assigns the same *users.Sessions it wraps into Sessions. nil in tests and
-	// the brief startup window before cmd assigns it.
-	UserSessions *users.Sessions
 	// Flags evaluates feature flag values for command-time gating. Tests
 	// inject noopFlags{} (every key false); New() defaults it to an empty
 	// in-memory client (same fail-closed contract) for the startup window
@@ -142,16 +139,18 @@ type App struct {
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
-// with its command registry built and indexed. cmd/tripbot builds the live App
+// with its command registry built and indexed. version is the build-time stamp
+// !version reports. cmd/tripbot builds the live App
 // with this and owns it; nothing in the package holds a singleton. Construction
 // touches no network or DB — the realX adapters are lazy.
-func New(cfg *c.TripbotConfig) *App {
+func New(version string, cfg *c.TripbotConfig) *App {
 	a := &App{
 		Cfg:         cfg,
 		Platform:    cfg.Platform,
+		Version:     version,
 		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Playout:     realPlayout{c: playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Video:       realVideo{},
 		Chat:        disconnectedChat{},
 		Sessions:    realSessions{},
@@ -173,6 +172,10 @@ func New(cfg *c.TripbotConfig) *App {
 
 const followerMsg = "Right now only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
+
+// wrongPlatformMsg answers a command that exists but isn't dispatchable here.
+// The %s is the trigger as the viewer typed it.
+const wrongPlatformMsg = "Sorry, %s doesn't work on this platform :("
 
 // followerGatingEnabled toggles the RequiresFollow access check in
 // checkAccess. Disabled for launch so first-time viewers aren't told to

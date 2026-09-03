@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -139,5 +140,36 @@ func FuzzSetBotFlag(f *testing.F) {
 		params := splitFuzzParams(s)
 		app.makeBotCmd(context.Background(), newTestUser(adminUser), params)
 		app.unBotCmd(context.Background(), newTestUser(adminUser), params)
+	})
+}
+
+// FuzzParseSeekSpan covers the !skip/!back argument parser, which is reachable
+// from chat with arbitrary text. The invariants are the ones the function
+// documents: a rejected span comes back as the zero duration, and a bare
+// integer means exactly that many minutes unless it overflows a Duration.
+func FuzzParseSeekSpan(f *testing.F) {
+	seeds := []string{
+		"", " ", "10", "-10", "+10", "0", "10m", "1h30m", "90s", "1H30M", "45S",
+		"9223372036854775807", "-9223372036854775808", "153722867280912930",
+		"1e9", "1.5h", "١٠", "10 m", "--10", "10ms", "\x00", "0x10",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		got, err := parseSeekSpan(s)
+		if err != nil {
+			if got != 0 {
+				t.Errorf("parseSeekSpan(%q) = %v with error %v, want the zero duration", s, got, err)
+			}
+			return
+		}
+		// A bare integer means minutes; anything else went through
+		// time.ParseDuration, which owns its own round-trip guarantees.
+		if n, convErr := strconv.Atoi(strings.ToLower(s)); convErr == nil {
+			if want := time.Duration(n) * time.Minute; got != want {
+				t.Errorf("parseSeekSpan(%q) = %v, want %v", s, got, want)
+			}
+		}
 	})
 }

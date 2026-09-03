@@ -81,17 +81,11 @@ spec:
             capabilities:
               drop:
                 - ALL
-          volumeMounts:
-            - mountPath: /opt/data/run
-              name: run
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
-      volumes:
-        - emptyDir: {}
-          name: run
 ---
 apiVersion: v1
 kind: Service

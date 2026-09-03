@@ -35,16 +35,11 @@ type TripbotConfig struct {
 	// (pkg/oauthtokens) — those still write. Off in every deployed env.
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 
-	// VideoDir is where the videos live
-	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
-
-	// MapsOutputDir is where generated maps will be stored
-	MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
-
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
-	// VlcServerHost is used to specify the host for the VLC webserver
-	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
+	// PlayoutHost is the host:port of playout's playback HTTP API
+	// (/playout/current).
+	PlayoutHost string `required:"true" envconfig:"PLAYOUT_HOST"`
 	// OnscreensServerHost is the host:port for the onscreens-server HTTP
 	// API (state.json, render/, asset/, plus the show/hide endpoints the
 	// chatbot drives).

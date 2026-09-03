@@ -1,11 +1,7 @@
-# Skip:
-#   - LFS-tracked binaries (assets/video/): CI doesn't pull LFS, so the
-#     MP4 checkout is a permission-denied pointer rather than the real
-#     file, and end-of-file-fixer chokes trying to read it.
-#   - vendored frontend assets (pkg/server/static/): third-party htmx +
-#     its SSE extension, kept byte-for-byte upstream — not ours to
-#     reformat (no trailing newline, minified, etc.).
-exclude: '^(assets/video/|pkg/server/static/)'
+# Skip vendored frontend assets (pkg/server/static/): third-party htmx +
+# its SSE extension, kept byte-for-byte upstream — not ours to reformat
+# (no trailing newline, minified, etc.).
+exclude: '^pkg/server/static/'
 
 # Install both the pre-commit (file-content) hooks and the commit-msg hook
 # (the Conventional Commits check below) on a plain `pre-commit install`.
@@ -129,3 +125,17 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         always_run: true
+
+  # This repo is public; the private-notes tree it grew up next to is not. A
+  # `vault/<dir>/` path anywhere in the tree — a README, a YAML comment, an alert
+  # description — points readers at something they cannot open. Content grep,
+  # not a comment linter: the ones that slipped through lived outside code
+  # comments. Fix by removing the reference, never by guessing a public link.
+  - repo: local
+    hooks:
+      - id: no-vault-refs
+        name: no private-notes paths (vault/<dir>/)
+        language: pygrep
+        entry: '\bvault/(infra|tripbot|console|general|decisions|sessions|incidents|website|guessr|obs|playout|platform-gateway|video-pipeline|flare|van|twitch|business)/'
+        types: [text]
+        exclude: ^\.pre-commit-config\.yaml$

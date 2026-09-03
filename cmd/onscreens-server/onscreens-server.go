@@ -11,6 +11,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
+	"github.com/nats-io/nats.go"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
@@ -39,15 +40,21 @@ func main() {
 	ctx, flush := bootstrap.Start("onscreens-server", version, conf)
 	defer flush()
 
-	// Connect to NATS so Server.Start can attach subscribers. Optional —
-	// when NATS_URL is empty the conn is nil and the subscriber registration
-	// is skipped; HTTP remains the sole transport.
-	natsclient.Connect(conf.NatsURL, "onscreens-server")
-
 	// construct the server — runs all per-onscreen init (singletons +
 	// background loops) up front so the HTTP routes have everything to
 	// read by the time the listener accepts.
 	srv := onscreensServer.New(onscreensServer.Config{Version: version, Conf: conf})
+
+	// Connect to NATS so Server.Start can attach subscribers. Optional —
+	// when NATS_URL is empty the conn is nil and the subscriber registration
+	// is skipped; HTTP remains the sole transport. The JetStream restores run
+	// in the on-connect callback so they execute against a live server even
+	// when the first dial loses the boot race (a node reboot brings NATS and
+	// this process up together); a one-shot restore at Start would time out
+	// and leave the middle text at its empty default.
+	natsclient.Connect(conf.NatsURL, "onscreens-server", func(*nats.Conn) {
+		srv.RestoreFromJetStream(ctx)
+	})
 
 	// start the webserver — blocks until ListenAndServe fails or the
 	// signal context cancels

@@ -3,7 +3,6 @@ package users
 import (
 	"context"
 	"log/slog"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -118,9 +117,12 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// tick's chat-message tally.
 	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID(), s.chatMessages())
 
-	// log out the people who aren't present, working from a snapshot so the
-	// lock isn't held across the DB work logout does
-	for username, user := range s.sessionSnapshot() {
+	// One snapshot serves both passes below, so the lock isn't held across the
+	// DB work logout does and the login pass costs no per-chatter lock.
+	loggedIn := s.sessionSnapshot()
+
+	// log out the people who aren't present
+	for username, user := range loggedIn {
 		if _, ok := currentChatters[username]; ok {
 			// they're logged in and a current chatter, do nothing
 			continue
@@ -129,21 +131,39 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 		s.logout(ctx, user)
 	}
 
-	// log in everybody else
-	//TODO: this could get slow, maybe make a list of users that need to be logged in?
+	// log in the chatters missing from the session, so the work scales with
+	// the number of arrivals rather than with the size of the audience.
+	// LoginIfNecessary still re-checks under mu, covering anyone an inbound
+	// message logged in since the snapshot.
 	for chatter := range currentChatters {
+		if _, ok := loggedIn[chatter]; ok {
+			continue
+		}
 		s.LoginIfNecessary(ctx, chatter)
 	}
 }
 
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
-func (s *Sessions) LoginIfNecessary(ctx context.Context, username string) *User {
+func (s *Sessions) LoginIfNecessary(ctx context.Context, username string) User {
 	if user, ok := s.get(username); ok {
 		return user
 	}
 	// they weren't logged in, so note in the DB
 	return s.login(ctx, username)
+}
+
+// RecordPlatformUserID persists u's platform-side ID and keeps the live
+// session entry in step, so later messages from the same chatter short-circuit
+// on the already-set field instead of re-issuing the write every time.
+func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUserID string) User {
+	RecordPlatformUserID(ctx, &u, platformUserID)
+	s.mu.Lock()
+	if live, ok := s.loggedIn[u.Username]; ok {
+		live.PlatformUserID = u.PlatformUserID
+	}
+	s.mu.Unlock()
+	return u
 }
 
 // LogoutIfNecessary will log out the user if it finds them in the session
@@ -153,28 +173,36 @@ func (s *Sessions) LogoutIfNecessary(ctx context.Context, username string) {
 	}
 }
 
-// get returns the logged-in *User for username, if present. It takes mu;
-// callers must not already hold it.
-func (s *Sessions) get(username string) (*User, bool) {
+// get returns a copy of the logged-in User for username, if present. It takes
+// mu; callers must not already hold it. The copy is what makes it safe: the
+// map holds *User, and handing that pointer out would let a caller read the
+// entry while a miles grant writes it under mu.
+func (s *Sessions) get(username string) (User, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	user, ok := s.loggedIn[username]
-	return user, ok
+	if !ok {
+		return User{}, false
+	}
+	return *user, true
 }
 
-// sessionSnapshot returns a copy of the loggedIn map, so callers can iterate
-// (and do slow DB work per entry) without holding mu.
-func (s *Sessions) sessionSnapshot() map[string]*User {
+// sessionSnapshot returns a copy of every logged-in User, so callers can
+// iterate (and do slow DB work per entry) without holding mu. The entries are
+// values for the reason described on get.
+func (s *Sessions) sessionSnapshot() map[string]User {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	snapshot := make(map[string]*User, len(s.loggedIn))
-	maps.Copy(snapshot, s.loggedIn)
+	snapshot := make(map[string]User, len(s.loggedIn))
+	for username, user := range s.loggedIn {
+		snapshot[username] = *user
+	}
 	return snapshot
 }
 
 // login will record the users presence in the DB
 // TODO: do we want to make a DB update here? we could do it on logout()
-func (s *Sessions) login(ctx context.Context, username string) *User {
+func (s *Sessions) login(ctx context.Context, username string) User {
 	now := time.Now()
 
 	user, err := FindOrCreate(ctx, s.cfg.Platform, username)
@@ -187,7 +215,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	// the next tick retries FindOrCreate and self-heals once the DB recovers.
 	if user.ID == 0 {
 		slog.WarnContext(ctx, "could not find or create user, skipping login", "username", username)
-		return &user
+		return user
 	}
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
@@ -217,13 +245,13 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
-	return &user
+	return user
 }
 
 // logout removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
-func (s *Sessions) logout(ctx context.Context, u *User) {
-	sessionMiles := s.sessionMiles(ctx, *u)
+func (s *Sessions) logout(ctx context.Context, u User) {
+	sessionMiles := s.sessionMiles(ctx, u)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -232,13 +260,13 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
 			"session_miles", sessionMiles,
-			"monthly_miles", s.CurrentMonthlyMiles(ctx, *u),
+			"monthly_miles", s.CurrentMonthlyMiles(ctx, u),
 			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
 		)
 	}
 
 	// update miles
-	u.Miles = s.CurrentMiles(ctx, *u)
+	u.Miles = s.CurrentMiles(ctx, u)
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -252,8 +280,8 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	// subscriber bonus, computed the same way the live award was. Recorded at
 	// source; left NULL when zero (most sessions).
 	extra := float64(u.sessionExtraMiles)
-	if s.IsSubscriber(*u) {
-		extra += float64(s.BonusMiles(*u))
+	if s.IsSubscriber(u) {
+		extra += float64(s.BonusMiles(u))
 	}
 	var extraMiles *float64
 	if extra > 0 {
@@ -281,7 +309,7 @@ func (s *Sessions) CheckpointMiles(ctx context.Context) {
 		if !ok {
 			continue
 		}
-		miles := s.sessionMiles(ctx, *user)
+		miles := s.sessionMiles(ctx, user)
 		if miles <= 0 {
 			continue
 		}
@@ -356,7 +384,12 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 // should have earned by watching, and the monthly board is what !miles leads
 // with and the overlay rotates. Gifted miles are the other case and stay
 // lifetime-only — see GiveEveryoneMiles.
-func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+//
+// An error means the correction was not applied at all: the returned total is
+// meaningless, so callers must neither report it nor record a correction event
+// for it. events is append-only, so an event without the matching users write
+// is a permanent divergence in the rollups.
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) (float32, error) {
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
 	var updated User
@@ -366,20 +399,23 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 	}
 	s.mu.Unlock()
 	if ok {
+		// login() never caches an ID-less user, so this row is always saveable;
+		// and the live copy carries the delta either way, so logout re-persists
+		// it if this write hits a transient failure.
 		updated.save(ctx)
 		s.correctMonthly(ctx, updated, delta)
-		return updated.Miles
+		return updated.Miles, nil
 	}
 	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
 	if err != nil {
-		// save() refuses an ID-less user, so the correction is dropped rather
-		// than half-applied; the returned total reflects only the delta.
-		slog.ErrorContext(ctx, "error finding or creating user", "err", err, "username", username)
+		// save() refuses an ID-less user, so there is no total to report: the
+		// correction is dropped rather than half-applied.
+		return 0, err
 	}
 	u.Miles += delta
 	u.save(ctx)
 	s.correctMonthly(ctx, u, delta)
-	return u.Miles
+	return u.Miles, nil
 }
 
 // correctMonthly applies a correction's delta to the current monthly

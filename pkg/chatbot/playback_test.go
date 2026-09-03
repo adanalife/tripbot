@@ -33,10 +33,13 @@ func skipIfDarwin(t *testing.T) {
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern. Chat output goes to the App's IRC fake (noopChat by default).
+// concern, restoring it afterwards. Chat output goes to the App's IRC fake
+// (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
+	prevWarp := lastTimewarpTime
 	lastTimewarpTime = time.Time{}
+	t.Cleanup(func() { lastTimewarpTime = prevWarp })
 	fn()
 }
 
@@ -333,8 +336,9 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
 	})
 
-	// Video: FindRandomByState("california") then GetCurrentlyPlaying() after Playout handoff.
-	wantVideo := []string{`FindRandomByState("california")`, "GetCurrentlyPlaying()"}
+	// Video: FindRandomByState("california"), Current() to compare against the
+	// departing clip's state, then GetCurrentlyPlaying() after Playout handoff.
+	wantVideo := []string{`FindRandomByState("california")`, "Current()", "GetCurrentlyPlaying()"}
 	if len(recVideo.Calls) != len(wantVideo) {
 		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
 	}
@@ -358,6 +362,38 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 	// IRC: a "Jumping to California...!" message.
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Jumping to California") {
 		t.Errorf("expected single 'Jumping to California' message, got %v", recIRC.Says)
+	}
+}
+
+// Jumping into the state already on screen reports it as moving around within
+// that state, and still performs the jump.
+func TestJumpCmd_SameStateSaysJumpingElsewhere(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		// currently playing California footage, and the lookup lands on
+		// another California clip
+		Vid:       video.Video{Slug: "2019_0615_120000_001", State: "California"},
+		RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "California"},
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
+	})
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Jumping elsewhere in California") {
+		t.Errorf("expected single 'Jumping elsewhere in California' message, got %v", recIRC.Says)
+	}
+
+	// the jump itself still happens
+	wantPlayout := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayout {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayout, recPlayout.Calls)
 	}
 }
 

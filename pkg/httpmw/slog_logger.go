@@ -12,11 +12,13 @@ import (
 
 // debugPaths are logged at Debug instead of Info because they're polled
 // often enough to dominate the default log stream. Kubelet's liveness and
-// readiness probes hit /health/{live,ready} every few seconds; OBS's CEF
+// readiness probes hit /health/{live,ready} every few seconds and the console
+// polls /health/deps on its status refresh; OBS's CEF
 // browser sources poll /onscreens/state.json at ~14 req/sec idle. Other
 // frequent paths (e.g. /metrics) stay at Info — add them here if they
 // become noisy.
 var debugPaths = map[string]bool{
+	"/health/deps":          true,
 	"/health/live":          true,
 	"/health/ready":         true,
 	"/onscreens/state.json": true,

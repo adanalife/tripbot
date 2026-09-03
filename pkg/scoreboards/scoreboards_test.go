@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
@@ -77,10 +78,7 @@ func TestTopUsers(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	sb, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
-	if err != nil {
-		t.Fatalf("findOrCreateScoreboard: %v", err)
-	}
+	sb := createScoreboardOn(t, db, "miles_2026_07", testConf.Platform)
 
 	// The real write path for viewers on this platform.
 	createUser(t, db, "alice", testConf.Platform, false)
@@ -102,7 +100,7 @@ func TestTopUsers(t *testing.T) {
 	ownerID := createUser(t, db, testConf.ChannelName, testConf.Platform, false)
 	otherPlatformID := createUser(t, db, "carol", "youtube", false)
 	for _, id := range []uint16{botID, optedOutID, ownerID, otherPlatformID} {
-		insertScore(t, db, id, sb.ID, 999)
+		insertScore(t, db, id, sb, 999)
 	}
 
 	got := TopUsers(ctx, testConf, "miles_2026_07", 10)
@@ -125,12 +123,9 @@ func TestTopUsers_TiesOrderByUsername(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	sb, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
-	if err != nil {
-		t.Fatalf("findOrCreateScoreboard: %v", err)
-	}
+	sb := createScoreboardOn(t, db, "miles_2026_07", testConf.Platform)
 	for _, name := range []string{"carol", "bob", "alice"} {
-		insertScore(t, db, createUser(t, db, name, testConf.Platform, false), sb.ID, 12.5)
+		insertScore(t, db, createUser(t, db, name, testConf.Platform, false), sb, 12.5)
 	}
 
 	want := [][]string{{"alice", "12.5"}, {"bob", "12.5"}, {"carol", "12.5"}}
@@ -163,47 +158,69 @@ func TestTopUsers_UnknownScoreboard(t *testing.T) {
 	}
 }
 
-func TestFindOrCreateScoreboard_CreatesThenFinds(t *testing.T) {
-	testdb.New(t)
+// The add path creates the board it scores on, once, and only for this
+// instance's platform: a same-named board on another platform must not be
+// adopted, or a youtube bot could attach scores to twitch's board.
+func TestAddToScoreByName_CreatesBoardPerPlatform(t *testing.T) {
+	db := testdb.New(t)
 	ctx := context.Background()
 
-	created, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
-	if err != nil {
-		t.Fatalf("findOrCreateScoreboard (create): %v", err)
-	}
-	if created.ID == 0 || created.Name != "miles_2026_07" || created.Platform != testConf.Platform {
-		t.Fatalf("unexpected scoreboard: %+v", created)
-	}
-	if created.DateCreated.IsZero() {
-		t.Errorf("expected date_created stamped on insert, got %+v", created)
+	otherID := createScoreboardOn(t, db, "miles_2026_07", "youtube")
+	createUser(t, db, "alice", testConf.Platform, false)
+
+	for i := 0; i < 2; i++ {
+		if err := AddToScoreByName(ctx, testConf.Platform, "alice", "miles_2026_07", 1); err != nil {
+			t.Fatalf("AddToScoreByName: %v", err)
+		}
 	}
 
-	found, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
-	if err != nil {
-		t.Fatalf("findOrCreateScoreboard (find): %v", err)
+	var boards []struct {
+		ID          uint16
+		DateCreated time.Time
 	}
-	if found.ID != created.ID {
-		t.Fatalf("expected the existing row %d, got a second row %d", created.ID, found.ID)
+	if err := db.Raw(
+		`SELECT id, date_created FROM scoreboards WHERE name = ? AND platform = ?`,
+		"miles_2026_07", testConf.Platform,
+	).Scan(&boards).Error; err != nil {
+		t.Fatalf("select scoreboards: %v", err)
+	}
+	if len(boards) != 1 {
+		t.Fatalf("expected exactly one board for this platform, got %d", len(boards))
+	}
+	if boards[0].ID == otherID {
+		t.Fatalf("adopted the other platform's board (id %d)", otherID)
+	}
+	if boards[0].DateCreated.IsZero() {
+		t.Errorf("expected date_created stamped on insert, got %v", boards[0].DateCreated)
 	}
 }
 
-// A board named miles_2026_07 already existing on another platform must not be
-// adopted: this instance gets its own row, so a youtube bot can never attach
-// scores to twitch's same-named board.
-func TestFindOrCreateScoreboard_PlatformScoped(t *testing.T) {
+// An unknown username scores nothing rather than landing on someone else's
+// row, and reads back as 0 rather than erroring.
+func TestScoreByName_UnknownUser(t *testing.T) {
 	db := testdb.New(t)
+	ctx := context.Background()
 
-	otherID := createScoreboardOn(t, db, "miles_2026_07", "youtube")
+	knownID := createUser(t, db, "alice", testConf.Platform, false)
+	if err := AddToScoreByName(ctx, testConf.Platform, "alice", "miles_2026_07", 5); err != nil {
+		t.Fatalf("AddToScoreByName: %v", err)
+	}
 
-	sb, err := findOrCreateScoreboard(context.Background(), testConf.Platform, "miles_2026_07")
-	if err != nil {
-		t.Fatalf("findOrCreateScoreboard: %v", err)
+	if err := AddToScoreByName(ctx, testConf.Platform, "ghost", "miles_2026_07", 99); err != nil {
+		t.Fatalf("AddToScoreByName(ghost): %v", err)
 	}
-	if sb.ID == otherID {
-		t.Fatalf("adopted the other platform's board (id %d)", otherID)
+
+	got, err := GetScoreByName(ctx, testConf.Platform, "ghost", "miles_2026_07")
+	if err != nil || got != 0 {
+		t.Errorf("GetScoreByName(ghost) = %v, %v; want 0, nil", got, err)
 	}
-	if sb.Platform != testConf.Platform {
-		t.Fatalf("expected platform %q, got %+v", testConf.Platform, sb)
+
+	var value float32
+	if err := db.Raw(`SELECT value FROM scores WHERE user_id = ?`, knownID).Scan(&value).Error; err != nil {
+		t.Fatalf("select score: %v", err)
+	}
+	if value != 5 {
+		t.Errorf("the known user's score = %v, want 5 — the ghost add leaked onto it", value)
 	}
 }
 
@@ -238,5 +255,43 @@ func TestAddToScoreByName_Accumulates(t *testing.T) {
 	}
 	if rows != 1 {
 		t.Errorf("expected increments to land on one row, got %d rows", rows)
+	}
+}
+
+// insertSnapshot writes one frozen-board row the way the rollup tick does.
+func insertSnapshot(t *testing.T, db *gorm.DB, board, platform string, rank int, username string, value float32) {
+	t.Helper()
+	err := db.Exec(
+		`INSERT INTO scoreboard_snapshots (scoreboard_name, platform, rank, username, value) VALUES (?, ?, ?, ?, ?)`,
+		board, platform, rank, username, value,
+	).Error
+	if err != nil {
+		t.Fatalf("insert snapshot row: %v", err)
+	}
+}
+
+// TestSnapshotTopUsers covers the frozen-board read: rank order rather than
+// insertion order, the channel owner dropped, another platform's rows for the
+// same board invisible, and the size cap.
+func TestSnapshotTopUsers(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	const board = "miles_2026_08"
+
+	insertSnapshot(t, db, board, testConf.Platform, 2, "alice", 10.5)
+	insertSnapshot(t, db, board, testConf.Platform, 1, testConf.ChannelName, 999)
+	insertSnapshot(t, db, board, testConf.Platform, 3, "bob", 42.5)
+	insertSnapshot(t, db, board, "youtube", 1, "carol", 77)
+
+	got := SnapshotTopUsers(ctx, testConf, board, 10)
+	want := [][]string{{"alice", "10.5"}, {"bob", "42.5"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("SnapshotTopUsers = %v, want %v", got, want)
+	}
+	if got := SnapshotTopUsers(ctx, testConf, board, 1); !reflect.DeepEqual(got, [][]string{{"alice", "10.5"}}) {
+		t.Errorf("SnapshotTopUsers with size=1 = %v, want just the top row", got)
+	}
+	if got := SnapshotTopUsers(ctx, testConf, "miles_2026_07", 10); len(got) != 0 {
+		t.Errorf("SnapshotTopUsers for an unfrozen month = %v, want nothing", got)
 	}
 }

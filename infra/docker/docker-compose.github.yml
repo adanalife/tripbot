@@ -9,7 +9,3 @@ services:
       - CHANNEL_NAME
       - BOT_USERNAME
       - TWITCH_CLIENT_ID
-    build:
-      # pull down cache layers from repo
-      cache_from:
-        - adanalife/tripbot

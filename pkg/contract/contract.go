@@ -33,7 +33,7 @@ import (
 const comment = "Anti-drift contract between tripbot (consumer, source of truth) and infra/cdk8s (producer). Canonical service names, ports, and env-var keys. Generated from Go constants in tripbot's pkg/contract via `go generate ./pkg/contract`; the infra side syncs from it via `task contract:sync`. Edit pkg/contract/contract.go and regenerate — do not hand-edit this file."
 
 // Logical service names → their Kubernetes Service name. These are the names
-// tripbot clients dial (VLC_SERVER_HOST, ONSCREENS_SERVER_HOST, the
+// tripbot clients dial (PLAYOUT_HOST, ONSCREENS_SERVER_HOST, the
 // obs-websocket addr) and the names cdk8s must stamp onto the matching
 // Service objects.
 const (
@@ -70,33 +70,24 @@ const (
 // the app-identity prefixes (Secret/ConfigMap names) — only the workload
 // Services carry the suffix.
 //
-// ServiceVLC* name playout's Services (the adanalife/playout repo authors
-// them): playout serves vlc-server's wire contract — the /vlc/current HTTP
-// API and the tripbot.<env>.vlc.* NATS subjects — so the Go-side vlc naming
-// stays until the client packages are renamed.
+// ServicePlayout* name playout's Services; the adanalife/playout repo authors
+// them and reads these names back from the synced contract.
 const (
 	ServiceTripbotTwitch      = "tripbot-twitch"
 	ServiceTripbotYouTube     = "tripbot-youtube"
 	ServiceTripbotTikTok      = "tripbot-tiktok"
 	ServiceTripbotFacebook    = "tripbot-facebook"
 	ServiceTripbotInstagram   = "tripbot-instagram"
-	ServiceVLCTwitch          = "playout-twitch"
-	ServiceVLCYouTube         = "playout-youtube"
 	ServiceOnscreensTwitch    = "onscreens-twitch"
 	ServiceOnscreensYouTube   = "onscreens-youtube"
 	ServiceOnscreensTikTok    = "onscreens-tiktok"
 	ServiceOnscreensFacebook  = "onscreens-facebook"
 	ServiceOnscreensInstagram = "onscreens-instagram"
-	// Aliases of ServiceVLC*: both key sets name playout's Services. The
-	// legacy vlc_* keys hold the wire-contract names consumers still read;
-	// they collapse into these when the contract renames vlc → playout.
-	ServicePlayoutTwitch  = "playout-twitch"
-	ServicePlayoutYouTube = "playout-youtube"
-	// The remaining platforms have no vlc_* alias — vlc-server is retired
-	// (#1135), so playout owns these names outright.
-	ServicePlayoutTikTok    = "playout-tiktok"
-	ServicePlayoutFacebook  = "playout-facebook"
-	ServicePlayoutInstagram = "playout-instagram"
+	ServicePlayoutTwitch      = "playout-twitch"
+	ServicePlayoutYouTube     = "playout-youtube"
+	ServicePlayoutTikTok      = "playout-tiktok"
+	ServicePlayoutFacebook    = "playout-facebook"
+	ServicePlayoutInstagram   = "playout-instagram"
 	// ServiceMediaMTX* name the per-platform RTSP relay between playout and
 	// OBS: playout publishes rtsp://mediamtx-<platform>:8554/dashcam and that
 	// platform's OBS pulls it. The infra repo's cdk8s authors the Services;
@@ -106,6 +97,17 @@ const (
 	ServiceMediaMTXTikTok    = "mediamtx-tiktok"
 	ServiceMediaMTXFacebook  = "mediamtx-facebook"
 	ServiceMediaMTXInstagram = "mediamtx-instagram"
+	// ServiceGateway* name the per-platform platform-gateway Services — the
+	// only holder of each platform's API credential, and the host tripbot's
+	// <PLATFORM>_API_URL dials for chat and Helix. The adanalife/platform-gateway
+	// repo's cdk8s authors the Services; the names live here because tripbot's
+	// own cdk8s, the gateway's cdk8s, and infra's Argo all have to agree on
+	// them, and nothing else fails when they drift.
+	ServiceGatewayTwitch    = "gateway-twitch"
+	ServiceGatewayYouTube   = "gateway-youtube"
+	ServiceGatewayTikTok    = "gateway-tiktok"
+	ServiceGatewayFacebook  = "gateway-facebook"
+	ServiceGatewayInstagram = "gateway-instagram"
 )
 
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
@@ -121,8 +123,8 @@ const (
 	PortOBSNoVNC = 6080
 	// PortOBSServer is the obs-server (Flask health/version/shutdown) port.
 	PortOBSServer = 8080
-	// PortVLCHTTP is the playback HTTP API port (playout's /vlc/current).
-	PortVLCHTTP = 8080
+	// PortPlayoutHTTP is the playback HTTP API port (playout's /playout/current).
+	PortPlayoutHTTP = 8080
 	// PortOnscreensHTTP is the onscreens-server HTTP API port.
 	PortOnscreensHTTP = 8080
 	// PortTripbotHTTP is the tripbot chatbot/admin HTTP port.
@@ -130,6 +132,9 @@ const (
 	// PortMediaMTXRTSP is the RTSP port on the MediaMTX relay pods — the port
 	// playout publishes to and OBS reads from.
 	PortMediaMTXRTSP = 8554
+	// PortGatewayHTTP is the platform-gateway HTTP API port — the port behind
+	// every <PLATFORM>_API_URL and the consent Ingress backend.
+	PortGatewayHTTP = 8080
 	// PortNATS is the NATS client port.
 	PortNATS = 4222
 	// PortPostgres is the Postgres port.
@@ -146,8 +151,8 @@ const (
 	EnvKeyOBSWebsocketAddr = "OBS_WEBSOCKET_ADDR"
 	// EnvKeyOBSServerHost mirrors TripbotConfig.ObsServerHost.
 	EnvKeyOBSServerHost = "OBS_SERVER_HOST"
-	// EnvKeyVLCServerHost mirrors TripbotConfig.VlcServerHost.
-	EnvKeyVLCServerHost = "VLC_SERVER_HOST"
+	// EnvKeyPlayoutHost mirrors TripbotConfig.PlayoutHost.
+	EnvKeyPlayoutHost = "PLAYOUT_HOST"
 	// EnvKeyOnscreensServerHost mirrors TripbotConfig.OnscreensServerHost.
 	EnvKeyOnscreensServerHost = "ONSCREENS_SERVER_HOST"
 	// EnvKeyDatabaseHost is the Postgres host pkg/database requires.
@@ -194,8 +199,6 @@ func Current() Contract {
 			{"tripbot_tiktok", ServiceTripbotTikTok},
 			{"tripbot_facebook", ServiceTripbotFacebook},
 			{"tripbot_instagram", ServiceTripbotInstagram},
-			{"vlc_twitch", ServiceVLCTwitch},
-			{"vlc_youtube", ServiceVLCYouTube},
 			{"playout_twitch", ServicePlayoutTwitch},
 			{"playout_youtube", ServicePlayoutYouTube},
 			{"playout_tiktok", ServicePlayoutTikTok},
@@ -211,6 +214,11 @@ func Current() Contract {
 			{"mediamtx_tiktok", ServiceMediaMTXTikTok},
 			{"mediamtx_facebook", ServiceMediaMTXFacebook},
 			{"mediamtx_instagram", ServiceMediaMTXInstagram},
+			{"gateway_twitch", ServiceGatewayTwitch},
+			{"gateway_youtube", ServiceGatewayYouTube},
+			{"gateway_tiktok", ServiceGatewayTikTok},
+			{"gateway_facebook", ServiceGatewayFacebook},
+			{"gateway_instagram", ServiceGatewayInstagram},
 			{"nats", ServiceNATS},
 			{"postgres", ServicePostgres},
 		},
@@ -219,17 +227,18 @@ func Current() Contract {
 			{"obs_websocket", PortOBSWebsocket},
 			{"obs_novnc", PortOBSNoVNC},
 			{"obs_server", PortOBSServer},
-			{"vlc_http", PortVLCHTTP},
+			{"playout_http", PortPlayoutHTTP},
 			{"onscreens_http", PortOnscreensHTTP},
 			{"tripbot_http", PortTripbotHTTP},
 			{"mediamtx_rtsp", PortMediaMTXRTSP},
+			{"gateway_http", PortGatewayHTTP},
 			{"nats", PortNATS},
 			{"postgres", PortPostgres},
 		},
 		EnvKeys: []pair{
 			{"obs_websocket_addr", EnvKeyOBSWebsocketAddr},
 			{"obs_server_host", EnvKeyOBSServerHost},
-			{"vlc_server_host", EnvKeyVLCServerHost},
+			{"playout_host", EnvKeyPlayoutHost},
 			{"onscreens_server_host", EnvKeyOnscreensServerHost},
 			{"database_host", EnvKeyDatabaseHost},
 			{"stream_platform", EnvKeyStreamPlatform},

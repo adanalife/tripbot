@@ -25,7 +25,7 @@ var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
 func LoadOrCreate(ctx context.Context, path string) (Video, error) {
 	slug := slug(path)
 
-	vid, err := load(ctx, slug)
+	vid, err := load(ctx, "slug = ?", slug)
 	if err != nil {
 		// create a new video
 		vid, err = create(ctx, slug)
@@ -34,110 +34,68 @@ func LoadOrCreate(ctx context.Context, path string) (Video, error) {
 	return vid, err
 }
 
-// load() fetches a Video from the DB
-func load(ctx context.Context, slug string) (Video, error) {
+// load() fetches a Video from the DB by the given GORM conditions: a primary
+// key, or a query fragment and its args.
+func load(ctx context.Context, conds ...any) (Video, error) {
 	var vid Video
-	result := database.GormDB().WithContext(ctx).Where("slug = ?", slug).First(&vid)
+	result := database.GormDB().WithContext(ctx).First(&vid, conds...)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return Video{}, errors.New("no matches found")
 	}
 	return vid, result.Error
 }
 
-// TODO: combine this with load()?
-func loadById(ctx context.Context, id int64) (Video, error) {
-	var vid Video
-	result := database.GormDB().WithContext(ctx).First(&vid, id)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return Video{}, errors.New("no matches found")
-	}
-	return vid, result.Error
-}
-
-// create will create a new Video from a slug
-// TODO: this is kinda weird, we create an empty Video
-// and then we save it to the DB... maybe we could just
-// save right to the DB? It would take some refactoring.
+// create will create a new Video from a slug. The returned Video is the
+// inserted row: save() fills in the derived fields, the DB-assigned ID, and
+// the autoCreateTime date_created.
 func create(ctx context.Context, file string) (Video, error) {
-	var newVid Video
-	var blankDate time.Time
-
 	if file == "" {
-		return newVid, errors.New("no file provided")
+		return Video{}, errors.New("no file provided")
 	}
 	slug := slug(file)
 
 	// validate the dash string
-	err := validate(slug)
-	if err != nil {
-		return newVid, err
+	if err := validate(slug); err != nil {
+		return Video{}, err
 	}
 
-	// create new (mostly) empty vid. DateCreated is left unset so GORM's
-	// autoCreateTime stamps it on insert (see Video struct in type.go).
-	newVid = Video{
-		Slug:       slug,
-		Lat:        0,
-		Lng:        0,
-		Flagged:    false,
-		DateFilmed: blankDate,
-	}
-
-	// store the video in the DB
-	err = newVid.save(ctx)
-	if err != nil {
+	// DateCreated is left unset so GORM's autoCreateTime stamps it on insert
+	// (see Video struct in type.go).
+	newVid := Video{Slug: slug}
+	if err := newVid.save(ctx); err != nil {
 		slog.ErrorContext(ctx, "error saving to DB", "err", err)
+		return Video{}, err
 	}
-
-	// now fetch it from the DB
-	//TODO: this is an extra DB call, do we care?
-	dbVid, err := load(ctx, slug)
-
-	return dbVid, err
+	return newVid, nil
 }
 
-// save() will store the video in the DB
-// TODO: I think this can be achieved much easier, c.p. user save
-func (v Video) save(ctx context.Context) error {
-	var err error
-	flagged := v.Flagged
-	lat := v.Lat
-	lng := v.Lng
-	state := v.State
-	coordSource := v.CoordSource
-	if coordSource == "" {
-		coordSource = CoordSourceOCR
+// save() fills in the fields derived from the slug and the coords, then
+// inserts the video. It writes through the receiver, so a caller holding a
+// freshly built Video gets the DB-assigned ID and date_created back.
+func (v *Video) save(ctx context.Context) error {
+	if v.CoordSource == "" {
+		v.CoordSource = CoordSourceOCR
 	}
 
-	if lat == 0 || lng == 0 {
+	if v.Lat == 0 || v.Lng == 0 {
 		// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
-		flagged = true
-		coordSource = CoordSourceMissing
+		v.Flagged = true
+		v.CoordSource = CoordSourceMissing
 	}
 
-	if !flagged {
+	if !v.Flagged {
 		// figure out which state we're in
-		state, err = geo.State(lat, lng)
+		state, err := geo.State(v.Lat, v.Lng)
 		// ErrDisabled is the expected steady-state when no Maps key
 		// is configured; don't spam Sentry on every video import.
 		if err != nil && !errors.Is(err, geo.ErrDisabled) {
 			slog.ErrorContext(ctx, "error geocoding coords", "err", err)
 		}
+		v.State = state
 	}
 
-	insert := Video{
-		Slug:        v.Slug,
-		Lat:         lat,
-		Lng:         lng,
-		DateFilmed:  v.toDate(),
-		Flagged:     flagged,
-		PrevVid:     v.PrevVid,
-		NextVid:     v.NextVid,
-		State:       state,
-		CoordSource: coordSource,
-		DateCreated: v.DateCreated,
-	}
-	return database.GormDB().WithContext(ctx).Create(&insert).Error
+	v.DateFilmed = v.toDate()
+	return database.GormDB().WithContext(ctx).Create(v).Error
 }
 
 // NextUnflagged() finds the next unflagged video by walking the next_vid chain.
@@ -153,7 +111,7 @@ func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
 	for i := int64(0); i < count; i++ {
 		nextID := vid.NextVid.Int64
 		var err error
-		vid, err = loadById(ctx, nextID)
+		vid, err = load(ctx, nextID)
 		if err != nil {
 			return Video{}, fmt.Errorf("broken next_vid chain at id %d: %w", nextID, err)
 		}
@@ -181,6 +139,16 @@ func validate(dashStr string) error {
 	return nil
 }
 
+// randomByStateQuery picks one clip filmed in a state by skipping a random
+// number of its rows, so the database reads a single row out of the match set
+// rather than sorting the whole set to take the first. The count and the skip
+// share one statement, so no clip can be added or removed between them.
+const randomByStateQuery = `
+	SELECT * FROM videos
+	WHERE state = @state
+	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state))
+	LIMIT 1`
+
 func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	var vid Video
 
@@ -194,14 +162,13 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	// title-case the state (it's stored in the DB like that)
 	state = helpers.TitlecaseState(state)
 
-	//TODO: ORDER BY random() will eventually get too slow
-	result := database.GormDB().WithContext(ctx).Where("state = ?", state).Order("random()").Limit(1).First(&vid)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return vid, terrors.ErrNoFootageForState
-	}
+	result := database.GormDB().WithContext(ctx).Raw(randomByStateQuery, sql.Named("state", state)).Scan(&vid)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return vid, terrors.ErrNoFootageForState
 	}
 	return vid, nil
 }

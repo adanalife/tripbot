@@ -13,8 +13,10 @@
 // SomaFM in the background and swaps back once an edge is serving bytes again.
 // All of it is the OBS-side analogue of the silent-disconnect stream watchdog
 // in pkg/obs/watchdog — same injectable-deps shape so the decision loop
-// unit-tests without a real OBS WebSocket. cmd/tripbot (Twitch only) is the
-// sole consumer.
+// unit-tests without a real OBS WebSocket. cmd/tripbot is the sole consumer,
+// and runs one per platform: any platform can select any bed, so neither the
+// fallback nor the album advance is Twitch-specific. Every series the loop
+// writes carries the platform it was started for.
 package audiowatchdog
 
 import (
@@ -214,11 +216,12 @@ func defaultSomaFMReachable(ctx context.Context, url string) bool {
 // Records the playing / level / on-fallback gauges every tick; somafm_reachable
 // only on the ticks that probe — which back off as an outage wears on, so it
 // reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is cancelled.
-func Watch(ctx context.Context, deps Deps, cfg Config) {
+func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
 
 	slog.InfoContext(ctx, "obs background-audio watchdog started",
+		"platform", platform,
 		"interval", cfg.Interval, "fail_threshold", cfg.FailThreshold,
 		"recover_threshold", cfg.RecoverThreshold, "cooldown", cfg.Cooldown)
 
@@ -245,7 +248,7 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				// the -60 floor and read as false silence; recording nothing
 				// instead lets the series go stale → NoData rather than
 				// fake-silent, so dashboards show a gap and alerts don't fire.
-				instrumentation.OBSBackgroundAudio.SetLevelDB(db)
+				instrumentation.OBSBackgroundAudio.SetLevelDB(platform, db)
 			}
 
 			state, err := deps.MediaState(ctx)
@@ -259,10 +262,11 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			}
 			if !synced {
 				deps.Resync(ctx)
+				instrumentation.OBSBackgroundAudio.IncResync(platform)
 				synced = true
 			}
 			playing := state == obs.MediaStatePlaying
-			instrumentation.OBSBackgroundAudio.SetPlaying(playing)
+			instrumentation.OBSBackgroundAudio.SetPlaying(platform, playing)
 
 			// The SomaFM outage machinery below only makes sense while SomaFM is
 			// the selected bed. On a local bed there's nothing to fall back
@@ -273,7 +277,7 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				failMisses, recoverHits = 0, 0
 				// "On fallback" is a statement about the SomaFM bed: a local bed
 				// the operator chose is not a fallback, however local it is.
-				instrumentation.OBSBackgroundAudio.SetOnFallback(false)
+				instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
 				// The album plays one track at a time, unlooped, so OBS ends the
 				// media between tracks — that's the cue to queue the next one.
 				// The meter's playback-ended subscription normally gets there
@@ -301,7 +305,7 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				slog.WarnContext(ctx, "audio watchdog: obs source settings unavailable", "err", err)
 				continue
 			}
-			instrumentation.OBSBackgroundAudio.SetOnFallback(onFallback)
+			instrumentation.OBSBackgroundAudio.SetOnFallback(platform, onFallback)
 
 			cooling := time.Since(lastSwap) < cfg.Cooldown
 
@@ -337,8 +341,8 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				lastSwap = time.Now()
 				failMisses = 0
 				recoverHits = 0
-				instrumentation.OBSBackgroundAudio.SetOnFallback(true)
-				instrumentation.OBSBackgroundAudio.IncSwap("to_fallback")
+				instrumentation.OBSBackgroundAudio.SetOnFallback(platform, true)
+				instrumentation.OBSBackgroundAudio.IncSwap(platform, "to_fallback")
 				continue
 			}
 
@@ -370,7 +374,7 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			}
 			skipped = 0
 			reachable := deps.SomaFMReachable(ctx)
-			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(reachable)
+			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(platform, reachable)
 			if !reachable {
 				recoverHits = 0
 				probeSkip = min(2*probeSkip+1, maxProbeSkip)
@@ -399,8 +403,8 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			}
 			lastSwap = time.Now()
 			recoverHits = 0
-			instrumentation.OBSBackgroundAudio.SetOnFallback(false)
-			instrumentation.OBSBackgroundAudio.IncSwap("to_somafm")
+			instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
+			instrumentation.OBSBackgroundAudio.IncSwap(platform, "to_somafm")
 		}
 	}
 }

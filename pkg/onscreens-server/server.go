@@ -99,16 +99,6 @@ func (s *Server) Start(ctx context.Context) error {
 	// nil (NATS_URL unset); HTTP remains the sole transport in that case.
 	s.StartNATSSubscribers(ctx)
 
-	// Restore the permanent middle-text overlay from its JetStream last-value
-	// cache so a server restart doesn't blank whatever text was on screen.
-	// Best-effort: a no-op without NATS / JetStream.
-	s.RestoreMiddleText(ctx)
-
-	// Restore console-edited rotator copy from its JetStream last-value cache so
-	// a restart doesn't drop the corners back to the copy compiled into the
-	// binary. Best-effort: a no-op without NATS / JetStream.
-	s.RestoreRotatorCopy(ctx)
-
 	r := mux.NewRouter()
 
 	// healthcheck endpoints
@@ -198,6 +188,19 @@ func (s *Server) Start(ctx context.Context) error {
 	case <-ctx.Done():
 		return nil
 	}
+}
+
+// RestoreFromJetStream restores the state a restart would otherwise lose —
+// the permanent middle-text overlay and the console-edited rotator copy — from
+// their JetStream last-value caches. Run it from the NATS on-connect callback
+// (see cmd/onscreens-server), not from Start: the client connects
+// asynchronously and keeps retrying, so a restore issued before the connection
+// is up times out against a server that isn't there yet, while the value
+// still sits in the stream. Best-effort: a nil JetStream (NATS off) or an
+// empty cache leaves each overlay at its constructed default.
+func (s *Server) RestoreFromJetStream(ctx context.Context) {
+	s.RestoreMiddleText(ctx)
+	s.RestoreRotatorCopy(ctx)
 }
 
 // Shutdown gracefully stops the HTTP listener, allowing in-flight

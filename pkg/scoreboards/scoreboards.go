@@ -4,24 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
-
-// Scoreboard represents a bucket of scores, and has a name to identify it.
-// Names are per-platform (miles_2026_07 exists once per platform): uniqueness
-// is (name, platform), and every lookup scopes by this instance's platform.
-type Scoreboard struct {
-	ID       uint16 `gorm:"primaryKey"`
-	Name     string
-	Platform string
-	// autoCreateTime stamps date_created on insert; the insert path doesn't set
-	// it, so without the tag GORM writes the 0001-01-01 zero value over the
-	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
-	DateCreated time.Time `gorm:"autoCreateTime"`
-}
 
 type topUserResult struct {
 	Username string
@@ -29,8 +15,6 @@ type topUserResult struct {
 }
 
 func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
-	var leaderboard [][]string
-
 	var results []topUserResult
 	result := database.GormDB().WithContext(ctx).
 		Table("scores").
@@ -51,16 +35,34 @@ func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, 
 		slog.ErrorContext(ctx, "error fetching top users", "err", result.Error)
 	}
 
-	for _, r := range results {
-		valueAsString := fmt.Sprintf("%.1f", r.Value)
-		leaderboard = append(leaderboard, []string{r.Username, valueAsString})
-	}
-	return leaderboard
+	return leaderboardRows(results)
 }
 
-// findOrCreateScoreboard will find a Scoreboard in the DB or create one
-func findOrCreateScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
-	var scoreboard Scoreboard
-	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: platform}).FirstOrCreate(&scoreboard)
-	return scoreboard, result.Error
+// SnapshotTopUsers reads a frozen monthly board out of scoreboard_snapshots,
+// which the rollup tick writes once per finished month (top 50 per platform,
+// already ranked, bots and opted-out accounts already excluded). The channel
+// owner is filtered here, as TopUsers does, because the snapshot keeps them.
+func SnapshotTopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
+	var results []topUserResult
+	result := database.GormDB().WithContext(ctx).
+		Table("scoreboard_snapshots").
+		Select("username, value").
+		Where("scoreboard_name = ? AND platform = ? AND username != ?", scoreboardName, cfg.Platform, cfg.ChannelName).
+		Order("rank ASC").
+		Limit(size).
+		Scan(&results)
+	if result.Error != nil {
+		slog.ErrorContext(ctx, "error fetching snapshot top users", "err", result.Error, "scoreboard", scoreboardName)
+	}
+	return leaderboardRows(results)
+}
+
+// leaderboardRows renders query rows as the [username, value] pairs every
+// leaderboard surface consumes, with the value at one decimal.
+func leaderboardRows(results []topUserResult) [][]string {
+	var leaderboard [][]string
+	for _, r := range results {
+		leaderboard = append(leaderboard, []string{r.Username, fmt.Sprintf("%.1f", r.Value)})
+	}
+	return leaderboard
 }

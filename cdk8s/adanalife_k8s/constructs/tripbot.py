@@ -71,11 +71,10 @@ SMALL_RESOURCES = k8s.ResourceRequirements(
 )
 
 # Constant base ConfigMap literals (base kustomization configMapGenerator). The
-# sibling-service hosts (VLC/ONSCREENS/OBS_SERVER_HOST) are per-platform, so
+# sibling-service hosts (PLAYOUT_HOST, ONSCREENS/OBS_SERVER_HOST) are per-platform, so
 # they're assembled in config_data() from app_name rather than held as literals.
 _BASE_CONFIG = {
     "READ_ONLY": "false",
-    "MAPS_OUTPUT_DIR": "/opt/data/maps",
     "DATABASE_HOST": "postgres",
     "TRIPBOT_SERVER_PORT": "8080",
 }
@@ -144,9 +143,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # bare "postgres" when co-located (parity); cross-namespace FQDN when the DB
     # is isolated in its own namespace (env.data_namespace).
     data["DATABASE_HOST"] = env.postgres_host
-    # playout serves the same playback API vlc-server did (/vlc/current); the
-    # env key keeps the VLC_SERVER_HOST name tripbot reads.
-    data["VLC_SERVER_HOST"] = f"{app_name('playout', platform)}:8080"
+    data["PLAYOUT_HOST"] = f"{app_name('playout', platform)}:8080"
     data["ONSCREENS_SERVER_HOST"] = f"{app_name('onscreens', platform)}:8080"
     data["OBS_SERVER_HOST"] = f"{app_name('obs', platform)}:8080"
     # OBS WebSocket control addr (port 4455) — distinct from OBS_SERVER_HOST's

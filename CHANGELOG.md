@@ -9,6 +9,110 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.7.0] — 2026-09-02
+
+### Chatbot
+
+- `!help <command>` now explains a single command — `!help timewarp` answers with what it does, who can run it, and its aliases — while a bare `!help` still lists the command surface. Every command in the registry carries a one-line Help, and a test keeps that true for the next one added. ([#1467](https://github.com/adanalife/tripbot/pull/1467))
+- State crossings are now recorded at the moment the footage crosses the line, not at the next clip switch. A new ten-second tick reads the playhead and the per-moment track, so the 48 clips that cross a state mid-clip write their `state_crossing` event with the exact offset into the clip (`video_ts_sec`); clips without a track still answer at clip level, as before. ([#1476](https://github.com/adanalife/tripbot/pull/1476))
+- Spaceless command variants like `!gotowyoming` now run as `!goto wyoming` — the parser splits at the longest registered trigger instead of reporting an unknown command. Close misspellings still fuzzy-route first, and a word no trigger prefixes stays unknown. ([#1478](https://github.com/adanalife/tripbot/pull/1478))
+- `!socialmedia` now points viewers at the dashcam guessing game at <https://guessr.dana.lol> alongside the usual social commands. ([#1482](https://github.com/adanalife/tripbot/pull/1482))
+
+### Fixes
+
+- `task cdk8s:prod:bump` runs cdk8s via `npx`, matching `cdk8s:synth`, so it works from a fresh checkout instead of dying with `Failed to spawn: cdk8s`. ([#1468](https://github.com/adanalife/tripbot/pull/1468))
+- The silent-disconnect watchdog stands down after three forced recoveries that the channel never came back from, instead of bouncing the OBS output every cooldown for as long as the outage lasts, and reports the stood-down state as `tripbot_obs_recovery_exhausted` so an alert can page on it. A recovery that holds, or the output being stopped, re-arms it. ([#1470](https://github.com/adanalife/tripbot/pull/1470))
+- The Discord connector now recognises the unset-token placeholder in the shape the secret store actually seeds, so switching Discord on with no token set stays a clean no-op instead of an auth loop. ([#1475](https://github.com/adanalife/tripbot/pull/1475))
+
+### CI / Tooling
+
+- Changelog fragments whose filename carries towncrier's de-duplication counter are now renamed to a valid `<PR>.<type>.md` instead of a name towncrier rejects. ([#1469](https://github.com/adanalife/tripbot/pull/1469))
+- The pull-request gates now name which gate failed, in the checks tab and in the run summary. ([#1474](https://github.com/adanalife/tripbot/pull/1474))
+- Drop the dead `cache_from: adanalife/tripbot` from the CI compose override — the image is pre-built and loaded before compose runs, so the cache key was never consulted. ([#1479](https://github.com/adanalife/tripbot/pull/1479))
+
+### Cleanup
+
+- Scoreboard reads and writes each run one query instead of three, and an unknown username no longer lands on another viewer's score row. ([#1473](https://github.com/adanalife/tripbot/pull/1473))
+- Chatbot tests restore the package globals they mutate, so the suite passes under `-shuffle=on`. ([#1477](https://github.com/adanalife/tripbot/pull/1477))
+
+### Misc
+
+- Corrected two comments that still described tripbot as holding a Twitch IRC client. The socket moved into gateway-twitch on 2026-08-01, so the token reload feeds EventSub's redial token and the expiry gauge, not an IRC `PASS` line. ([#1466](https://github.com/adanalife/tripbot/pull/1466))
+- Cover the eventbus JetStream stream setup and subscriber events with tests against an embedded NATS server. ([#1480](https://github.com/adanalife/tripbot/pull/1480))
+- Cover the subscriber, gift-sub, resub, and unsubscribe announcements with tests. ([#1481](https://github.com/adanalife/tripbot/pull/1481))
+
+## [v5.6.0] — 2026-09-01
+
+### Chatbot
+
+- Admin-only chat commands are now declared on the command itself (`RequiresAdmin`) and enforced by the single access gate, instead of an ad-hoc check inside each handler — and `chat-commands.json` now says which commands are admin-only. ([#1456](https://github.com/adanalife/tripbot/pull/1456))
+- A chat command that isn't supported on the current platform now replies saying so, instead of failing silently as if the bot were broken. ([#1457](https://github.com/adanalife/tripbot/pull/1457))
+
+### Playout
+
+- Speak the `playout` wire names: commands publish to `tripbot.<env>.playout.*`, the playhead reads `TRIPBOT_PLAYOUT_LASTPLAYED` and `/playout/current`, and tripbot dials playout via `PLAYOUT_HOST` (was `VLC_SERVER_HOST`). The contract drops the `vlc_twitch`/`vlc_youtube` aliases and renames `vlc_http` → `playout_http`, `vlc_server_host` → `playout_host`. ([#1461](https://github.com/adanalife/tripbot/pull/1461))
+
+### Fixes
+
+- `!givemiles` says so when a correction doesn't land, instead of posting a fabricated total and recording an event for it. `Sessions.CorrectMiles` returns `(float32, error)`; when the target's DB row can't be read or created there is no running total to report, so the reply is "Couldn't apply that right now, try again in a bit". The correction event goes in only once the correction has persisted — `events` is append-only, so an event with no matching `users` write left the miles rollups permanently diverged. ([#1222](https://github.com/adanalife/tripbot/pull/1222))
+- Back the OBS websocket dial off to 5 minutes when it keeps failing, and say so once per outage instead of every retry — a platform whose OBS is scaled to zero was filling 99.7% of the error feed. ([#1458](https://github.com/adanalife/tripbot/pull/1458))
+
+### Deploy / Infra
+
+- prod-1 tripbot connects to the CloudNativePG `pg-rw` Postgres service once prod-1-data is cut over. ([#1437](https://github.com/adanalife/tripbot/pull/1437))
+- prod-1 tripbot manifests re-rendered for the CNPG cutover: DATABASE_HOST now points at pg-rw.prod-1-data (release pin unchanged). ([#1455](https://github.com/adanalife/tripbot/pull/1455))
+
+### CI / Tooling
+
+- The weekly base-image mirror refresh now alerts Discord when it fails. ([#1453](https://github.com/adanalife/tripbot/pull/1453))
+- The release-please changelog build now recovers unnumbered changelog fragments (from a PR that merged while the numbering job was still queued) by reading the PR number off the squash commit that added them, instead of letting them publish with no PR link. ([#1460](https://github.com/adanalife/tripbot/pull/1460))
+
+### Misc
+
+- Count each time the audio watchdog re-reads the live background-audio bed off OBS (`tripbot_background_audio_resyncs_total`), so an OBS restart's bed recovery is visible as a series rather than only as a log line. ([#1459](https://github.com/adanalife/tripbot/pull/1459))
+
+## [v5.5.0] — 2026-08-30
+
+### Fixes
+
+- Fix a data race on logged-in user records. The session's lock guarded the login map but not the entries behind it, so reading a user's miles while the gift or checkpoint cron wrote them was unsynchronized — on the chat path as well as the crons. ([#1448](https://github.com/adanalife/tripbot/pull/1448))
+
+### Misc
+
+- `pkg/contract` now owns the per-platform `gateway-<platform>` Service names and the gateway HTTP port. They were agreed across tripbot's cdk8s, the platform-gateway repo's cdk8s and infra's Argo without any generated contract holding them, so a rename would have broken consumers silently instead of failing a drift test. tripbot's own cdk8s reads the nine `<PLATFORM>_API_URL` values through the contract instead of hardcoding the FQDNs; the rendered manifests are byte-identical. ([#1441](https://github.com/adanalife/tripbot/pull/1441))
+
+## [v5.4.0] — 2026-08-28
+
+### Chatbot
+
+- `!help` lists the commands you can run. It used to answer with one line out of a rotating set of tips, numbered `(3 of 11)` — which told a viewer there were eight more and gave them no way to reach any of them except by running it again. It is now an alias of `!commands`, alongside `!command`, `!controls` and `!hello`. The rotation itself is unchanged and still runs on the Chatter timer, where one line at a time is the whole idea. ([#1413](https://github.com/adanalife/tripbot/pull/1413))
+- `!givemiles` now applies its correction to the current monthly scoreboard as well as the lifetime total, since a correction restores miles the viewer should have earned by watching. A clawback larger than the month's score is clamped at zero rather than pushing the leaderboard negative. Gifted miles (the per-sub bonus) stay lifetime-only. ([#1430](https://github.com/adanalife/tripbot/pull/1430))
+
+### Fixes
+
+- Boot-time races against NATS and playout now log as warnings instead of errors. The onscreens rotator/middle-text restores and tripbot's initial-video lookup are all best-effort and self-heal on the next publish or cron run, so reporting them as errors only filled Sentry with noise from every restart. ([#1432](https://github.com/adanalife/tripbot/pull/1432))
+- Re-read the background-audio bed off OBS whenever OBS comes back, so an OBS restart no longer leaves tripbot reporting a stale bed and letting an unlooped album fall silent after its boot track. ([#1435](https://github.com/adanalife/tripbot/pull/1435))
+- `!song`, `!audio` and the console's now-playing line name the bed that's actually on air. While the audio watchdog rides out a SomaFM outage on the album (or the car hum), SomaFM stays *selected* — so every one of them was reading the selection and announcing a SomaFM track nobody was hearing. ([#1438](https://github.com/adanalife/tripbot/pull/1438))
+- The audio watchdog's SomaFM recovery probe backs off as an outage wears on — every tick, then up to every ~3.7 minutes — instead of opening a fresh connection to the edge every 7 seconds for as long as the stream is stranded on the fallback bed. ([#1439](https://github.com/adanalife/tripbot/pull/1439))
+- The background-audio metrics now say which platform they came from, so a single platform going silent is visible instead of being averaged away with the ones that are fine. ([#1445](https://github.com/adanalife/tripbot/pull/1445))
+- The silent-disconnect watchdog now recovers an OBS output whose reconnect has wedged. OBS's streaming state is read as three values instead of a boolean, so a reconnecting output is left to OBS's own retry for three minutes and then treated like any other active output — where previously it reset the watchdog's miss counter on every tick, and a reconnect that stopped retrying could keep the stream dark indefinitely. ([#1446](https://github.com/adanalife/tripbot/pull/1446))
+
+### Deploy / Infra
+
+- stage-1 tripbot now connects to the CloudNativePG `pg-rw` Postgres service; prod-1 is unchanged. ([#1436](https://github.com/adanalife/tripbot/pull/1436))
+
+### Cleanup
+
+- Drop the dead hidden-file guard in video dash-string validation; the filename regex already rejects a leading dot. ([#1434](https://github.com/adanalife/tripbot/pull/1434))
+
+### Misc
+
+- Dropped `file-list.txt` (62,823 lines of 2019 corpus listing, unreferenced since it was written) and three unreferenced image assets. ([#1442](https://github.com/adanalife/tripbot/pull/1442))
+- Dropped the unread `VIDEO_DIR` and `MAPS_OUTPUT_DIR` config, including the `MAPS_OUTPUT_DIR` entry every rendered tripbot ConfigMap carried. ([#1442](https://github.com/adanalife/tripbot/pull/1442))
+- Dropped seven exported functions with no caller: `eventbus`'s five `*StreamName` accessors, `helpers.RunningOnLinux`, and `onscreensServer.Server.Lookup`. ([#1442](https://github.com/adanalife/tripbot/pull/1442))
+- `gateway.Chatters` no longer documents a short chatters list as expected — the gateway pages the read to the end as of platform-gateway 1.26. ([#1443](https://github.com/adanalife/tripbot/pull/1443))
+- New `/health/deps` endpoint reports whether Postgres and NATS are usable, so a wedged dependency is visible without dropping the pod out of its Service the way a readiness failure would. ([#1444](https://github.com/adanalife/tripbot/pull/1444))
+
 ## [v5.3.1] — 2026-08-24
 
 ### Fixes

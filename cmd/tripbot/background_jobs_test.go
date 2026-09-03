@@ -21,6 +21,7 @@ import (
 // video, posts the periodic chatter, and republishes the rotators' clip feed.
 var neutralJobs = []string{
 	"video.GetCurrentlyPlaying",
+	"video.TrackState",
 	"chatbot.Chatter",
 	"video.LocationFeed",
 }
@@ -29,9 +30,9 @@ var neutralJobs = []string{
 // tracking read Twitch chatters; the leaderboards need viewers who earn miles
 // and guess, which needs a chatter with a persisted identity (the gateway
 // platforms hand the command path a transient user); the subscriber and follower
-// polls hit Helix; the token refresh dereferences the IRC client a non-Twitch
-// instance never constructs; and only the Twitch instance holds tokens to report
-// an auth status for (gateway-youtube owns the youtube oauth_tokens row).
+// polls hit Helix; the token reload reads the Twitch oauth_tokens rows a
+// non-Twitch instance never holds; and only the Twitch instance holds tokens to
+// report an auth status for (gateway-youtube owns the youtube oauth_tokens row).
 var twitchOnlyJobs = []string{
 	"users.UpdateSession",
 	"users.CheckpointMiles",

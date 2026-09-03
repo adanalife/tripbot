@@ -123,8 +123,8 @@ type Tripbot struct {
 	// lifetime-miles leaderboard — the single process-wide instance,
 	// constructed in NewTripbot. Cron jobs refresh it (UpdateSession /
 	// UpdateLeaderboard); boot hydrates it (InitLeaderboard); shutdown
-	// flushes it (Shutdown); assigned onto the chatbot App (Sessions adapter +
-	// UserSessions) and into discord so they read the same state. One *Sessions
+	// flushes it (Shutdown); assigned onto the chatbot App (via the Sessions
+	// adapter) and into discord so they read the same state. One *Sessions
 	// per chat provider is the multi-provider seam.
 	sessions *users.Sessions
 
@@ -184,12 +184,12 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	t := &Tripbot{
 		version: version,
 		cfg:     cfg,
-		app:     chatbot.New(cfg),
+		app:     chatbot.New(version, cfg),
 		srv:     server.New(cfg),
 		player: video.NewPlayer(
 			cfg,
 			onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
-			playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
+			playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
 		),
 		flagClient: feature.NewInMemoryClient(nil),
 		gateway:    newGatewayClient(cfg),
@@ -262,7 +262,6 @@ func (t *Tripbot) Run() {
 	t.recordDeploy(ctx)
 	t.app.Video = chatbot.NewVideoAdapter(t.player)                         // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.cfg.Platform, t.sessions) // command-time queries
-	t.app.UserSessions = t.sessions                                         // inbound handlers + access checks read the same session state
 	t.sessions.InitLeaderboard(context.Background())
 	t.startFeatureFlags(ctx)
 	t.startRotatorEditing()
@@ -817,7 +816,7 @@ func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(
 		audiowatchdog.BackgroundAudioInputName, 30*time.Second, t.beds.Advance)
 	go meter.Run(ctx)
-	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
+	go audiowatchdog.Watch(ctx, t.cfg.Platform, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
@@ -1169,6 +1168,9 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// platform-neutral jobs: every instance plays video and posts the
 	// periodic help message.
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
+	// Faster than the clip poll above because it is about a moment, not a clip:
+	// the tick is the precision a mid-clip state crossing is recorded to.
+	t.addJob(10*time.Second, "video.TrackState", t.player.TrackState)
 	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
 	// Refresh the rotators' clip-data feed every minute. Re-publishing (not just
 	// on video change) also recovers a restarted onscreens-server within a tick;
@@ -1247,8 +1249,8 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(authStatusInterval, "twitch.EmitAuthStatus", t.emitAuthStatus)
 	// The platform-gateway owns token refresh now; tripbot only reads the rows
 	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
-	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
-	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
+	// gateway's rotations — EventSub's redial token and the token-expiry gauge
+	// (both fed by LoadFromDB) — without tripbot ever refreshing itself.
 	t.addJob(tokenReloadInterval, "twitch.ReloadTokens", func(ctx context.Context) {
 		if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)

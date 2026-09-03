@@ -31,6 +31,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  actions: read
 
 concurrency:
   group: pr-gates-${{ github.event.pull_request.number }}
@@ -69,7 +70,7 @@ jobs:
             echo "cdk8s=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: astral-sh/setup-uv@v9.0.0 # no floating major tag published
+      - uses: astral-sh/setup-uv@v10.0.1 # no floating major tag published
 
       # Require every PR into main to add a towncrier changelog fragment under
       # changelog.d/ (see README "Changelog"). This is what keeps the release
@@ -178,3 +179,43 @@ jobs:
       - name: Verify dist/ is committed in sync
         if: steps.changed.outputs.cdk8s == 'true'
         run: git diff --exit-code -- cdk8s/dist/
+
+      # The gates run as steps of one job (see the header), so a red reads
+      # `gates` in the checks list with nothing saying which gate died. This step
+      # reads the job's own step verdicts back and reports them: a gate/verdict
+      # table on the run summary, and one error annotation per failed gate,
+      # which is what the PR's checks tab shows under the check. Reporting only —
+      # the job topology, and its single billed minute, are unchanged.
+      - name: Name the failing gate
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          JOB: ${{ github.job }}
+        run: |
+          # A step's verdict lands in the API a beat after the step ends.
+          for _ in 1 2; do
+            gh api --paginate "repos/$GH_REPO/actions/runs/$RUN_ID/jobs" > jobs.json \
+              || { echo "::warning::could not read this job's step verdicts"; exit 0; }
+            jq -r --arg job "$JOB" '
+              .jobs[] | select(.name == $job) | .steps[]
+              | select(.conclusion != null)
+              | select(.name | test("^(Set up job|Complete job|Post )") | not)
+              | "\(.conclusion)\t\(.name)"' jobs.json > verdicts
+            grep -q '^failure' verdicts && break
+            sleep 5
+          done
+          {
+            echo "## pr-gates"
+            echo
+            echo "| Gate | Verdict |"
+            echo "|---|---|"
+            awk -F'\t' '{
+              v = $1 == "success" ? "✅ pass" : $1 == "failure" ? "❌ **fail**" : $1 == "skipped" ? "⏭️ skipped" : $1
+              printf "| %s | %s |\n", $2, v
+            }' verdicts
+          } >> "$GITHUB_STEP_SUMMARY"
+          awk -F'\t' '$1 == "failure" {
+            printf "::error title=pr-gates: %s failed::Open the \"%s\" step in this run'\''s log.\n", $2, $2
+          }' verdicts

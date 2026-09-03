@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -50,6 +51,7 @@ func normalizeCommandPrefix(msg string) string {
 type chatUser interface {
 	HasCommandAvailable(ctx context.Context) bool
 	IsSubscriber() bool
+	IsAdmin() bool
 }
 
 // checkAccess returns true when the user is allowed to run cmd on platform.
@@ -63,7 +65,16 @@ type chatUser interface {
 // (platformHasSubscribers). Elsewhere it would reject every viewer forever, so
 // a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
 // instead.
+//
+// The admin gate is silent unless the command sets AdminDeniedMsg, where the
+// follower and subscriber gates always explain themselves.
 func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) (ok bool, refused string) {
+	if cmd.RequiresAdmin && !user.IsAdmin() {
+		if cmd.AdminDeniedMsg != "" {
+			say(cmd.AdminDeniedMsg)
+		}
+		return false, events.RefusedAdminGate
+	}
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		say(followerMsg)
 		return false, events.RefusedFollowGate
@@ -80,7 +91,7 @@ func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatU
 // checks now live on Sessions (per-provider state), not on User.
 type sessionUser struct {
 	cfg *c.TripbotConfig
-	s   *users.Sessions
+	s   Sessions
 	u   *users.User
 }
 
@@ -90,13 +101,16 @@ func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 func (su sessionUser) IsSubscriber() bool {
 	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
 }
+func (su sessionUser) IsAdmin() bool {
+	return su.cfg.UserIsAdmin(su.u.Username)
+}
 
 // dispatch runs cmd for user. typed is the token that matched the command —
 // the alias, state shortcut, or misspelling as the viewer wrote it — which the
 // command_run event keeps when it differs from the canonical trigger.
 func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say); !ok {
+	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, a.Chat.Say); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
 			Username: user.Username,
 			Command:  cmd.Trigger,
@@ -272,8 +286,40 @@ func (a *App) findCommand(message string) (*Command, string, []string) {
 			slog.Info("fuzzy-routed misspelled command", "text", command, "command", cmd.Trigger)
 			return cmd, command, params
 		}
+
+		// spaceless variant: "!gotowyoming" is a registered trigger with its
+		// first param glued on. Runs after the fuzzy pass so a close
+		// misspelling ("!gotoo") stays a typo of !goto rather than becoming
+		// "!goto o".
+		if cmd, rest := a.splitSpaceless(command); cmd != nil {
+			slog.Info("split spaceless command", "text", command, "command", cmd.Trigger)
+			return cmd, command, append([]string{rest}, params...)
+		}
 	}
 	return nil, "", nil
+}
+
+// splitSpaceless finds the longest registered !-trigger that command starts
+// with and returns it with the glued-on remainder: "!gotowyoming" yields
+// !goto and "wyoming". Longest wins so "!guessrx" is !guessr + "x", not !guess
+// + "rx". Returns nil when no trigger is a proper prefix, so an unknown command
+// stays unknown — genuine typos are meant to stay visible in the logs, they
+// seed new commands. Bare-word triggers ("hello") are never split.
+func (a *App) splitSpaceless(command string) (*Command, string) {
+	var best *Command
+	bestLen := 0
+	for trigger, cmd := range a.singleWordLookup {
+		if !strings.HasPrefix(trigger, "!") || len(trigger) <= bestLen || len(command) <= len(trigger) {
+			continue
+		}
+		if strings.HasPrefix(command, trigger) {
+			best, bestLen = cmd, len(trigger)
+		}
+	}
+	if best == nil {
+		return nil, ""
+	}
+	return best, command[bestLen:]
 }
 
 // stateGuessParams returns the params to pass to !guess when command (a
@@ -373,6 +419,9 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 			// separating: a viewer repeatedly reaching for a command their
 			// platform can't run is an argument for enabling it there.
 			reason = events.RefusedWrongPlatform
+			// Say so rather than swallowing it: the viewer typed a real
+			// trigger, and silence reads as a broken bot.
+			a.Chat.Say(fmt.Sprintf(wrongPlatformMsg, command))
 		}
 		slog.InfoContext(ctx, "unknown chat command", "command", command, "reason", reason)
 		a.recordRefusal(ctx, events.CommandRefusal{
@@ -498,9 +547,9 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 // with no ids — so the column fills in as people talk rather than all at once.
 func (a *App) chatUser(ctx context.Context, username, platformUserID string) *users.User {
 	if platformPersistsUsers[a.platform()] {
-		user := a.UserSessions.LoginIfNecessary(ctx, username)
-		users.RecordPlatformUserID(ctx, user, platformUserID)
-		return user
+		user := a.Sessions.RecordPlatformUserID(
+			ctx, a.Sessions.LoginIfNecessary(ctx, username), platformUserID)
+		return &user
 	}
 	return &users.User{Username: strings.ToLower(username)}
 }

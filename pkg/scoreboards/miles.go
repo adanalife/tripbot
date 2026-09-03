@@ -36,3 +36,9 @@ func PreviousMilesScoreboard() string {
 func PreviousGuessScoreboard() string {
 	return "guess_state_" + previousMonth().Format("2006_01")
 }
+
+// PreviousMonthLabel names the month the Previous* boards cover, with its
+// year ("August 2026"), so a posted board dates itself.
+func PreviousMonthLabel() string {
+	return previousMonth().Format("January 2006")
+}
