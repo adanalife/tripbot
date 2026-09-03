@@ -9,6 +9,45 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.8.0] — 2026-09-03
+
+### Chatbot
+
+- `/lastmonth` in Discord posts last month's final miles and correct-guess top 10 from the frozen month-end snapshots. ([#1484](https://github.com/adanalife/tripbot/pull/1484))
+- `!jump <state>` picks its clip by random offset instead of sorting every clip filmed in that state, so the lookup stays quick as the corpus grows. ([#1490](https://github.com/adanalife/tripbot/pull/1490))
+- Index `videos.state` so by-state clip lookups (`!jump <state>`, `!find`'s state facet) stop sequential-scanning the table. ([#1492](https://github.com/adanalife/tripbot/pull/1492))
+- `!jump` into the state already on screen now says "Jumping elsewhere in *state*...!" ([#1494](https://github.com/adanalife/tripbot/pull/1494))
+- `!date` and `!time` now say how long ago the footage was recorded, e.g. "This moment was Saturday June 15, 2019 (7 years 2 months ago)". ([#1495](https://github.com/adanalife/tripbot/pull/1495))
+- Session reconcile only logs in chatters missing from the session, so each tick costs work proportional to arrivals rather than audience size. ([#1498](https://github.com/adanalife/tripbot/pull/1498))
+
+### Onscreens
+
+- - **Leaderboard overlay: tighter username↔score gap, no parens.** The `.lb-grid` column gap drops from `0.4em` to `0.25em` and `renderLeaderboard` emits `<span class="lb-user">alice</span>` instead of `(alice)`. Scores keep their own right-aligned column, so digits still line up across rows. ([#1493](https://github.com/adanalife/tripbot/pull/1493))
+- Drop `ONSCREENS_SERVER_RUN_DIR` and the emptyDir mounted for it — nothing has written to the run dir since the on-disk state files were removed, so the boot-time `MkdirAll` was a startup failure mode guarding an empty directory. ([#1502](https://github.com/adanalife/tripbot/pull/1502))
+
+### Fixes
+
+- onscreens-server restores the middle text and rotator copy from JetStream once NATS is actually connected, so a boot that races NATS no longer leaves the middle overlay blank. ([#1486](https://github.com/adanalife/tripbot/pull/1486))
+- `task test` now rebuilds its compose test image against the latest mirrored Go base and fails with a clear message when that image's toolchain is older than `go.mod` requires. ([#1488](https://github.com/adanalife/tripbot/pull/1488))
+
+### CI / Tooling
+
+- Add a pre-commit hook (run in CI too) that fails on any private-notes `vault/<dir>/` path in the tree. ([#1483](https://github.com/adanalife/tripbot/pull/1483))
+- release-please runs on the automation app token, so the release tag fires `release.yml` by itself (no explicit dispatch) and the Discord announcement only fires on a tag push, never on a re-deploy. ([#1485](https://github.com/adanalife/tripbot/pull/1485))
+- The audio-watchdog and overlay-expiry tests run on `testing/synctest`, so they finish instantly and deterministically instead of waiting out real timers. ([#1499](https://github.com/adanalife/tripbot/pull/1499))
+- Drop the `setup-task` version hold in `testing.yml` — go-task published the release behind its `v3.53.1` tag, so `3.x` resolves again. ([#1501](https://github.com/adanalife/tripbot/pull/1501))
+
+### Cleanup
+
+- **Delete the unused dashcam sample clip.** `assets/video/` held a 216 MB Git LFS sample clip whose only consumer was a dead bind mount on the tripbot docker-compose service; both are gone, along with the now-dead `.dockerignore` and pre-commit exclusions for the path. ([#1487](https://github.com/adanalife/tripbot/pull/1487))
+- The chatbot reaches session state only through its `Sessions` interface: the login lifecycle, subscriber/command-availability reads, and the bonus-mile grant join it, and the concrete `UserSessions` field is gone. Tests fake the login step instead of asserting on a nil dereference. ([#1497](https://github.com/adanalife/tripbot/pull/1497))
+- Simplify the pkg/video DB layer: one load() for both lookup shapes, and create() inserts the new clip directly instead of re-reading it back. ([#1500](https://github.com/adanalife/tripbot/pull/1500))
+
+### Misc
+
+- Chatbot tests now assert how many times a command calls Say(), so a command that answers twice where one line is intended fails the suite. ([#1489](https://github.com/adanalife/tripbot/pull/1489))
+- Fuzz the `!skip`/`!back` span parser, the rotator copy sanitizer (idempotence), and the map route splitter (NaN/Inf geometry). ([#1491](https://github.com/adanalife/tripbot/pull/1491))
+
 ## [v5.7.0] — 2026-09-02
 
 ### Chatbot
