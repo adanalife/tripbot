@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -495,24 +493,22 @@ func TestKilometresCmd_OtherUser_StripsAtSign(t *testing.T) {
 
 // --- versionCmd ---
 
-func TestVersionCmd_UsesCachedVersion(t *testing.T) {
+func TestVersionCmd_SaysAppVersion(t *testing.T) {
 	app := newTestApp(video.Video{})
-	currentVersion = "v1.2.3-test"
-	defer func() { currentVersion = "" }()
+	app.Version = "v1.2.3-test"
 
 	out, _ := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.Contains(out(), "v1.2.3-test") {
-		t.Errorf("expected cached version in output, got %q", out())
+		t.Errorf("expected App version in output, got %q", out())
 	}
 }
 
 func TestVersionCmd_MessageFormat(t *testing.T) {
 	app := newTestApp(video.Video{})
-	currentVersion = "v1.2.3-test"
-	defer func() { currentVersion = "" }()
+	app.Version = "v1.2.3-test"
 
 	out, _ := captureSay(t, app)
 
@@ -523,42 +519,8 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 	}
 }
 
-func TestVersionCmd_ReadsFromVersionFile(t *testing.T) {
+func TestVersionCmd_FallsBackToDevWhenUnset(t *testing.T) {
 	app := newTestApp(video.Video{})
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "version")
-	if err := os.WriteFile(path, []byte("v9.9.9-from-file\n"), 0o644); err != nil {
-		t.Fatalf("seed version file: %v", err)
-	}
-
-	origPath := versionFilePath
-	versionFilePath = path
-	currentVersion = ""
-	defer func() {
-		versionFilePath = origPath
-		currentVersion = ""
-	}()
-
-	out, _ := captureSay(t, app)
-
-	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if !strings.Contains(out(), "v9.9.9-from-file") {
-		t.Errorf("expected version read from file, got %q", out())
-	}
-}
-
-func TestVersionCmd_FallsBackToDevWhenFileMissing(t *testing.T) {
-	app := newTestApp(video.Video{})
-
-	origPath := versionFilePath
-	versionFilePath = filepath.Join(t.TempDir(), "does-not-exist")
-	currentVersion = ""
-	defer func() {
-		versionFilePath = origPath
-		currentVersion = ""
-	}()
 
 	out, _ := captureSay(t, app)
 
@@ -566,32 +528,6 @@ func TestVersionCmd_FallsBackToDevWhenFileMissing(t *testing.T) {
 
 	if !strings.Contains(out(), "dev") {
 		t.Errorf("expected 'dev' fallback in output, got %q", out())
-	}
-}
-
-func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
-	app := newTestApp(video.Video{})
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "version")
-	if err := os.WriteFile(path, []byte("   \n"), 0o644); err != nil {
-		t.Fatalf("seed empty version file: %v", err)
-	}
-
-	origPath := versionFilePath
-	versionFilePath = path
-	currentVersion = ""
-	defer func() {
-		versionFilePath = origPath
-		currentVersion = ""
-	}()
-
-	out, _ := captureSay(t, app)
-
-	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if !strings.Contains(out(), "dev") {
-		t.Errorf("expected 'dev' fallback for whitespace-only file, got %q", out())
 	}
 }
 

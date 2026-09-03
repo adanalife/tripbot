@@ -1,0 +1,1 @@
+**`!version` reports the build-time ldflag stamp.** The version reaches `chatbot.New` as an `App` field, threaded from the same `-X main.version` value the startup log and `/version` endpoint report, so the command no longer reads `/etc/tripbot/version` at runtime — one carrier of the value instead of two, and one fewer mutable package global in `pkg/chatbot`.
