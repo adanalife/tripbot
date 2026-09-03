@@ -16,7 +16,7 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 - `/lastmonth` in Discord posts last month's final miles and correct-guess top 10 from the frozen month-end snapshots. ([#1484](https://github.com/adanalife/tripbot/pull/1484))
 - `!jump <state>` picks its clip by random offset instead of sorting every clip filmed in that state, so the lookup stays quick as the corpus grows. ([#1490](https://github.com/adanalife/tripbot/pull/1490))
 - Index `videos.state` so by-state clip lookups (`!jump <state>`, `!find`'s state facet) stop sequential-scanning the table. ([#1492](https://github.com/adanalife/tripbot/pull/1492))
-- `!jump` into the state already on screen now says "Jumping elsewhere in _state_...!" ([#1494](https://github.com/adanalife/tripbot/pull/1494))
+- `!jump` into the state already on screen now says "Jumping elsewhere in *state*...!" ([#1494](https://github.com/adanalife/tripbot/pull/1494))
 - `!date` and `!time` now say how long ago the footage was recorded, e.g. "This moment was Saturday June 15, 2019 (7 years 2 months ago)". ([#1495](https://github.com/adanalife/tripbot/pull/1495))
 - Session reconcile only logs in chatters missing from the session, so each tick costs work proportional to arrivals rather than audience size. ([#1498](https://github.com/adanalife/tripbot/pull/1498))
 
