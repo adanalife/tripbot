@@ -397,7 +397,7 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 	app.indexCommands()
 	rec := &recordingEvents{}
 	app.Events = rec
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	// !somafm is in the registry but outside the v1 allowlist Facebook runs.
 	app.runCommand(context.Background(), newTestUser(adminUser), "!somafm")
@@ -411,6 +411,9 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 	// The viewer typed a real trigger, so they hear why nothing happened.
 	if !strings.Contains(out(), "!somafm") {
 		t.Errorf("say = %q, want it to name !somafm", out())
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
