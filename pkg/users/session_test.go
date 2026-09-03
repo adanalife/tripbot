@@ -388,3 +388,38 @@ func TestCheckpointMiles(t *testing.T) {
 		t.Fatalf("expected 1 logout event, got %d", len(logoutEvents))
 	}
 }
+
+// UpdateSession only logs in the chatters missing from the session, so a
+// reconcile tick's work scales with arrivals rather than audience size. An
+// already-logged-in chatter must not be logged in a second time: that would
+// re-count the visit and emit a duplicate login event.
+func TestUpdateSession_OnlyLogsInNewChatters(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db, User{Username: "regular", NumVisits: 7})
+	ctx := context.Background()
+
+	rec := &recordingChatterSource{}
+	s := New(testConf, chatterSetSource{
+		recordingChatterSource: rec,
+		chatters:               map[string]struct{}{"regular": {}, "newcomer": {}},
+	})
+	s.loggedIn["regular"] = &User{Username: "regular", Platform: testConf.Platform, NumVisits: 7, LoggedIn: time.Now()}
+
+	s.UpdateSession(ctx)
+
+	// login() consults the chatter source once per login, so one lookup means
+	// newcomer alone went through it.
+	if rec.subCalls != 1 {
+		t.Errorf("expected 1 login, got %d subscriber lookups", rec.subCalls)
+	}
+	if !s.isLoggedIn("newcomer") {
+		t.Error("expected the new chatter to be logged in")
+	}
+	regular, err := Find(ctx, testConf.Platform, "regular")
+	if err != nil {
+		t.Fatalf("finding regular: %v", err)
+	}
+	if regular.NumVisits != 7 {
+		t.Errorf("visits = %d, want 7 (a second login would have counted another)", regular.NumVisits)
+	}
+}
