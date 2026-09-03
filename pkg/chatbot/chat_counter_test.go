@@ -13,7 +13,7 @@ func (r *recordingChatCounter) Add() { r.adds++ }
 // Every inbound message lands on the counter — plain chatter and commands
 // alike, since the chat-rate sample is a total, not a per-kind breakdown.
 func TestHandleMessage_TalliesEveryMessage(t *testing.T) {
-	app, _ := gatewayPlatformApp(t)
+	app, _, _ := gatewayPlatformApp(t)
 	rec := &recordingChatCounter{}
 	app.ChatCounter = rec
 

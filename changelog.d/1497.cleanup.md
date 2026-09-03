@@ -1,0 +1,1 @@
+The chatbot reaches session state only through its `Sessions` interface: the login lifecycle, subscriber/command-availability reads, and the bonus-mile grant join it, and the concrete `UserSessions` field is gone. Tests fake the login step instead of asserting on a nil dereference.

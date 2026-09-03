@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
-	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -38,13 +37,13 @@ func captureSubscriberEvents(t *testing.T) func() []eventbus.SubscriberEvent {
 	}
 }
 
-// subAnnounceApp returns a test App with a real Sessions (AnnounceSubscriber
-// reaches through UserSessions, which is concrete rather than an interface) and
-// recorders on the two surfaces a sub touches.
+// subAnnounceApp returns a test App with recorders on the three surfaces a sub
+// touches: chat, the events table, and the session state that hands out the
+// bonus mile.
 func subAnnounceApp(t *testing.T) (*App, *recordingChat, *recordingEvents) {
 	t.Helper()
 	app := newTestApp(video.Video{})
-	app.UserSessions = users.New(testConf, stubChatterSource{})
+	app.Sessions = &recordingSessions{}
 	chat := &recordingChat{}
 	app.Chat = chat
 	rec := &recordingEvents{}
