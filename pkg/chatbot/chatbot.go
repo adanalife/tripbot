@@ -27,6 +27,10 @@ type App struct {
 	// the v1 allowlist. Empty is treated as Twitch. Set from cfg.Platform
 	// in New().
 	Platform string
+	// Version is the build-time version stamp (-X main.version), passed
+	// through New() by cmd/tripbot for !version to report. Empty on a
+	// directly-constructed App, which !version reports as "dev".
+	Version string
 	// botless, when true, makes the rotating Chatter / !help lines advertise
 	// promo copy (follow on Twitch, interactivity coming soon) instead of
 	// command ads — for a YouTube instance running with inbound chat disabled,
@@ -135,13 +139,15 @@ type App struct {
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
-// with its command registry built and indexed. cmd/tripbot builds the live App
+// with its command registry built and indexed. version is the build-time stamp
+// !version reports. cmd/tripbot builds the live App
 // with this and owns it; nothing in the package holds a singleton. Construction
 // touches no network or DB — the realX adapters are lazy.
-func New(cfg *c.TripbotConfig) *App {
+func New(version string, cfg *c.TripbotConfig) *App {
 	a := &App{
 		Cfg:         cfg,
 		Platform:    cfg.Platform,
+		Version:     version,
 		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},

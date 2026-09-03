@@ -184,7 +184,7 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	t := &Tripbot{
 		version: version,
 		cfg:     cfg,
-		app:     chatbot.New(cfg),
+		app:     chatbot.New(version, cfg),
 		srv:     server.New(cfg),
 		player: video.NewPlayer(
 			cfg,

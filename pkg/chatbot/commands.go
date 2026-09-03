@@ -72,14 +72,6 @@ func targetUsername(param string) string {
 // lastHelloTime is used to rate-limit the hello command
 var lastHelloTime time.Time = time.Now()
 
-var currentVersion string
-
-// versionFilePath is the build-time-baked version file path. Released
-// container images write the tag here (see infra/docker/*/Dockerfile);
-// outside a container the file won't exist and versionCmd falls back to
-// "dev". Overridable in tests.
-var versionFilePath = "/etc/tripbot/version"
-
 // commandsCmd lists a curated set of featured commands — filtered to the ones
 // actually dispatchable on this App's platform, so a YouTube instance doesn't
 // suggest commands that would silently no-op. With an argument ("!help
@@ -165,30 +157,15 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
-	// Cache the lookup — the file is baked at image build time, so its
-	// contents don't change for the lifetime of the process.
-	if currentVersion == "" {
-		currentVersion = readBuildVersion(ctx)
-	}
-
-	a.Chat.Say("Current version is " + currentVersion)
-}
-
-// readBuildVersion reads the build-time-baked tag from versionFilePath
-// (written by the release Dockerfiles). When the file is missing or
-// empty — i.e. local `go run` outside a container — returns "dev" to
-// match the ldflag default used by the /version HTTP handler.
-func readBuildVersion(ctx context.Context) string {
-	raw, err := os.ReadFile(versionFilePath)
-	if err != nil {
-		slog.DebugContext(ctx, "version file not present, falling back to dev", "err", err, "file", versionFilePath)
-		return "dev"
-	}
-	v := strings.TrimSpace(string(raw))
+	// Directly-constructed Apps (tests, and the window before cmd/tripbot
+	// hands New() the ldflag) leave Version empty; "dev" matches the ldflag
+	// default the /version HTTP handler reports.
+	v := a.Version
 	if v == "" {
-		return "dev"
+		v = "dev"
 	}
-	return v
+
+	a.Chat.Say("Current version is " + v)
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
