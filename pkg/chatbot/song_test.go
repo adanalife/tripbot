@@ -42,7 +42,7 @@ func TestSongCmd_OffSomaFM_ReportsTheLiveBedNotTheFeed(t *testing.T) {
 			app := newTestApp(video.Video{})
 			fake := &fakeBeds{bed: tc.bed, track: tc.track, artist: "Steve Cobby", title: "Big Wow"}
 			app.Beds = fake
-			out, _ := captureSay(t, app)
+			out, says := captureSay(t, app)
 
 			app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -55,6 +55,9 @@ func TestSongCmd_OffSomaFM_ReportsTheLiveBedNotTheFeed(t *testing.T) {
 			}
 			if strings.Contains(got, "Big Wow") {
 				t.Errorf("reported a SomaFM track while the %s bed was playing: %q", tc.bed, got)
+			}
+			if says() != 1 {
+				t.Errorf("expected exactly one Say() call, got %d", says())
 			}
 		})
 	}
@@ -70,7 +73,7 @@ func TestSongCmd_OnSomaFM_NamesTheTunedChannel(t *testing.T) {
 		artist:  "Steve Cobby",
 		title:   "Big Wow",
 	}
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -80,6 +83,9 @@ func TestSongCmd_OnSomaFM_NamesTheTunedChannel(t *testing.T) {
 	}
 	if !strings.Contains(got, "Drone Zone") {
 		t.Errorf("expected the channel named in the report, got %q", got)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -104,11 +110,14 @@ func TestSongCmd_FetchError_FallsBackToApology(t *testing.T) {
 func TestSongCmd_NoBedStoreSaysSo(t *testing.T) {
 	app := newTestApp(video.Video{})
 	app.Beds = nil
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if got := out(); got == "" {
 		t.Error("expected a message rather than silence")
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }

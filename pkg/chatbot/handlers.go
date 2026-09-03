@@ -91,7 +91,7 @@ func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatU
 // checks now live on Sessions (per-provider state), not on User.
 type sessionUser struct {
 	cfg *c.TripbotConfig
-	s   *users.Sessions
+	s   Sessions
 	u   *users.User
 }
 
@@ -110,7 +110,7 @@ func (su sessionUser) IsAdmin() bool {
 // command_run event keeps when it differs from the canonical trigger.
 func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say); !ok {
+	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, a.Chat.Say); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
 			Username: user.Username,
 			Command:  cmd.Trigger,
@@ -547,8 +547,8 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 // with no ids — so the column fills in as people talk rather than all at once.
 func (a *App) chatUser(ctx context.Context, username, platformUserID string) *users.User {
 	if platformPersistsUsers[a.platform()] {
-		user := a.UserSessions.RecordPlatformUserID(
-			ctx, a.UserSessions.LoginIfNecessary(ctx, username), platformUserID)
+		user := a.Sessions.RecordPlatformUserID(
+			ctx, a.Sessions.LoginIfNecessary(ctx, username), platformUserID)
 		return &user
 	}
 	return &users.User{Username: strings.ToLower(username)}

@@ -1,0 +1,1 @@
+**Delete the unused dashcam sample clip.** `assets/video/` held a 216 MB Git LFS sample clip whose only consumer was a dead bind mount on the tripbot docker-compose service; both are gone, along with the now-dead `.dockerignore` and pre-commit exclusions for the path.

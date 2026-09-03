@@ -347,7 +347,7 @@ func TestGuessrLeaderboardCmd_Daily(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -357,6 +357,9 @@ func TestGuessrLeaderboardCmd_Daily(t *testing.T) {
 	}
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August 1 Guessr", 2 rows)`) {
 		t.Errorf("expected one August 1 Guessr overlay call, got %v", rec.Calls)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -372,12 +375,15 @@ func TestGuessrLeaderboardCmd_MonthlyParam(t *testing.T) {
 
 	app := newTestApp(video.Video{})
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), []string{"Monthly"})
 
 	if want := "August Guessr: 1. Endless Roadside (17163)"; out() != want {
 		t.Errorf("chat said %q, want %q", out(), want)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -395,7 +401,7 @@ func TestGuessrLeaderboardCmd_NoRows_PointsAtTheGame(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -404,6 +410,9 @@ func TestGuessrLeaderboardCmd_NoRows_PointsAtTheGame(t *testing.T) {
 	}
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay call for an empty board, got %v", rec.Calls)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 

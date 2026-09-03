@@ -25,8 +25,6 @@ from adanalife_k8s import appconfig, configmap, scheduling
 from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.naming import app_name, meta_labels, selector
 
-RUN_DIR = "/opt/data/run"
-
 
 class OnscreensServer(Construct):
     def __init__(self, scope: Construct, platform: str, *, env: EnvConfig):
@@ -112,8 +110,6 @@ class OnscreensServer(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("128Mi")},
             ),
-            # Writable tmpfs scratch for RUN_DIR — nothing durable.
-            volume_mounts=[k8s.VolumeMount(name="run", mount_path=RUN_DIR)],
         )
 
         k8s.KubeDeployment(
@@ -142,7 +138,7 @@ class OnscreensServer(Construct):
                         # runAsNonRoot as a spec field, whatever USER the image
                         # declares — and this one declares none. Same uid as
                         # tripbot: a static Go binary on :8080 (unprivileged)
-                        # whose only writes go to the RUN_DIR emptyDir.
+                        # that writes nothing to disk.
                         security_context=k8s.PodSecurityContext(
                             run_as_non_root=True,
                             run_as_user=65532,
@@ -166,9 +162,6 @@ class OnscreensServer(Construct):
                             else None
                         ),
                         containers=[container],
-                        volumes=[
-                            k8s.Volume(name="run", empty_dir=k8s.EmptyDirVolumeSource())
-                        ],
                     ),
                 ),
             ),

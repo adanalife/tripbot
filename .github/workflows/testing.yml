@@ -34,12 +34,6 @@ jobs:
     - uses: actions/checkout@v7
     - uses: arduino/setup-task@v3
       with:
-        # HOLD, not a policy: setup-task resolves this spec against go-task's
-        # git tags, and go-task currently has v3.53.0 + v3.53.1 tagged with no
-        # published release behind them — so 3.x picks v3.53.1 and the download
-        # 404s. Restore 3.x once go-task's latest release catches up to its
-        # latest tag.
-        version: 3.52.0
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     # `task test:cover` runs the test service from
     # infra/docker/docker-compose.testing.yml — same path used locally,

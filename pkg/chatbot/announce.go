@@ -39,8 +39,8 @@ func (a *App) AnnounceNewFollower(username string) {
 // one banner per recipient. tier rides along for the console's badge.
 func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
-	a.UserSessions.GiveEveryoneMiles(1.0)
-	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
+	a.Sessions.GiveEveryoneMiles(1.0)
+	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.Sessions.LoggedInCount()))
 	// Counted for gift recipients too, matching channel.subscribe, which fires
 	// for them as well — the shout goes out either way, so skipping them would
 	// show a shortfall against tripbot_events_total that isn't one.

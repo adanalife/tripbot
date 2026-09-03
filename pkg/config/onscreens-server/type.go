@@ -7,10 +7,6 @@ type OnscreensServerConfig struct {
 	// Verbose determines output verbosity
 	Verbose bool `default:"false" envconfig:"VERBOSE"`
 
-	// RunDir is where temporary-but-important runtime files live.
-	// EmptyDir / tmpfs is sufficient in k8s.
-	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
-
 	// OnscreensServerBindAddress is the address (host:port or :port) the
 	// onscreens-server HTTP listener binds to. :8080 is the project-wide
 	// convention for a service's HTTP port.

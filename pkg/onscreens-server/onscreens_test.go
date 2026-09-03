@@ -3,8 +3,14 @@ package onscreensServer
 import (
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
+
+// sweepInterval paces the expiry loop under test. synctest puts the bubble on a
+// fake clock, so the value is arbitrary and costs no wall time: every sweep
+// lands on an exact interval boundary instead of racing the real scheduler.
+const sweepInterval = time.Second
 
 // An Onscreen is written by the HTTP and NATS handlers while its own background
 // loop sweeps it for expiry and the state endpoint reads it for the browser
@@ -35,31 +41,38 @@ func TestOnscreenConcurrentAccess(t *testing.T) {
 // ShowFor's window closes on its own: the background loop hides the overlay once
 // the duration passes, which is what re-arms the browser source's rising edge.
 func TestOnscreenShowForExpires(t *testing.T) {
-	osc := newOnscreen(time.Millisecond)
-	osc.ShowFor("timewarp", 20*time.Millisecond)
-	if !osc.IsShowing() {
-		t.Fatal("IsShowing = false immediately after ShowFor, want true")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		osc := newOnscreen(sweepInterval)
+		defer osc.stop() // lets the loop exit before the bubble closes
+		osc.ShowFor("timewarp", 3*sweepInterval)
+		synctest.Wait()
+		if !osc.IsShowing() {
+			t.Fatal("IsShowing = false immediately after ShowFor, want true")
+		}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for osc.IsShowing() && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if osc.IsShowing() {
-		t.Error("still showing well past the ShowFor duration, want hidden")
-	}
-	// Hide retains content — the persisted middle-text state depends on it.
-	if got := osc.Content(); got != "timewarp" {
-		t.Errorf("Content() after expiry = %q, want %q", got, "timewarp")
-	}
+		// The first sweep past the window is the one that hides it.
+		time.Sleep(4 * sweepInterval)
+		synctest.Wait()
+		if osc.IsShowing() {
+			t.Error("still showing past the ShowFor duration, want hidden")
+		}
+		// Hide retains content — the persisted middle-text state depends on it.
+		if got := osc.Content(); got != "timewarp" {
+			t.Errorf("Content() after expiry = %q, want %q", got, "timewarp")
+		}
+	})
 }
 
 // Show is the permanent state: no duration, so the sweeper must never hide it.
 func TestOnscreenShowDoesNotExpire(t *testing.T) {
-	osc := newOnscreen(time.Millisecond)
-	osc.Show("permanent")
-	time.Sleep(30 * time.Millisecond) // several sweeps at this interval
-	if !osc.IsShowing() {
-		t.Error("IsShowing = false after several sweeps, want a Show to persist")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		osc := newOnscreen(sweepInterval)
+		defer osc.stop()
+		osc.Show("permanent")
+		time.Sleep(30 * sweepInterval) // several sweeps at this interval
+		synctest.Wait()
+		if !osc.IsShowing() {
+			t.Error("IsShowing = false after several sweeps, want a Show to persist")
+		}
+	})
 }

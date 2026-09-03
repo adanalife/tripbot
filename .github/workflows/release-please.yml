@@ -11,18 +11,26 @@ name: release-please
 # onscreens-server (tripbot restarts only the chat bot; onscreens restarts
 # only blip the overlays — the stream itself stays up).
 #
-# Merging the release PR creates the vX.Y.Z tag + GitHub Release; release.yml is
-# then dispatched explicitly at that tag because GITHUB_TOKEN-created tags don't
-# fire push triggers.
+# Merging the release PR creates the vX.Y.Z tag + GitHub Release, and the tag
+# fires release.yml on its own.
+#
+# It runs on the adanalife-automation app token, not GITHUB_TOKEN, and both
+# halves of that matter. Anything github-actions[bot] triggers is held at
+# `action_required` under the repo's first-time-contributor approval policy —
+# a status the bot never outgrows — so a bot-authored release PR parks its
+# gates unrun until someone clicks approve. And a GITHUB_TOKEN-pushed tag
+# fires no push trigger at all, so release.yml would need dispatching by hand.
+# An app token is an ordinary actor on both counts: its pull_request events run
+# unheld and its tag reaches release.yml on its own.
 on:
   push:
     branches:
       - main
 
+# Every write goes through the app token below; the job's own GITHUB_TOKEN
+# needs nothing.
 permissions:
-  contents: write # tag + GitHub Release + release-PR branch
-  pull-requests: write # open/update the release PR
-  actions: write # dispatch release.yml
+  contents: read
 
 concurrency:
   group: release-please
@@ -33,9 +41,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          # Without these the token carries the app installation's whole
+          # permission set. release-please needs exactly two: contents to push
+          # the branch and cut the tag, pull-requests to maintain the release PR.
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: googleapis/release-please-action@v5
         id: release
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -63,14 +84,6 @@ jobs:
           echo "exists=$([ "$code" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Mint automation app token
-        if: ${{ steps.release-branch.outputs.exists == 'true' }}
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
       - name: Check out the release PR branch
         if: ${{ steps.release-branch.outputs.exists == 'true' }}
@@ -163,9 +176,3 @@ jobs:
             git commit -m "chore: build changelog + re-synth dist for $VERSION"
             git push origin HEAD:release-please--branches--main
           fi
-
-      - name: Dispatch release workflow at the new tag
-        if: ${{ steps.release.outputs.release_created }}
-        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "${{ steps.release.outputs.tag_name }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

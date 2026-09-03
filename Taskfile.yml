@@ -18,24 +18,42 @@ tasks:
     cmds:
       - task --list
 
+  # The test image is a thin layer over the mirrored Go base, so a local copy
+  # built months ago still satisfies compose and silently runs an old toolchain
+  # against a go.mod that has moved on. Rebuilding with --pull refreshes the
+  # base; the version check turns the resulting failure into a legible one.
+  test:image:
+    desc: Rebuild the test image against the latest mirrored Go base and verify its toolchain satisfies go.mod
+    cmds:
+      - "{{.COMPOSE}} build --pull test"
+      - >-
+        {{.COMPOSE}} run --rm --no-deps test bash -c 'want=$(grep -m1 "^go " go.mod | cut -d" " -f2);
+        got=$(go version | cut -d" " -f3 | sed "s/^go//");
+        printf "%s\n%s\n" "$want" "$got" | sort -V -C ||
+        { echo "test image ships Go $got, but go.mod requires >= $want" >&2; exit 1; }'
+
   test:
     desc: Run all unit tests
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test go test ./..."
 
   test:cover:
     desc: Run tests with coverage + race detector; prints per-function and total coverage
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'"
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'"
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test go test -race ./..."
 
@@ -57,6 +75,7 @@ tasks:
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test bash"
 

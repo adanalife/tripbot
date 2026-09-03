@@ -176,6 +176,10 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
+	// read the departing clip before the handoff, so we can tell chat we're
+	// staying in the same state rather than arriving somewhere new
+	sameState := randomVid.State != "" &&
+		strings.EqualFold(a.Video.Current().State, randomVid.State)
 	// tell Playout to play it
 	err = a.Playout.PlayFileInPlaylist(ctx, randomVid.File())
 	if err != nil {
@@ -183,7 +187,11 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
-	a.Chat.Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
+	if sameState {
+		a.Chat.Say(fmt.Sprintf("Jumping elsewhere in %s...!", titlecaseState))
+	} else {
+		a.Chat.Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
+	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
