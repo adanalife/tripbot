@@ -129,3 +129,17 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         always_run: true
+
+  # This repo is public; the private-notes tree it grew up next to is not. A
+  # `vault/<dir>/` path anywhere in the tree — a README, a YAML comment, an alert
+  # description — points readers at something they cannot open. Content grep,
+  # not a comment linter: the ones that slipped through lived outside code
+  # comments. Fix by removing the reference, never by guessing a public link.
+  - repo: local
+    hooks:
+      - id: no-vault-refs
+        name: no private-notes paths (vault/<dir>/)
+        language: pygrep
+        entry: '\bvault/(infra|tripbot|console|general|decisions|sessions|incidents|website|guessr|obs|playout|platform-gateway|video-pipeline|flare|van|twitch|business)/'
+        types: [text]
+        exclude: ^\.pre-commit-config\.yaml$
