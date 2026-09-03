@@ -87,48 +87,33 @@ func create(ctx context.Context, file string) (Video, error) {
 	return dbVid, err
 }
 
-// save() will store the video in the DB
-// TODO: I think this can be achieved much easier, c.p. user save
-func (v Video) save(ctx context.Context) error {
-	var err error
-	flagged := v.Flagged
-	lat := v.Lat
-	lng := v.Lng
-	state := v.State
-	coordSource := v.CoordSource
-	if coordSource == "" {
-		coordSource = CoordSourceOCR
+// save() fills in the fields derived from the slug and the coords, then
+// inserts the video. It writes through the receiver, so a caller holding a
+// freshly built Video gets the DB-assigned ID and date_created back.
+func (v *Video) save(ctx context.Context) error {
+	if v.CoordSource == "" {
+		v.CoordSource = CoordSourceOCR
 	}
 
-	if lat == 0 || lng == 0 {
+	if v.Lat == 0 || v.Lng == 0 {
 		// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
-		flagged = true
-		coordSource = CoordSourceMissing
+		v.Flagged = true
+		v.CoordSource = CoordSourceMissing
 	}
 
-	if !flagged {
+	if !v.Flagged {
 		// figure out which state we're in
-		state, err = geo.State(lat, lng)
+		state, err := geo.State(v.Lat, v.Lng)
 		// ErrDisabled is the expected steady-state when no Maps key
 		// is configured; don't spam Sentry on every video import.
 		if err != nil && !errors.Is(err, geo.ErrDisabled) {
 			slog.ErrorContext(ctx, "error geocoding coords", "err", err)
 		}
+		v.State = state
 	}
 
-	insert := Video{
-		Slug:        v.Slug,
-		Lat:         lat,
-		Lng:         lng,
-		DateFilmed:  v.toDate(),
-		Flagged:     flagged,
-		PrevVid:     v.PrevVid,
-		NextVid:     v.NextVid,
-		State:       state,
-		CoordSource: coordSource,
-		DateCreated: v.DateCreated,
-	}
-	return database.GormDB().WithContext(ctx).Create(&insert).Error
+	v.DateFilmed = v.toDate()
+	return database.GormDB().WithContext(ctx).Create(v).Error
 }
 
 // NextUnflagged() finds the next unflagged video by walking the next_vid chain.
