@@ -10,7 +10,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
-	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var Uptime time.Time
@@ -55,17 +54,11 @@ type App struct {
 	// installs. The provider-neutral seam: every platform's ChatClient drops in
 	// here without touching command code.
 	Chat ChatClient
-	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
-	// surface of pkg/users for command-time queries. Tests inject a
-	// recordingSessions to assert lookups and stage results; production
-	// uses the realSessions adapter built by NewSessionsAdapter.
+	// Sessions is the pkg/users surface: command-time queries plus the
+	// inbound login lifecycle and the follower/subscriber access reads. Tests
+	// inject a recordingSessions to assert lookups and stage results;
+	// production uses the realSessions adapter built by NewSessionsAdapter.
 	Sessions Sessions
-	// UserSessions is the concrete process-wide session state the inbound chat
-	// handlers (HandleMessage) and dispatch's access check use directly — the login/logout lifecycle + follower/subscriber + login-count
-	// reads that are intentionally off the narrow Sessions interface. cmd/tripbot
-	// assigns the same *users.Sessions it wraps into Sessions. nil in tests and
-	// the brief startup window before cmd assigns it.
-	UserSessions *users.Sessions
 	// Flags evaluates feature flag values for command-time gating. Tests
 	// inject noopFlags{} (every key false); New() defaults it to an empty
 	// in-memory client (same fail-closed contract) for the startup window

@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/adanalife/tripbot/pkg/users"
 	"gorm.io/gorm"
@@ -25,6 +26,16 @@ func (noopSessions) BonusMiles(_ users.User) float32                            
 func (noopSessions) CorrectMiles(_ context.Context, _ string, _ float32) (float32, error) {
 	return 0, nil
 }
+func (noopSessions) LoginIfNecessary(_ context.Context, username string) users.User {
+	return users.User{Username: strings.ToLower(username)}
+}
+func (noopSessions) RecordPlatformUserID(_ context.Context, u users.User, _ string) users.User {
+	return u
+}
+func (noopSessions) IsSubscriber(_ users.User) bool                            { return false }
+func (noopSessions) HasCommandAvailable(_ context.Context, _ *users.User) bool { return true }
+func (noopSessions) GiveEveryoneMiles(_ float32)                               {}
+func (noopSessions) LoggedInCount() int                                        { return 0 }
 
 // recordingSessions captures every call made to it so tests can assert
 // the chatbot queried the expected user / leaderboard surfaces.
@@ -46,6 +57,47 @@ type recordingSessions struct {
 	CorrectMilesErr error
 	// Miles / MonthlyMiles / Bonus stage what the miles methods return.
 	Miles, MonthlyMiles, Bonus float32
+	// Subscriber stages IsSubscriber; CommandUnavailable flips
+	// HasCommandAvailable to false (the zero value grants, so the ordinary
+	// dispatch tests run their commands).
+	Subscriber, CommandUnavailable bool
+	// LoggedIn stages LoggedInCount; Gifts records every GiveEveryoneMiles.
+	LoggedIn int
+	Gifts    []float32
+}
+
+func (r *recordingSessions) LoginIfNecessary(_ context.Context, username string) users.User {
+	r.Calls = append(r.Calls, fmt.Sprintf("LoginIfNecessary(%q)", username))
+	if r.FindResult.Username == username {
+		return r.FindResult
+	}
+	return users.User{Username: username}
+}
+
+func (r *recordingSessions) RecordPlatformUserID(_ context.Context, u users.User, platformUserID string) users.User {
+	r.Calls = append(r.Calls, fmt.Sprintf("RecordPlatformUserID(%q, %q)", u.Username, platformUserID))
+	u.PlatformUserID = platformUserID
+	return u
+}
+
+func (r *recordingSessions) IsSubscriber(u users.User) bool {
+	r.Calls = append(r.Calls, fmt.Sprintf("IsSubscriber(%q)", u.Username))
+	return r.Subscriber
+}
+
+func (r *recordingSessions) HasCommandAvailable(_ context.Context, u *users.User) bool {
+	r.Calls = append(r.Calls, fmt.Sprintf("HasCommandAvailable(%q)", u.Username))
+	return !r.CommandUnavailable
+}
+
+func (r *recordingSessions) GiveEveryoneMiles(gift float32) {
+	r.Calls = append(r.Calls, fmt.Sprintf("GiveEveryoneMiles(%g)", gift))
+	r.Gifts = append(r.Gifts, gift)
+}
+
+func (r *recordingSessions) LoggedInCount() int {
+	r.Calls = append(r.Calls, "LoggedInCount")
+	return r.LoggedIn
 }
 
 func (r *recordingSessions) Find(_ context.Context, username string) (users.User, error) {

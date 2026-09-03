@@ -14,9 +14,6 @@ services:
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
-    volumes:
-      #TODO: do we even need this?
-      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:

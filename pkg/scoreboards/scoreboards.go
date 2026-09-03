@@ -15,8 +15,6 @@ type topUserResult struct {
 }
 
 func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
-	var leaderboard [][]string
-
 	var results []topUserResult
 	result := database.GormDB().WithContext(ctx).
 		Table("scores").
@@ -37,9 +35,34 @@ func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, 
 		slog.ErrorContext(ctx, "error fetching top users", "err", result.Error)
 	}
 
+	return leaderboardRows(results)
+}
+
+// SnapshotTopUsers reads a frozen monthly board out of scoreboard_snapshots,
+// which the rollup tick writes once per finished month (top 50 per platform,
+// already ranked, bots and opted-out accounts already excluded). The channel
+// owner is filtered here, as TopUsers does, because the snapshot keeps them.
+func SnapshotTopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
+	var results []topUserResult
+	result := database.GormDB().WithContext(ctx).
+		Table("scoreboard_snapshots").
+		Select("username, value").
+		Where("scoreboard_name = ? AND platform = ? AND username != ?", scoreboardName, cfg.Platform, cfg.ChannelName).
+		Order("rank ASC").
+		Limit(size).
+		Scan(&results)
+	if result.Error != nil {
+		slog.ErrorContext(ctx, "error fetching snapshot top users", "err", result.Error, "scoreboard", scoreboardName)
+	}
+	return leaderboardRows(results)
+}
+
+// leaderboardRows renders query rows as the [username, value] pairs every
+// leaderboard surface consumes, with the value at one decimal.
+func leaderboardRows(results []topUserResult) [][]string {
+	var leaderboard [][]string
 	for _, r := range results {
-		valueAsString := fmt.Sprintf("%.1f", r.Value)
-		leaderboard = append(leaderboard, []string{r.Username, valueAsString})
+		leaderboard = append(leaderboard, []string{r.Username, fmt.Sprintf("%.1f", r.Value)})
 	}
 	return leaderboard
 }

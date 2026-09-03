@@ -439,7 +439,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		a.Chat.Say(fmt.Sprintf("This moment was %s", fmtTime))
+		msg := fmt.Sprintf("This moment was %s", fmtTime)
+		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+			msg += fmt.Sprintf(" (%s)", ago)
+		}
+		a.Chat.Say(msg)
 	}
 }
 
@@ -462,7 +466,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		a.Chat.Say(fmt.Sprintf("This moment was %s", fmtDate))
+		msg := fmt.Sprintf("This moment was %s", fmtDate)
+		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+			msg += fmt.Sprintf(" (%s)", ago)
+		}
+		a.Chat.Say(msg)
 	}
 }
 

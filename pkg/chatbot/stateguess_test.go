@@ -103,7 +103,7 @@ func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
 
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"massachusets"})
 
@@ -114,18 +114,24 @@ func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
 	if len(recScores.Credited) != 1 {
 		t.Errorf("credited = %v, want the guesser once", recScores.Credited)
 	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
 }
 
 func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 	// a misspelling of the WRONG state corrects to that state and stays wrong
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"wyomig"})
 
 	if !strings.Contains(out(), "Try again") {
 		t.Errorf("expected try-again in output, got %q", out())
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -144,7 +150,7 @@ func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
 			recPlayout := &recordingPlayout{}
 			app.Scoreboards = recScores
 			app.Playout = recPlayout
-			out, _ := captureSay(t, app)
+			out, says := captureSay(t, app)
 
 			app.guessCmd(context.Background(), newTestUser("viewer1"), []string{guess})
 
@@ -157,6 +163,9 @@ func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
 			if len(recPlayout.Calls) != 0 {
 				t.Errorf("playout calls = %v, want no timewarp", recPlayout.Calls)
 			}
+			if says() != 1 {
+				t.Errorf("expected exactly one Say() call, got %d", says())
+			}
 		})
 	}
 }
@@ -168,7 +177,7 @@ func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
 	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"zz"})
 
@@ -177,6 +186,9 @@ func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
 	}
 	if len(recScores.Credited) != 0 {
 		t.Errorf("credited = %v, want nobody", recScores.Credited)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -191,7 +203,7 @@ func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
 	t.Cleanup(func() { lastTimewarpTime = saved })
 
 	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
-	out, _ := captureSay(t, app)
+	out, says := captureSay(t, app)
 	user := newTestUser("viewer1")
 
 	// First miss: no previous distance, no hint.
@@ -236,5 +248,8 @@ func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
 	app.guessCmd(context.Background(), user, []string{"Nevada"})
 	if got := out(); !strings.Contains(got, "EarthDay") {
 		t.Errorf("first miss after a timewarp should show EarthDay, got %q", got)
+	}
+	if says() != 7 {
+		t.Errorf("expected exactly 7 Say() calls, got %d", says())
 	}
 }

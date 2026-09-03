@@ -114,3 +114,30 @@ func TestSunsetStrFutureAndPast(t *testing.T) {
 		t.Fatalf("expected past-tense sunset, got %q", got)
 	}
 }
+
+func TestTimeAgoSince(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		then time.Time
+		want string
+	}{
+		{"years and months", time.Date(2023, 7, 3, 12, 0, 0, 0, time.UTC), "3 years 2 months ago"},
+		{"whole years only", time.Date(2024, 9, 3, 12, 0, 0, 0, time.UTC), "2 years ago"},
+		{"one year singular", time.Date(2025, 9, 3, 12, 0, 0, 0, time.UTC), "1 year ago"},
+		{"months only", time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC), "5 months ago"},
+		{"one month singular", time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC), "1 month ago"},
+		{"day-of-month not yet reached", time.Date(2025, 9, 30, 12, 0, 0, 0, time.UTC), "11 months ago"},
+		{"under a month falls back to durafmt", time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC), "2 weeks ago"},
+		{"zero timestamp", time.Time{}, ""},
+		{"future timestamp", now.Add(time.Hour), ""},
+		{"now", now, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := timeAgoSince(tt.then, now); got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

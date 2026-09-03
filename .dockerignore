@@ -6,5 +6,4 @@
 infra
 !infra/docker/bin
 
-assets/video
 log

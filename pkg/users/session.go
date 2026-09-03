@@ -117,9 +117,12 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// tick's chat-message tally.
 	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID(), s.chatMessages())
 
-	// log out the people who aren't present, working from a snapshot so the
-	// lock isn't held across the DB work logout does
-	for username, user := range s.sessionSnapshot() {
+	// One snapshot serves both passes below, so the lock isn't held across the
+	// DB work logout does and the login pass costs no per-chatter lock.
+	loggedIn := s.sessionSnapshot()
+
+	// log out the people who aren't present
+	for username, user := range loggedIn {
 		if _, ok := currentChatters[username]; ok {
 			// they're logged in and a current chatter, do nothing
 			continue
@@ -128,9 +131,14 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 		s.logout(ctx, user)
 	}
 
-	// log in everybody else
-	//TODO: this could get slow, maybe make a list of users that need to be logged in?
+	// log in the chatters missing from the session, so the work scales with
+	// the number of arrivals rather than with the size of the audience.
+	// LoginIfNecessary still re-checks under mu, covering anyone an inbound
+	// message logged in since the snapshot.
 	for chatter := range currentChatters {
+		if _, ok := loggedIn[chatter]; ok {
+			continue
+		}
 		s.LoginIfNecessary(ctx, chatter)
 	}
 }
