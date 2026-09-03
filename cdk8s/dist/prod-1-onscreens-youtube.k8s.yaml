@@ -52,7 +52,7 @@ spec:
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: true
-          image: adanalife/onscreens-server:5.7.0
+          image: adanalife/onscreens-server:5.8.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -82,18 +82,12 @@ spec:
             capabilities:
               drop:
                 - ALL
-          volumeMounts:
-            - mountPath: /opt/data/run
-              name: run
       priorityClassName: prod-stream
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
-      volumes:
-        - emptyDir: {}
-          name: run
 ---
 apiVersion: v1
 kind: Service
