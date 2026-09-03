@@ -1,11 +1,7 @@
-# Skip:
-#   - LFS-tracked binaries (assets/video/): CI doesn't pull LFS, so the
-#     MP4 checkout is a permission-denied pointer rather than the real
-#     file, and end-of-file-fixer chokes trying to read it.
-#   - vendored frontend assets (pkg/server/static/): third-party htmx +
-#     its SSE extension, kept byte-for-byte upstream — not ours to
-#     reformat (no trailing newline, minified, etc.).
-exclude: '^(assets/video/|pkg/server/static/)'
+# Skip vendored frontend assets (pkg/server/static/): third-party htmx +
+# its SSE extension, kept byte-for-byte upstream — not ours to reformat
+# (no trailing newline, minified, etc.).
+exclude: '^pkg/server/static/'
 
 # Install both the pre-commit (file-content) hooks and the commit-msg hook
 # (the Conventional Commits check below) on a plain `pre-commit install`.
