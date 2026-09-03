@@ -23,9 +23,9 @@ func link(t *testing.T, from, to Video) {
 // struct, so a walk must start from the persisted state.
 func reload(t *testing.T, id int) Video {
 	t.Helper()
-	vid, err := loadById(context.Background(), int64(id))
+	vid, err := load(context.Background(), int64(id))
 	if err != nil {
-		t.Fatalf("loadById(%d): %v", id, err)
+		t.Fatalf("load(%d): %v", id, err)
 	}
 	return vid
 }

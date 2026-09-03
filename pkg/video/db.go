@@ -25,7 +25,7 @@ var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
 func LoadOrCreate(ctx context.Context, path string) (Video, error) {
 	slug := slug(path)
 
-	vid, err := load(ctx, slug)
+	vid, err := load(ctx, "slug = ?", slug)
 	if err != nil {
 		// create a new video
 		vid, err = create(ctx, slug)
@@ -34,20 +34,11 @@ func LoadOrCreate(ctx context.Context, path string) (Video, error) {
 	return vid, err
 }
 
-// load() fetches a Video from the DB
-func load(ctx context.Context, slug string) (Video, error) {
+// load() fetches a Video from the DB by the given GORM conditions: a primary
+// key, or a query fragment and its args.
+func load(ctx context.Context, conds ...any) (Video, error) {
 	var vid Video
-	result := database.GormDB().WithContext(ctx).Where("slug = ?", slug).First(&vid)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return Video{}, errors.New("no matches found")
-	}
-	return vid, result.Error
-}
-
-// TODO: combine this with load()?
-func loadById(ctx context.Context, id int64) (Video, error) {
-	var vid Video
-	result := database.GormDB().WithContext(ctx).First(&vid, id)
+	result := database.GormDB().WithContext(ctx).First(&vid, conds...)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return Video{}, errors.New("no matches found")
 	}
@@ -91,7 +82,7 @@ func create(ctx context.Context, file string) (Video, error) {
 
 	// now fetch it from the DB
 	//TODO: this is an extra DB call, do we care?
-	dbVid, err := load(ctx, slug)
+	dbVid, err := load(ctx, "slug = ?", slug)
 
 	return dbVid, err
 }
@@ -153,7 +144,7 @@ func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
 	for i := int64(0); i < count; i++ {
 		nextID := vid.NextVid.Int64
 		var err error
-		vid, err = loadById(ctx, nextID)
+		vid, err = load(ctx, nextID)
 		if err != nil {
 			return Video{}, fmt.Errorf("broken next_vid chain at id %d: %w", nextID, err)
 		}
