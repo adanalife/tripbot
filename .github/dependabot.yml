@@ -128,11 +128,11 @@ updates:
       default-days: 7
       semver-major-days: 14
     rebase-strategy: disabled
+    allow:
+      - dependency-type: direct
   # The cdk8s Python layer: the libraries the authoring code imports. The npm
   # entry above covers the CLI half of the same toolchain; without this one the
   # Python half takes no updates at all, security included.
-    allow:
-      - dependency-type: direct
   - package-ecosystem: uv
     directory: cdk8s
     schedule:
