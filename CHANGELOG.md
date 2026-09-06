@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.9.0] — 2026-09-06
+
+### Chatbot
+
+- **`!version` reports the build-time ldflag stamp.** The version reaches `chatbot.New` as an `App` field, threaded from the same `-X main.version` value the startup log and `/version` endpoint report, so the command no longer reads `/etc/tripbot/version` at runtime — one carrier of the value instead of two, and one fewer mutable package global in `pkg/chatbot`. ([#1496](https://github.com/adanalife/tripbot/pull/1496))
+
+### Console / API
+
+- The console-action audit endpoint accepts optional `principal` and `tier` fields, stored as their own keys in the `console_action` event's meta. "Everything this principal did" is now a `meta->>'principal'` lookup instead of a substring search through the free-text detail. ([#1506](https://github.com/adanalife/tripbot/pull/1506))
+
+### CI / Tooling
+
+- The release PR is staged (changelog built, `cdk8s/dist` re-synthed, CI fired) on every main push while its branch exists, not only on the runs where release-please itself changed it. ([#1503](https://github.com/adanalife/tripbot/pull/1503))
+- Pin markdownlint's emphasis and strong styles to asterisk, so a single underscore emphasis in a changelog fragment no longer flips the whole CHANGELOG into a wall of MD049 errors. ([#1505](https://github.com/adanalife/tripbot/pull/1505))
+
 ## [v5.8.0] — 2026-09-03
 
 ### Chatbot
