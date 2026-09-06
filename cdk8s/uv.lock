@@ -55,16 +55,16 @@ wheels = [
 
 [[package]]
 name = "cdk8s"
-version = "2.70.93"
+version = "2.70.98"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "constructs" },
     { name = "jsii" },
     { name = "publication" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/ea/3cea2960b3b33b291756ce62da1b31ea6c715570a196bcf1ac1378c227a0/cdk8s-2.70.93.tar.gz", hash = "sha256:c5259edc4f9dabcaa9106362bc40030bd4d9c8b978d219b0affb9d365f9aa94a", size = 387898, upload-time = "2026-08-17T12:31:25.314Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/5b/1c9adc20e77eda3acb10a0cd215854d7e33fe282a8d068f3d26747c6e6fd/cdk8s-2.70.98.tar.gz", hash = "sha256:f1f7710ea70f2a9e99a98c70fcd83f99908d10f1cabbf13081211166740cd9da", size = 387933, upload-time = "2026-08-29T12:18:12.342Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/76/beb5a79e2bd644d50b78337af9ed8c5cb411127a658ab54c8157ac251ddc/cdk8s-2.70.93-py3-none-any.whl", hash = "sha256:26b99181147e6367dadf0f0afc64c548bd79afedbe9b20a89a2d8942f190c571", size = 385843, upload-time = "2026-08-17T12:31:23.263Z" },
+    { url = "https://files.pythonhosted.org/packages/41/04/ecccf234b2fcc4bdd496c675752a9bf2342174e0489c7c1452578f65b7e2/cdk8s-2.70.98-py3-none-any.whl", hash = "sha256:cdf85db2eb8cbf2aef6b42d4fa7cd8a530decc64dd5fe33eebc06141d65b5b86", size = 385859, upload-time = "2026-08-29T12:18:10.493Z" },
 ]
 
 [[package]]
@@ -100,7 +100,7 @@ wheels = [
 
 [[package]]
 name = "jsii"
-version = "1.139.0"
+version = "1.140.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -110,9 +110,9 @@ dependencies = [
     { name = "typeguard" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c1/71/7c612c16291a6dc654bac00f56bef24c45f86e9a7c9668dc7d36f187e808/jsii-1.139.0.tar.gz", hash = "sha256:163c5d3ec00fd4ec89a33b9097f20a6f27626dd69d6875a8f7cc7577b8021ad0", size = 531387, upload-time = "2026-07-17T02:34:33.293Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/3e/b3edc1319658b3cc45dcf2d7b61742a4fcda5d453ef9583cdfccfe90ab77/jsii-1.140.0.tar.gz", hash = "sha256:454c874d963a862f6b90bc013c45a720e51292659f57249d9cae7cb2a189ec0e", size = 532926, upload-time = "2026-08-24T18:41:31.05Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/3e/fce01768f79b2d5d0cf6258b55045f4b083ee86fd5de24c1af38168312ab/jsii-1.139.0-py3-none-any.whl", hash = "sha256:11468f767c6da698ed9888a04352850af33ccccfec7656475626caf36fca8bbb", size = 501693, upload-time = "2026-07-17T02:34:31.747Z" },
+    { url = "https://files.pythonhosted.org/packages/38/c6/78745af0249f2f1c1d2f2112dbcde0a4025daac1d0125a685163197c9fac/jsii-1.140.0-py3-none-any.whl", hash = "sha256:aa24f27d15d8d7db1ff32a9c56074bc87e728b30330ead97fb149419a3721a50", size = 503205, upload-time = "2026-08-24T18:41:29.071Z" },
 ]
 
 [[package]]
