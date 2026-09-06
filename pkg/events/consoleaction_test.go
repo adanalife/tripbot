@@ -9,7 +9,7 @@ import (
 )
 
 // A console_action row is a system event whose meta names the action, its
-// target, and optional free-text detail. The exact JSON matters — audit
+// target, optional free-text detail, and the optional caller identity. The exact JSON matters — audit
 // queries address it as meta->>'action' / meta->>'target'.
 func TestConsoleActionRow(t *testing.T) {
 	mock := installMockDB(t)
@@ -28,7 +28,7 @@ func TestConsoleActionRow(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
 	if err := ConsoleAction(context.Background(), &c.TripbotConfig{Platform: "twitch"},
-		"scale", "obs-tiktok", "replicas 0→1"); err != nil {
+		ConsoleActionMeta{Action: "scale", Target: "obs-tiktok", Detail: "replicas 0→1"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -49,7 +49,33 @@ func TestConsoleActionRow_EmptyDetailOmitted(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
 	if err := ConsoleAction(context.Background(), &c.TripbotConfig{Platform: "twitch"},
-		"obs_refresh", "obs-twitch", ""); err != nil {
+		ConsoleActionMeta{Action: "obs_refresh", Target: "obs-twitch"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// The reported caller lands in meta as its own principal/tier fields, so an
+// audit query can address it as meta->>'principal' rather than by scanning
+// the free-text detail.
+func TestConsoleActionRow_Principal(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"", "twitch", "console_action",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, nil,
+			`{"action":"scale","target":"obs-tiktok","detail":"replicas 0→1","principal":"dana-iphone","tier":"owner"}`,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := ConsoleAction(context.Background(), &c.TripbotConfig{Platform: "twitch"},
+		ConsoleActionMeta{
+			Action: "scale", Target: "obs-tiktok", Detail: "replicas 0→1",
+			Principal: "dana-iphone", Tier: "owner",
+		}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

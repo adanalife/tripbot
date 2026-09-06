@@ -601,20 +601,25 @@ func Raided(ctx context.Context, cfg *c.TripbotConfig, r Raid) error {
 	})
 }
 
-// consoleActionMeta is a console_action event's meta payload.
-type consoleActionMeta struct {
-	Action string `json:"action"`
-	Target string `json:"target"`
-	Detail string `json:"detail,omitempty"`
+// ConsoleActionMeta is a console_action event's meta payload. Principal and
+// tier name the caller the console authenticated for the action, and are empty
+// when the console has no identity for it.
+type ConsoleActionMeta struct {
+	Action    string `json:"action"`
+	Target    string `json:"target"`
+	Detail    string `json:"detail,omitempty"`
+	Principal string `json:"principal,omitempty"`
+	Tier      string `json:"tier,omitempty"`
 }
 
 // ConsoleAction records one successful admin mutation performed through the
 // standalone console — the audit trail for "what changed from the console,
-// and when". A system event (empty username): the console holds no
-// per-operator identity to attribute. No airing context — console actions are
-// about the platform's controls, not the footage on screen.
-func ConsoleAction(ctx context.Context, cfg *c.TripbotConfig, action, target, detail string) error {
-	payload, err := json.Marshal(consoleActionMeta{Action: action, Target: target, Detail: detail})
+// and when". A system event (empty username): tripbot has no user record for
+// a console caller, so any identity the console reports rides in the meta
+// payload. No airing context — console actions are about the platform's
+// controls, not the footage on screen.
+func ConsoleAction(ctx context.Context, cfg *c.TripbotConfig, m ConsoleActionMeta) error {
+	payload, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}

@@ -95,7 +95,9 @@ var writers = []struct {
 		})
 	}},
 	{"ConsoleAction", "console_action", func(ctx context.Context, cfg *c.TripbotConfig) error {
-		return ConsoleAction(ctx, cfg, "scale", "obs-tiktok", "replicas 0→1")
+		return ConsoleAction(ctx, cfg, ConsoleActionMeta{
+			Action: "scale", Target: "obs-tiktok", Detail: "replicas 0→1",
+		})
 	}},
 }
 
