@@ -117,6 +117,8 @@ func TestConsoleActionHandler_BadPayloadIs400(t *testing.T) {
 		"long action":    `{"action":"` + long[:200] + `","target":"obs-tiktok"}`,
 		"long target":    `{"action":"scale","target":"` + long[:200] + `"}`,
 		"long detail":    `{"action":"scale","target":"obs-tiktok","detail":"` + long + `"}`,
+		"long principal": `{"action":"scale","target":"obs-tiktok","principal":"` + long[:200] + `"}`,
+		"long tier":      `{"action":"scale","target":"obs-tiktok","tier":"` + long[:20] + `"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -136,5 +138,52 @@ func TestConsoleActionHandler_ReadOnlyDropsSilently(t *testing.T) {
 	rec := postConsoleAction(t, s, `{"action":"scale","target":"obs-tiktok"}`)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204\n%s", rec.Code, rec.Body.String())
+	}
+}
+
+// A report naming its caller stores principal and tier as their own meta
+// fields, alongside an unmodified detail.
+func TestConsoleActionHandler_RecordsPrincipal(t *testing.T) {
+	mock := installServerMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"", sqlmock.AnyArg(), "console_action",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, nil,
+			`{"action":"scale","target":"obs-tiktok","detail":"replicas 0","principal":"dana-iphone","tier":"owner"}`,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	rec := postConsoleAction(t, New(testConf),
+		`{"action":"scale","target":"obs-tiktok","detail":"replicas 0",`+
+			`"principal":" dana-iphone ","tier":"owner"}`)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204\n%s", rec.Code, rec.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// Fields the handler doesn't know are ignored rather than rejected, so a
+// console running ahead of this tripbot still gets its report recorded.
+func TestConsoleActionHandler_IgnoresUnknownFields(t *testing.T) {
+	mock := installServerMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"", sqlmock.AnyArg(), "console_action",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, nil,
+			`{"action":"scale","target":"obs-tiktok"}`,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	rec := postConsoleAction(t, New(testConf),
+		`{"action":"scale","target":"obs-tiktok","from_the_future":"whatever"}`)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204\n%s", rec.Code, rec.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
 	}
 }

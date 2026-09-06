@@ -1,0 +1,1 @@
+The console-action audit endpoint accepts optional `principal` and `tier` fields, stored as their own keys in the `console_action` event's meta. "Everything this principal did" is now a `meta->>'principal'` lookup instead of a substring search through the free-text detail.
