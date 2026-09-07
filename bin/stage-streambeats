@@ -24,11 +24,19 @@ reported rather than guessed at. Safe to re-run after each batch of downloads.
     bin/stage-streambeats ~/Downloads/streambeats
     bin/stage-streambeats ~/Downloads/streambeats --apply
     bin/stage-streambeats ~/Downloads/streambeats --genres ambient,hifi,synthwave,lofi --apply
+
+Also emits the track index tripbot reads instead of mounting the share, so the
+album library costs the bot no scheduling dependency (`beds.MusicIndexFile`).
+Pass --index to write it and print the kubectl line that puts it in a namespace;
+with no source directory it only does that, against the share as it stands.
+
+    bin/stage-streambeats --index /tmp/index.json
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -39,6 +47,16 @@ from pathlib import Path
 # serves over NFS as the obs-music PV, so what lands here is what the pods see.
 # Override with --share on any other machine.
 SHARE = Path("/Volumes/ADanaLife/audio")
+
+# Where the same albums appear inside the pods, which is the only path the index
+# may carry: OBS resolves them against its own mount of the claim. Contract with
+# beds.MusicDir and cdk8s's MUSIC_MOUNT_PATH — all three have to agree.
+POD_MUSIC_DIR = "/opt/tripbot/assets/music"
+
+# The ConfigMap the index is loaded as, and the key inside it. Contract with
+# beds.MusicIndexFile and the cdk8s volume that mounts it.
+INDEX_CONFIGMAP = "obs-music-index"
+INDEX_KEY = "index.json"
 
 # Album -> genre, from streambeats.com/genre/<slug> (read 2026-08-03). The site
 # is the only place this mapping exists: Bandcamp tags every album "Electronic,
@@ -209,10 +227,41 @@ def safe_extract(z: Path, dest: Path) -> None:
         zf.extractall(dest)
 
 
+def write_index(share: Path, out: Path) -> int:
+    """Write {album: [pod track paths]} for every album on the share.
+
+    Rebuilt from the share each time rather than accumulated, so an album
+    removed by hand leaves the index by the next run.
+    """
+    index = {
+        d.name: sorted(
+            f"{POD_MUSIC_DIR}/{d.name}/{p.relative_to(d).as_posix()}"
+            for p in d.rglob("*")
+            if p.suffix.lower() in AUDIO_EXTS
+        )
+        for d in sorted(share.iterdir())
+        if d.is_dir()
+    }
+    index = {album: tracks for album, tracks in index.items() if tracks}
+    out.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+    tracks = sum(len(t) for t in index.values())
+    print(f"\nindex: {len(index)} album(s), {tracks} track(s) -> {out}")
+    print(
+        "load it into a namespace (per env, tripbot reads it from every one):\n"
+        f"  kubectl create configmap {INDEX_CONFIGMAP} --from-file={INDEX_KEY}={out} "
+        "-n <namespace> --dry-run=client -o yaml | kubectl apply -f -"
+    )
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "source", type=Path, help="directory holding the album .zip files or folders"
+        "source",
+        type=Path,
+        nargs="?",
+        help="directory holding the album .zip files or folders; "
+        "omit to only write --index",
     )
     ap.add_argument(
         "--share", type=Path, default=SHARE, help=f"target share (default {SHARE})"
@@ -223,14 +272,27 @@ def main() -> int:
     ap.add_argument(
         "--apply", action="store_true", help="actually move (default: dry run)"
     )
+    ap.add_argument(
+        "--index",
+        type=Path,
+        help="also write the album track index here, for the obs-music-index ConfigMap",
+    )
     args = ap.parse_args()
 
-    if not args.source.is_dir():
+    if args.source is not None and not args.source.is_dir():
         print(f"source not a directory: {args.source}", file=sys.stderr)
         return 1
     if not args.share.is_dir():
         print(f"share not mounted: {args.share}", file=sys.stderr)
         return 1
+    if args.source is None:
+        if args.index is None:
+            print(
+                "nothing to do: give a source directory, --index, or both",
+                file=sys.stderr,
+            )
+            return 1
+        return write_index(args.share, args.index)
 
     wanted = {g.strip() for g in args.genres.split(",") if g.strip()}
     index = album_index()
@@ -311,6 +373,8 @@ def main() -> int:
     )
     if not args.apply and planned:
         print("dry run — re-run with --apply to do it")
+    if args.index is not None:
+        write_index(args.share, args.index)
     return 1 if failed else 0
 
 
