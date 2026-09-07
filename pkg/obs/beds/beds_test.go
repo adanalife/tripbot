@@ -2,6 +2,7 @@ package beds
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -1103,5 +1104,73 @@ func TestPlaying_NamesTheDroneFallback(t *testing.T) {
 	}
 	if bed, track := s.Playing(); bed != CarHum || track != "" {
 		t.Fatalf("playing on the drone fallback: want %s with no track, got %s %q", CarHum, bed, track)
+	}
+}
+
+// writeIndex emits the album track index bin/stage-streambeats produces, at a
+// path of its own so the test can point a store at it with no share mounted —
+// which is the shape a tripbot pod runs in.
+func writeIndex(t *testing.T, byAlbum map[string][]string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "index.json")
+	raw, err := json.Marshal(byAlbum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The index is the whole music dependency: with no share on disk at all, the
+// album bed still lists, selects and plays, because every path tripbot handles
+// is a string it passes to OBS.
+func TestAlbumBedRunsOffTheIndexWithNoShareMounted(t *testing.T) {
+	index := writeIndex(t, map[string][]string{
+		"streambeats-lofi-gold":     {MusicDir + "/streambeats-lofi-gold/b two.mp3", MusicDir + "/streambeats-lofi-gold/a one.mp3"},
+		"streambeats-lofi-secluded": {MusicDir + "/streambeats-lofi-secluded/a one.mp3"},
+		"streambeats-lofi-empty":    {},
+		"streambeats-ambient-gems":  {MusicDir + "/streambeats-ambient-gems/a one.mp3"},
+	})
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, "", "twitch").WithIndex(index) // "" is MusicDir, which the test machine has no more than a pod does
+
+	if got, want := s.Albums(), []string{"streambeats-ambient-gems", "streambeats-lofi-gold", "streambeats-lofi-secluded"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() = %v, want %v (the empty album isn't selectable)", got, want)
+	}
+	if got, want := s.Groups(), []string{"streambeats", "streambeats-lofi"}; !slices.Equal(got, want) {
+		t.Fatalf("Groups() = %v, want %v", got, want)
+	}
+	s.SetShuffle(context.Background(), false)
+	if err := s.SetAlbum(context.Background(), "streambeats-lofi"); err != nil {
+		t.Fatalf("SetAlbum: %v", err)
+	}
+	// Sorted within the album, and album by album across the group.
+	if got, want := o.file, MusicDir+"/streambeats-lofi-gold/a one.mp3"; got != want {
+		t.Fatalf("OBS playing %q, want %q", got, want)
+	}
+	if got, want := s.PlayingAlbum(), "streambeats-lofi-gold"; got != want {
+		t.Fatalf("PlayingAlbum() = %q, want %q", got, want)
+	}
+}
+
+// A missing index leaves the album bed empty rather than erroring the process,
+// which is the state the optional ConfigMap mount produces before any music is
+// staged. The share is the fallback, so a laptop run with the real directory
+// mounted is unaffected.
+func TestMissingIndexFallsBackToTheShare(t *testing.T) {
+	dir := shareDir(t, 2)
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch").WithIndex(filepath.Join(t.TempDir(), "absent.json"))
+	if got, want := s.Albums(), []string{"fifty-horizons"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() = %v, want %v", got, want)
+	}
+
+	s = NewStore(&fakeOBS{}, CarHum, "/nonexistent-share", "twitch").WithIndex(filepath.Join(t.TempDir(), "absent.json"))
+	if got := s.Albums(); len(got) != 0 {
+		t.Fatalf("Albums() = %v, want none", got)
+	}
+	if err := s.SetAlbum(context.Background(), ""); err == nil {
+		t.Fatal("SetAlbum with no library succeeded; want a refusal so the bed on air keeps playing")
 	}
 }

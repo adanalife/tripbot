@@ -793,7 +793,10 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	if t.platformIsTwitch() {
 		seed = beds.SomaFM
 	}
-	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform)
+	// The album library is read from the mounted index rather than the share,
+	// so the bot lists the music without the music PVC being a scheduling
+	// dependency of it. OBS holds that claim and plays the paths.
+	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform).WithIndex(beds.MusicIndexFile)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
 }
