@@ -132,8 +132,8 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - mountPath: /opt/tripbot/assets/music
-              name: music
+            - mountPath: /opt/tripbot/assets/music-index
+              name: music-index
               readOnly: true
       initContainers:
         - args:
@@ -172,10 +172,10 @@ spec:
           key: dana.lol/rpi5
           operator: Exists
       volumes:
-        - name: music
-          persistentVolumeClaim:
-            claimName: obs-music-local
-            readOnly: true
+        - configMap:
+            name: obs-music-index
+            optional: true
+          name: music-index
 ---
 apiVersion: v1
 kind: Service
