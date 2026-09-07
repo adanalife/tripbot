@@ -1,0 +1,1 @@
+`GET /api/insights/regions` reports footage performance per state — airtime, concurrent viewers, and the non-bot join/leave churn each state earned while it held the screen, normalized per hour of airtime.

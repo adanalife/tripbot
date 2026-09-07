@@ -51,12 +51,16 @@ LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
 # bot identity, not any one platform stack.
 NAME_IDENTITY = "tripbot"
 
-# The read-only album library claim and where it's mounted. Cross-repo contract:
-# infra provisions the claim, the obs repo mounts it at the same path, and
-# pkg/obs/beds hands OBS the track paths it reads here — so all three must agree
-# exactly. Node-local rather than the NAS share so a storage outage can't reach
-# the stream (see infra's cdk8s/adanalife_k8s/constructs/music.py).
-MUSIC_CLAIM = "obs-music-local"
+# The album library index and where it's mounted. tripbot lists the library to
+# shuffle and advance tracks but never opens a track, so it mounts the index
+# rather than the claim: a ConfigMap volume can be optional, a PVC volume can
+# not, and an unbound claim would hold every tripbot Deployment unschedulable
+# over a bed nobody is listening to. The obs repo mounts the claim itself at
+# MUSIC_MOUNT_PATH, which is the path the index's entries name — so the two
+# repos and pkg/obs/beds must agree on it exactly. bin/stage-streambeats builds
+# the ConfigMap as its last step.
+MUSIC_INDEX_CONFIGMAP = "obs-music-index"
+MUSIC_INDEX_MOUNT_PATH = "/opt/tripbot/assets/music-index"
 MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 
 # Small but explicit requests for the helper containers (migrate init, one-shot
@@ -350,14 +354,12 @@ class Tripbot(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("1Gi")},
             ),
-            # The album background-audio bed: tripbot lists the share to shuffle
-            # and advance tracks, and OBS mounts the same claim at the same path,
-            # so a path picked here is valid over there. Read-only on both sides.
+            # The album background-audio bed reads its track list from here.
             volume_mounts=(
                 [
                     k8s.VolumeMount(
-                        name="music",
-                        mount_path=MUSIC_MOUNT_PATH,
+                        name="music-index",
+                        mount_path=MUSIC_INDEX_MOUNT_PATH,
                         read_only=True,
                     )
                 ]
@@ -366,12 +368,17 @@ class Tripbot(Construct):
             ),
         )
 
+        # Optional, and created out of band by bin/stage-streambeats rather than
+        # here: the share only changes when music is staged, which is the same
+        # moment the index is rebuilt. An absent one lists no albums, which the
+        # bed store already treats as "nothing to switch to" — so a namespace
+        # with no music staged yet still schedules and still streams.
         music_volumes = (
             [
                 k8s.Volume(
-                    name="music",
-                    persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
-                        claim_name=MUSIC_CLAIM, read_only=True
+                    name="music-index",
+                    config_map=k8s.ConfigMapVolumeSource(
+                        name=MUSIC_INDEX_CONFIGMAP, optional=True
                     ),
                 )
             ]

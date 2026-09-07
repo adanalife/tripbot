@@ -1562,8 +1562,8 @@ func TestUnBotCmd_Admin_FlipsToFalse(t *testing.T) {
 
 // --- Chatter ---
 
-// The rotating tip set is Chatter's alone now that !help lists commands
-// instead, so this is the only place left that walks the index. Successive
+// The rotating tip set is Chatter's alone — !help lists the command surface
+// instead — so this is the only place that walks the index. Successive
 // posts have to differ and then wrap, or a timer firing all day either says the
 // same thing all day or walks off the end.
 //
