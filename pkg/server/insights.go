@@ -34,6 +34,10 @@ const (
 	commandInsightsDefaultDays = 7
 	guessInsightsDefaultDays   = 30
 	footageInsightsDefaultDays = 7
+	// Regions default to a wider window than clips: the rollup exists because a
+	// state needs many plays before its churn settles, and a week of airtime
+	// spread over ~50 states rarely gets there.
+	regionInsightsDefaultDays = 30
 )
 
 // insightsDays parses ?days, falling back to def when absent or unparseable
@@ -420,6 +424,188 @@ func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "footage insights query failed", "err", err, "days", days)
 		insightsError(w, "couldn't gather footage insights")
+		return
+	}
+	writeInsights(w, r, payload)
+}
+
+// regionInsight is one state's in-window footage performance. It answers the
+// question the per-clip report above structurally can't: any single clip plays
+// too rarely for its average to settle, while a state accumulates enough
+// airtime to be acted on ("Utah desert holds viewers; Nebraska highway sheds
+// them").
+//
+// State comes from the clip's current videos.state rather than the state
+// denormalized onto video_plays at play time. The play row is the better
+// record of one play, but a rollup needs all three of its sub-aggregates
+// keyed the same way, and viewer_samples and events carry only video_id — so
+// resolving every side through videos keeps a clip whose state was backfilled
+// after it aired from splitting across an empty group and a named one.
+type regionInsight struct {
+	State string `json:"state"`
+	// Plays is every play that started in the window; ClosedPlays is the
+	// subset whose end was observed, which is the part AirtimeHours can be
+	// summed from. They diverge when tripbot restarted mid-clip.
+	Plays        int64   `json:"plays"`
+	ClosedPlays  int64   `json:"closed_plays"`
+	AirtimeHours float64 `json:"airtime_hours"`
+	Samples      int64   `json:"samples"`
+	// LiveSamples counts ticks that positively reported something was
+	// broadcasting. It exists to price the other figures rather than to
+	// filter them: viewer_samples.live only started being written at
+	// migration 047, so a window reaching back before that has samples it
+	// cannot vouch for, and a caller comparing the two numbers can see how
+	// much of the average rests on ticks that predate the column.
+	LiveSamples int64 `json:"live_samples"`
+	// AvgViewers and MaxViewers aggregate viewer_samples.viewers — the
+	// platform's own concurrent-viewer number. Null when no in-window tick
+	// carried one: a platform with no such endpoint, a gateway too old to
+	// serve it, or rows written before migration 047.
+	AvgViewers *float64 `json:"avg_viewers"`
+	MaxViewers *int64   `json:"max_viewers"`
+	// AvgChatters aggregates viewer_samples.count, which is the *chatter*
+	// total — an engagement signal, and a self-selecting slice biased toward
+	// whatever provokes typing. Kept beside the viewer figures because it is
+	// the only series with history: it has been collected since 2026-07-06.
+	AvgChatters float64 `json:"avg_chatters"`
+	// Joins and Leaves are non-bot session starts and ends stamped with a
+	// clip in this state, so Net is the audience the state gained while it
+	// held the screen. This is the "best performing" figure the design
+	// settled on: raw viewer count is dominated by time-of-day, raids and
+	// day-of-week, which churn differences out.
+	Joins  int64 `json:"joins"`
+	Leaves int64 `json:"leaves"`
+	Net    int64 `json:"net"`
+	// NetPerHour normalizes Net by airtime, because a state that aired ten
+	// times longer collects more joins without performing any better. Null
+	// when no play in the window closed, leaving no airtime to divide by.
+	NetPerHour *float64 `json:"net_per_hour"`
+}
+
+// regionInsightsResponse is the wire shape of GET /api/insights/regions.
+type regionInsightsResponse struct {
+	Days    int             `json:"days"`
+	Regions []regionInsight `json:"regions"`
+	// Platforms are the platforms whose samples fed the window, in name
+	// order — same honesty check as the per-clip report's list.
+	Platforms []string `json:"platforms"`
+}
+
+// regionMinSamples drops states seen fewer than this many sample ticks in the
+// window. Higher than footageMinSamples because the whole point of rolling up
+// to a state is that it clears a bar a clip can't: ten ticks is ~10 minutes of
+// having been on screen.
+const regionMinSamples = 10
+
+// regionsSQL rolls the three raw signals up per state: airtime from
+// video_plays, audience from viewer_samples, churn from the airing-stamped
+// login/logout events. Samples drive the join because they are what measures
+// performance — a state that aired but was never sampled has nothing to say.
+//
+// live IS NOT FALSE rather than live: the column only started being written at
+// migration 047, so filtering on it strictly would throw away every earlier
+// tick and quietly return nothing on a window that reaches back past it. NULL
+// means "nobody reported", which is not the same claim as "offline" — the
+// rows that positively say offline are the ones worth excluding, and
+// live_samples reports how much of the window could be vouched for.
+const regionsSQL = `
+WITH samples AS (
+    SELECT v.state                                            AS state,
+           COUNT(*)                                           AS samples,
+           COUNT(*) FILTER (WHERE s.live)                     AS live_samples,
+           AVG(s.viewers) FILTER (WHERE s.live IS NOT FALSE)   AS avg_viewers,
+           MAX(s.viewers) FILTER (WHERE s.live IS NOT FALSE)   AS max_viewers,
+           AVG(s.count)   FILTER (WHERE s.live IS NOT FALSE)   AS avg_chatters
+    FROM viewer_samples s
+    JOIN videos v ON v.id = s.video_id
+    WHERE s.video_id IS NOT NULL
+      AND v.state <> ''
+      AND s.sampled_at >= now() - make_interval(days => @days)
+    GROUP BY v.state
+    HAVING COUNT(*) >= @min_samples
+),
+airtime AS (
+    SELECT v.state   AS state,
+           COUNT(*)  AS plays,
+           COUNT(p.ended_at) AS closed_plays,
+           COALESCE(SUM(EXTRACT(EPOCH FROM (p.ended_at - p.started_at))), 0) / 3600.0 AS airtime_hours
+    FROM video_plays p
+    JOIN videos v ON v.id = p.video_id
+    WHERE p.video_id IS NOT NULL
+      AND v.state <> ''
+      AND p.started_at >= now() - make_interval(days => @days)
+    GROUP BY v.state
+),
+churn AS (
+    SELECT v.state AS state,
+           COUNT(*) FILTER (WHERE e.event = 'login')  AS joins,
+           COUNT(*) FILTER (WHERE e.event = 'logout') AS leaves
+    FROM events e
+    JOIN users u  ON u.platform = e.platform AND u.username = e.username
+    JOIN videos v ON v.id = e.video_id
+    WHERE e.event IN ('login', 'logout')
+      AND e.video_id IS NOT NULL
+      AND v.state <> ''
+      AND u.is_bot = false
+      AND e.date_created >= now() - make_interval(days => @days)
+    GROUP BY v.state
+)
+SELECT s.state,
+       COALESCE(a.plays, 0)                              AS plays,
+       COALESCE(a.closed_plays, 0)                       AS closed_plays,
+       ROUND(COALESCE(a.airtime_hours, 0)::numeric, 2)::float8 AS airtime_hours,
+       s.samples,
+       s.live_samples,
+       ROUND(s.avg_viewers::numeric, 1)::float8          AS avg_viewers,
+       s.max_viewers,
+       ROUND(COALESCE(s.avg_chatters, 0)::numeric, 1)::float8 AS avg_chatters,
+       COALESCE(c.joins, 0)                              AS joins,
+       COALESCE(c.leaves, 0)                             AS leaves,
+       COALESCE(c.joins, 0) - COALESCE(c.leaves, 0)      AS net,
+       ROUND(((COALESCE(c.joins, 0) - COALESCE(c.leaves, 0))
+              / NULLIF(a.airtime_hours, 0))::numeric, 2)::float8 AS net_per_hour
+FROM samples s
+LEFT JOIN airtime a ON a.state = s.state
+LEFT JOIN churn   c ON c.state = s.state
+ORDER BY net_per_hour DESC NULLS LAST, avg_viewers DESC NULLS LAST, s.state
+LIMIT 20`
+
+// regionPlatformsSQL names the platforms that contributed samples to the
+// window. Unfiltered by min_samples for the same reason as the per-clip
+// list: the question is which platforms were being sampled at all.
+const regionPlatformsSQL = `
+SELECT DISTINCT s.platform
+FROM viewer_samples s
+JOIN videos v ON v.id = s.video_id
+WHERE s.video_id IS NOT NULL
+  AND v.state <> ''
+  AND s.sampled_at >= now() - make_interval(days => @days)
+ORDER BY s.platform`
+
+func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse, error) {
+	out := regionInsightsResponse{Days: days, Regions: []regionInsight{}, Platforms: []string{}}
+	err := database.GormDB().WithContext(ctx).
+		Raw(regionsSQL, sql.Named("days", days), sql.Named("min_samples", regionMinSamples)).
+		Scan(&out.Regions).Error
+	if err != nil {
+		return out, fmt.Errorf("regions: %w", err)
+	}
+	if err := database.GormDB().WithContext(ctx).
+		Raw(regionPlatformsSQL, sql.Named("days", days)).
+		Scan(&out.Platforms).Error; err != nil {
+		return out, fmt.Errorf("region platforms: %w", err)
+	}
+	return out, nil
+}
+
+// regionInsightsHandler serves GET /api/insights/regions: per-state airtime,
+// audience and join/leave churn over the ?days window.
+func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	days := insightsDays(r, regionInsightsDefaultDays)
+	payload, err := gatherRegionInsights(r.Context(), days)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "region insights query failed", "err", err, "days", days)
+		insightsError(w, "couldn't gather region insights")
 		return
 	}
 	writeInsights(w, r, payload)

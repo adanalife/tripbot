@@ -402,3 +402,245 @@ func footagePlatforms(t *testing.T) []string {
 	}
 	return got.Platforms
 }
+
+// seedSampleFull inserts a viewer_samples row carrying the migration-047
+// audience columns, which seedSample leaves NULL.
+func seedSampleFull(t *testing.T, db *gorm.DB, videoID, chatters int, viewers *int, live *bool, at time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO viewer_samples (platform, count, video_id, viewers, live, sampled_at)
+	                VALUES ('twitch', ?, ?, ?, ?, ?)`, chatters, videoID, viewers, live, at).Error
+	if err != nil {
+		t.Fatalf("insert full sample for video %d: %v", videoID, err)
+	}
+}
+
+// seedClosedPlay inserts a video_plays row with an observed end, which is
+// what the region rollup can sum airtime from. A nil ended leaves the row
+// open, mirroring a restart mid-clip.
+func seedClosedPlay(t *testing.T, db *gorm.DB, videoID int, started time.Time, ended *time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO video_plays (platform, video_id, started_at, ended_at)
+	                VALUES ('twitch', ?, ?, ?)`, videoID, started, ended).Error
+	if err != nil {
+		t.Fatalf("insert closed play for video %d: %v", videoID, err)
+	}
+}
+
+// seedAiringEvent inserts a login/logout stamped with the clip that was
+// airing — the migration-044 columns that make the churn join a GROUP BY.
+func seedAiringEvent(t *testing.T, db *gorm.DB, username, event string, videoID int, at time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO events (platform, username, event, video_id, date_created)
+	                VALUES ('twitch', ?, ?, ?, ?)`, username, event, videoID, at).Error
+	if err != nil {
+		t.Fatalf("insert airing %s for %s: %v", event, username, err)
+	}
+}
+
+func TestRegionInsightsHandler_EmptyDataShape(t *testing.T) {
+	testdb.New(t)
+	rec := insightsGET(t, "/api/insights/regions", regionInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`"days":30`, `"regions":[]`, `"platforms":[]`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %s: %s", want, body)
+		}
+	}
+}
+
+func regionInsights(t *testing.T, path string) regionInsightsResponse {
+	t.Helper()
+	rec := insightsGET(t, path, regionInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got regionInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	return got
+}
+
+func TestRegionInsightsHandler_Aggregates(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "reg_alice", false)
+	seedUser(t, db, "reg_bob", false)
+	seedUser(t, db, "reg_bot", true)
+
+	in := time.Now().Add(-1 * time.Hour)
+	out := time.Now().Add(-40 * 24 * time.Hour)
+
+	utah := seedVideo(t, db, "insights_region_ut", "Utah", "", nil)
+	nevada := seedVideo(t, db, "insights_region_nv", "Nevada", "", nil)
+	idaho := seedVideo(t, db, "insights_region_id", "Idaho", "", nil)
+	// A clip the geocode pass has not named yet: it must not become a state
+	// called "" in the report.
+	unnamed := seedVideo(t, db, "insights_region_none", "", "", nil)
+
+	live, offline := true, false
+	ten, twenty, five, huge := 10, 20, 5, 999
+
+	// Utah: twelve live samples averaging 15 viewers, plus one offline tick
+	// whose 999 viewers must not touch the average.
+	for i := 0; i < 6; i++ {
+		seedSampleFull(t, db, utah, 2, &ten, &live, in.Add(time.Duration(i)*time.Minute))
+		seedSampleFull(t, db, utah, 2, &twenty, &live, in.Add(time.Duration(6+i)*time.Minute))
+	}
+	seedSampleFull(t, db, utah, 500, &huge, &offline, in.Add(20*time.Minute))
+	// Nevada: twelve live samples at five viewers.
+	for i := 0; i < 12; i++ {
+		seedSampleFull(t, db, nevada, 1, &five, &live, in.Add(time.Duration(i)*time.Minute))
+	}
+	// Idaho: under regionMinSamples, so it drops out entirely.
+	for i := 0; i < 5; i++ {
+		seedSampleFull(t, db, idaho, 9, &twenty, &live, in.Add(time.Duration(i)*time.Minute))
+	}
+	// The unnamed clip clears the sample bar and still must not appear.
+	for i := 0; i < 12; i++ {
+		seedSampleFull(t, db, unnamed, 9, &twenty, &live, in.Add(time.Duration(i)*time.Minute))
+	}
+	// Out of window: must count toward nothing.
+	seedSampleFull(t, db, utah, 400, &huge, &live, out)
+
+	// Utah aired two closed hours plus one play still open at the end of the
+	// window; Nevada aired two closed hours in one play.
+	utahEnd1 := in.Add(time.Hour)
+	utahEnd2 := in.Add(2 * time.Hour)
+	seedClosedPlay(t, db, utah, in, &utahEnd1)
+	seedClosedPlay(t, db, utah, in.Add(time.Hour), &utahEnd2)
+	seedClosedPlay(t, db, utah, in.Add(2*time.Hour), nil)
+	nevadaEnd := in.Add(2 * time.Hour)
+	seedClosedPlay(t, db, nevada, in, &nevadaEnd)
+	// A stale play must not add airtime to the window.
+	staleEnd := out.Add(time.Hour)
+	seedClosedPlay(t, db, nevada, out, &staleEnd)
+
+	// Utah churn: eight joins, two leaves -> net 6 over 2h = 3.00/h.
+	for i := 0; i < 8; i++ {
+		seedAiringEvent(t, db, "reg_alice", "login", utah, in.Add(time.Duration(i)*time.Minute))
+	}
+	for i := 0; i < 2; i++ {
+		seedAiringEvent(t, db, "reg_alice", "logout", utah, in.Add(time.Duration(30+i)*time.Minute))
+	}
+	// A bot's arrival is not audience, and a stale join is not in-window.
+	seedAiringEvent(t, db, "reg_bot", "login", utah, in)
+	seedAiringEvent(t, db, "reg_alice", "login", utah, out)
+	// Nevada churn: three joins, one leave -> net 2 over 2h = 1.00/h.
+	for i := 0; i < 3; i++ {
+		seedAiringEvent(t, db, "reg_bob", "login", nevada, in.Add(time.Duration(i)*time.Minute))
+	}
+	seedAiringEvent(t, db, "reg_bob", "logout", nevada, in.Add(10*time.Minute))
+
+	got := regionInsights(t, "/api/insights/regions")
+	if got.Days != 30 {
+		t.Errorf("days = %d, want 30", got.Days)
+	}
+	if len(got.Regions) != 2 {
+		t.Fatalf("regions = %+v, want exactly Utah and Nevada", got.Regions)
+	}
+	// Ordered by net_per_hour: Utah's 3.00/h beats Nevada's 1.00/h even
+	// though both aired the same two hours.
+	ut, nv := got.Regions[0], got.Regions[1]
+	if ut.State != "Utah" || nv.State != "Nevada" {
+		t.Fatalf("order = %q, %q, want Utah then Nevada", ut.State, nv.State)
+	}
+	if ut.Plays != 3 || ut.ClosedPlays != 2 || ut.AirtimeHours != 2.0 {
+		t.Errorf("utah airtime = plays %d closed %d hours %v, want 3/2/2", ut.Plays, ut.ClosedPlays, ut.AirtimeHours)
+	}
+	if ut.Samples != 13 || ut.LiveSamples != 12 {
+		t.Errorf("utah samples = %d (%d live), want 13 (12 live)", ut.Samples, ut.LiveSamples)
+	}
+	if ut.AvgViewers == nil || *ut.AvgViewers != 15.0 {
+		t.Errorf("utah avg_viewers = %v, want 15 — the offline 999 must be excluded", ut.AvgViewers)
+	}
+	if ut.MaxViewers == nil || *ut.MaxViewers != 20 {
+		t.Errorf("utah max_viewers = %v, want 20", ut.MaxViewers)
+	}
+	if ut.AvgChatters != 2.0 {
+		t.Errorf("utah avg_chatters = %v, want 2", ut.AvgChatters)
+	}
+	if ut.Joins != 8 || ut.Leaves != 2 || ut.Net != 6 {
+		t.Errorf("utah churn = %d/%d net %d, want 8/2 net 6 (bot and stale excluded)", ut.Joins, ut.Leaves, ut.Net)
+	}
+	if ut.NetPerHour == nil || *ut.NetPerHour != 3.0 {
+		t.Errorf("utah net_per_hour = %v, want 3", ut.NetPerHour)
+	}
+	if nv.AirtimeHours != 2.0 || nv.Net != 2 || nv.NetPerHour == nil || *nv.NetPerHour != 1.0 {
+		t.Errorf("nevada = hours %v net %d per-hour %v, want 2/2/1", nv.AirtimeHours, nv.Net, nv.NetPerHour)
+	}
+	if !slices.Equal(got.Platforms, []string{"twitch"}) {
+		t.Errorf("platforms = %v, want [twitch]", got.Platforms)
+	}
+}
+
+// The rollup has to keep working on history written before migration 047 added
+// viewer_samples.viewers / .live. Filtering on live strictly would discard
+// every earlier tick and return an empty report on a window that reaches back
+// past the migration — so the query treats NULL as "nobody reported" rather
+// than as "offline", and says so through live_samples. This test is what fails
+// if someone tightens `live IS NOT FALSE` to `live`.
+func TestRegionInsightsHandler_ReportsRowsPredatingTheAudienceColumns(t *testing.T) {
+	db := testdb.New(t)
+	in := time.Now().Add(-1 * time.Hour)
+	clip := seedVideo(t, db, "insights_region_legacy", "Wyoming", "", nil)
+
+	// Twelve pre-047 ticks: chatters only, no viewers, no live flag.
+	for i := 0; i < 12; i++ {
+		seedSample(t, db, clip, 3, in.Add(time.Duration(i)*time.Minute))
+	}
+	end := in.Add(time.Hour)
+	seedClosedPlay(t, db, clip, in, &end)
+
+	got := regionInsights(t, "/api/insights/regions")
+	if len(got.Regions) != 1 {
+		t.Fatalf("regions = %+v, want Wyoming to report from chatter-only history", got.Regions)
+	}
+	r := got.Regions[0]
+	if r.Samples != 12 {
+		t.Errorf("samples = %d, want 12", r.Samples)
+	}
+	if r.LiveSamples != 0 {
+		t.Errorf("live_samples = %d, want 0 — no tick vouched for being live", r.LiveSamples)
+	}
+	if r.AvgViewers != nil || r.MaxViewers != nil {
+		t.Errorf("avg/max viewers = %v/%v, want null — no tick carried a viewer count", r.AvgViewers, r.MaxViewers)
+	}
+	if r.AvgChatters != 3.0 {
+		t.Errorf("avg_chatters = %v, want 3 — the one series with history", r.AvgChatters)
+	}
+}
+
+// A window with samples but no closed play has no airtime to divide by, and
+// the rate must read null rather than zero or an infinity.
+func TestRegionInsightsHandler_NullRateWithoutClosedAirtime(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "reg_open", false)
+	in := time.Now().Add(-1 * time.Hour)
+	clip := seedVideo(t, db, "insights_region_open", "Montana", "", nil)
+
+	live := true
+	five := 5
+	for i := 0; i < 12; i++ {
+		seedSampleFull(t, db, clip, 1, &five, &live, in.Add(time.Duration(i)*time.Minute))
+	}
+	seedClosedPlay(t, db, clip, in, nil) // never observed ending
+	seedAiringEvent(t, db, "reg_open", "login", clip, in)
+
+	got := regionInsights(t, "/api/insights/regions")
+	if len(got.Regions) != 1 {
+		t.Fatalf("regions = %+v, want Montana", got.Regions)
+	}
+	r := got.Regions[0]
+	if r.Plays != 1 || r.ClosedPlays != 0 || r.AirtimeHours != 0 {
+		t.Errorf("airtime = plays %d closed %d hours %v, want 1/0/0", r.Plays, r.ClosedPlays, r.AirtimeHours)
+	}
+	if r.Net != 1 {
+		t.Errorf("net = %d, want 1", r.Net)
+	}
+	if r.NetPerHour != nil {
+		t.Errorf("net_per_hour = %v, want null — no airtime to divide by", r.NetPerHour)
+	}
+}
