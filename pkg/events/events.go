@@ -417,8 +417,8 @@ func CommandRan(ctx context.Context, cfg *c.TripbotConfig, r CommandRun) error {
 
 // preFixSentinel is safely after the 0001-01-01 zero-time the timestamp bug
 // wrote (between the GORM migration #499 and the autoCreateTime fix) but well
-// before any real stream data — the stream started May 2019. Used to exclude
-// the bogus zero-dated rows when reconstructing a user's first-seen date.
+// before any real stream data — the stream started May 2019. Excludes the
+// bogus zero-dated rows when reconstructing a user's first-seen date.
 var preFixSentinel = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // EarliestRealEventDate returns the earliest event timestamp for the user that

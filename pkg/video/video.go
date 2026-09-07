@@ -119,9 +119,9 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 // It reads the playhead rather than the clip: video_coords knows which state
 // each moment of a clip is in, so a line crossed mid-clip is recorded at the
 // moment it happens — 48 clips in the corpus cross one — instead of at the
-// next clip switch. A clip with no track answers with its clip-level state,
-// which is what the switch-time comparison used to do; the first observation
-// after boot records nothing, since there is nothing to cross from.
+// next clip switch. A clip with no track answers with its clip-level state;
+// the first observation after boot records nothing, since there is nothing
+// to cross from.
 //
 // sequential says the van drove across the line: either the same clip is still
 // on screen, or the new clip follows the previous one in corpus order

@@ -780,9 +780,9 @@ func TestCheckAccess_RequiresAdmin_Admin(t *testing.T) {
 	}
 }
 
-// Every command that used to gate itself inside its handler now declares it,
-// so a new admin command that forgets the field fails here rather than
-// shipping wide open.
+// Admin commands declare their gate as a registry field rather than checking
+// inside the handler, so a new one that forgets the field fails here rather
+// than shipping wide open.
 func TestRegistry_AdminCommandsDeclareRequiresAdmin(t *testing.T) {
 	want := map[string]bool{
 		"!shutdown": true, "!refreshoverlays": true, "!secretinfo": true,
