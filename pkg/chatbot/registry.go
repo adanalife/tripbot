@@ -334,8 +334,8 @@ func (a *App) buildRegistry() []Command {
 }
 
 // Platform names for App.Platform. Add a constant here when a new streaming
-// platform (Kick, TikTok, …) comes online; platform-specific commands then
-// reference it via Command.Platforms.
+// platform (Kick, …) comes online; platform-specific commands then reference
+// it via Command.Platforms.
 const (
 	platformTwitch    = "twitch"
 	platformYouTube   = "youtube"
@@ -357,14 +357,13 @@ func (a *App) platform() string {
 }
 
 // v1Commands is the allowlist of triggers a v1-rollout platform instance
-// (YouTube, Facebook, Instagram, TikTok) runs — the "info + playback control" subset, plus the
-// !state/!location info commands.
+// (YouTube, Facebook, Instagram, TikTok) runs — the "info + playback
+// control" subset, plus the !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
 // !unbot) are excluded: those are per-user identity/score state. !somafm is
 // excluded too — it credits a bed that only Twitch defaults to. Aliases come
-// along with their trigger, so only triggers are listed. See the YouTube
-// provider plan.
+// along with their trigger, so only triggers are listed.
 var v1Commands = map[string]bool{
 	"!version": true, "!uptime": true, "!commands": true,
 	"!gas": true, "!report": true,

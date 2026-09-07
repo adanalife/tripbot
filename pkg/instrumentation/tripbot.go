@@ -156,10 +156,10 @@ var GatewayConnection = gatewayConnectionGauge{gauge: gatewayUp}
 // disconnect in prod.
 //
 // Counting attempts rather than successes is the load-bearing part. Recovery
-// that keeps failing is the worse outage and the one that used to be invisible:
-// through a 9h41m outage on 2026-08-05 the watchdog attempted a restart every
-// 60s and failed every time, and this counter never moved, so the panel built
-// on it read a flat zero for the whole incident.
+// that keeps failing is the worse outage and the one a success count cannot
+// see: through a 9h41m outage on 2026-08-05 the watchdog attempted a restart
+// every 60s and failed every time, so a success-counted panel reads a flat
+// zero for the whole incident.
 var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsCounter{counter: obsSilentDisconnectRestarts}
 
 // OBSRecoveryExhausted exposes the watchdog's stood-down state. Set(true,
