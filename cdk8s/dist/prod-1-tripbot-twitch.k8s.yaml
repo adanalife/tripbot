@@ -17,6 +17,7 @@ data:
   OBS_SERVER_HOST: obs-twitch:8080
   OBS_WEBSOCKET_ADDR: obs-twitch:4455
   ONSCREENS_SERVER_HOST: onscreens-twitch:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -43,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 2b3a2db3c8
+        adanalife.dev/config-hash: f03c2c956e
       labels:
         app: tripbot-twitch
     spec:
@@ -57,9 +58,6 @@ spec:
             - secretRef:
                 name: tripbot-database-creds
             - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
-            - secretRef:
                 name: sentry-tripbot
                 optional: true
             - secretRef:
@@ -72,7 +70,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.9.0
+          image: adanalife/tripbot:5.10.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -103,8 +101,8 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - mountPath: /opt/tripbot/assets/music
-              name: music
+            - mountPath: /opt/tripbot/assets/music-index
+              name: music-index
               readOnly: true
       initContainers:
         - args:
@@ -120,7 +118,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.9.0
+          image: adanalife/tripbot:5.10.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -140,10 +138,10 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       volumes:
-        - name: music
-          persistentVolumeClaim:
-            claimName: obs-music-local
-            readOnly: true
+        - configMap:
+            name: obs-music-index
+            optional: true
+          name: music-index
 ---
 apiVersion: v1
 kind: Service

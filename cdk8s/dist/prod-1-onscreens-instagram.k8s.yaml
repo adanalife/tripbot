@@ -10,6 +10,7 @@ data:
   ENV: production
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
   ONSCREENS_SERVER_PLATFORM: instagram
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=instagram
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -37,7 +38,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 2ea2313267
+        adanalife.dev/config-hash: 35de313b0f
       labels:
         app: onscreens-instagram
     spec:
@@ -48,10 +49,7 @@ spec:
             - secretRef:
                 name: sentry-onscreens-server
                 optional: true
-            - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
-          image: adanalife/onscreens-server:5.9.0
+          image: adanalife/onscreens-server:5.10.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

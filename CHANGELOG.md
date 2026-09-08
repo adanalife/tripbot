@@ -9,6 +9,25 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.10.0] — 2026-09-08
+
+### Console / API
+
+- GET `/api/insights/viewers?hours=` answers with per-platform viewer and chat-volume buckets over the recent window, bucketed for a chart — the series behind the app's charts. ([#1515](https://github.com/adanalife/tripbot/pull/1515))
+
+### Deploy / Infra
+
+- The album background-audio bed reads its track list from a mounted index instead of the music share, so a music volume that isn't there no longer holds every tripbot Deployment unschedulable. ([#1513](https://github.com/adanalife/tripbot/pull/1513))
+- Telemetry now ships to the in-cluster Alloy OTLP receiver (`k8s-monitoring-alloy-receiver.monitoring.svc:4318`) instead of straight to Grafana Cloud. Metrics land in VictoriaMetrics as well as the cloud, and the `grafana-cloud-otlp` Secret no longer mounts into app pods. ([#1516](https://github.com/adanalife/tripbot/pull/1516))
+
+### CI / Tooling
+
+- The private-notes pre-commit hook now matches prose references as well as `vault/<dir>/` paths. ([#1514](https://github.com/adanalife/tripbot/pull/1514))
+
+### Misc
+
+- `GET /api/insights/regions` reports footage performance per state — airtime, concurrent viewers, and the non-bot join/leave churn each state earned while it held the screen, normalized per hour of airtime. ([#1510](https://github.com/adanalife/tripbot/pull/1510))
+
 ## [v5.9.0] — 2026-09-06
 
 ### Chatbot
