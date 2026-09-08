@@ -17,6 +17,7 @@ data:
   OBS_SERVER_HOST: obs-youtube:8080
   OBS_WEBSOCKET_ADDR: obs-youtube:4455
   ONSCREENS_SERVER_HOST: onscreens-youtube:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=youtube
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -64,7 +65,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: dece183338
+        adanalife.dev/config-hash: bf1849b82c
       labels:
         app: tripbot-youtube
     spec:
@@ -87,9 +88,6 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-            - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
             - secretRef:
                 name: sentry-tripbot
                 optional: true

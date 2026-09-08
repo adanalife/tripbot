@@ -74,17 +74,12 @@ class OnscreensServer(Construct):
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
                 # onscreens-server reports to its own Sentry project. The
-                # observability Secrets are optional so the pod can start
-                # before the ExternalSecrets sync; Sentry/OTLP just gate off
-                # when the env vars are absent.
+                # Secret is optional so the pod can start before the
+                # ExternalSecrets sync; Sentry gates off when the env vars
+                # are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
                         name="sentry-onscreens-server", optional=True
-                    )
-                ),
-                k8s.EnvFromSource(
-                    secret_ref=k8s.SecretEnvSource(
-                        name="grafana-cloud-otlp", optional=True
                     )
                 ),
             ],

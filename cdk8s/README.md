@@ -12,7 +12,7 @@ needs it.
 (`DataChart`), the ESO `SecretStore`, the shared observability Secrets +
 cert-manager Issuers (`SupportingChart`), the dashcam PV/PVC, and the Argo config
 itself. The charts here reference the Secrets those units materialize *by name*
-(`grafana-cloud-otlp`, `sentry-*`, the DB creds) — that naming is the contract
+(`sentry-*`, the DB creds) — that naming is the contract
 between the two repos.
 
 ## Setup
