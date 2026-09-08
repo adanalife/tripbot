@@ -10,6 +10,7 @@ data:
   ENV: production
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
   ONSCREENS_SERVER_PLATFORM: twitch
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -37,7 +38,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 1689252f67
+        adanalife.dev/config-hash: 83fdd30c91
       labels:
         app: onscreens-twitch
     spec:
@@ -48,10 +49,7 @@ spec:
             - secretRef:
                 name: sentry-onscreens-server
                 optional: true
-            - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
-          image: adanalife/onscreens-server:5.9.0
+          image: adanalife/onscreens-server:5.10.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
