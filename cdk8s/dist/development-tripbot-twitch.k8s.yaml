@@ -16,6 +16,7 @@ data:
   OBS_SERVER_HOST: obs-twitch:8080
   OBS_WEBSOCKET_ADDR: obs-twitch:4455
   ONSCREENS_SERVER_HOST: onscreens-twitch:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -41,7 +42,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: e228ff644f
+        adanalife.dev/config-hash: 7d030dc41f
       labels:
         app: tripbot-twitch
     spec:
@@ -54,9 +55,6 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-            - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
             - secretRef:
                 name: sentry-tripbot
                 optional: true

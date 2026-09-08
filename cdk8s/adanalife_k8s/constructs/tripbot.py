@@ -221,19 +221,16 @@ class Tripbot(Construct):
         # per-env supporting unit (emit_identity_secrets), not here. The component
         # just envFroms them by name below.
 
-        # --- envFrom: config, DB creds, shared OTLP/Sentry, then app Secrets ---
+        # --- envFrom: config, DB creds, shared Sentry, then app Secrets ---
         # Order is load-bearing: later entries win on key collision.
-        # The discord and observability (Sentry/OTLP) Secrets are
-        # optional so the bot boots without them — observability gates itself
-        # off when the env vars are absent, and the pod isn't hostage to
-        # ExternalSecret sync order. Boot-required Secrets (DB creds, and
-        # twitch on a twitch instance) stay required: a missing one fails loud.
+        # The discord and Sentry Secrets are optional so the bot boots without
+        # them — observability gates itself off when the env vars are absent,
+        # and the pod isn't hostage to ExternalSecret sync order.
+        # Boot-required Secrets (DB creds, and twitch on a twitch instance)
+        # stay required: a missing one fails loud.
         env_from = [
             k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
             k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
-            k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(name="grafana-cloud-otlp", optional=True)
-            ),
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(name="sentry-tripbot", optional=True)
             ),

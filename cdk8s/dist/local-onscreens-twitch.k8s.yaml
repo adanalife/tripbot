@@ -9,6 +9,7 @@ metadata:
 data:
   ENV: staging
   ONSCREENS_SERVER_PLATFORM: twitch
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -36,7 +37,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 3d18c19002
+        adanalife.dev/config-hash: ae7b44af68
       labels:
         app: onscreens-twitch
     spec:
@@ -46,9 +47,6 @@ spec:
                 name: onscreens-twitch-config
             - secretRef:
                 name: sentry-onscreens-server
-                optional: true
-            - secretRef:
-                name: grafana-cloud-otlp
                 optional: true
           image: adanalife/onscreens-server:latest
           imagePullPolicy: Always

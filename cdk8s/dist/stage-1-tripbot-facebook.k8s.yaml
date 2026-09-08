@@ -18,6 +18,7 @@ data:
   OBS_SERVER_HOST: obs-facebook:8080
   OBS_WEBSOCKET_ADDR: obs-facebook:4455
   ONSCREENS_SERVER_HOST: onscreens-facebook:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=facebook
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -44,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 81a6e8f1c1
+        adanalife.dev/config-hash: d9119cd7ba
       labels:
         app: tripbot-facebook
     spec:
@@ -67,9 +68,6 @@ spec:
                 name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
-            - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
             - secretRef:
                 name: sentry-tripbot
                 optional: true

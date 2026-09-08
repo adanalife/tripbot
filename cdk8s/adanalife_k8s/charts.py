@@ -11,7 +11,7 @@ infra/cdk8s:
 postgres (DataChart), the ESO SecretStore, the shared observability Secrets +
 cert-manager Issuers (SupportingChart), the dashcam PV/PVC, and the Argo config.
 Apps reference the materialized Secret names emitted by those infra units by name
-(grafana-cloud-otlp / sentry-* / the DB creds) — that naming is the contract
+(sentry-* / the DB creds) — that naming is the contract
 between the two repos.
 """
 

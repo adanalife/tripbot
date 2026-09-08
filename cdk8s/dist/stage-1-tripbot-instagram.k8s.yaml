@@ -18,6 +18,7 @@ data:
   OBS_SERVER_HOST: obs-instagram:8080
   OBS_WEBSOCKET_ADDR: obs-instagram:4455
   ONSCREENS_SERVER_HOST: onscreens-instagram:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=instagram
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -44,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 6b2fa90912
+        adanalife.dev/config-hash: ed93b2069f
       labels:
         app: tripbot-instagram
     spec:
@@ -67,9 +68,6 @@ spec:
                 name: tripbot-instagram-config
             - secretRef:
                 name: tripbot-database-creds
-            - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
             - secretRef:
                 name: sentry-tripbot
                 optional: true

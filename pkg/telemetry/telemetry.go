@@ -1,6 +1,7 @@
 // Package telemetry initializes OpenTelemetry providers (traces, metrics,
-// logs) for tripbot's binaries. Backend is OTLP/HTTP — typically Grafana
-// Cloud. Configuration comes from standard OTEL_* env vars.
+// logs) for tripbot's binaries. Backend is OTLP/HTTP — in-cluster, an Alloy
+// collector that fans out to VictoriaMetrics and Grafana Cloud.
+// Configuration comes from standard OTEL_* env vars.
 //
 // Setting OTEL_SDK_DISABLED=true (or leaving OTEL_EXPORTER_OTLP_ENDPOINT
 // unset) makes Init skip the OTLP exporters and only wire up a Prometheus
@@ -145,9 +146,9 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 
 // dropBodySizeHistograms returns MeterProvider options that drop the
 // http_server_{request,response}_body_size_bytes histograms via OTel SDK
-// views. These auto-instrumented histograms are pushed OTLP-direct to the
-// metrics backend (bypassing Alloy, so they can't be relabeled chart-side)
-// and account for ~700 active series with no panels reading them. The
+// views. These auto-instrumented histograms account for ~700 active series
+// with no panels reading them, and dropping them in the SDK is cheaper than
+// relabeling downstream. The
 // http_server_request_duration_seconds histogram is deliberately left
 // untouched — its buckets back the p50/p95/p99 latency panels.
 func dropBodySizeHistograms() []sdkmetric.Option {

@@ -10,6 +10,7 @@ data:
   ENV: staging
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
   ONSCREENS_SERVER_PLATFORM: facebook
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=facebook
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -37,7 +38,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: fb92371de9
+        adanalife.dev/config-hash: e2f3277525
       labels:
         app: onscreens-facebook
     spec:
@@ -56,9 +57,6 @@ spec:
                 name: onscreens-facebook-config
             - secretRef:
                 name: sentry-onscreens-server
-                optional: true
-            - secretRef:
-                name: grafana-cloud-otlp
                 optional: true
           image: adanalife/onscreens-server:main
           imagePullPolicy: Always
