@@ -644,3 +644,95 @@ func TestRegionInsightsHandler_NullRateWithoutClosedAirtime(t *testing.T) {
 		t.Errorf("net_per_hour = %v, want null — no airtime to divide by", r.NetPerHour)
 	}
 }
+
+func TestViewerSeriesStep(t *testing.T) {
+	cases := map[int]int{1: 60, 6: 60, 24: 360, 168: 2520}
+	for hours, want := range cases {
+		if got := viewerSeriesStep(hours); got != want {
+			t.Errorf("viewerSeriesStep(%d) = %d, want %d", hours, got, want)
+		}
+	}
+}
+
+func TestViewerSeriesHandler_EmptyDataShape(t *testing.T) {
+	testdb.New(t)
+	rec := insightsGET(t, "/api/insights/viewers", viewerSeriesHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`"hours":24`, `"step":360`, `"series":[]`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %s: %s", want, body)
+		}
+	}
+}
+
+// seedTick inserts one platform's ~61s sample as the audience columns record
+// it: the concurrent-viewer reading, whether the channel was live, and the
+// chat messages that arrived in the tick. Any of the three may be nil.
+func seedTick(t *testing.T, db *gorm.DB, platform string, viewers *int, live *bool, chat *int, at time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO viewer_samples (platform, count, viewers, live, chat_messages, sampled_at)
+	                VALUES (?, 0, ?, ?, ?, ?)`, platform, viewers, live, chat, at).Error
+	if err != nil {
+		t.Fatalf("insert %s tick: %v", platform, err)
+	}
+}
+
+func TestViewerSeriesHandler_Buckets(t *testing.T) {
+	db := testdb.New(t)
+	live, offline := true, false
+	ten, twenty, none := 10, 20, 0
+	three, five := 3, 5
+	// A one-hour window has 60-second buckets; anchor every tick to the start
+	// of a bucket so which bucket it lands in is not a matter of luck.
+	bucket := time.Unix(time.Now().Add(-30*time.Minute).Unix()/60*60, 0)
+
+	// twitch: two live ticks in one bucket average 15 viewers and total 8
+	// messages; an offline tick in the next bucket keeps its chat but its
+	// viewers stay out of the mean, so that bucket's viewers read null.
+	seedTick(t, db, "twitch", &ten, &live, &three, bucket)
+	seedTick(t, db, "twitch", &twenty, &live, &five, bucket.Add(20*time.Second))
+	seedTick(t, db, "twitch", &none, &offline, &three, bucket.Add(time.Minute))
+	// youtube: one tick with no counters wired at all — a point of nulls.
+	seedTick(t, db, "youtube", nil, nil, nil, bucket)
+	// A tick outside the window counts toward nothing.
+	seedTick(t, db, "twitch", &twenty, &live, &five, time.Now().Add(-2*time.Hour))
+
+	rec := insightsGET(t, "/api/insights/viewers?hours=1", viewerSeriesHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got viewerSeriesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if got.Hours != 1 || got.Step != 60 {
+		t.Errorf("hours/step = %d/%d, want 1/60", got.Hours, got.Step)
+	}
+	if len(got.Series) != 2 || got.Series[0].Platform != "twitch" || got.Series[1].Platform != "youtube" {
+		t.Fatalf("series = %+v, want twitch then youtube", got.Series)
+	}
+	fifteen, eight, thr := 15.0, int64(8), int64(3)
+	want := []viewerPoint{
+		{T: bucket.Unix(), Viewers: &fifteen, Chat: &eight},
+		{T: bucket.Unix() + 60, Viewers: nil, Chat: &thr},
+	}
+	if diff := pointsDiff(got.Series[0].Points, want); diff != "" {
+		t.Errorf("twitch points: %s", diff)
+	}
+	if diff := pointsDiff(got.Series[1].Points, []viewerPoint{{T: bucket.Unix()}}); diff != "" {
+		t.Errorf("youtube points: %s", diff)
+	}
+}
+
+// pointsDiff compares two point lists by value, pointers included; "" when equal.
+func pointsDiff(got, want []viewerPoint) string {
+	g, _ := json.Marshal(got)
+	w, _ := json.Marshal(want)
+	if string(g) != string(w) {
+		return "got " + string(g) + ", want " + string(w)
+	}
+	return ""
+}

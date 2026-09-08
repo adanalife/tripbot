@@ -43,7 +43,13 @@ const (
 // insightsDays parses ?days, falling back to def when absent or unparseable
 // and clamping to [insightsMinDays, insightsMaxDays].
 func insightsDays(r *http.Request, def int) int {
-	raw := r.URL.Query().Get("days")
+	return queryInt(r, "days", def, insightsMinDays, insightsMaxDays)
+}
+
+// queryInt parses the named integer query parameter, falling back to def when
+// absent or unparseable and clamping to [lo, hi].
+func queryInt(r *http.Request, key string, def, lo, hi int) int {
+	raw := r.URL.Query().Get(key)
 	if raw == "" {
 		return def
 	}
@@ -51,13 +57,7 @@ func insightsDays(r *http.Request, def int) int {
 	if err != nil {
 		return def
 	}
-	if n < insightsMinDays {
-		return insightsMinDays
-	}
-	if n > insightsMaxDays {
-		return insightsMaxDays
-	}
-	return n
+	return min(max(n, lo), hi)
 }
 
 // commandUsage is one command's in-window activity: how often it ran, how many
@@ -606,6 +606,107 @@ func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "region insights query failed", "err", err, "days", days)
 		insightsError(w, "couldn't gather region insights")
+		return
+	}
+	writeInsights(w, r, payload)
+}
+
+// The viewer series is the one insights endpoint that answers with a time
+// series rather than a ranking: per-platform concurrent viewers and chat
+// volume over a recent window, bucketed for a chart. Hours rather than days,
+// because the question it answers is "how did today go".
+const (
+	viewerSeriesMinHours     = 1
+	viewerSeriesMaxHours     = 24 * 7
+	viewerSeriesDefaultHours = 24
+	// How many buckets a window is cut into, whatever its length — enough to
+	// draw a line on a phone, few enough that a week stays one small payload.
+	viewerSeriesBuckets = 240
+)
+
+// viewerPoint is one bucket of one platform's audience.
+type viewerPoint struct {
+	// The bucket's start, in unix seconds.
+	T int64 `json:"t"`
+	// Mean concurrent viewers across the bucket's live ticks. Null when no
+	// tick in the bucket carried a viewer count (a platform without the
+	// endpoint, or offline the whole bucket).
+	Viewers *float64 `json:"viewers"`
+	// Chat messages that arrived during the bucket. Null when no tick in the
+	// bucket had the counter wired.
+	Chat *int64 `json:"chat"`
+}
+
+// viewerSeries is one platform's points, oldest first.
+type viewerSeries struct {
+	Platform string        `json:"platform"`
+	Points   []viewerPoint `json:"points"`
+}
+
+type viewerSeriesResponse struct {
+	Hours int `json:"hours"`
+	// The bucket width in seconds, so a chart can draw gaps where a bucket
+	// is missing rather than joining across them.
+	Step   int            `json:"step"`
+	Series []viewerSeries `json:"series"`
+}
+
+// viewerSeriesStep is the bucket width for a window: the window cut into
+// viewerSeriesBuckets, rounded down to whole minutes and never under one,
+// since the samples themselves land about a minute apart.
+func viewerSeriesStep(hours int) int {
+	return max(60, hours*3600/viewerSeriesBuckets/60*60)
+}
+
+// Offline ticks (live = false) are kept out of the viewer mean the way the
+// region rollup keeps them out: an empty room and a dark channel both read
+// zero and mean opposite things. Chat counts every tick — a message is a
+// message whether or not the channel was live.
+const viewerSeriesSQL = `
+SELECT platform,
+       (floor(extract(epoch FROM sampled_at) / @step) * @step)::bigint AS t,
+       ROUND(AVG(viewers) FILTER (WHERE live IS NOT FALSE)::numeric, 1)::float8 AS viewers,
+       SUM(chat_messages)                                                        AS chat
+FROM viewer_samples
+WHERE sampled_at >= now() - make_interval(hours => @hours)
+GROUP BY platform, t
+ORDER BY platform, t`
+
+func gatherViewerSeries(ctx context.Context, hours int) (viewerSeriesResponse, error) {
+	step := viewerSeriesStep(hours)
+	out := viewerSeriesResponse{Hours: hours, Step: step, Series: []viewerSeries{}}
+	var rows []struct {
+		Platform string
+		T        int64
+		Viewers  *float64
+		Chat     *int64
+	}
+	err := database.GormDB().WithContext(ctx).
+		Raw(viewerSeriesSQL, sql.Named("hours", hours), sql.Named("step", step)).
+		Scan(&rows).Error
+	if err != nil {
+		return out, fmt.Errorf("viewer series: %w", err)
+	}
+	// The rows arrive grouped by platform, so a change of platform starts a
+	// new series.
+	for _, row := range rows {
+		if n := len(out.Series); n == 0 || out.Series[n-1].Platform != row.Platform {
+			out.Series = append(out.Series, viewerSeries{Platform: row.Platform, Points: []viewerPoint{}})
+		}
+		last := &out.Series[len(out.Series)-1]
+		last.Points = append(last.Points, viewerPoint{T: row.T, Viewers: row.Viewers, Chat: row.Chat})
+	}
+	return out, nil
+}
+
+// viewerSeriesHandler serves GET /api/insights/viewers: per-platform viewer
+// and chat-volume buckets over the ?hours window.
+func viewerSeriesHandler(w http.ResponseWriter, r *http.Request) {
+	hours := queryInt(r, "hours", viewerSeriesDefaultHours, viewerSeriesMinHours, viewerSeriesMaxHours)
+	payload, err := gatherViewerSeries(r.Context(), hours)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "viewer series query failed", "err", err, "hours", hours)
+		insightsError(w, "couldn't gather the viewer series")
 		return
 	}
 	writeInsights(w, r, payload)
