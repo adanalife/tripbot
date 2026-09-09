@@ -706,6 +706,59 @@ func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 	}
 }
 
+// An album bed with no play order is the one way the stream goes silent while
+// OBS reports a healthy source: Detect adopts the bed OBS booted on without
+// passing setNow's refuse-an-empty-album guard, so a missing track index leaves
+// Album selected with nothing loaded. Prod sat silent on both platforms this
+// way on 2026-09-08.
+func TestAdvance_EmptyAlbumFallsBackToTheCarHum(t *testing.T) {
+	dir := t.TempDir() // a share with no albums: nothing to build an order from
+	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir, "twitch")
+	s.Detect(context.Background())
+
+	if bed, _ := s.Current(); bed != Album {
+		t.Fatalf("setup: want the album adopted off OBS, got %q", bed)
+	}
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if o.file != FallbackFile || !o.loop {
+		t.Errorf("want the looping car hum on air, got file=%s loop=%v", o.file, o.loop)
+	}
+	// The selection stays Album so the album=1 / tracks=0 gauge goes on
+	// reporting a misconfiguration, while what is audible reads as the drone.
+	if bed, _ := s.Current(); bed != Album {
+		t.Errorf("rescue changed the selection: %q", bed)
+	}
+	if bed, _ := s.Playing(); bed != CarHum {
+		t.Errorf("on air: want carhum, got %q", bed)
+	}
+}
+
+// Once the drone is standing in, further ended-media reports must not keep
+// re-swapping it: the rescue is what takes the stream off the album path.
+func TestAdvance_EmptyAlbumRescuesOnlyOnce(t *testing.T) {
+	dir := t.TempDir()
+	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir, "twitch")
+	s.Detect(context.Background())
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	o.file = "" // a second swap would write the fallback path again
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if o.file != "" {
+		t.Errorf("rescued a stream already on the drone: %s", o.file)
+	}
+}
+
 // The bed the audio watchdog rides a SomaFM outage out on. An outage lasts
 // hours, so the album — licence-clean, and actual music — is a better degraded
 // state than the drone whenever the share can supply it.

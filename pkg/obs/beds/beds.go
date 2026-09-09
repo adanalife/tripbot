@@ -41,8 +41,10 @@ type Bed string
 const (
 	// SomaFM is internet radio, on whichever of SomaFM's channels is selected
 	// (see Stations). Its music is not cleared for our rebroadcast — it trips
-	// YouTube's Content ID and the other platforms' audio ID — so it's a
-	// Twitch-only default, by tolerance rather than licence.
+	// YouTube's Content ID and the other platforms' audio ID — so it is safe to
+	// select only on Twitch, by tolerance rather than licence. No platform
+	// starts here: its edges have refused our IP, so a boot that began on this
+	// bed could begin on one that never plays.
 	SomaFM Bed = "somafm"
 	// CarHum is the synthesized, licence-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
@@ -659,9 +661,13 @@ func (s *Store) Pending() (Switch, bool) {
 // and would otherwise be stepped over by the outgoing track's own ending.
 func (s *Store) Advance(ctx context.Context) error {
 	s.mu.Lock()
-	if s.playingLocked() != Album || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
+	if s.playingLocked() != Album || time.Since(s.lastStart) < advanceDebounce {
 		s.mu.Unlock()
 		return nil
+	}
+	if len(s.tracks) == 0 {
+		s.mu.Unlock()
+		return s.rescueEmptyAlbum(ctx)
 	}
 	s.lastStart = time.Now()
 	current := s.tracks[s.idx]
@@ -680,6 +686,36 @@ func (s *Store) Advance(ctx context.Context) error {
 		return fmt.Errorf("advance album track: %w", err)
 	}
 	slog.InfoContext(ctx, "background audio: next track", "track", filepath.Base(track))
+	return nil
+}
+
+// rescueEmptyAlbum puts the car hum on air when the album is selected with no
+// play order to advance through. That state is reachable without ever passing
+// the guard in setNow, which refuses an album with no tracks: Detect adopts
+// whichever bed OBS booted on, so an OBS started on an album track while the
+// track index is missing leaves the store on Album with nothing loaded. The
+// boot track then ends, there is nothing to queue, and the stream is silent
+// with OBS reporting a healthy source.
+//
+// The drone is the only bed left — it is baked into the image, so it needs
+// neither the share nor the index — and it loops, so nothing has to advance it.
+// The selection stays Album: it is still what the operator asked for, and
+// keeping it is what makes the album=1 / tracks=0 gauge go on describing a
+// misconfiguration that wants fixing rather than resolving into a bed nobody
+// chose. Recording the drone as the fallback is what takes the stream off this
+// path — playingLocked then reports CarHum, so the next Advance returns early
+// instead of rescuing an already-rescued stream.
+func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
+	if err := s.obs.SetLocalFile(ctx, InputName, FallbackFile, true); err != nil {
+		return fmt.Errorf("rescue empty album bed: %w", err)
+	}
+	s.mu.Lock()
+	s.fallback = CarHum
+	s.lastStart = time.Now()
+	s.mu.Unlock()
+	s.record()
+	slog.ErrorContext(ctx, "background audio: album bed has no tracks, falling back to the car hum",
+		"album", s.Album())
 	return nil
 }
 
@@ -935,10 +971,9 @@ func scanTracks(dir string) ([]string, error) {
 // are read back under the lock so the gauges describe one consistent moment.
 //
 // The play-order depth is here because an empty one is invisible everywhere
-// else: Advance returns silently when there is nothing to advance to, so an
-// album bed with no tracks plays its boot track and then falls silent with OBS
-// still reporting a healthy source. album=1 with tracks=0 is that state, and
-// it is the only warning of it.
+// else. Advance keeps such a bed audible by falling back to the drone, but that
+// is a rescue, not a repair: the album the operator selected still cannot play,
+// and album=1 with tracks=0 is the only thing that says so.
 func (s *Store) record() {
 	s.mu.Lock()
 	bed, tracks := s.bed, len(s.tracks)
