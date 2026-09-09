@@ -825,3 +825,41 @@ func TestDispatch_AdminGateRefusesAndRecords(t *testing.T) {
 		t.Errorf("refusals = %+v, want one %q", rec.Refusals, events.RefusedAdminGate)
 	}
 }
+
+// A newcomer told to "type !commands" types the word. Both allowlisted words
+// route to the same place the banged form does.
+func TestFindCommand_BareCommandWords(t *testing.T) {
+	for _, word := range []string{"commands", "help", "HELP"} {
+		cmd, typed, params := builtTestApp.findCommand(word)
+		if cmd == nil {
+			t.Fatalf("%q reached no command", word)
+		}
+		if cmd.Trigger != "!commands" {
+			t.Errorf("%q routed to %q, want !commands", word, cmd.Trigger)
+		}
+		if typed != "!"+strings.ToLower(word) {
+			t.Errorf("%q reported typed %q, want %q", word, typed, "!"+strings.ToLower(word))
+		}
+		if len(params) != 0 {
+			t.Errorf("%q carried params %v", word, params)
+		}
+	}
+}
+
+// The whole point of the allowlist being whole-message-only: these are people
+// talking to each other, and answering them would be the bot barging in.
+func TestFindCommand_BareCommandWordsNeedTheWholeMessage(t *testing.T) {
+	for _, msg := range []string{"help me find the map", "commands please", "any help here"} {
+		if cmd, _, _ := builtTestApp.findCommand(msg); cmd != nil {
+			t.Errorf("%q dispatched to %q, want no command", msg, cmd.Trigger)
+		}
+	}
+}
+
+// Only the two listed words are bare-dispatchable — an arbitrary trigger typed
+// without its bang stays ordinary chat.
+func TestFindCommand_UnlistedBareWordStillMisses(t *testing.T) {
+	if cmd, _, _ := builtTestApp.findCommand("location"); cmd != nil {
+		t.Errorf("bare \"location\" dispatched to %q, want no command", cmd.Trigger)
+	}
+}
