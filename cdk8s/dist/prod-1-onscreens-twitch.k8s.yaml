@@ -49,7 +49,7 @@ spec:
             - secretRef:
                 name: sentry-onscreens-server
                 optional: true
-          image: adanalife/onscreens-server:5.10.0
+          image: adanalife/onscreens-server:5.10.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
