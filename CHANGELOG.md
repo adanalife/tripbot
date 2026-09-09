@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.10.1] — 2026-09-09
+
+### Fixes
+
+- The album background-audio bed now falls back to the car-hum drone when it has no tracks to play, instead of leaving the stream silent. An OBS that boots onto an album track while the track index is missing left the bed selected with no play order, and nothing recovered it — prod ran silent on both platforms for over seven hours this way. The album stays selected so the misconfiguration is still visible on the dashboards; the drone is just what is audible until it is fixed. ([#1518](https://github.com/adanalife/tripbot/pull/1518))
+
 ## [v5.10.0] — 2026-09-08
 
 ### Console / API
