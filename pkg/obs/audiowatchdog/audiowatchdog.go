@@ -66,8 +66,9 @@ type Deps struct {
 	// SwapToSomaFM points the source back at its SomaFM network stream.
 	SwapToSomaFM func(context.Context) error
 	// ActiveBed reports which bed the stream is meant to be playing. Only the
-	// SomaFM bed needs the outage machinery below — a local bed can't be
-	// rescued by swapping to another local bed.
+	// SomaFM bed needs the outage machinery below: a local bed that plays has
+	// nothing to ride out, and the one that doesn't — an album with no play
+	// order — is rescued by AdvanceAlbum instead.
 	ActiveBed func() beds.Bed
 	// SourceIsLocal reports whether the background-audio source is pointed at a
 	// local file right now. Read from OBS every tick rather than remembered
@@ -285,6 +286,11 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				// that landed while the subscription was down, where the cost is
 				// one gap of up to Interval instead of a bed that never advances
 				// again. The Store drops whichever arrives second.
+				//
+				// It is also the one path that rescues an album with no play
+				// order, which the Store cannot advance and which would
+				// otherwise hold the stream silent: down media on that bed
+				// never clears on its own, so this tick is what reaches it.
 				if bed == beds.Album && obs.MediaStateDown(state) {
 					if err := deps.AdvanceAlbum(ctx); err != nil {
 						slog.ErrorContext(ctx, "audio watchdog: album advance failed", "err", err)
