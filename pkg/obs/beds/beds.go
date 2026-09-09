@@ -41,8 +41,10 @@ type Bed string
 const (
 	// SomaFM is internet radio, on whichever of SomaFM's channels is selected
 	// (see Stations). Its music is not cleared for our rebroadcast — it trips
-	// YouTube's Content ID and the other platforms' audio ID — so it's a
-	// Twitch-only default, by tolerance rather than licence.
+	// YouTube's Content ID and the other platforms' audio ID — so it is safe to
+	// select only on Twitch, by tolerance rather than licence. No platform
+	// starts here: its edges have refused our IP, so a boot that began on this
+	// bed could begin on one that never plays.
 	SomaFM Bed = "somafm"
 	// CarHum is the synthesized, licence-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
