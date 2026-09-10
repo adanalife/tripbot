@@ -9,6 +9,27 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.11.0] — 2026-09-10
+
+### Chatbot
+
+- Typing `commands` or `help` without the `!` now runs `!commands`, as long as the word is the whole message. ([#1520](https://github.com/adanalife/tripbot/pull/1520))
+
+### Console / API
+
+- `GET /admin/map/recent?n=` serves each platform's recent map breadcrumbs from `video_plays`, so the console can seed its trail from the database instead of from what the video stream can replay. ([#1526](https://github.com/adanalife/tripbot/pull/1526))
+
+### Deploy / Infra
+
+- Argo refuses a sync to a tripbot or onscreens image tag the registry does not have yet: pinned envs render a PreSync gate Job that probes the tag first, so a release that outruns its image build fails loudly instead of parking a pod in ImagePullBackOff. ([#1524](https://github.com/adanalife/tripbot/pull/1524))
+- Two minutes after startup tripbot counts the previous run's orphaned sessions — logins with no logout sharing their `session_id` — and reports them as the `tripbot_orphaned_sessions` gauge and a log line, so an ungraceful exit names how many viewers had in-flight miles discarded instead of waiting for a viewer to notice. ([#1525](https://github.com/adanalife/tripbot/pull/1525))
+
+### CI / Tooling
+
+- The chat access gates — `UserIsAdmin`, `UserIsCompedSubscriber` and the environment predicates — now have direct tests pinning their case-insensitive matching and empty-allowlist behavior. ([#1522](https://github.com/adanalife/tripbot/pull/1522))
+- The playback chat commands (`!timewarp`, `!jump`, `!daytime`, `!skip`, `!back`, `!find`) now take their host check through an overridable seam, so their 22 tests run on macOS instead of skipping — and the no-playout branch they used to occupy locally has a test of its own. ([#1522](https://github.com/adanalife/tripbot/pull/1522))
+- **The release gate verifies the binary's stamp, not a text file.** `tripbot --version` and `onscreens-server --version` print the ldflag-stamped version and SHA, so `verify-stamped-image.sh` and the compose smoke run the binary instead of `cat`-ing `/etc/tripbot/{version,sha}` — proving the stamp reached the binary rather than a `RUN echo` layer. Both Dockerfiles drop the file-writing layer and stamp `main.sha` alongside `main.version`. ([#1523](https://github.com/adanalife/tripbot/pull/1523))
+
 ## [v5.10.1] — 2026-09-09
 
 ### Fixes

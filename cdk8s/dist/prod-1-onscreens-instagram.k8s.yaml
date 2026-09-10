@@ -49,7 +49,7 @@ spec:
             - secretRef:
                 name: sentry-onscreens-server
                 optional: true
-          image: adanalife/onscreens-server:5.10.1
+          image: adanalife/onscreens-server:5.11.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -85,6 +85,53 @@ spec:
         runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  labels:
+    app.kubernetes.io/name: onscreens-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: onscreens-instagram-image-gate
+  namespace: prod-1
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: onscreens-instagram
+        app.kubernetes.io/part-of: tripbot
+    spec:
+      containers:
+        - args:
+            - manifest
+            - adanalife/onscreens-server:5.11.0
+          image: gcr.io/go-containerregistry/crane:v0.21.7
+          name: image-gate
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+  ttlSecondsAfterFinished: 86400
 ---
 apiVersion: v1
 kind: Service
