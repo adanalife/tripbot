@@ -75,8 +75,22 @@ func tracedJob(name string, fn func(context.Context)) func(context.Context) {
 	}
 }
 
-// version is overridable at build time via -ldflags "-X main.version=...".
-var version = "dev"
+// version and sha are overridable at build time via
+// -ldflags "-X main.version=... -X main.sha=...".
+var (
+	version = "dev"
+	sha     = "unknown"
+)
+
+// printVersion reports the build stamp and whether --version was asked for,
+// so the release gate can read the stamp off the binary itself.
+func printVersion(args []string) bool {
+	if len(args) < 2 || args[1] != "--version" {
+		return false
+	}
+	fmt.Println(version, sha)
+	return true
+}
 
 // Tripbot holds the bot process's runtime dependencies and wiring. The boot
 // sequence (Run) and graceful shutdown are methods on it, so startup ordering
@@ -220,6 +234,9 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 }
 
 func main() {
+	if printVersion(os.Args) {
+		return
+	}
 	printBanner()
 	NewTripbot(version, c.Load()).Run()
 }
