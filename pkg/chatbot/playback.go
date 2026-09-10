@@ -30,6 +30,13 @@ const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 // plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
 
+// runningOnDarwin gates every command that hands the playhead to playout.
+// Playout runs beside the stream on Linux; on a Mac dev box there is nothing
+// to hand off to, so those commands answer with an apology instead. It is a
+// var rather than a direct helpers.RunningOnDarwin() call so tests can drive
+// the enabled path on any host — a Mac otherwise skips them entirely.
+var runningOnDarwin = helpers.RunningOnDarwin
+
 // timewarpCoverDelay is how long we wait after triggering the full-screen warp
 // overlay before actually jumping the playhead. The overlay is driven by a
 // browser source that polls for state, so it needs a beat to bring the opaque
@@ -108,7 +115,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !timewarp", "username", user.Username)
 
 	// exit early if we're on OS X
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		a.Chat.Say("Sorry, timewarp isn't available right now")
 		return
 	}
@@ -135,7 +142,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !jump", "username", user.Username)
 
 	// exit early if we're on OS X
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		a.Chat.Say("Sorry, jump isn't available right now")
 		return
 	}
@@ -207,7 +214,7 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !daytime", "username", user.Username)
 
 	// exit early if we're on OS X
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		a.Chat.Say("Sorry, daytime isn't available right now")
 		return
 	}
@@ -282,7 +289,7 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 	slog.InfoContext(ctx, "ran "+name, "username", user.Username)
 
 	// exit early if we're on OS X
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		a.Chat.Say(fmt.Sprintf("Sorry, %s isn't available right now", strings.TrimPrefix(name, "!")))
 		return
 	}

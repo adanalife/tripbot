@@ -7,7 +7,6 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
-	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 // IncomingGift is one viewer gift from a gateway-wired platform, in the shape
@@ -106,7 +105,7 @@ func (a *App) HandleGatewayGift(ctx context.Context, gift IncomingGift) {
 	}
 
 	// Playout playback isn't wired up on the dev Mac (same guard as !timewarp).
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		return
 	}
 
