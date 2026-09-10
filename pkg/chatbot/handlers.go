@@ -214,6 +214,16 @@ func (a *App) recordRun(ctx context.Context, r events.CommandRun) {
 	}
 }
 
+// The words a viewer types bare after reading an instruction that spelled them
+// with a bang. Deliberately two: every entry is a word that stops being
+// ordinary chat the moment it opens a message, so widening this turns
+// conversation into command dispatch. Close misspellings are not covered here
+// — fuzzy matching stays behind the bang on purpose.
+var bareCommandWords = map[string]struct{}{
+	"commands": {},
+	"help":     {},
+}
+
 // findCommand parses message and returns the matching Command, the typed
 // token that matched it, and the params. Returns a nil Command if no command
 // matches. typed is the case-folded form the viewer reached for — the alias,
@@ -265,6 +275,18 @@ func (a *App) findCommand(message string) (*Command, string, []string) {
 	// single-word lookup
 	if cmd, ok := a.singleWordLookup[command]; ok {
 		return cmd, command, params
+	}
+
+	// A newcomer reads "type !commands" and types the word. Accepted only as
+	// the entire message: "help" on its own is someone addressing the bot,
+	// while "help me find the map" is someone talking to chat, and dispatching
+	// on the latter would answer a question nobody asked the bot.
+	if len(params) == 0 {
+		if _, bare := bareCommandWords[command]; bare {
+			if cmd, ok := a.singleWordLookup["!"+command]; ok {
+				return cmd, "!" + command, nil
+			}
+		}
 	}
 
 	if strings.HasPrefix(command, "!") {
