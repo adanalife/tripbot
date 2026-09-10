@@ -100,6 +100,9 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
 	// the full dashcam route as JSON, for the console's map overlay.
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
+	// the recent breadcrumbs of each platform, so a fresh console seeds its map
+	// trail from the database rather than from what the video stream can replay.
+	r.Handle("/admin/map/recent", tagged("/admin/map/recent", mapRecentHandler)).Methods("GET")
 	// read-only JSON of the feature-flag snapshot, and a write to flip a flag's
 	// global default — the console's feature-flag panel. Internal-only like the
 	// rest of /api (no Ingress; reached over the in-namespace Service).
