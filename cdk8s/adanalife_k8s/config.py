@@ -190,11 +190,17 @@ class EnvConfig:
         pins it for this env, else the env's floating tag."""
         return self.image_pins.get(component, self.image_tag)
 
+    def is_pinned(self, component: str) -> bool:
+        """Whether versions.yaml pins this component to a release tag in this env.
+        A pinned tag is immutable, and can be synced before its image is
+        published — which is what the PreSync image gate guards."""
+        return component in self.image_pins
+
     def pull_policy_for(self, component: str) -> str:
         """Pinned release tags are immutable → IfNotPresent (no redundant pulls,
         no silent drift). Floating tags (latest/main) need Always to pick up
         rebuilds under the same tag."""
-        return "IfNotPresent" if component in self.image_pins else "Always"
+        return "IfNotPresent" if self.is_pinned(component) else "Always"
 
     @property
     def otel_disabled(self) -> str:

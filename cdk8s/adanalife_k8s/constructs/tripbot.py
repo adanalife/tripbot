@@ -41,6 +41,7 @@ from constructs import Construct
 import imports.k8s as k8s
 from adanalife_k8s import appconfig, configmap, eso, scheduling
 from adanalife_k8s.config import EnvConfig
+from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.eso import ESData
 from adanalife_k8s.naming import app_name, meta_labels, selector
 
@@ -424,6 +425,14 @@ class Tripbot(Construct):
                 ),
             ),
         )
+
+        # Refuse the sync outright when the pinned tag isn't published yet,
+        # rather than rolling a pod that can't pull it (pinned envs only — a
+        # floating tag always resolves to a prior build).
+        if env.is_pinned("tripbot"):
+            emit_image_gate(
+                self, name=name, namespace=ns, labels=labels, image_ref=image
+            )
 
         # --- Service ---
         k8s.KubeService(
