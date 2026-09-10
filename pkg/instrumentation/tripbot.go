@@ -31,6 +31,7 @@ var (
 	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
 	twitchConnected           = mustGauge("tripbot_twitch_connected", "1 when the bot is receiving Twitch chat, 0 otherwise")
 	twitchTokenExpiry         = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
+	orphanedSessions          = mustGauge("tripbot_orphaned_sessions", "Sessions the previous process left open by exiting without writing their logouts — login rows with no logout sharing their session_id — counted once shortly after startup and labeled by service_platform. Non-zero means the last exit was ungraceful and names how many viewers had in-flight miles discarded; a graceful shutdown pairs every login and reads 0.")
 	channelLive               = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
 	currentState              = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
 
@@ -118,6 +119,11 @@ var TwitchTokenExpiry = twitchTokenExpiryGauge{gauge: twitchTokenExpiry}
 // an alert can watch must call this; a platform that never does has no series,
 // which the lost-visibility canary reports rather than reading as offline.
 var ChannelLive = channelLiveGauge{gauge: channelLive}
+
+// OrphanedSessions exposes the ungraceful-exit gauge. Call Set(n, platform)
+// once per boot with events.OrphanedSessions' answer; it is a fact about the
+// previous run, so it is recorded once rather than kept current.
+var OrphanedSessions = orphanedSessionsGauge{gauge: orphanedSessions}
 
 // CurrentState exposes the dashcam-state gauge. Call Set(abbrev, platform) on
 // every video transition with the active state's 2-letter abbreviation (or
@@ -261,6 +267,12 @@ type channelLiveGauge struct{ gauge metric.Int64Gauge }
 
 func (c channelLiveGauge) Set(live bool, platform string) {
 	c.gauge.Record(context.Background(), b2i(live), platformAttr(platform))
+}
+
+type orphanedSessionsGauge struct{ gauge metric.Int64Gauge }
+
+func (g orphanedSessionsGauge) Set(n int64, platform string) {
+	g.gauge.Record(context.Background(), n, platformAttr(platform))
 }
 
 type currentStateGauge struct {
