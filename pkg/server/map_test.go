@@ -6,10 +6,14 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"github.com/adanalife/tripbot/pkg/video"
+	"gorm.io/gorm"
 )
 
 // withCorpusRoute stages the route the handler reads, and clears the built
@@ -269,5 +273,77 @@ func TestSimplify_HonorsTheErrorBound(t *testing.T) {
 	}
 	if worst > eps {
 		t.Errorf("a dropped point sits %.0f m off the simplified line, want <= %d m", worst, eps)
+	}
+}
+
+// seedTrailPlay inserts a video_plays row with the coordinates the clip carried
+// on screen — the shape the map trail is drawn from.
+func seedTrailPlay(t *testing.T, db *gorm.DB, platform string, lat, lng float64, flagged bool, at time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO video_plays (platform, lat, lng, flagged, started_at)
+	                VALUES (?, ?, ?, ?, ?)`, platform, lat, lng, flagged, at).Error
+	if err != nil {
+		t.Fatalf("insert play for %s: %v", platform, err)
+	}
+}
+
+func TestRecentTrails(t *testing.T) {
+	db := testdb.New(t)
+	base := time.Now().Add(-time.Hour)
+
+	// Two platforms interleaved in time, so a per-platform partition is the
+	// only thing that returns three points each rather than the newest six.
+	for i := range 3 {
+		seedTrailPlay(t, db, "twitch", 40+float64(i), -100, false, base.Add(time.Duration(2*i)*time.Minute))
+		seedTrailPlay(t, db, "youtube", 30+float64(i), -90, false, base.Add(time.Duration(2*i+1)*time.Minute))
+	}
+	// Neither of these belongs on a map: a flagged clip is deliberately hidden,
+	// and 0/0 is the no-GPS sentinel.
+	seedTrailPlay(t, db, "twitch", 41, -101, true, base.Add(time.Hour))
+	seedTrailPlay(t, db, "twitch", 0, 0, false, base.Add(2*time.Hour))
+
+	got, err := recentTrails(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("recentTrails: %v", err)
+	}
+	want := map[string][][2]float64{
+		"twitch":  {{40, -100}, {41, -100}, {42, -100}},
+		"youtube": {{30, -90}, {31, -90}, {32, -90}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("recentTrails = %v, want %v", got, want)
+	}
+}
+
+func TestRecentTrailsKeepsTheNewestNPerPlatform(t *testing.T) {
+	db := testdb.New(t)
+	base := time.Now().Add(-time.Hour)
+	for i := range 5 {
+		seedTrailPlay(t, db, "twitch", float64(i), -100, false, base.Add(time.Duration(i)*time.Minute))
+	}
+
+	got, err := recentTrails(t.Context(), 2)
+	if err != nil {
+		t.Fatalf("recentTrails: %v", err)
+	}
+	// The two newest, still oldest-first — a trail is appended to, so the order
+	// within the window is not the order the window was chosen by.
+	want := map[string][][2]float64{"twitch": {{3, -100}, {4, -100}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("recentTrails(n=2) = %v, want %v", got, want)
+	}
+}
+
+func TestMapRecentHandlerServesEmptyObjectWithNoPlays(t *testing.T) {
+	testdb.New(t)
+
+	rec := httptest.NewRecorder()
+	mapRecentHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/map/recent", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != "{}" {
+		t.Errorf("body = %q, want %q", got, "{}")
 	}
 }

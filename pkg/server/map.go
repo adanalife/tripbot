@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"math"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 )
@@ -231,4 +233,76 @@ func downsample(pts [][2]float64, max int) [][2]float64 {
 		out = append(out, last)
 	}
 	return out
+}
+
+// mapRecentDefaultPoints matches the console's MAP_TRAIL_SIZE — the ring it is
+// seeding holds this many breadcrumbs per platform, so asking for more would
+// only fill a buffer that drops the excess on the next clip change.
+const mapRecentDefaultPoints = 1000
+
+// mapRecentMaxPoints bounds what a caller can ask for. The response is two
+// float64s per point per platform, so the ceiling is a few hundred KB even
+// with every platform live.
+const mapRecentMaxPoints = 5000
+
+// recentTrailsSQL returns the last @n breadcrumbs of each platform, oldest
+// first within a platform so a caller can append them to a trail in order.
+//
+// The WHERE clause is the SQL form of the console's has_fix: a flagged clip is
+// deliberately not on the map, and 0/0 is the no-GPS sentinel rather than a
+// point in the Gulf of Guinea. video_plays denormalizes flagged/lat/lng at play
+// time, so these are the values the clip carried on screen — which is what the
+// live trail was drawn from too, and the reason this seed and the ring agree.
+const recentTrailsSQL = `
+SELECT platform, lat, lng
+FROM (
+    SELECT platform, lat, lng, started_at,
+           ROW_NUMBER() OVER (PARTITION BY platform ORDER BY started_at DESC) AS rn
+    FROM video_plays
+    WHERE NOT flagged
+      AND (lat <> 0 OR lng <> 0)
+) recent
+WHERE rn <= @n
+ORDER BY platform, started_at`
+
+// recentTrails reads the last n breadcrumbs per platform out of video_plays.
+func recentTrails(ctx context.Context, n int) (map[string][][2]float64, error) {
+	var rows []struct {
+		Platform string
+		Lat      float64
+		Lng      float64
+	}
+	if err := database.GormDB().WithContext(ctx).
+		Raw(recentTrailsSQL, sql.Named("n", n)).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string][][2]float64)
+	for _, r := range rows {
+		out[r.Platform] = append(out[r.Platform], [2]float64{r.Lat, r.Lng})
+	}
+	return out, nil
+}
+
+// mapRecentHandler serves GET /admin/map/recent?n=: {"twitch":[[lat,lng],…],…},
+// each platform's recent breadcrumbs oldest first.
+//
+// The console draws its map trail from an in-memory ring the hub fills off the
+// NATS video stream, so a fresh console pod's line is only as long as the
+// stream's retention lets it replay — and all platforms share one subject, so
+// the per-platform share of that is smaller still. This endpoint is the durable
+// answer to the same question: trail length becomes a property of the database
+// rather than of stream retention and console uptime.
+func mapRecentHandler(w http.ResponseWriter, r *http.Request) {
+	n := queryInt(r, "n", mapRecentDefaultPoints, 1, mapRecentMaxPoints)
+	trails, err := recentTrails(r.Context(), n)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "recent trails query failed", "err", err, "n", n)
+		http.Error(w, `{"error":"couldn't read recent trails"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(trails); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't write recent trails", "err", err)
+	}
 }
