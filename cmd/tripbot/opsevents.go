@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 // This file wires the ops-transition event writers (event-taxonomy ADR: the
@@ -55,4 +57,38 @@ func (t *Tripbot) watchdogRecoveredHook(name string) func(context.Context) {
 			slog.ErrorContext(ctx, "error recording watchdog recovery event", "err", err)
 		}
 	}
+}
+
+// orphanCheckDelay is how long after startup the orphaned-session count is
+// taken. A rolling update starts this pod while the outgoing one is still
+// draining, and the outgoing pod's graceful shutdown writes its logouts during
+// that overlap; counting immediately would read those live sessions as
+// orphans. Two minutes clears the drain with room to spare.
+const orphanCheckDelay = 2 * time.Minute
+
+// reportOrphanedSessions answers, once per boot, the question a reboot alert
+// never does — what did the last exit cost? It counts the platform's login
+// events from before this process started that no logout ever paired, and
+// records the count as a gauge and a log line. A graceful exit pairs every
+// session and reports 0; anything else names how many viewers had in-flight
+// miles discarded, so the loss is known within minutes instead of when a
+// viewer remembers their own number. startedAt is the process start, so
+// sessions this run opens are never counted.
+func (t *Tripbot) reportOrphanedSessions(ctx context.Context, startedAt time.Time) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(orphanCheckDelay):
+	}
+	n, err := events.OrphanedSessions(ctx, t.cfg.Platform, startedAt)
+	if err != nil {
+		slog.ErrorContext(ctx, "error counting orphaned sessions", "err", err)
+		return
+	}
+	instrumentation.OrphanedSessions.Set(n, t.cfg.Platform)
+	if n > 0 {
+		slog.WarnContext(ctx, "previous exit was ungraceful: sessions left without a logout", "orphaned_sessions", n)
+		return
+	}
+	slog.InfoContext(ctx, "previous exit paired every session", "orphaned_sessions", 0)
 }
