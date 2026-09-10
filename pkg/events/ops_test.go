@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -172,6 +173,29 @@ func TestWatchdogRecoveredRow(t *testing.T) {
 
 	if err := WatchdogRecovered(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "twitch"); err != nil {
 		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// OrphanedSessions is a windowed anti-join over the platform's login rows:
+// the platform, the window's start (before − lookback), before itself, and
+// the same start again for the logout side, in that order.
+func TestOrphanedSessionsCountsUnpairedLogins(t *testing.T) {
+	mock := installMockDB(t)
+	before := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	since := before.Add(-orphanLookback)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM events l`).
+		WithArgs("twitch", since, before, since).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(9))
+
+	n, err := OrphanedSessions(context.Background(), "twitch", before)
+	if err != nil {
+		t.Fatalf("OrphanedSessions: %v", err)
+	}
+	if n != 9 {
+		t.Errorf("n = %d, want 9", n)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
