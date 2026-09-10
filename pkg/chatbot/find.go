@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
 	"gorm.io/gorm"
@@ -253,7 +252,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !find", "username", user.Username)
 
 	// Playout playback isn't wired up on the dev Mac (same guard as !goto).
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		a.Chat.Say("Sorry, find isn't available right now")
 		return
 	}

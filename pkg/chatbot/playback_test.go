@@ -3,13 +3,13 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -18,18 +18,17 @@ import (
 // the refresh was an unobserved package-level call into video.GetCurrentlyPlaying
 // (which in turn hit playout over HTTP). Now we can assert it fires.
 //
-// The *Cmd handlers early-return on Darwin via helpers.RunningOnDarwin(), so
-// each test calls skipIfDarwin to no-op when running `go test` locally on a Mac.
-// The canonical test invocation is `task test` (Linux container, ENV=testing).
+// The *Cmd handlers early-return on Darwin, so each test calls enablePlayback
+// to take the enabled path regardless of host OS.
 
-// skipIfDarwin no-ops the test when GOOS=darwin. The *Cmd handlers under test
-// short-circuit on Darwin via helpers.RunningOnDarwin(), so the assertions below
-// would never see the recording fakes get called.
-func skipIfDarwin(t *testing.T) {
+// enablePlayback forces the playback commands' host check to report Linux, so
+// the assertions below see the recording fakes get called on a Mac dev box as
+// well as in CI.
+func enablePlayback(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "darwin" {
-		t.Skip("playback *Cmd handlers early-return on darwin; covered in CI (linux)")
-	}
+	prev := runningOnDarwin
+	runningOnDarwin = func() bool { return false }
+	t.Cleanup(func() { runningOnDarwin = prev })
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
@@ -46,7 +45,7 @@ func runAsAdmin(t *testing.T, fn func()) {
 // --- timewarpCmd ---
 
 func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	recPlayout := &recordingPlayout{}
@@ -85,7 +84,7 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 // With the credit flag off (the default / fresh-deploy state via noopFlags),
 // the warp still fires but the overlay gets no username — ShowTimewarp("").
 func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	app.Onscreens = recOverlay
@@ -104,7 +103,7 @@ func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
 // --- skipCmd ---
 
 func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
@@ -129,7 +128,7 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 // numbers mean minutes, and the sign picks the direction ("!skip -10m"
 // rewinds). The chat reply states the span moved.
 func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	cases := []struct {
 		name     string
 		cmd      string
@@ -180,7 +179,7 @@ func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 // parseable timescale is allowed (the player wraps modulo the corpus), so
 // only spans that overflow time.Duration count as unparseable.
 func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	cases := []struct {
 		name    string
 		params  []string
@@ -220,7 +219,7 @@ func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
 // --- backCmd ---
 
 func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
@@ -317,7 +316,7 @@ func TestTimewarp_RecordsWarpEvent(t *testing.T) {
 // success, no-footage-for-state, and bad input.
 
 func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	recPlayout := &recordingPlayout{}
@@ -368,7 +367,7 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 // Jumping into the state already on screen reports it as moving around within
 // that state, and still performs the jump.
 func TestJumpCmd_SameStateSaysJumpingElsewhere(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
@@ -398,7 +397,7 @@ func TestJumpCmd_SameStateSaysJumpingElsewhere(t *testing.T) {
 }
 
 func TestJumpCmd_NoFootageForState(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	recPlayout := &recordingPlayout{}
@@ -438,7 +437,7 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 // their interior space, stray whitespace and punctuation are cleaned up, and
 // case is left for the lookup to resolve.
 func TestJumpCmd_StateNameParsing(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	tests := []struct {
 		name      string
 		params    []string
@@ -482,7 +481,7 @@ func TestJumpCmd_StateNameParsing(t *testing.T) {
 // An unrecognized multi-word name still reaches the friendly no-footage reply
 // rather than erroring out.
 func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
@@ -510,7 +509,7 @@ func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
 
 // Input that sanitizes down to nothing gets the usage reply without a lookup.
 func TestJumpCmd_NoStateNameInParams(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recVideo := &recordingVideo{}
 	recIRC := &recordingChat{}
@@ -533,7 +532,7 @@ func TestJumpCmd_NoStateNameInParams(t *testing.T) {
 // --- daytimeCmd ---
 
 func TestDaytimeCmd_AdminJumpsToNextMorning(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
@@ -572,7 +571,7 @@ func TestDaytimeCmd_AdminJumpsToNextMorning(t *testing.T) {
 }
 
 func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
@@ -601,7 +600,7 @@ func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
 }
 
 func TestJumpCmd_RejectsBadInput(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
@@ -653,7 +652,7 @@ func TestParseSeekSpan_UppercaseUnits(t *testing.T) {
 // the error must not reclassify the reply into the internal-error branch, which
 // sends the usage string instead.
 func TestJumpCmd_NoFootageForState_Wrapped(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recVideo := &recordingVideo{
 		RandomErr: fmt.Errorf("query state footage: %w", terrors.ErrNoFootageForState),
@@ -678,7 +677,7 @@ func TestJumpCmd_NoFootageForState_Wrapped(t *testing.T) {
 
 // Same wrap-safety check for the !daytime path.
 func TestDaytimeCmd_NoDaytimeAhead_Wrapped(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recVideo := &recordingVideo{
 		DaytimeErr: fmt.Errorf("scan window: %w", terrors.ErrNoDaytimeFound),
@@ -698,5 +697,55 @@ func TestDaytimeCmd_NoDaytimeAhead_Wrapped(t *testing.T) {
 	}
 	if len(recPlayout.Calls) != 0 {
 		t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+	}
+}
+
+// On a host without playout, every playhead command has to answer chat rather
+// than reach for a player that isn't there. This is the branch a Mac dev box
+// takes; pinning it keeps the apology (and the early return) from rotting now
+// that the rest of the file drives the enabled path.
+func TestPlaybackCmds_WithoutPlayoutApologizeAndDoNothing(t *testing.T) {
+	prev := runningOnDarwin
+	runningOnDarwin = func() bool { return true }
+	t.Cleanup(func() { runningOnDarwin = prev })
+
+	cases := []struct {
+		name string
+		want string
+		run  func(a *App, ctx context.Context, u *users.User)
+	}{
+		{"timewarp", "Sorry, timewarp isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.timewarpCmd(ctx, u, nil) }},
+		{"jump", "Sorry, jump isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.jumpCmd(ctx, u, []string{"nevada"}) }},
+		{"daytime", "Sorry, daytime isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.daytimeCmd(ctx, u, nil) }},
+		{"skip", "Sorry, skip isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.skipCmd(ctx, u, nil) }},
+		{"back", "Sorry, back isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.backCmd(ctx, u, nil) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			chat := &recordingChat{}
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			app.Chat = chat
+			app.Playout = recPlayout
+			app.Video = recVideo
+
+			runAsAdmin(t, func() { tc.run(app, context.Background(), newTestUser(adminUser)) })
+
+			if len(chat.Says) != 1 || chat.Says[0] != tc.want {
+				t.Errorf("chat = %v, want [%q]", chat.Says, tc.want)
+			}
+			if len(recPlayout.Calls) != 0 {
+				t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+			}
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+			}
+		})
 	}
 }
