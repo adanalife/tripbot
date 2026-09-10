@@ -7,9 +7,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 ARG VERSION=dev
+ARG SHA=unknown
 
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/tripbot ./cmd/tripbot
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION} -X main.sha=${SHA}" -o /out/tripbot ./cmd/tripbot
 
 # Runtime: minimal Ubuntu 24.04 matching the OBS container
 FROM ghcr.io/adanalife/mirror/ubuntu:24.04
@@ -31,12 +32,6 @@ COPY db/migrate /migrations
 # Bundle seed script + data so the k8s seed Job is self-contained.
 COPY infra/docker/bin/seed-db.sh /usr/local/bin/seed-db
 COPY db/seed /seed
-
-ARG VERSION=dev
-ARG SHA=unknown
-RUN mkdir -p /etc/tripbot \
-  && echo "${VERSION}" > /etc/tripbot/version \
-  && echo "${SHA}" > /etc/tripbot/sha
 
 EXPOSE 8080
 

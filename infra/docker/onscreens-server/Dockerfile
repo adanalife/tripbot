@@ -13,9 +13,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 ARG VERSION=dev
+ARG SHA=unknown
 
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/onscreens-server ./cmd/onscreens-server
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION} -X main.sha=${SHA}" -o /out/onscreens-server ./cmd/onscreens-server
 
 # Runtime: minimal Ubuntu 24.04 matching the tripbot/obs containers
 FROM ghcr.io/adanalife/mirror/ubuntu:24.04
@@ -29,12 +30,6 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/onscreens-server /usr/local/bin/onscreens-server
-
-ARG VERSION=dev
-ARG SHA=unknown
-RUN mkdir -p /etc/tripbot \
-  && echo "${VERSION}" > /etc/tripbot/version \
-  && echo "${SHA}" > /etc/tripbot/sha
 
 EXPOSE 8080
 

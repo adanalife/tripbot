@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -14,8 +15,22 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// version is overridable at build time via -ldflags "-X main.version=...".
-var version = "dev"
+// version and sha are overridable at build time via
+// -ldflags "-X main.version=... -X main.sha=...".
+var (
+	version = "dev"
+	sha     = "unknown"
+)
+
+// printVersion reports the build stamp and whether --version was asked for,
+// so the release gate can read the stamp off the binary itself.
+func printVersion(args []string) bool {
+	if len(args) < 2 || args[1] != "--version" {
+		return false
+	}
+	fmt.Println(version, sha)
+	return true
+}
 
 // httpShutdownTimeout is how long main waits for in-flight requests to
 // finish before forcing connections closed. 5s matches the exporter flush
@@ -24,6 +39,9 @@ var version = "dev"
 const httpShutdownTimeout = 5 * time.Second
 
 func main() {
+	if printVersion(os.Args) {
+		return
+	}
 	slog.Info("onscreens-server starting", "version", version)
 
 	// Before bootstrap.Start, so there's no Sentry to report to yet — this is

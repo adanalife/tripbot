@@ -27,7 +27,7 @@ on:
         required: true
         type: string
       version:
-        description: 'Version string stamped into /etc/tripbot/version'
+        description: 'Version string stamped into the binary'
         required: true
         type: string
       tags:
