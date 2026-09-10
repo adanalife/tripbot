@@ -1,0 +1,1 @@
+Argo refuses a sync to a tripbot or onscreens image tag the registry does not have yet: pinned envs render a PreSync gate Job that probes the tag first, so a release that outruns its image build fails loudly instead of parking a pod in ImagePullBackOff.

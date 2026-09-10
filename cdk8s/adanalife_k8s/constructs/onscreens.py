@@ -23,6 +23,7 @@ from constructs import Construct
 import imports.k8s as k8s
 from adanalife_k8s import appconfig, configmap, scheduling
 from adanalife_k8s.config import EnvConfig
+from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.naming import app_name, meta_labels, selector
 
 
@@ -33,6 +34,7 @@ class OnscreensServer(Construct):
         ns = env.namespace or None
         labels = meta_labels(name)
         sel = selector(name)
+        image = f"adanalife/onscreens-server:{env.tag_for('onscreens-server')}"
 
         # --- ConfigMap (stable name + content-hash annotation) ---
         # Telemetry block (ENV + OTEL_* + SENTRY_ENVIRONMENT) is shared with the
@@ -62,7 +64,7 @@ class OnscreensServer(Construct):
 
         container = k8s.Container(
             name=name,
-            image=f"adanalife/onscreens-server:{env.tag_for('onscreens-server')}",
+            image=image,
             image_pull_policy=env.pull_policy_for("onscreens-server"),
             security_context=k8s.SecurityContext(
                 allow_privilege_escalation=False,
@@ -161,6 +163,17 @@ class OnscreensServer(Construct):
                 ),
             ),
         )
+
+        # Same release bump moves both pins, so onscreens races the registry
+        # exactly as tripbot does (pinned envs only).
+        if env.is_pinned("onscreens-server"):
+            emit_image_gate(
+                self,
+                name=name,
+                namespace=ns,
+                labels=labels,
+                image_ref=image,
+            )
 
         # --- Service (cluster-internal; tripbot + OBS reach :8080 by DNS) ---
         k8s.KubeService(
