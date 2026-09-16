@@ -277,8 +277,13 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!location",
 			Help:    "Where the van is: the town and state, with a map link",
 			// "!loclistion" stays: 3 edits from !location, beyond
-			// fuzzyLookup's max of 2
-			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loc", "!loclistion"},
+			// fuzzyLookup's max of 2. "where is this" is what viewers
+			// actually type, in both spellings a question mark produces —
+			// the matcher compares whole words, so "this?" is not "this".
+			Aliases: []string{
+				"!tripbot", "!city", "!town", "!where", "!loc", "!loclistion",
+				"where is this", "where is this?",
+			},
 			Handler:        a.locationCmd,
 			RequiresFollow: true,
 		},

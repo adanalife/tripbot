@@ -258,7 +258,9 @@
         "!town",
         "!where",
         "!loc",
-        "!loclistion"
+        "!loclistion",
+        "where is this",
+        "where is this?"
       ],
       "requires_follow": true,
       "platforms": [
