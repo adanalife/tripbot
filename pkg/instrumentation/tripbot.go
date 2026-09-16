@@ -42,12 +42,12 @@ var (
 	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total recoveries the silent-disconnect watchdog attempted because OBS reported outputActive=true while the platform reported the channel offline, labeled by service_platform and by result (ok, failed). The recovery is a StopStream+StartStream on Twitch and YouTube and an egress re-mint on TikTok")
 	obsRecoveryExhausted        = mustGauge("tripbot_obs_recovery_exhausted", "1 while the silent-disconnect watchdog has stood down on a platform: it forced its maximum run of consecutive recoveries and the channel stayed offline through every one, so the fault is upstream of anything a restart can fix and it has stopped bouncing the output. 0 otherwise, labeled by service_platform. Clears when the channel comes back or the OBS output is stopped. Drives the 'watchdog exhausted' alert.")
 
-	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by job")
-	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by job")
-	cronLastRun  = mustGauge("tripbot_cron_last_run_timestamp_seconds", "Unix timestamp of the most recent completion of each cron job, labeled by job")
+	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by cron_job")
+	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by cron_job")
+	cronLastRun  = mustGauge("tripbot_cron_last_run_timestamp_seconds", "Unix timestamp of the most recent completion of each cron job, labeled by cron_job")
 	cronDuration = mustHistogram(
 		"tripbot_cron_duration_seconds",
-		"Cron job duration in seconds, labeled by job",
+		"Cron job duration in seconds, labeled by cron_job",
 		0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60,
 	)
 
@@ -363,8 +363,14 @@ type cronMetrics struct {
 // duration, and updates the last-run timestamp. Call on every completion,
 // including when a panic was recovered, so "no successful run in 3× interval"
 // alerts still see activity from a panicking job.
+// The attribute is cron.job rather than job: on the OTLP -> Prometheus path
+// the job label is synthesized from service.namespace/service.name, and a
+// datapoint attribute named job overwrites it — the cron families come out as
+// job="video.TrackState" instead of job="tripbot/tripbot", so a query keyed on
+// the service's job label silently skips them. It also matches the cron span's
+// own cron.job attribute (cmd/tripbot).
 func (c cronMetrics) Observe(job string, seconds float64, now int64) {
-	attr := metric.WithAttributes(attribute.String("job", job))
+	attr := metric.WithAttributes(attribute.String("cron.job", job))
 	c.runs.Add(context.Background(), 1, attr)
 	c.duration.Record(context.Background(), seconds, attr)
 	c.lastRun.Record(context.Background(), now, attr)
@@ -372,7 +378,7 @@ func (c cronMetrics) Observe(job string, seconds float64, now int64) {
 
 // Panic records a cron panic. Call from a recover() handler before Observe.
 func (c cronMetrics) Panic(job string) {
-	c.panics.Add(context.Background(), 1, metric.WithAttributes(attribute.String("job", job)))
+	c.panics.Add(context.Background(), 1, metric.WithAttributes(attribute.String("cron.job", job)))
 }
 
 type httpPanicsCounter struct{ counter metric.Int64Counter }

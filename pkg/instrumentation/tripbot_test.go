@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	metricsdk "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -211,5 +212,82 @@ func TestAnnouncementsInc_StampsKindAndPlatform(t *testing.T) {
 	want := map[string]int64{"sub/twitch": 1, "resub/twitch": 1, "sub/youtube": 1}
 	if !maps.Equal(got, want) {
 		t.Errorf("announcement datapoints = %v, want %v", got, want)
+	}
+}
+
+// The cron families must carry their job name as cron.job, never as job: the
+// OTLP -> Prometheus path synthesizes the job label from
+// service.namespace/service.name, so a datapoint attribute named job silently
+// replaces it and the cron series drop out of any query keyed on the service's
+// job label. Asserts both halves — the right key present, the colliding one
+// absent.
+//
+// Built on its own provider, not the package-level global: the global
+// instruments delegate to the first provider set, so sharing them would make
+// this depend on test order.
+func TestCronObserve_StampsCronJobNotJob(t *testing.T) {
+	reader := metricsdk.NewManualReader()
+	meter := metricsdk.NewMeterProvider(metricsdk.WithReader(reader)).Meter("test")
+	runs, err := meter.Int64Counter("tripbot_cron_runs_total")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	lastRun, err := meter.Int64Gauge("tripbot_cron_last_run_timestamp_seconds")
+	if err != nil {
+		t.Fatalf("gauge: %v", err)
+	}
+	duration, err := meter.Float64Histogram("tripbot_cron_duration_seconds")
+	if err != nil {
+		t.Fatalf("histogram: %v", err)
+	}
+	panics, err := meter.Int64Counter("tripbot_cron_panics_total")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c := cronMetrics{runs: runs, panics: panics, lastRun: lastRun, duration: duration}
+
+	c.Observe("video.TrackState", 0.5, 1700000000)
+	c.Panic("video.TrackState")
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	seen := 0
+	check := func(name string, attrs attribute.Set) {
+		seen++
+		if _, ok := attrs.Value("job"); ok {
+			t.Errorf("%s carries a job attribute (%v) — it overwrites the synthesized job label", name, attrs)
+		}
+		job, ok := attrs.Value("cron.job")
+		if !ok {
+			t.Errorf("%s has no cron.job attribute (%v)", name, attrs)
+		} else if job.AsString() != "video.TrackState" {
+			t.Errorf("%s cron.job = %q, want video.TrackState", name, job.AsString())
+		}
+	}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			switch d := m.Data.(type) {
+			case metricdata.Sum[int64]:
+				for _, dp := range d.DataPoints {
+					check(m.Name, dp.Attributes)
+				}
+			case metricdata.Gauge[int64]:
+				for _, dp := range d.DataPoints {
+					check(m.Name, dp.Attributes)
+				}
+			case metricdata.Histogram[float64]:
+				for _, dp := range d.DataPoints {
+					check(m.Name, dp.Attributes)
+				}
+			default:
+				t.Fatalf("%s is %T, want a Sum, Gauge or Histogram", m.Name, m.Data)
+			}
+		}
+	}
+	if seen != 4 {
+		t.Errorf("checked %d cron datapoints, want 4 (runs, panics, last-run, duration)", seen)
 	}
 }
