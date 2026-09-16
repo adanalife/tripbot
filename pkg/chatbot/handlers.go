@@ -124,7 +124,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 	// otelhttp) nest under chat.command in Tempo, so a single !miles
 	// shows up as one trace with all 4 GetScore-chain SQL spans nested.
 	ctx, span := tracer.Start(ctx, "chat.command",
-		trace.WithAttributes(attribute.String("command", cmd.Trigger)))
+		trace.WithAttributes(attribute.String("chat.command", cmd.Trigger)))
 	defer span.End()
 
 	// A handler can still refuse from inside its own body (the !guess
@@ -417,8 +417,13 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 	// Tag the active span with the parsed command. Bare-word triggers
 	// (e.g. "hello") aren't included to keep the attribute's cardinality
 	// bounded to the bot's actual command surface (and typos thereof).
+	//
+	// The key is chat.command.typed, not chat.command: this is the raw text,
+	// which differs from the canonical trigger the dispatch span records under
+	// chat.command, and it is set even when nothing resolves — which is how a
+	// trace shows a typo'd command going nowhere.
 	if strings.HasPrefix(command, "!") {
-		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
+		trace.SpanFromContext(ctx).SetAttributes(attribute.String("chat.command.typed", command))
 	}
 
 	cmd, typed, params := a.findCommand(message)
@@ -516,10 +521,8 @@ type IncomingMessage struct {
 // carries. Every platform arrives here — inbound is one gateway poll — so the
 // only thing that varies is whether the sender has a persisted identity.
 func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
-	// span attribute kept as twitch.user for observability continuity; it
-	// generalizes to a platform-tagged key once a second platform lands.
 	ctx, span := tracer.Start(ctx, "chatbot.handle_message",
-		trace.WithAttributes(attribute.String("twitch.user", msg.User)))
+		trace.WithAttributes(attribute.String("chat.user", msg.User)))
 	defer span.End()
 
 	// increment the Prometheus counter
