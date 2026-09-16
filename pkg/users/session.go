@@ -304,11 +304,12 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 // discards all of it and the !miles reply reads backwards. Runs on a cron, so
 // a crash costs one interval instead of the whole session.
 func (s *Sessions) CheckpointMiles(ctx context.Context) {
-	for username := range s.sessionSnapshot() {
-		user, ok := s.get(username)
-		if !ok {
-			continue
-		}
+	// The snapshot carries each User, so the pass costs no per-user lookup.
+	// sessionMiles reads the banked figure from the live session either way,
+	// and returns 0 for anyone who logged out since — which the check below
+	// already skips.
+	for _, user := range s.sessionSnapshot() {
+		username := user.Username
 		miles := s.sessionMiles(ctx, user)
 		if miles <= 0 {
 			continue
