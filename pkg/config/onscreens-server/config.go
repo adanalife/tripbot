@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/contract"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -19,6 +20,9 @@ func Load() (*OnscreensServerConfig, error) {
 	var cfg OnscreensServerConfig
 	if err := envconfig.Process("ONSCREENS_SERVER", &cfg); err != nil {
 		return nil, fmt.Errorf("could not load config: %w", err)
+	}
+	if cfg.OnscreensServerBindAddress == "" {
+		cfg.OnscreensServerBindAddress = fmt.Sprintf(":%d", contract.PortOnscreensHTTP)
 	}
 	return &cfg, nil
 }

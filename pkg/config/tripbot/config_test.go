@@ -2,7 +2,10 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"testing"
+
+	"github.com/adanalife/tripbot/pkg/contract"
 )
 
 // Load normalizes ChannelName so no caller has to lowercase it. This fails if a
@@ -38,5 +41,20 @@ func TestLoadLowercasesBotUsername(t *testing.T) {
 
 	if got := Load().BotUsername; got != "tripbot4000" {
 		t.Errorf("Load().BotUsername = %q, want %q", got, "tripbot4000")
+	}
+}
+
+// The webserver's port is the contract's, not a literal spelled in a struct
+// tag — a rename there has to reach the binary, which is the direction
+// pkg/contract exists to hold. An explicit TRIPBOT_SERVER_PORT still wins.
+func TestLoadPortDefaultsToTheContract(t *testing.T) {
+	t.Setenv("TRIPBOT_SERVER_PORT", "")
+	if got, want := Load().TripbotServerPort, strconv.Itoa(contract.PortTripbotHTTP); got != want {
+		t.Errorf("Load().TripbotServerPort = %q, want %q", got, want)
+	}
+
+	t.Setenv("TRIPBOT_SERVER_PORT", "9999")
+	if got := Load().TripbotServerPort; got != "9999" {
+		t.Errorf("Load().TripbotServerPort = %q, want %q", got, "9999")
 	}
 }

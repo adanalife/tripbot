@@ -3,9 +3,11 @@ package config
 import (
 	"log"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/contract"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -27,6 +29,10 @@ func Load() *TripbotConfig {
 	// oauth_tokens lookup, whose rows the platform-gateway writes from Twitch's
 	// `login` field, which is always lowercase: a mixed-case BOT_USERNAME would
 	// match no row and the bot would come up with no token.
+	if cfg.TripbotServerPort == "" {
+		cfg.TripbotServerPort = strconv.Itoa(contract.PortTripbotHTTP)
+	}
+
 	cfg.ChannelName = strings.ToLower(cfg.ChannelName)
 	cfg.BotUsername = strings.ToLower(cfg.BotUsername)
 

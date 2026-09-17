@@ -23,8 +23,14 @@ from constructs import Construct
 import imports.k8s as k8s
 from adanalife_k8s import appconfig, configmap, scheduling
 from adanalife_k8s.config import EnvConfig
+from adanalife_k8s.contract import load_contract
 from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.naming import app_name, meta_labels, selector
+
+
+# The contract's ports, so a rename in pkg/contract reaches the manifests
+# rather than drifting against a literal spelled here.
+_PORTS = load_contract()
 
 
 class OnscreensServer(Construct):
@@ -70,7 +76,11 @@ class OnscreensServer(Construct):
                 allow_privilege_escalation=False,
                 capabilities=k8s.Capabilities(drop=["ALL"]),
             ),
-            ports=[k8s.ContainerPort(name="http", container_port=8080)],
+            ports=[
+                k8s.ContainerPort(
+                    name="http", container_port=_PORTS.port("onscreens_http")
+                )
+            ],
             env_from=[
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
@@ -186,7 +196,7 @@ class OnscreensServer(Construct):
                 ports=[
                     k8s.ServicePort(
                         name="http",
-                        port=8080,
+                        port=_PORTS.port("onscreens_http"),
                         target_port=k8s.IntOrString.from_string("http"),
                     )
                 ],

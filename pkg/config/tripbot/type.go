@@ -35,8 +35,10 @@ type TripbotConfig struct {
 	// (pkg/oauthtokens) — those still write. Off in every deployed env.
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 
-	// TripbotServerPort is used to specify the port on which the webserver runs
-	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
+	// TripbotServerPort is the port the webserver runs on. Unset, it is the
+	// port the contract declares — a struct tag can't hold a computed value,
+	// so the default is applied in Load rather than spelled here.
+	TripbotServerPort string `envconfig:"TRIPBOT_SERVER_PORT"`
 	// PlayoutHost is the host:port of playout's playback HTTP API
 	// (/playout/current).
 	PlayoutHost string `required:"true" envconfig:"PLAYOUT_HOST"`

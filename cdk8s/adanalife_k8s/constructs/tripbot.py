@@ -41,6 +41,7 @@ from constructs import Construct
 import imports.k8s as k8s
 from adanalife_k8s import appconfig, configmap, eso, scheduling
 from adanalife_k8s.config import EnvConfig
+from adanalife_k8s.contract import load_contract
 from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.eso import ESData
 from adanalife_k8s.naming import app_name, meta_labels, selector
@@ -75,13 +76,17 @@ SMALL_RESOURCES = k8s.ResourceRequirements(
     }
 )
 
+# The contract's ports, so a rename in pkg/contract reaches the manifests
+# rather than drifting against a literal spelled here.
+_PORTS = load_contract()
+
 # Constant base ConfigMap literals (base kustomization configMapGenerator). The
 # sibling-service hosts (PLAYOUT_HOST, ONSCREENS/OBS_SERVER_HOST) are per-platform, so
 # they're assembled in config_data() from app_name rather than held as literals.
 _BASE_CONFIG = {
     "READ_ONLY": "false",
     "DATABASE_HOST": "postgres",
-    "TRIPBOT_SERVER_PORT": "8080",
+    "TRIPBOT_SERVER_PORT": str(_PORTS.port("tripbot_http")),
 }
 
 
@@ -148,14 +153,20 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # bare "postgres" when co-located (parity); cross-namespace FQDN when the DB
     # is isolated in its own namespace (env.data_namespace).
     data["DATABASE_HOST"] = env.postgres_host
-    data["PLAYOUT_HOST"] = f"{app_name('playout', platform)}:8080"
-    data["ONSCREENS_SERVER_HOST"] = f"{app_name('onscreens', platform)}:8080"
-    data["OBS_SERVER_HOST"] = f"{app_name('obs', platform)}:8080"
-    # OBS WebSocket control addr (port 4455) — distinct from OBS_SERVER_HOST's
-    # :8080 Flask health server. Read directly by tripbot's pkg/obs (watchdog +
-    # stream start/stop); must be per-platform so the YouTube stack dials
-    # obs-youtube, not obs-twitch.
-    data["OBS_WEBSOCKET_ADDR"] = f"{app_name('obs', platform)}:4455"
+    data["PLAYOUT_HOST"] = (
+        f"{app_name('playout', platform)}:{_PORTS.port('playout_http')}"
+    )
+    data["ONSCREENS_SERVER_HOST"] = (
+        f"{app_name('onscreens', platform)}:{_PORTS.port('onscreens_http')}"
+    )
+    data["OBS_SERVER_HOST"] = f"{app_name('obs', platform)}:{_PORTS.port('obs_server')}"
+    # OBS WebSocket control addr — distinct from OBS_SERVER_HOST's Flask health
+    # server. Read directly by tripbot's pkg/obs (watchdog + stream start/stop);
+    # must be per-platform so the YouTube stack dials obs-youtube, not
+    # obs-twitch.
+    data["OBS_WEBSOCKET_ADDR"] = (
+        f"{app_name('obs', platform)}:{_PORTS.port('obs_websocket')}"
+    )
     # tripbot's Run() branches on STREAM_PLATFORM (chat transport, command
     # allowlist, Twitch-only boot steps). twitch is the binary's default, so —
     # same idiom as the OBS chart — only non-twitch instances carry the key,
@@ -325,7 +336,11 @@ class Tripbot(Construct):
             image=image,
             image_pull_policy=pull,
             security_context=hardened,
-            ports=[k8s.ContainerPort(name="http", container_port=8080)],
+            ports=[
+                k8s.ContainerPort(
+                    name="http", container_port=_PORTS.port("tripbot_http")
+                )
+            ],
             # USER must be set so OTel's process resource detector (user.Current)
             # doesn't crash telemetry init on a no-/etc/passwd uid-65532 binary.
             env=[k8s.EnvVar(name="USER", value="tripbot")],
@@ -445,7 +460,7 @@ class Tripbot(Construct):
                 ports=[
                     k8s.ServicePort(
                         name="http",
-                        port=8080,
+                        port=_PORTS.port("tripbot_http"),
                         target_port=k8s.IntOrString.from_string("http"),
                     )
                 ],
