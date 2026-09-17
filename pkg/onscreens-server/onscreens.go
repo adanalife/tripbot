@@ -25,6 +25,9 @@ type Onscreen struct {
 	expires       time.Time
 	dontExpire    bool
 	sleepInterval time.Duration
+	// done ends the background loop. Closed by stop().
+	done     chan struct{}
+	stopOnce sync.Once
 }
 
 // onscreenView is an Onscreen's JSON wire format, served by
@@ -45,23 +48,35 @@ func newOnscreen(sleepInterval time.Duration) *Onscreen {
 	osc := &Onscreen{
 		expires:       time.Now(),
 		sleepInterval: sleepInterval,
+		done:          make(chan struct{}),
 	}
 	// start the background loop
 	go osc.backgroundLoop()
 	return osc
 }
 
-// backgroundLoop will loop forever, hiding the Onscreen if needed
-// TODO: add signal to end the loop
+// stop ends the background loop. An overlay lives as long as the process does,
+// so this is a lifecycle seam rather than something the server calls: it lets a
+// test wind the loop down once it has asserted on what the sweep did.
+func (osc *Onscreen) stop() {
+	osc.stopOnce.Do(func() { close(osc.done) })
+}
+
+// backgroundLoop hides the Onscreen once its display window passes, until
+// stop() ends it.
 func (osc *Onscreen) backgroundLoop() {
-	for { // forever
+	for {
 		osc.mu.Lock()
 		if osc.isShowing && osc.expiredLocked() {
 			osc.isShowing = false
 		}
 		interval := osc.sleepInterval
 		osc.mu.Unlock()
-		time.Sleep(interval)
+		select {
+		case <-osc.done:
+			return
+		case <-time.After(interval):
+		}
 	}
 }
 

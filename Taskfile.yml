@@ -18,24 +18,42 @@ tasks:
     cmds:
       - task --list
 
+  # The test image is a thin layer over the mirrored Go base, so a local copy
+  # built months ago still satisfies compose and silently runs an old toolchain
+  # against a go.mod that has moved on. Rebuilding with --pull refreshes the
+  # base; the version check turns the resulting failure into a legible one.
+  test:image:
+    desc: Rebuild the test image against the latest mirrored Go base and verify its toolchain satisfies go.mod
+    cmds:
+      - "{{.COMPOSE}} build --pull test"
+      - >-
+        {{.COMPOSE}} run --rm --no-deps test bash -c 'want=$(grep -m1 "^go " go.mod | cut -d" " -f2);
+        got=$(go version | cut -d" " -f3 | sed "s/^go//");
+        printf "%s\n%s\n" "$want" "$got" | sort -V -C ||
+        { echo "test image ships Go $got, but go.mod requires >= $want" >&2; exit 1; }'
+
   test:
     desc: Run all unit tests
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test go test ./..."
 
   test:cover:
     desc: Run tests with coverage + race detector; prints per-function and total coverage
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'"
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'"
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test go test -race ./..."
 
@@ -57,13 +75,14 @@ tasks:
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
+    deps: [test:image]
     cmds:
       - "{{.COMPOSE}} run --rm test bash"
 
-  # Twitch OAuth consent + token bootstrap is owned by the platform-gateway now
-  # (gateway-twitch's /auth/* flow writes the oauth_tokens rows). The old
-  # `auth:bootstrap*` tasks + cmd/auth-bootstrap were removed with that cutover;
-  # re-auth is a browser click at the gateway consent page (surfaced in tripbot-console).
+  # Twitch OAuth consent + token bootstrap is owned by the platform-gateway
+  # (gateway-twitch's /auth/* flow writes the oauth_tokens rows), so there's no
+  # auth-bootstrap task here: re-auth is a browser click at the gateway consent
+  # page (surfaced in tripbot-console).
 
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
@@ -137,8 +156,24 @@ tasks:
   # bridges use. cdk8s reads it into SUPPORTED_PLATFORMS; never hand-edit it here.
   platforms:sync:
     desc: Re-sync platforms.json from the sibling platform-gateway checkout (the source of truth)
+    vars:
+      # The sibling checkouts sit next to this repo's *main* worktree, which is
+      # not the working directory when this runs from ~/adanalife/worktrees/ —
+      # there, `..` is the worktrees dir. `--git-common-dir` always names the
+      # shared .git regardless of which worktree asks, so its grandparent is the
+      # siblings' parent either way. `--path-format=absolute` matters: from the
+      # main checkout the common dir is the relative `.git`, whose grandparent
+      # would otherwise be `.`.
+      SIBLINGS:
+        sh: dirname "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    preconditions:
+      # The copy reads the sibling's working tree, and a checkout behind
+      # origin/main syncs stale content and succeeds silently. Refuse unless the
+      # synced file matches origin/main.
+      - sh: git -C {{.SIBLINGS}}/platform-gateway fetch -q origin && git -C {{.SIBLINGS}}/platform-gateway diff --quiet origin/main -- platforms.json
+        msg: "{{.SIBLINGS}}/platform-gateway platforms.json differs from origin/main — pull that checkout (or push its change) first; syncing from it copies stale content"
     cmds:
-      - cp ../platform-gateway/platforms.json platforms.json
+      - cp {{.SIBLINGS}}/platform-gateway/platforms.json platforms.json
 
   # cdk8s — the Python authoring layer for tripbot's app workload manifests
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
@@ -193,6 +228,20 @@ tasks:
       - task: cdk8s:synth
       - git diff --exit-code -- dist/ || { echo "dist/ is stale — run task cdk8s:synth and commit"; exit 1; }
 
+  # Schema-validate the committed dist/*.k8s.yaml (what Argo actually applies)
+  # against the cluster's k8s API version — catches API-version drift after a
+  # k8s bump. dist/apps/*.json is the ApplicationSet discovery index (see
+  # main.py), not a manifest, so the glob excludes it. CRD kinds resolve via
+  # the datree CRDs-catalog; anything not there is skipped, not failed. The
+  # {{`{{.Group}}`}} backtick wrapping keeps kubeconform's URL template out of
+  # Task's own templating. Mirrored in cdk8s-synth.yml.
+  cdk8s:validate:
+    desc: Validate the committed dist/*.k8s.yaml manifests against the k8s API schemas (kubeconform)
+    dir: cdk8s
+    cmds:
+      # -kubernetes-version tracks the live cluster (kubectl version); bump it with talos upgrades
+      - mise exec -- kubeconform -strict -summary -kubernetes-version 1.36.0 -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{`{{.Group}}`}}/{{`{{.ResourceKind}}`}}_{{`{{.ResourceAPIVersion}}`}}.json' -ignore-missing-schemas dist/*.k8s.yaml
+
   cdk8s:verify:
     desc: The cdk8s edit loop in one step — synth, show what changed in dist/, run the synth-time checks
     dir: cdk8s
@@ -236,7 +285,7 @@ tasks:
       # change (its tag + any config delta this release introduced). DISTNAME
       # strips the -server suffix (onscreens-server -> onscreens); tripbot is
       # unchanged.
-      - mise exec -- uv run cdk8s synth
+      - mise exec -- uv run npx cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"
         others=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)' | grep -v "prod-1-${distname}-" || true)

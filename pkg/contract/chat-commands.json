@@ -17,7 +17,8 @@
       "aliases": [
         "!bed",
         "!carsound",
-        "!carhum"
+        "!carhum",
+        "!radio"
       ],
       "platforms": [
         "facebook",
@@ -63,7 +64,8 @@
       "aliases": [
         "!command",
         "!controls",
-        "!hello"
+        "!hello",
+        "!help"
       ],
       "platforms": [
         "facebook",
@@ -165,6 +167,7 @@
     },
     {
       "trigger": "!givemiles",
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]
@@ -219,16 +222,6 @@
       ]
     },
     {
-      "trigger": "!help",
-      "platforms": [
-        "facebook",
-        "instagram",
-        "tiktok",
-        "twitch",
-        "youtube"
-      ]
-    },
-    {
       "trigger": "!instagram",
       "aliases": [
         "!ig",
@@ -260,7 +253,8 @@
         "!lb",
         "!mlb",
         "!ldb",
-        "!ldbd"
+        "!ldbd",
+        "!top"
       ],
       "requires_follow": true,
       "platforms": [
@@ -275,7 +269,9 @@
         "!town",
         "!where",
         "!loc",
-        "!loclistion"
+        "!loclistion",
+        "where is this",
+        "where is this?"
       ],
       "requires_follow": true,
       "platforms": [
@@ -288,12 +284,14 @@
     },
     {
       "trigger": "!makebot",
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]
     },
     {
       "trigger": "!middle",
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]
@@ -313,6 +311,7 @@
       "aliases": [
         "!refreshoverlay"
       ],
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]
@@ -335,12 +334,14 @@
     },
     {
       "trigger": "!secretinfo",
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]
     },
     {
       "trigger": "!shutdown",
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]
@@ -472,6 +473,7 @@
     },
     {
       "trigger": "!unbot",
+      "requires_admin": true,
       "platforms": [
         "twitch"
       ]

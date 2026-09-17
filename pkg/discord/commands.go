@@ -28,6 +28,7 @@ var catalogue = []commandSummary{
 	{name: "leaderboard", description: "Top miles this month"},
 	{name: "totalleaderboard", description: "Top miles of all time"},
 	{name: "guessleaderboard", description: "Top correct guesses this month"},
+	{name: "lastmonth", description: "Last month's final boards: top miles and correct guesses"},
 }
 
 // commandDefinitions returns the discordgo.ApplicationCommand list to
@@ -74,6 +75,8 @@ func (s *Session) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		s.runLifetimeLeaderboard(ctx, i)
 	case "guessleaderboard":
 		s.runLeaderboard(ctx, i, "Correct Guesses This Month", scoreboards.CurrentGuessScoreboard, true)
+	case "lastmonth":
+		s.runLastMonth(ctx, i)
 	case "commands":
 		s.runCommands(ctx, i)
 	default:
@@ -129,6 +132,35 @@ func (s *Session) runLifetimeLeaderboard(ctx context.Context, i *discordgo.Inter
 	s.editReplyEmbed(ctx, i, leaderboardEmbed("Total Miles", entries))
 }
 
+// runLastMonth posts last month's two boards as they stood at month end. The
+// rollup tick freezes them into scoreboard_snapshots on its first pass after
+// rollover, so this reads a final result, not a live one — the same numbers
+// whenever it is asked. Both boards ride one reply; a month with no snapshot
+// yet says so rather than posting an empty embed.
+func (s *Session) runLastMonth(ctx context.Context, i *discordgo.InteractionCreate) {
+	if err := s.deferReply(i); err != nil {
+		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "command", "lastmonth")
+		return
+	}
+	month := scoreboards.PreviousMonthLabel()
+	miles := scoreboards.SnapshotTopUsers(ctx, s.cfg, scoreboards.PreviousMilesScoreboard(), leaderboardSize)
+	guesses := filterNonZeroInts(scoreboards.SnapshotTopUsers(ctx, s.cfg, scoreboards.PreviousGuessScoreboard(), leaderboardSize))
+	var embeds []*discordgo.MessageEmbed
+	for _, board := range []struct {
+		title   string
+		entries [][]string
+	}{{"Miles — " + month, miles}, {"Correct Guesses — " + month, guesses}} {
+		if e := leaderboardEmbed(board.title, board.entries); e != nil {
+			embeds = append(embeds, e)
+		}
+	}
+	if len(embeds) == 0 {
+		s.editReplyText(ctx, i, fmt.Sprintf("No final boards for %s yet — they're frozen on the first rollup tick after month end.", month))
+		return
+	}
+	s.editReplyEmbed(ctx, i, embeds...)
+}
+
 // runCommands renders the static catalogue as an ephemeral embed.
 // Pure-function reply — no DB, no async, no risk of timing out the
 // 3-second initial response window. Discord renders it only to the
@@ -169,8 +201,7 @@ func (s *Session) deferReply(i *discordgo.InteractionCreate) error {
 	})
 }
 
-func (s *Session) editReplyEmbed(ctx context.Context, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	embeds := []*discordgo.MessageEmbed{embed}
+func (s *Session) editReplyEmbed(ctx context.Context, i *discordgo.InteractionCreate, embeds ...*discordgo.MessageEmbed) {
 	if _, err := s.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds}); err != nil {
 		slog.ErrorContext(ctx, "discord edit embed reply failed", "err", err)
 	}

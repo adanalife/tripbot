@@ -24,4 +24,12 @@ jobs:
       # duplicate-Authorization 400 on fetch).
       - uses: golang/govulncheck-action@v1
         with:
+          # go-version-input defaults to 'stable' and the action hands both it
+          # and go-version-file to setup-go, which prefers go-version. Left at
+          # the default, go-version-file is dead and the scan runs on whatever
+          # is newest -- so every stdlib fix between our pin and current stable
+          # reads as already-fixed. Blanking it restores go.mod as the source
+          # of truth, which is the toolchain the binaries are actually built
+          # with.
+          go-version-input: ''
           go-version-file: go.mod

@@ -9,24 +9,24 @@ metadata:
 data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
-  COMPED_SUBSCRIBERS: reapermoss
-  DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
+  COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
+  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local
   ENV: production
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-twitch:8080
   OBS_WEBSOCKET_ADDR: obs-twitch:4455
   ONSCREENS_SERVER_HOST: onscreens-twitch:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
+  PLAYOUT_HOST: playout-twitch:8080
   READ_ONLY: "false"
   SENTRY_ENVIRONMENT: prod-1
   TRIPBOT_SERVER_PORT: "8080"
   TWITCH_API_URL: http://gateway-twitch.prod-1.svc.cluster.local:8080
-  VLC_SERVER_HOST: playout-twitch:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: ba5232c5e3
+        adanalife.dev/config-hash: f03c2c956e
       labels:
         app: tripbot-twitch
     spec:
@@ -58,9 +58,6 @@ spec:
             - secretRef:
                 name: tripbot-database-creds
             - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
-            - secretRef:
                 name: sentry-tripbot
                 optional: true
             - secretRef:
@@ -73,7 +70,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:4.21.0
+          image: adanalife/tripbot:5.11.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -104,8 +101,8 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - mountPath: /opt/tripbot/assets/music
-              name: music
+            - mountPath: /opt/tripbot/assets/music-index
+              name: music-index
               readOnly: true
       initContainers:
         - args:
@@ -121,7 +118,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.21.0
+          image: adanalife/tripbot:5.11.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -141,10 +138,57 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       volumes:
-        - name: music
-          persistentVolumeClaim:
-            claimName: obs-music-local
-            readOnly: true
+        - configMap:
+            name: obs-music-index
+            optional: true
+          name: music-index
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  labels:
+    app.kubernetes.io/name: tripbot-twitch
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-twitch-image-gate
+  namespace: prod-1
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tripbot-twitch
+        app.kubernetes.io/part-of: tripbot
+    spec:
+      containers:
+        - args:
+            - manifest
+            - adanalife/tripbot:5.11.0
+          image: gcr.io/go-containerregistry/crane:v0.21.7
+          name: image-gate
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+  ttlSecondsAfterFinished: 86400
 ---
 apiVersion: v1
 kind: Service
@@ -162,32 +206,3 @@ spec:
   selector:
     app: tripbot-twitch
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-twitch.prod.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-twitch
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-twitch
-  namespace: prod-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-twitch.prod.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-twitch
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-twitch.prod.whereisdana.today
-      secretName: tripbot-twitch-tls

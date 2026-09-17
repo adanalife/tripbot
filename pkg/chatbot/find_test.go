@@ -41,7 +41,7 @@ func newFindTestApp(t *testing.T, search Search) (*App, *recordingPlayout, *reco
 }
 
 func TestFindCmd_JumpsToClosestHit(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	pinFindRandIntn(t, 0) // force the closest moment so the jump is assertable
 	search := &recordingSearch{Hits: []SearchHit{
 		{Slug: "2018_0514_224801_013", TsSec: 163.5, State: "Nevada", Distance: 0.21},
@@ -68,7 +68,7 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 }
 
 func TestFindCmd_NoHits(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Hits: nil})
 
 	runAsAdmin(t, func() {
@@ -84,7 +84,7 @@ func TestFindCmd_NoHits(t *testing.T) {
 }
 
 func TestFindCmd_DistanceTooFarIsAMiss(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	// A hit exists but it's past the distance ceiling — treat as a miss rather
 	// than yanking the stream to a bad match.
 	search := &recordingSearch{Hits: []SearchHit{{Slug: "x", TsSec: 1, Distance: findMaxDistance + 0.01}}}
@@ -103,7 +103,7 @@ func TestFindCmd_DistanceTooFarIsAMiss(t *testing.T) {
 }
 
 func TestFindCmd_SearchError(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Err: errors.New("responder down")})
 
 	runAsAdmin(t, func() {
@@ -119,7 +119,7 @@ func TestFindCmd_SearchError(t *testing.T) {
 }
 
 func TestFindCmd_NoArgsShowsUsage(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	search := &recordingSearch{}
 	app, recPlayout, recChat := newFindTestApp(t, search)
 

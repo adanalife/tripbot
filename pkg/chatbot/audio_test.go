@@ -53,7 +53,7 @@ type fakeBeds struct {
 
 const testTrack = "/opt/tripbot/assets/music/fifty-horizons/Colorado Sunrise.mp3"
 
-func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+func (f *fakeBeds) Playing() (beds.Bed, string) { return f.bed, f.track }
 
 func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
 	f.feeds++
@@ -202,7 +202,15 @@ func newAudioTestApp(t *testing.T, bed beds.Bed, track string) (*App, *fakeBeds,
 	app := newTestApp(video.Video{})
 	fake := &fakeBeds{bed: bed, track: track}
 	app.Beds = fake
-	return app, fake, captureSay(t, app)
+	out, says := captureSay(t, app)
+	// Every command exercised through this app answers with a single chat
+	// line, so the count is asserted here rather than in all sixteen tests.
+	t.Cleanup(func() {
+		if says() != 1 {
+			t.Errorf("expected exactly one Say() call, got %d", says())
+		}
+	})
+	return app, fake, out
 }
 
 func TestAudioCmd_ViewerGetsReportWithoutSwitching(t *testing.T) {
@@ -403,12 +411,15 @@ func TestAudioCmd_FailedSwitchDoesNotClaimSuccess(t *testing.T) {
 func TestAudioCmd_NoBedStoreReportsUnavailable(t *testing.T) {
 	app := newTestApp(video.Video{})
 	app.Beds = nil
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"album"})
 
 	if got := out(); got == "" {
 		t.Error("expected an unavailable message rather than silence")
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -419,7 +430,7 @@ func TestAudio_AvailableOnEveryPlatform(t *testing.T) {
 		app := newTestApp(video.Video{})
 		app.Platform = platform
 		app.indexCommands()
-		if cmd, _ := app.findCommand("!audio"); cmd == nil {
+		if cmd, _, _ := app.findCommand("!audio"); cmd == nil {
 			t.Errorf("!audio must be available on %s", platform)
 		}
 	}

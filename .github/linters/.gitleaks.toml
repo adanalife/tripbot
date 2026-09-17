@@ -13,8 +13,8 @@ description = "tripbot repo allowlists for non-secret strings"
 # The public ADanaLife Discord guild snowflake (607964164220125258). It appears
 # in the cdk8s Tripbot construct (stage's config block) AND in the rendered
 # cdk8s/dist manifests; allowlist the value itself so both are covered. Not a
-# secret — it's visible on Discord invite previews; the bot token lives in AWS
-# Secrets Manager (k8s/tripbot/discord-bot-token) and never in this repo.
+# secret — it's visible on Discord invite previews; the bot token lives in SSM
+# Parameter Store (/k8s/tripbot/discord-bot-token) and never in this repo.
 # gitleaks' discord-client-id rule false-positives on the 18-digit numeric value.
 regexes = [
   '''607964164220125258''',

@@ -10,9 +10,9 @@ on:
   push:
     tags:
       - v*
-  # release-please.yml dispatches this at the tag it just created — a
-  # GITHUB_TOKEN-created tag can't fire the push trigger above. The push
-  # trigger stays for manually-pushed tags.
+  # A manual re-deploy of an existing tag, for when the push-triggered run
+  # failed on something outside the code (a registry hiccup, an expired
+  # token). Pick the tag as the ref.
   workflow_dispatch:
 
 jobs:
@@ -64,7 +64,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Only the tag push announces. A workflow_dispatch run re-deploys a tag
+      # that already shipped, which is operational rather than news. The alert
+      # below stays unconditional: a re-deploy going red is exactly the case
+      # worth paging on.
       - name: Discord notification
+        if: github.event_name == 'push'
         # A rotated or deleted webhook returns 404 and must not fail a release
         # that already shipped; the notification is best-effort.
         continue-on-error: true
@@ -73,8 +78,8 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           VERSION_TAG: ${{ github.ref_name }}
         with:
-          # Link the tagged CHANGELOG.md, not a payload `compare` URL: releases
-          # dispatch via workflow_dispatch, whose event payload has no `compare`.
+          # Link the tagged CHANGELOG.md, not a payload `compare` URL: one wording
+          # fleet-wide, so a release reads the same whichever repo it came from.
           args: 'New release for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.repository.html_url }}/blob/{{ VERSION_TAG }}/CHANGELOG.md)'
 
   # Nothing else says a release went red. The release PR merged green long

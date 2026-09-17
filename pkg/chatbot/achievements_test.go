@@ -11,7 +11,7 @@ import (
 func TestAchievementsCmd_NoneYet(t *testing.T) {
 	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	mock.ExpectQuery(`SELECT title FROM achievements`).
 		WithArgs("twitch", "caller").
@@ -31,7 +31,7 @@ func TestAchievementsCmd_NoneYet(t *testing.T) {
 func TestAchievementsCmd_ListsNewestFirstAndCaps(t *testing.T) {
 	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	rows := sqlmock.NewRows([]string{"title"})
 	for _, title := range []string{

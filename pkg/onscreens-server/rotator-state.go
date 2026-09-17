@@ -83,7 +83,10 @@ func readRotatorConfig(ctx context.Context, js jetstream.JetStream, env, platfor
 func (s *Server) RestoreRotatorCopy(ctx context.Context) {
 	js := natsclient.JetStream()
 	if err := EnsureRotatorConfigStream(ctx, js, s.cfg.Environment); err != nil {
-		slog.ErrorContext(ctx, "couldn't ensure rotator config stream", "err", err)
+		// Warn rather than error: the only way this fails in practice is NATS
+		// not being reachable yet at boot, and the restore is best-effort — the
+		// copy comes back on tripbot's next publish.
+		slog.WarnContext(ctx, "couldn't ensure rotator config stream", "err", err)
 		return
 	}
 	cfg, ok := readRotatorConfig(ctx, js, s.cfg.Environment, s.cfg.Platform)

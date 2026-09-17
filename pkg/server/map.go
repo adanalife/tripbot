@@ -1,11 +1,17 @@
 package server
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"math"
 	"net/http"
+	"sync"
+	"time"
 
+	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -13,10 +19,25 @@ import (
 // overridable in tests so the handler renders without a DB.
 var corpusRoute = video.CorpusRoute
 
-// maxCorpusPoints caps the corpus polyline. It's a faint background route, so a
-// few thousand points is ample detail — and keeps the JSON + the Leaflet path
-// light. Larger corpora are evenly downsampled.
-const maxCorpusPoints = 2500
+// corpusEpsilonMeters is how far the drawn line may stray from the real one.
+// Simplification keeps whichever points are needed to hold that bound, so the
+// budget is spent on curves and switchbacks and nothing is spent on the
+// straight interstate runs — which is what an evenly-spaced sample gets
+// backwards. Measured over the corpus: 100 m keeps 9,465 of 398,684 points
+// (65 KB gzipped) with every real bend intact. Lower it for more fidelity;
+// 50 m roughly doubles the point count.
+const corpusEpsilonMeters = 100
+
+// maxCorpusPoints is a backstop on the simplified polyline, not the thing that
+// decides its shape — corpusEpsilonMeters does that, and lands well under this.
+// It exists so a future corpus several times the size can't quietly turn into a
+// multi-megabyte response; if it ever binds, raise the epsilon rather than this.
+const maxCorpusPoints = 25000
+
+// corpusTTL is how long a built response is reused. The corpus only changes
+// when new footage is ingested, and the handler's own Cache-Control promises
+// the same hour downstream.
+const corpusTTL = time.Hour
 
 // maxRouteGapMiles is the jump between consecutive clips above which the route
 // is split into a new segment. The van often resumed recording hundreds of
@@ -25,53 +46,176 @@ const maxCorpusPoints = 2500
 // miles, so this threshold cleanly separates trip boundaries from real travel.
 const maxRouteGapMiles = 25
 
+// corpusCache holds the built response so the route is read and simplified
+// once an hour rather than once per click. Reading a few hundred thousand
+// track points and simplifying them takes long enough to be worth not doing on
+// a toggle, and the corpus only changes at ingest. Holding the encoded bytes
+// (not the points) also keeps the JSON encode off the request path.
+var corpusCache struct {
+	sync.Mutex
+	body []byte
+	// builtAt is zero until the first successful build; a failed read isn't
+	// cached, so a DB blip doesn't pin an empty route for an hour.
+	builtAt time.Time
+}
+
+// corpusBody returns the encoded route, building it if the cache is cold or
+// stale. Errors yield nil, which the handler serves as an empty route — the
+// overlay is decoration, so it degrades rather than failing the page.
+func corpusBody(ctx context.Context) []byte {
+	corpusCache.Lock()
+	defer corpusCache.Unlock()
+	if corpusCache.body != nil && time.Since(corpusCache.builtAt) < corpusTTL {
+		return corpusCache.body
+	}
+	pts := corpusRoute(ctx)
+	if len(pts) == 0 {
+		return nil
+	}
+	segs := splitOnGaps(pts, maxRouteGapMiles)
+	for i, seg := range segs {
+		segs[i].Points = downsample(simplify(seg.Points, corpusEpsilonMeters), maxCorpusPoints)
+	}
+	body, err := json.Marshal(segs)
+	if err != nil {
+		slog.ErrorContext(ctx, "couldn't encode corpus route", "err", err)
+		return nil
+	}
+	slog.InfoContext(ctx, "built corpus route",
+		"raw_points", len(pts), "segments", len(segs), "bytes", len(body))
+	corpusCache.body, corpusCache.builtAt = body, time.Now()
+	return body
+}
+
 // mapCorpusHandler serves GET /admin/map/corpus: the full dashcam route as JSON
-// [[[lat,lng],…],…] — a list of segments, broken wherever consecutive clips
-// jump more than maxRouteGapMiles (trip boundaries). Leaflet renders a nested
-// array as a multi-polyline, so each segment draws as a disconnected line.
+// [{"band":…,"points":[[lat,lng],…]},…] — a list of segments, broken wherever
+// consecutive points jump more than maxRouteGapMiles (trip boundaries) or the
+// band changes. One band per segment is what lets Leaflet colour it: a polyline
+// is a single colour, so the split does the work a gradient would otherwise.
 // Loaded lazily by the map's "show full route" toggle, cached an hour (the
 // corpus rarely changes).
 func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
-	segs := splitOnGaps(downsample(corpusRoute(r.Context()), maxCorpusPoints), maxRouteGapMiles)
+	body := corpusBody(r.Context())
+	if body == nil {
+		body = []byte("[]")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	if err := json.NewEncoder(w).Encode(segs); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't encode corpus route", "err", err)
+	if _, err := w.Write(body); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't write corpus route", "err", err)
 	}
+}
+
+// routeSegment is one drawable run of the route: points that are contiguous in
+// space and share a band, so the whole thing renders as one coloured polyline.
+type routeSegment struct {
+	Band   string       `json:"band"`
+	Points [][2]float64 `json:"points"`
 }
 
 // splitOnGaps breaks an ordered point list into contiguous segments, starting a
 // new segment whenever the great-circle distance between consecutive points
-// exceeds maxMiles. Returns an empty (non-nil) slice for empty input so the JSON
-// is [] rather than null.
-func splitOnGaps(pts [][2]float64, maxMiles float64) [][][2]float64 {
-	segs := make([][][2]float64, 0)
+// exceeds maxMiles, or the band changes. Returns an empty (non-nil) slice for
+// empty input so the JSON is [] rather than null.
+//
+// A band change repeats the boundary point in both segments. Without it the
+// line has a hole at every transition — and with 139 bridged clips scattered
+// through the corpus that is 139 visible breaks in a line that never stopped.
+func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
+	segs := make([]routeSegment, 0)
 	if len(pts) == 0 {
 		return segs
 	}
-	cur := [][2]float64{pts[0]}
+	cur := routeSegment{Band: pts[0].Band, Points: [][2]float64{{pts[0].Lat, pts[0].Lng}}}
 	for i := 1; i < len(pts); i++ {
 		prev, p := pts[i-1], pts[i]
-		if milesBetween(prev[0], prev[1], p[0], p[1]) > maxMiles {
+		xy := [2]float64{p.Lat, p.Lng}
+		switch {
+		case helpers.MilesBetween(prev.Lat, prev.Lng, p.Lat, p.Lng) > maxMiles:
 			segs = append(segs, cur)
-			cur = [][2]float64{p}
-			continue
+			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
+		case p.Band != cur.Band:
+			// Carry the shared point across so the two colours meet.
+			cur.Points = append(cur.Points, xy)
+			segs = append(segs, cur)
+			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
+		default:
+			cur.Points = append(cur.Points, xy)
 		}
-		cur = append(cur, p)
 	}
 	return append(segs, cur)
 }
 
-// milesBetween returns the great-circle (haversine) distance in miles between
-// two lat/lng points.
-func milesBetween(lat1, lng1, lat2, lng2 float64) float64 {
-	const earthRadiusMiles = 3958.8
-	rad := math.Pi / 180
-	dLat := (lat2 - lat1) * rad
-	dLng := (lng2 - lng1) * rad
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
-	return earthRadiusMiles * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+// simplify drops the points that don't change the shape of the line:
+// Ramer–Douglas–Peucker, keeping every point that would otherwise sit more than
+// epsilon metres from the simplified path. Endpoints are always kept, so a
+// segment never shortens.
+//
+// This is the opposite trade to downsample. An evenly-spaced sample spends the
+// same number of points on a straight interstate run as on a switchback, so
+// raising its budget mostly buys more points on the straight parts; this spends
+// them where the road actually bends.
+func simplify(pts [][2]float64, epsilon float64) [][2]float64 {
+	if len(pts) < 3 {
+		return pts
+	}
+	keep := make([]bool, len(pts))
+	keep[0], keep[len(pts)-1] = true, true
+
+	// Explicit stack rather than recursion: the corpus is a few hundred
+	// thousand points, and a pathological near-collinear run would recurse
+	// once per point.
+	type span struct{ i, j int }
+	stack := []span{{0, len(pts) - 1}}
+	for len(stack) > 0 {
+		s := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if s.j <= s.i+1 {
+			continue
+		}
+		worst, at := 0.0, s.i
+		for k := s.i + 1; k < s.j; k++ {
+			if d := perpMeters(pts[k], pts[s.i], pts[s.j]); d > worst {
+				worst, at = d, k
+			}
+		}
+		if worst > epsilon {
+			keep[at] = true
+			stack = append(stack, span{s.i, at}, span{at, s.j})
+		}
+	}
+
+	out := make([][2]float64, 0, len(pts)/8)
+	for i, k := range keep {
+		if k {
+			out = append(out, pts[i])
+		}
+	}
+	return out
+}
+
+// perpMeters is the distance in metres from p to the segment a–b. Degrees are
+// scaled to metres about a's latitude and treated as flat — over the
+// kilometre-scale spans this is asked about, the error from ignoring curvature
+// is far below the epsilon it's compared against.
+func perpMeters(p, a, b [2]float64) float64 {
+	const metersPerDegreeLat = 110540
+	metersPerDegreeLng := 111320 * math.Cos(a[0]*math.Pi/180)
+
+	px := (p[1] - a[1]) * metersPerDegreeLng
+	py := (p[0] - a[0]) * metersPerDegreeLat
+	bx := (b[1] - a[1]) * metersPerDegreeLng
+	by := (b[0] - a[0]) * metersPerDegreeLat
+
+	lenSq := bx*bx + by*by
+	if lenSq == 0 {
+		return math.Hypot(px, py)
+	}
+	// Clamped projection, so a point beyond either end measures to that end
+	// rather than to the infinite line through them.
+	t := (px*bx + py*by) / lenSq
+	t = min(max(t, 0), 1)
+	return math.Hypot(px-t*bx, py-t*by)
 }
 
 // downsample returns at most max evenly-spaced points, always keeping the last
@@ -89,4 +233,76 @@ func downsample(pts [][2]float64, max int) [][2]float64 {
 		out = append(out, last)
 	}
 	return out
+}
+
+// mapRecentDefaultPoints matches the console's MAP_TRAIL_SIZE — the ring it is
+// seeding holds this many breadcrumbs per platform, so asking for more would
+// only fill a buffer that drops the excess on the next clip change.
+const mapRecentDefaultPoints = 1000
+
+// mapRecentMaxPoints bounds what a caller can ask for. The response is two
+// float64s per point per platform, so the ceiling is a few hundred KB even
+// with every platform live.
+const mapRecentMaxPoints = 5000
+
+// recentTrailsSQL returns the last @n breadcrumbs of each platform, oldest
+// first within a platform so a caller can append them to a trail in order.
+//
+// The WHERE clause is the SQL form of the console's has_fix: a flagged clip is
+// deliberately not on the map, and 0/0 is the no-GPS sentinel rather than a
+// point in the Gulf of Guinea. video_plays denormalizes flagged/lat/lng at play
+// time, so these are the values the clip carried on screen — which is what the
+// live trail was drawn from too, and the reason this seed and the ring agree.
+const recentTrailsSQL = `
+SELECT platform, lat, lng
+FROM (
+    SELECT platform, lat, lng, started_at,
+           ROW_NUMBER() OVER (PARTITION BY platform ORDER BY started_at DESC) AS rn
+    FROM video_plays
+    WHERE NOT flagged
+      AND (lat <> 0 OR lng <> 0)
+) recent
+WHERE rn <= @n
+ORDER BY platform, started_at`
+
+// recentTrails reads the last n breadcrumbs per platform out of video_plays.
+func recentTrails(ctx context.Context, n int) (map[string][][2]float64, error) {
+	var rows []struct {
+		Platform string
+		Lat      float64
+		Lng      float64
+	}
+	if err := database.GormDB().WithContext(ctx).
+		Raw(recentTrailsSQL, sql.Named("n", n)).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string][][2]float64)
+	for _, r := range rows {
+		out[r.Platform] = append(out[r.Platform], [2]float64{r.Lat, r.Lng})
+	}
+	return out, nil
+}
+
+// mapRecentHandler serves GET /admin/map/recent?n=: {"twitch":[[lat,lng],…],…},
+// each platform's recent breadcrumbs oldest first.
+//
+// The console draws its map trail from an in-memory ring the hub fills off the
+// NATS video stream, so a fresh console pod's line is only as long as the
+// stream's retention lets it replay — and all platforms share one subject, so
+// the per-platform share of that is smaller still. This endpoint is the durable
+// answer to the same question: trail length becomes a property of the database
+// rather than of stream retention and console uptime.
+func mapRecentHandler(w http.ResponseWriter, r *http.Request) {
+	n := queryInt(r, "n", mapRecentDefaultPoints, 1, mapRecentMaxPoints)
+	trails, err := recentTrails(r.Context(), n)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "recent trails query failed", "err", err, "n", n)
+		http.Error(w, `{"error":"couldn't read recent trails"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(trails); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't write recent trails", "err", err)
+	}
 }

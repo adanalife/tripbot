@@ -2,12 +2,14 @@ package users
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 )
 
 // TestSessions_ConcurrentAccess hammers the session map and the leaderboard
@@ -33,6 +35,7 @@ func TestSessions_ConcurrentAccess(t *testing.T) {
 		func() { _ = s.isLoggedIn("alice") },
 		func() { _ = s.LoggedInCount() },
 		func() { s.LogoutIfNecessary(ctx, "ghost") },
+		func() { s.CheckpointMiles(ctx) },
 	} {
 		wg.Add(1)
 		go func() {
@@ -102,9 +105,6 @@ func TestLogin_SelfHealsAfterFindOrCreateFailure(t *testing.T) {
 	cancel()
 
 	user := s.LoginIfNecessary(failing, "flaky")
-	if user == nil {
-		t.Fatal("login must still return a User when the lookup fails")
-	}
 	if user.ID != 0 {
 		t.Errorf("expected a zero User for an unreachable DB, got %+v", user)
 	}
@@ -196,7 +196,9 @@ func TestLogout_RecordsGiftedMilesAsExtra(t *testing.T) {
 }
 
 // CorrectMiles applies a manual delta and persists it, whether or not the user
-// is currently in chat.
+// is currently in chat. A correction that can't be persisted comes back as an
+// error rather than a total — the caller keys off that to skip both the chat
+// reply and the correction event.
 func TestCorrectMiles(t *testing.T) {
 	t.Run("logged-out user is corrected in the DB", func(t *testing.T) {
 		db := testdb.New(t)
@@ -204,7 +206,11 @@ func TestCorrectMiles(t *testing.T) {
 		seedUsers(t, db, User{Username: "offline", Miles: 10})
 
 		s := New(testConf, noopChatterSource{})
-		if got := s.CorrectMiles(ctx, "offline", -4); got != 6 {
+		got, err := s.CorrectMiles(ctx, "offline", -4)
+		if err != nil {
+			t.Fatalf("CorrectMiles: %v", err)
+		}
+		if got != 6 {
 			t.Errorf("expected 6 miles returned, got %v", got)
 		}
 
@@ -217,13 +223,42 @@ func TestCorrectMiles(t *testing.T) {
 		}
 	})
 
+	t.Run("an unpersistable correction returns the error, not a total", func(t *testing.T) {
+		db := testdb.New(t)
+		seedUsers(t, db, User{Username: "unreadable", Miles: 10})
+
+		// A cancelled context is the cheapest real query failure: the row
+		// exists, so FindOrCreate can only be failing on the lookup.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		s := New(testConf, noopChatterSource{})
+		got, err := s.CorrectMiles(ctx, "unreadable", -4)
+		if !errors.Is(err, ErrLookupFailed) {
+			t.Fatalf("want ErrLookupFailed, got %v", err)
+		}
+		if got != 0 {
+			t.Errorf("a dropped correction must not report a total, got %v", got)
+		}
+
+		stored, err := Find(context.Background(), testConf.Platform, "unreadable")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 10 {
+			t.Errorf("expected the stored miles untouched, got %v", stored.Miles)
+		}
+	})
+
 	t.Run("logged-in user's live copy is corrected too", func(t *testing.T) {
 		testdb.New(t)
 		ctx := context.Background()
 
 		s := New(testConf, noopChatterSource{})
 		s.LoginIfNecessary(ctx, "online")
-		s.CorrectMiles(ctx, "online", 12)
+		if _, err := s.CorrectMiles(ctx, "online", 12); err != nil {
+			t.Fatalf("CorrectMiles: %v", err)
+		}
 
 		live, ok := s.get("online")
 		if !ok {
@@ -240,4 +275,151 @@ func TestCorrectMiles(t *testing.T) {
 			t.Errorf("expected 12 miles persisted, got %v", stored.Miles)
 		}
 	})
+
+	t.Run("the monthly scoreboard moves with the lifetime total", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "restored", Miles: 100})
+
+		s := New(testConf, noopChatterSource{})
+		s.CorrectMiles(ctx, "restored", 20)
+
+		stored, err := Find(ctx, testConf.Platform, "restored")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 120 {
+			t.Errorf("expected 120 lifetime miles, got %v", stored.Miles)
+		}
+		if got := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); got != 20 {
+			t.Errorf("expected 20 miles on the monthly board, got %v", got)
+		}
+	})
+
+	t.Run("a clawback larger than the month is clamped at zero", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "clawback", Miles: 500})
+
+		s := New(testConf, noopChatterSource{})
+		// 5 of this month's miles against a 500-mile lifetime: the rest was
+		// earned in earlier months, so the month can only give back what it has.
+		s.CorrectMiles(ctx, "clawback", 5)
+		s.CorrectMiles(ctx, "clawback", -50)
+
+		stored, err := Find(ctx, testConf.Platform, "clawback")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 455 {
+			t.Errorf("expected the full -50 off the lifetime total, got %v", stored.Miles)
+		}
+		if got := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); got != 0 {
+			t.Errorf("expected the monthly board floored at 0, got %v", got)
+		}
+	})
+}
+
+// CheckpointMiles banks the session's accrual mid-session so a crash can't take
+// it, and the banked miles are then neither double-counted by the live totals
+// nor re-banked by the eventual logout.
+func TestCheckpointMiles(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "parked")
+	// ten hours in chat at 0.1mi/3min is ~20 miles accrued but unbanked
+	s.mu.Lock()
+	s.loggedIn["parked"].LoggedIn = time.Now().Add(-10 * time.Hour)
+	s.mu.Unlock()
+
+	live, _ := s.get("parked")
+	before := s.CurrentMonthlyMiles(ctx, live)
+
+	s.CheckpointMiles(ctx)
+
+	stored, err := Find(ctx, testConf.Platform, "parked")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if stored.Miles < 15 || stored.Miles > 25 {
+		t.Errorf("expected ~20 miles banked to the DB, got %v", stored.Miles)
+	}
+	if score := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); score < 15 || score > 25 {
+		t.Errorf("expected ~20 miles banked to the monthly scoreboard, got %v", score)
+	}
+
+	// The reported totals don't move: what the checkpoint added to the DB it
+	// subtracted from the in-flight half.
+	live, _ = s.get("parked")
+	if after := s.CurrentMonthlyMiles(ctx, live); after-before > 0.1 || before-after > 0.1 {
+		t.Errorf("monthly miles moved across the checkpoint: %v -> %v", before, after)
+	}
+	// An other-user lookup reads a fresh DB row, which must not re-count them.
+	if after := s.CurrentMonthlyMiles(ctx, stored); after-before > 0.1 || before-after > 0.1 {
+		t.Errorf("monthly miles differ for a DB-loaded copy: %v -> %v", before, after)
+	}
+
+	// A second checkpoint with no time passed banks nothing more.
+	s.CheckpointMiles(ctx)
+	twice, err := Find(ctx, testConf.Platform, "parked")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if twice.Miles-stored.Miles > 0.1 {
+		t.Errorf("second checkpoint re-banked miles: %v -> %v", stored.Miles, twice.Miles)
+	}
+
+	// Nor does logout, which only owes the remainder.
+	s.LogoutIfNecessary(ctx, "parked")
+	final, err := Find(ctx, testConf.Platform, "parked")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if final.Miles-stored.Miles > 0.1 {
+		t.Errorf("logout re-banked checkpointed miles: %v -> %v", stored.Miles, final.Miles)
+	}
+	var logoutEvents []events.Event
+	if err := db.Where("username = ? AND event = ?", "parked", "logout").Find(&logoutEvents).Error; err != nil {
+		t.Fatalf("reading events: %v", err)
+	}
+	if len(logoutEvents) != 1 {
+		t.Fatalf("expected 1 logout event, got %d", len(logoutEvents))
+	}
+}
+
+// UpdateSession only logs in the chatters missing from the session, so a
+// reconcile tick's work scales with arrivals rather than audience size. An
+// already-logged-in chatter must not be logged in a second time: that would
+// re-count the visit and emit a duplicate login event.
+func TestUpdateSession_OnlyLogsInNewChatters(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db, User{Username: "regular", NumVisits: 7})
+	ctx := context.Background()
+
+	rec := &recordingChatterSource{}
+	s := New(testConf, chatterSetSource{
+		recordingChatterSource: rec,
+		chatters:               map[string]struct{}{"regular": {}, "newcomer": {}},
+	})
+	s.loggedIn["regular"] = &User{Username: "regular", Platform: testConf.Platform, NumVisits: 7, LoggedIn: time.Now()}
+
+	s.UpdateSession(ctx)
+
+	// login() consults the chatter source once per login, so one lookup means
+	// newcomer alone went through it.
+	if rec.subCalls != 1 {
+		t.Errorf("expected 1 login, got %d subscriber lookups", rec.subCalls)
+	}
+	if !s.isLoggedIn("newcomer") {
+		t.Error("expected the new chatter to be logged in")
+	}
+	regular, err := Find(ctx, testConf.Platform, "regular")
+	if err != nil {
+		t.Fatalf("finding regular: %v", err)
+	}
+	if regular.NumVisits != 7 {
+		t.Errorf("visits = %d, want 7 (a second login would have counted another)", regular.NumVisits)
+	}
 }

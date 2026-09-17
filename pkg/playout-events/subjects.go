@@ -6,12 +6,10 @@ import (
 )
 
 // domain is the fixed segment between <env> and the verb in every playout
-// subject: tripbot.<env>.vlc.<verb>.<platform>. The "vlc" value is the legacy
-// wire name playout subscribes to; it renames with the coordinated contract
-// change, not unilaterally here.
-const domain = "vlc"
+// subject: tripbot.<env>.playout.<verb>.<platform>.
+const domain = "playout"
 
-// subject builds tripbot.<env>.vlc.<verb...>. Unexported so callers go
+// subject builds tripbot.<env>.playout.<verb...>. Unexported so callers go
 // through the typed constructors below — that keeps the verb strings in one
 // place and out of reach of typos at the call site. The variadic tail lets
 // the two-segment play.random / play.file group alongside the flat skip /
@@ -32,10 +30,10 @@ func BackSubject(env, platform string) string       { return subject(env, "back"
 func SeekSubject(env, platform string) string       { return subject(env, "seek", platform) }
 
 // LastPlayedSubject is the per-platform leaf playout publishes its
-// now-playing state to (tripbot.<env>.vlc.lastplayed.<platform>). Unlike the
+// now-playing state to (tripbot.<env>.playout.lastplayed.<platform>). Unlike the
 // command subjects above this one is *state*, not a command: every platform
 // instance (playout-twitch, playout-youtube) shares the env's NATS, so the platform
-// leaf keeps the TRIPBOT_VLC_LASTPLAYED stream's last-value cache
+// leaf keeps the TRIPBOT_PLAYOUT_LASTPLAYED stream's last-value cache
 // (MaxMsgsPerSubject=1) per instance instead of the instances clobbering one
 // another — same shape as tripbot.<env>.auth.status.<platform>.
 func LastPlayedSubject(env, platform string) string {
@@ -43,5 +41,5 @@ func LastPlayedSubject(env, platform string) string {
 }
 
 // LastPlayedWildcard covers every platform's lastplayed leaf in env — the
-// subject filter the TRIPBOT_VLC_LASTPLAYED stream is declared with.
+// subject filter the TRIPBOT_PLAYOUT_LASTPLAYED stream is declared with.
 func LastPlayedWildcard(env string) string { return subject(env, "lastplayed") + ".*" }

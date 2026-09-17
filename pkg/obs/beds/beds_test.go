@@ -2,6 +2,7 @@ package beds
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -705,6 +706,174 @@ func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 	}
 }
 
+// An album bed with no play order is the one way the stream goes silent while
+// OBS reports a healthy source: Detect adopts the bed OBS booted on without
+// passing setNow's refuse-an-empty-album guard, so a missing track index leaves
+// Album selected with nothing loaded. Prod sat silent on both platforms this
+// way on 2026-09-08.
+func TestAdvance_EmptyAlbumFallsBackToTheCarHum(t *testing.T) {
+	dir := t.TempDir() // a share with no albums: nothing to build an order from
+	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir, "twitch")
+	s.Detect(context.Background())
+
+	if bed, _ := s.Current(); bed != Album {
+		t.Fatalf("setup: want the album adopted off OBS, got %q", bed)
+	}
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if o.file != FallbackFile || !o.loop {
+		t.Errorf("want the looping car hum on air, got file=%s loop=%v", o.file, o.loop)
+	}
+	// The selection stays Album so the album=1 / tracks=0 gauge goes on
+	// reporting a misconfiguration, while what is audible reads as the drone.
+	if bed, _ := s.Current(); bed != Album {
+		t.Errorf("rescue changed the selection: %q", bed)
+	}
+	if bed, _ := s.Playing(); bed != CarHum {
+		t.Errorf("on air: want carhum, got %q", bed)
+	}
+}
+
+// Once the drone is standing in, further ended-media reports must not keep
+// re-swapping it: the rescue is what takes the stream off the album path.
+func TestAdvance_EmptyAlbumRescuesOnlyOnce(t *testing.T) {
+	dir := t.TempDir()
+	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir, "twitch")
+	s.Detect(context.Background())
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	o.file = "" // a second swap would write the fallback path again
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if o.file != "" {
+		t.Errorf("rescued a stream already on the drone: %s", o.file)
+	}
+}
+
+// The bed the audio watchdog rides a SomaFM outage out on. An outage lasts
+// hours, so the album — licence-clean, and actual music — is a better degraded
+// state than the drone whenever the share can supply it.
+func TestSwapToFallback_PrefersTheAlbumOverTheDrone(t *testing.T) {
+	dir := shareDir(t, 3)
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, dir, "twitch")
+	if err := s.SwapToFallback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(o.file) != filepath.Join(dir, "fifty-horizons") {
+		t.Fatalf("fallback played %q, want a track from the album under %q", o.file, dir)
+	}
+	// Looping would mean OBS never reports media-ended, so the album would
+	// never advance off its first track.
+	if o.loop {
+		t.Fatal("the fallback album must not loop")
+	}
+	// The swap back to SomaFM keys off the *selected* bed, so recording the
+	// fallback as the bed would switch the watchdog off and strand the stream
+	// on the album once SomaFM returns.
+	if bed, _ := s.Current(); bed != SomaFM {
+		t.Fatalf("selected bed after falling back: want %s, got %s", SomaFM, bed)
+	}
+}
+
+func TestSwapToFallback_UsesTheDroneWhenTheAlbumCantPlay(t *testing.T) {
+	for _, tc := range []struct{ name, dir string }{
+		{"empty share", t.TempDir()},
+		{"share not mounted", filepath.Join(t.TempDir(), "absent")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &fakeOBS{}
+			s := NewStore(o, SomaFM, tc.dir, "twitch")
+			if err := s.SwapToFallback(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if o.file != FallbackFile {
+				t.Fatalf("fallback file: want %s, got %s", FallbackFile, o.file)
+			}
+			// Nothing advances the drone, so it has to loop or it leaves dead air.
+			if !o.loop {
+				t.Fatal("the car-hum fallback must loop")
+			}
+		})
+	}
+}
+
+// The fallback leaves the selected bed on SomaFM, so Advance has to know the
+// album by more than the bed. Without that the outage plays one track and falls
+// silent — the album=1 / tracks=0 state, which is the thing the fallback exists
+// to prevent rather than to cause.
+func TestSwapToFallback_AlbumKeepsAdvancing(t *testing.T) {
+	const n = 3
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, n), "twitch")
+	ctx := context.Background()
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{o.file: true}
+	for range n - 1 {
+		if err := s.Advance(ctx); err != nil {
+			t.Fatal(err)
+		}
+		seen[o.file] = true
+	}
+	if len(seen) != n {
+		t.Fatalf("fallback album played %d of %d tracks: a stalled order falls silent", len(seen), n)
+	}
+}
+
+func TestSwapToSomaFM_EndsTheAlbumFallback(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SwapToSomaFM(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !o.network {
+		t.Fatalf("swap back left the source on the local file %q", o.file)
+	}
+	// A late report of the last fallback track ending must not repoint the
+	// source at a track and undo the recovery.
+	if err := s.Advance(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !o.network {
+		t.Fatalf("advance after the swap back put %q back on air", o.file)
+	}
+}
+
+// Choosing a bed mid-outage ends the fallback: what's audible is what was
+// asked for, so a track ending must not walk an album nobody selected.
+func TestSet_ClearsTheAlbumFallback(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, CarHum); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Advance(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if o.file != CarHumFile {
+		t.Fatalf("advance walked the album after the drone was chosen: %s", o.file)
+	}
+}
+
 func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 	dir := shareDir(t, 1)
 	for _, tc := range []struct {
@@ -924,23 +1093,137 @@ func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
 		t.Error("the pending station is being reported as the live one")
 	}
 
-	// Wait on the bed, not on the pending flag. applyPending clears pending and
-	// records the station under one lock, then releases it before switching the
-	// bed — so between those two the tune reads as landed while Current() still
-	// reports the old bed, and asserting in that window fails a store that is
-	// working correctly. The bed is the last thing to move, so waiting on it
-	// covers the station and the pending flag too.
+	// Wait on the pending flag, not the bed. applyPending records the station,
+	// switches the bed, and only then clears pending — so the cleared flag is the
+	// one signal that the whole tune has landed. Waiting on the bed instead
+	// asserts inside the window between the bed moving and the flag clearing,
+	// which fails a store that is working correctly.
 	waitFor(t, "the tune to land", func() bool {
-		bed, _ := s.Current()
-		return bed == SomaFM
+		_, pending := s.Pending()
+		return !pending
 	})
-	if _, pending := s.Pending(); pending {
-		t.Error("still reporting a pending tune after it landed")
-	}
 	if got := s.Station(); got != "dronezone" {
 		t.Errorf("station = %q after the tune landed, want dronezone", got)
 	}
 	if bed, _ := s.Current(); bed != SomaFM {
 		t.Errorf("bed = %q after the tune landed, want somafm", bed)
+	}
+}
+
+// Everything that names what a viewer is hearing — !song, !audio, the console's
+// now-playing line — reads Playing, and during an outage that is not the
+// selection: the watchdog puts the album on air and leaves SomaFM selected, so
+// a reader of the selection announces a station, and a SomaFM track, nobody is
+// hearing.
+func TestPlaying_NamesTheFallbackWhileTheSelectionStandsSomaFM(t *testing.T) {
+	dir := shareDir(t, 3)
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, dir, "twitch")
+	ctx := context.Background()
+	if bed, _ := s.Playing(); bed != SomaFM {
+		t.Fatalf("playing bed before the outage: want %s, got %s", SomaFM, bed)
+	}
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bed, track := s.Playing()
+	if bed != Album {
+		t.Fatalf("playing bed on the fallback: want %s, got %s", Album, bed)
+	}
+	if track != o.file {
+		t.Fatalf("playing track %q, want the one on air %q", track, o.file)
+	}
+	if s.PlayingAlbum() != "fifty-horizons" {
+		t.Fatalf("playing album on the fallback: got %q", s.PlayingAlbum())
+	}
+	if sel, _ := s.Current(); sel != SomaFM {
+		t.Fatalf("selected bed: want %s, got %s", SomaFM, sel)
+	}
+	if err := s.SwapToSomaFM(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if bed, track := s.Playing(); bed != SomaFM || track != "" {
+		t.Fatalf("playing after recovery: want %s with no track, got %s %q", SomaFM, bed, track)
+	}
+}
+
+// The drone is the fallback whenever the share can't supply a track, and it
+// misnames the audio in exactly the same way.
+func TestPlaying_NamesTheDroneFallback(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, t.TempDir(), "twitch")
+	if err := s.SwapToFallback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if bed, track := s.Playing(); bed != CarHum || track != "" {
+		t.Fatalf("playing on the drone fallback: want %s with no track, got %s %q", CarHum, bed, track)
+	}
+}
+
+// writeIndex emits the album track index bin/stage-streambeats produces, at a
+// path of its own so the test can point a store at it with no share mounted —
+// which is the shape a tripbot pod runs in.
+func writeIndex(t *testing.T, byAlbum map[string][]string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "index.json")
+	raw, err := json.Marshal(byAlbum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The index is the whole music dependency: with no share on disk at all, the
+// album bed still lists, selects and plays, because every path tripbot handles
+// is a string it passes to OBS.
+func TestAlbumBedRunsOffTheIndexWithNoShareMounted(t *testing.T) {
+	index := writeIndex(t, map[string][]string{
+		"streambeats-lofi-gold":     {MusicDir + "/streambeats-lofi-gold/b two.mp3", MusicDir + "/streambeats-lofi-gold/a one.mp3"},
+		"streambeats-lofi-secluded": {MusicDir + "/streambeats-lofi-secluded/a one.mp3"},
+		"streambeats-lofi-empty":    {},
+		"streambeats-ambient-gems":  {MusicDir + "/streambeats-ambient-gems/a one.mp3"},
+	})
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, "", "twitch").WithIndex(index) // "" is MusicDir, which the test machine has no more than a pod does
+
+	if got, want := s.Albums(), []string{"streambeats-ambient-gems", "streambeats-lofi-gold", "streambeats-lofi-secluded"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() = %v, want %v (the empty album isn't selectable)", got, want)
+	}
+	if got, want := s.Groups(), []string{"streambeats", "streambeats-lofi"}; !slices.Equal(got, want) {
+		t.Fatalf("Groups() = %v, want %v", got, want)
+	}
+	s.SetShuffle(context.Background(), false)
+	if err := s.SetAlbum(context.Background(), "streambeats-lofi"); err != nil {
+		t.Fatalf("SetAlbum: %v", err)
+	}
+	// Sorted within the album, and album by album across the group.
+	if got, want := o.file, MusicDir+"/streambeats-lofi-gold/a one.mp3"; got != want {
+		t.Fatalf("OBS playing %q, want %q", got, want)
+	}
+	if got, want := s.PlayingAlbum(), "streambeats-lofi-gold"; got != want {
+		t.Fatalf("PlayingAlbum() = %q, want %q", got, want)
+	}
+}
+
+// A missing index leaves the album bed empty rather than erroring the process,
+// which is the state the optional ConfigMap mount produces before any music is
+// staged. The share is the fallback, so a laptop run with the real directory
+// mounted is unaffected.
+func TestMissingIndexFallsBackToTheShare(t *testing.T) {
+	dir := shareDir(t, 2)
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch").WithIndex(filepath.Join(t.TempDir(), "absent.json"))
+	if got, want := s.Albums(), []string{"fifty-horizons"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() = %v, want %v", got, want)
+	}
+
+	s = NewStore(&fakeOBS{}, CarHum, "/nonexistent-share", "twitch").WithIndex(filepath.Join(t.TempDir(), "absent.json"))
+	if got := s.Albums(); len(got) != 0 {
+		t.Fatalf("Albums() = %v, want none", got)
+	}
+	if err := s.SetAlbum(context.Background(), ""); err == nil {
+		t.Fatal("SetAlbum with no library succeeded; want a refusal so the bed on air keeps playing")
 	}
 }

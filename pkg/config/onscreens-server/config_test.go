@@ -1,46 +1,31 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
+	"fmt"
 	"testing"
+
+	"github.com/adanalife/tripbot/pkg/contract"
 )
 
-// A run dir that can't be created has to come back as an error rather than
-// ending the process, so main owns the exit and this stays testable at all.
-func TestLoad_UnusableRunDirReturnsError(t *testing.T) {
-	blocker := filepath.Join(t.TempDir(), "not-a-dir")
-	if err := os.WriteFile(blocker, nil, 0600); err != nil {
-		t.Fatalf("seeding the blocking file: %v", err)
-	}
-	t.Setenv("ONSCREENS_SERVER_RUN_DIR", filepath.Join(blocker, "run"))
-
-	cfg, err := Load()
-	if err == nil {
-		t.Fatal("Load() succeeded with an uncreatable run dir, want an error")
-	}
-	if cfg != nil {
-		t.Errorf("Load() = %+v on error, want nil config", cfg)
-	}
-	if !strings.Contains(err.Error(), "run dir") {
-		t.Errorf("err = %v, want it to name the run dir", err)
-	}
-}
-
-// The happy path creates the run dir and hands back the config.
-func TestLoad_CreatesRunDir(t *testing.T) {
-	runDir := filepath.Join(t.TempDir(), "nested", "run")
-	t.Setenv("ONSCREENS_SERVER_RUN_DIR", runDir)
-
+// The listener's port is the contract's, not a literal spelled in a struct tag
+// — a rename there has to reach the binary, which is the direction
+// pkg/contract exists to hold. An explicit bind address still wins.
+func TestLoadBindAddressDefaultsToTheContract(t *testing.T) {
+	t.Setenv("ONSCREENS_SERVER_BIND_ADDRESS", "")
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("Load() = %v, want success", err)
+		t.Fatalf("Load() error: %v", err)
 	}
-	if cfg.RunDir != runDir {
-		t.Errorf("RunDir = %q, want %q", cfg.RunDir, runDir)
+	if want := fmt.Sprintf(":%d", contract.PortOnscreensHTTP); cfg.OnscreensServerBindAddress != want {
+		t.Errorf("bind address = %q, want %q", cfg.OnscreensServerBindAddress, want)
 	}
-	if fi, err := os.Stat(runDir); err != nil || !fi.IsDir() {
-		t.Errorf("run dir not created: stat err = %v", err)
+
+	t.Setenv("ONSCREENS_SERVER_BIND_ADDRESS", "127.0.0.1:9999")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.OnscreensServerBindAddress != "127.0.0.1:9999" {
+		t.Errorf("bind address = %q, want %q", cfg.OnscreensServerBindAddress, "127.0.0.1:9999")
 	}
 }

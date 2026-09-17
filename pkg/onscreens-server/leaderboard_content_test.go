@@ -18,12 +18,15 @@ func TestRenderLeaderboard(t *testing.T) {
 		t.Fatalf("expected title-cased header, got %q", got)
 	}
 	for _, name := range []string{"alice", "bob", "carol"} {
-		if !strings.Contains(got, `<span class="lb-user">(`+name+`)</span>`) {
+		if !strings.Contains(got, `<span class="lb-user">`+name+`</span>`) {
 			t.Fatalf("expected user span for %q, got %q", name, got)
 		}
 	}
-	if !strings.Contains(got, `<span class="lb-score">100.5</span><span class="lb-user">(alice)</span>`) {
+	if !strings.Contains(got, `<span class="lb-score">100.5</span><span class="lb-user">alice</span>`) {
 		t.Fatalf("expected adjacent score+user spans for alice, got %q", got)
+	}
+	if strings.Contains(got, "(") {
+		t.Fatalf("expected no parens around usernames, got %q", got)
 	}
 }
 
@@ -36,7 +39,7 @@ func TestRenderLeaderboardTruncatesToMax(t *testing.T) {
 
 	// "u1" is a substring of "u10", so match the rendered span, not the name.
 	for i := 1; i <= maxLeaderboardRows+2; i++ {
-		span := fmt.Sprintf(`<span class="lb-user">(u%d)</span>`, i)
+		span := fmt.Sprintf(`<span class="lb-user">u%d</span>`, i)
 		if want := i <= maxLeaderboardRows; strings.Contains(got, span) != want {
 			t.Fatalf("u%d present = %v, want %v: %q", i, !want, want, got)
 		}
@@ -73,9 +76,9 @@ func TestRenderLeaderboardNoSpacePadding(t *testing.T) {
 	got := renderLeaderboard("guesses", board)
 
 	wantSpans := []string{
-		`<span class="lb-score">123</span><span class="lb-user">(alice)</span>`,
-		`<span class="lb-score">15</span><span class="lb-user">(bob)</span>`,
-		`<span class="lb-score">7</span><span class="lb-user">(carol)</span>`,
+		`<span class="lb-score">123</span><span class="lb-user">alice</span>`,
+		`<span class="lb-score">15</span><span class="lb-user">bob</span>`,
+		`<span class="lb-score">7</span><span class="lb-user">carol</span>`,
 	}
 	for _, want := range wantSpans {
 		if !strings.Contains(got, want) {

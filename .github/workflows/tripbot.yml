@@ -115,12 +115,11 @@ jobs:
       - name: Check running containers
         run: docker ps -a
 
-      - name: Verify version files baked into image
+      - name: Verify version stamp baked into binary
         run: |
-          docker exec tripbot-tripbot-1 test -s /etc/tripbot/version
-          docker exec tripbot-tripbot-1 test -s /etc/tripbot/sha
-          echo "version: $(docker exec tripbot-tripbot-1 cat /etc/tripbot/version)"
-          echo "sha:     $(docker exec tripbot-tripbot-1 cat /etc/tripbot/sha)"
+          STAMP=$(docker exec tripbot-tripbot-1 tripbot --version)
+          test -n "$STAMP"
+          echo "stamp: $STAMP"
 
       - name: Verify /version HTTP endpoint
         run: |

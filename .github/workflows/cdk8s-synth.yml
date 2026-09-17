@@ -39,7 +39,7 @@ jobs:
           working_directory: cdk8s
 
       # uv handles project-local Python deps on top of mise's interpreter.
-      - uses: astral-sh/setup-uv@v9.0.0 # no floating major tag published
+      - uses: astral-sh/setup-uv@v10.0.1 # no floating major tag published
 
       - name: Install Python deps
         working-directory: cdk8s
@@ -73,6 +73,22 @@ jobs:
           git ls-files -- 'dist/prod-1-*.k8s.yaml' \
             | grep -vE 'prod-1-(tripbot-identity|job-)' \
             | xargs -r git checkout --
+
+      # Schema-validate the freshly synthed dist/*.k8s.yaml (what Argo applies)
+      # against the cluster's k8s API version — catches API-version drift after
+      # a k8s bump. dist/apps/*.json is the ApplicationSet discovery index, not
+      # a manifest, so the glob excludes it. CRD kinds resolve via the datree
+      # CRDs-catalog. Mirrors `task cdk8s:validate`; keep the two commands in
+      # lockstep.
+      - name: Validate manifests (kubeconform)
+        working-directory: cdk8s
+        run: >-
+          mise exec -- kubeconform -strict -summary
+          -kubernetes-version 1.36.0
+          -schema-location default
+          -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          -ignore-missing-schemas
+          dist/*.k8s.yaml
 
       - name: Verify dist/ is committed in sync
         run: git diff --exit-code -- cdk8s/dist/

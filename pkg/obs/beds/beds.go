@@ -16,9 +16,12 @@ package beds
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -38,8 +41,10 @@ type Bed string
 const (
 	// SomaFM is internet radio, on whichever of SomaFM's channels is selected
 	// (see Stations). Its music is not cleared for our rebroadcast — it trips
-	// YouTube's Content ID and the other platforms' audio ID — so it's a
-	// Twitch-only default, by tolerance rather than licence.
+	// YouTube's Content ID and the other platforms' audio ID — so it is safe to
+	// select only on Twitch, by tolerance rather than licence. No platform
+	// starts here: its edges have refused our IP, so a boot that began on this
+	// bed could begin on one that never plays.
 	SomaFM Bed = "somafm"
 	// CarHum is the synthesized, licence-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
@@ -72,6 +77,14 @@ const (
 	CarHumFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
 	MusicDir   = "/opt/tripbot/assets/music"
 
+	// MusicIndexFile is where cdk8s mounts the album track index that
+	// bin/stage-streambeats emits — a ConfigMap, so a missing one leaves the
+	// pod schedulable where a missing PVC would not. Listing albums from it is
+	// what keeps tripbot off the music claim entirely: the paths in it still
+	// point into OBS's copy of the same claim, and OBS is the only side that
+	// ever opens the audio bytes.
+	MusicIndexFile = "/opt/tripbot/assets/music-index/index.json"
+
 	// FallbackFile is the audio watchdog's copy of the car-hum drone: the same
 	// audio as CarHumFile at a path of its own. The source's settings record
 	// only which file is playing, so the two names are what separate "an
@@ -98,10 +111,15 @@ type OBS interface {
 
 // Store holds the live bed + album position and applies changes to OBS.
 type Store struct {
-	obs      OBS
+	obs OBS
+	// musicDir is the share root the track paths sit under. It stays the path
+	// vocabulary even where the share isn't mounted: albumFromFile and
+	// bedFromSettings classify what OBS reports back by this prefix.
 	musicDir string
-	platform string      // stamped on the bed metrics; each platform picks its own bed
-	np       *nowPlaying // SomaFM's feed for the tuned channel
+	// indexFile is the track index to list albums from; "" walks musicDir.
+	indexFile string
+	platform  string      // stamped on the bed metrics; each platform picks its own bed
+	np        *nowPlaying // SomaFM's feed for the tuned channel
 
 	mu      sync.Mutex
 	bed     Bed
@@ -113,6 +131,13 @@ type Store struct {
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
 	lastStart time.Time // when a track was last pointed at OBS; see Advance
+	// fallback is the bed the audio watchdog has playing while SomaFM is still
+	// the selected one, and "" when nothing is standing in. The selected bed
+	// can't say so — the watchdog's outage machinery only runs while the store
+	// reads SomaFM — so this is what keeps Advance walking the fallback album
+	// instead of letting one track end in the silence the fallback exists to
+	// prevent, and what lets Playing name audio the selection doesn't.
+	fallback Bed
 
 	// The switch waiting out switchDelay, and the timer that will apply it. gen
 	// rises with every request so a timer that fires after being superseded can
@@ -172,14 +197,54 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 	}
 }
 
-// Current reports the live bed and, on the album, the track file playing.
+// WithIndex lists the albums from a track index file instead of walking the
+// share. The index is how tripbot reads the library without mounting it: the
+// bot only ever hands OBS a path, so a list of paths is the whole dependency.
+// An absent index falls back to the share, which is what keeps a laptop run
+// with the real directory mounted working unchanged.
+func (s *Store) WithIndex(path string) *Store {
+	s.indexFile = path
+	return s
+}
+
+// Current reports the selected bed and, on the album, the track file playing.
+// This is the choice, not always the audio: during a SomaFM outage the watchdog
+// puts another bed on air without changing the selection, which is what keeps
+// the outage machinery running. Callers naming what a viewer hears want Playing.
 func (s *Store) Current() (Bed, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.bed != Album || s.idx >= len(s.tracks) {
-		return s.bed, ""
+	return s.bed, s.trackOnAirLocked(s.bed)
+}
+
+// Playing reports the bed actually on air and, on the album, its track file —
+// the answer to "what is this?". It differs from Current only during a SomaFM
+// outage, where the watchdog swaps the album (or the drone) onto the source and
+// leaves SomaFM selected: reading the selection there names a station nobody is
+// hearing, and on the album a SomaFM track nobody is hearing either.
+func (s *Store) Playing() (Bed, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bed := s.playingLocked()
+	return bed, s.trackOnAirLocked(bed)
+}
+
+// playingLocked is the bed on air: the fallback while one is standing in, and
+// otherwise the selection. Caller holds s.mu.
+func (s *Store) playingLocked() Bed {
+	if s.fallback != "" {
+		return s.fallback
 	}
-	return s.bed, s.tracks[s.idx]
+	return s.bed
+}
+
+// trackOnAirLocked is the track file for bed, which only the album has. Caller
+// holds s.mu.
+func (s *Store) trackOnAirLocked(bed Bed) string {
+	if bed != Album || s.idx >= len(s.tracks) {
+		return ""
+	}
+	return s.tracks[s.idx]
 }
 
 // Station reports the SomaFM channel the SomaFM bed plays. Always a station,
@@ -211,10 +276,11 @@ func (s *Store) Album() string {
 func (s *Store) PlayingAlbum() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.bed != Album || s.idx >= len(s.tracks) {
+	track := s.trackOnAirLocked(s.playingLocked())
+	if track == "" {
 		return ""
 	}
-	return albumFromFile(s.tracks[s.idx], s.musicDir)
+	return albumFromFile(track, s.musicDir)
 }
 
 // Shuffle reports whether the play order is shuffled rather than sequential.
@@ -252,12 +318,13 @@ func (s *Store) SetShuffle(ctx context.Context, on bool) error {
 	return nil
 }
 
-// Albums lists the selectable albums on the share, in display order. Read off
-// the filesystem on every call rather than cached at startup: the share is an
-// NFS mount Dana drops new music onto, and a list cached at boot would hide a
-// new album until the next restart.
+// Albums lists the selectable albums on the share, in display order. Read on
+// every call rather than cached at startup: new music arrives while the bot is
+// running, and a list cached at boot would hide an album until the next restart.
 func (s *Store) Albums() []string {
-	return scanAlbums(s.musicDir)
+	albums := slices.Collect(maps.Keys(s.albumTracks()))
+	sort.Strings(albums)
+	return albums
 }
 
 // Groups lists the prefixes that name more than one album, so the picker can
@@ -322,8 +389,10 @@ func (s *Store) SomaFMTrack(ctx context.Context) (artist, title string, err erro
 }
 
 // Detect reads the source's settings and records which bed OBS actually booted
-// on, so a tripbot restart doesn't report a stale guess. A failure here is not
-// fatal — the configured default stands and the next switch corrects it.
+// on, so neither a tripbot restart nor an OBS restart leaves the store
+// reporting a stale guess. The audio watchdog calls it each time OBS comes
+// (back) up. A failure here is not fatal — the current bed stands and the next
+// call corrects it.
 func (s *Store) Detect(ctx context.Context) {
 	settings, err := s.obs.Settings(ctx, InputName)
 	if err != nil {
@@ -364,7 +433,7 @@ func (s *Store) Detect(ctx context.Context) {
 		slog.WarnContext(ctx, "background audio: album is live but its play order is empty",
 			"err", loadErr)
 	}
-	slog.InfoContext(ctx, "background audio: detected bed at startup", "bed", bed, "station", station)
+	slog.InfoContext(ctx, "background audio: detected bed", "bed", bed, "station", station)
 }
 
 // bedFromSettings maps an ffmpeg_source's settings back to the bed that would
@@ -456,6 +525,9 @@ func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	s.bed = bed
 	s.lastStart = time.Now()
+	// A chosen bed ends any outage fallback: what's audible is now what was
+	// asked for, whichever bed the watchdog had put there.
+	s.fallback = ""
 	s.mu.Unlock()
 	s.record()
 	// Counted here rather than at the callers so a console switch and a chat
@@ -577,8 +649,9 @@ func (s *Store) Pending() (Switch, bool) {
 }
 
 // Advance moves to the next album track (wrapping at the end) and plays it.
-// A no-op unless the album is the live bed — the callers report the media
-// ending, which also happens on the other beds.
+// A no-op unless the album is what's audible — either as the selected bed or as
+// the watchdog's fallback for a SomaFM outage — since the callers report the
+// media ending, which also happens on the other beds.
 //
 // Two of them report the same ending: the playback-ended subscription, which
 // arrives in milliseconds, and the watchdog tick that backs it up. So an
@@ -588,9 +661,13 @@ func (s *Store) Pending() (Switch, bool) {
 // and would otherwise be stepped over by the outgoing track's own ending.
 func (s *Store) Advance(ctx context.Context) error {
 	s.mu.Lock()
-	if s.bed != Album || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
+	if s.playingLocked() != Album || time.Since(s.lastStart) < advanceDebounce {
 		s.mu.Unlock()
 		return nil
+	}
+	if len(s.tracks) == 0 {
+		s.mu.Unlock()
+		return s.rescueEmptyAlbum(ctx)
 	}
 	s.lastStart = time.Now()
 	current := s.tracks[s.idx]
@@ -612,33 +689,119 @@ func (s *Store) Advance(ctx context.Context) error {
 	return nil
 }
 
+// rescueEmptyAlbum puts the car hum on air when the album is selected with no
+// play order to advance through. That state is reachable without ever passing
+// the guard in setNow, which refuses an album with no tracks: Detect adopts
+// whichever bed OBS booted on, so an OBS started on an album track while the
+// track index is missing leaves the store on Album with nothing loaded. The
+// boot track then ends, there is nothing to queue, and the stream is silent
+// with OBS reporting a healthy source.
+//
+// The drone is the only bed left — it is baked into the image, so it needs
+// neither the share nor the index — and it loops, so nothing has to advance it.
+// The selection stays Album: it is still what the operator asked for, and
+// keeping it is what makes the album=1 / tracks=0 gauge go on describing a
+// misconfiguration that wants fixing rather than resolving into a bed nobody
+// chose. Recording the drone as the fallback is what takes the stream off this
+// path — playingLocked then reports CarHum, so the next Advance returns early
+// instead of rescuing an already-rescued stream.
+func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
+	if err := s.obs.SetLocalFile(ctx, InputName, FallbackFile, true); err != nil {
+		return fmt.Errorf("rescue empty album bed: %w", err)
+	}
+	s.mu.Lock()
+	s.fallback = CarHum
+	s.lastStart = time.Now()
+	s.mu.Unlock()
+	s.record()
+	slog.ErrorContext(ctx, "background audio: album bed has no tracks, falling back to the car hum",
+		"album", s.Album())
+	return nil
+}
+
+// SwapToFallback points the source at the bed the audio watchdog rides out a
+// SomaFM outage on: the album when the share has tracks, the car-hum drone when
+// it doesn't. The album is licence-clean (it was made for this stream) and is
+// actual music, so it's the better degraded state; the drone covers an empty or
+// unmounted share, where it's the only bed left.
+//
+// The selection is deliberately left alone — the fallback is recorded beside it
+// instead. The watchdog runs its outage machinery only while the store reads
+// SomaFM, so selecting the fallback here would switch the watchdog off and
+// strand the stream on it for good.
+// That is also why the album's play order is (re)built here: nothing else on
+// this path builds one, and without it the album plays a single track and falls
+// silent — the album=1 / tracks=0 state record() exists to expose.
+func (s *Store) SwapToFallback(ctx context.Context) error {
+	s.mu.Lock()
+	track := ""
+	loadErr := s.loadAlbumLocked("")
+	if loadErr == nil {
+		track = s.trackLocked(Album)
+	}
+	s.mu.Unlock()
+	if loadErr != nil {
+		slog.WarnContext(ctx, "background audio: no album to fall back to, using the car hum",
+			"err", loadErr)
+	}
+
+	// The album plays unlooped, so OBS reports the media ending and Advance
+	// queues the next track. The drone loops: nothing advances it.
+	file, loop := track, false
+	if file == "" {
+		file, loop = FallbackFile, true
+	}
+	if err := s.obs.SetLocalFile(ctx, InputName, file, loop); err != nil {
+		return fmt.Errorf("swap to fallback bed: %w", err)
+	}
+
+	s.mu.Lock()
+	s.fallback = CarHum
+	if track != "" {
+		s.fallback = Album
+	}
+	s.lastStart = time.Now()
+	s.mu.Unlock()
+	s.record()
+	slog.InfoContext(ctx, "background audio: swapped to the fallback bed", "file", file)
+	return nil
+}
+
+// SwapToSomaFM points the source back at the tuned station once the edge is
+// serving again, ending the fallback — a fallback album stops advancing because
+// it has stopped playing. The counterpart of SwapToFallback; the selection is
+// untouched here too, since on this path it never stopped being SomaFM.
+func (s *Store) SwapToSomaFM(ctx context.Context) error {
+	if err := s.obs.SetNetwork(ctx, InputName, StreamURL(s.Station())); err != nil {
+		return fmt.Errorf("swap back to somafm: %w", err)
+	}
+	s.mu.Lock()
+	s.fallback = ""
+	s.mu.Unlock()
+	return nil
+}
+
 // loadAlbumLocked builds a fresh shuffled play order. playing positions the
 // order on a track already on air (pass "" to start at the top), so the next
 // advance moves off it instead of restarting it. Caller holds s.mu.
 func (s *Store) loadAlbumLocked(playing string) error {
-	var tracks []string
-	if s.album == "" {
-		// The whole share: one walk, skipping the loose files at its root.
-		var err error
-		if tracks, err = scanTracks(s.musicDir, false); err != nil {
-			return fmt.Errorf("scan album tracks under %s: %w", s.musicDir, err)
-		}
-	} else {
-		// One album, or every album under a group prefix. Walked per album and
-		// concatenated in sorted order, so an unshuffled group plays album by
-		// album instead of interleaving them.
-		matched := albumsFor(scanAlbums(s.musicDir), s.album)
-		if len(matched) == 0 {
+	byAlbum := s.albumTracks()
+	albums := slices.Collect(maps.Keys(byAlbum))
+	sort.Strings(albums)
+
+	// The whole share plays every album; a selection plays the one it names or
+	// every album under a group prefix. Either way the tracks are concatenated
+	// in album order, so an unshuffled group plays album by album instead of
+	// interleaving them.
+	matched := albums
+	if s.album != "" {
+		if matched = albumsFor(albums, s.album); len(matched) == 0 {
 			return fmt.Errorf("no album on the share named or under %q", s.album)
 		}
-		for _, album := range matched {
-			dir := filepath.Join(s.musicDir, album)
-			found, err := scanTracks(dir, true)
-			if err != nil {
-				return fmt.Errorf("scan album tracks under %s: %w", dir, err)
-			}
-			tracks = append(tracks, found...)
-		}
+	}
+	var tracks []string
+	for _, album := range matched {
+		tracks = append(tracks, byAlbum[album]...)
 	}
 	if len(tracks) == 0 {
 		return fmt.Errorf("no album tracks for selection %q under %s", s.album, s.musicDir)
@@ -713,37 +876,79 @@ func scanGroups(albums []string) []string {
 	return out
 }
 
-// scanAlbums lists the selectable albums: every immediate subdirectory of the
-// share holding at least one track. Sorted, so the console picker and chat's
-// option list read the same order every time. An unreadable share yields no
-// albums rather than an error — the caller's next scanTracks reports why.
-func scanAlbums(musicDir string) []string {
+// albumTracks is the library: album directory name to its sorted track paths.
+// One source for every listing the store does, read from the index when one is
+// configured and by walking the share otherwise.
+//
+// An unreadable library yields no albums rather than an error. That is the
+// designed state where the index is mounted optional and absent: an empty album
+// list makes the album bed refuse to start, which leaves whatever bed is on air
+// playing rather than switching the stream to silence.
+func (s *Store) albumTracks() map[string][]string {
+	if s.indexFile == "" {
+		return scanShare(s.musicDir)
+	}
+	byAlbum, err := readIndex(s.indexFile)
+	if err == nil {
+		return byAlbum
+	}
+	// A corrupt index is worth a shout; an absent one is the optional mount
+	// doing its job. Both fall through to the share, which is empty wherever
+	// the index is the reason the claim isn't mounted.
+	if !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("background audio: unreadable album index", "path", s.indexFile, "err", err)
+	}
+	return scanShare(s.musicDir)
+}
+
+// readIndex loads the album track index bin/stage-streambeats emits. Paths are
+// taken as written: they are the share paths OBS resolves, which is the only
+// consumer that has to open them.
+func readIndex(path string) (map[string][]string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var byAlbum map[string][]string
+	if err := json.Unmarshal(raw, &byAlbum); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	for album, tracks := range byAlbum {
+		if len(tracks) == 0 {
+			delete(byAlbum, album) // an album with no tracks isn't selectable
+			continue
+		}
+		sort.Strings(tracks)
+	}
+	return byAlbum, nil
+}
+
+// scanShare walks the mounted share: every immediate subdirectory holding at
+// least one track, keyed by its name.
+func scanShare(musicDir string) map[string][]string {
 	entries, err := os.ReadDir(musicDir)
 	if err != nil {
 		return nil
 	}
-	var out []string
+	out := map[string][]string{}
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		if tracks, err := scanTracks(filepath.Join(musicDir, e.Name()), true); err == nil && len(tracks) > 0 {
-			out = append(out, e.Name())
+		if tracks, err := scanTracks(filepath.Join(musicDir, e.Name())); err == nil && len(tracks) > 0 {
+			out[e.Name()] = tracks
 		}
 	}
-	sort.Strings(out)
 	return out
 }
 
 // scanTracks lists the album tracks under dir, sorted so the pre-shuffle order
 // is deterministic (the shuffle is what makes playback vary, not readdir order).
 //
-// loose says whether audio sitting directly in dir counts. Scanning one album,
-// it does — that's where its tracks live. Scanning the whole share, it does not:
-// albums are the share's SUBDIRECTORIES, and the root holds other audio beside
-// them (carsounds.m4a, a 556MB archive) that a flat scan would shuffle in as one
-// enormous track.
-func scanTracks(dir string, loose bool) ([]string, error) {
+// Only ever called on one album's directory. The share root holds other audio
+// beside the albums (carsounds.m4a, a 556MB archive), and reaching it a
+// directory at a time is what leaves those out.
+func scanTracks(dir string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -751,9 +956,6 @@ func scanTracks(dir string, loose bool) ([]string, error) {
 		}
 		if d.IsDir() || !audioExts[strings.ToLower(filepath.Ext(path))] {
 			return nil
-		}
-		if !loose && filepath.Dir(path) == filepath.Clean(dir) {
-			return nil // loose file at the share root, not an album track
 		}
 		out = append(out, path)
 		return nil
@@ -769,10 +971,9 @@ func scanTracks(dir string, loose bool) ([]string, error) {
 // are read back under the lock so the gauges describe one consistent moment.
 //
 // The play-order depth is here because an empty one is invisible everywhere
-// else: Advance returns silently when there is nothing to advance to, so an
-// album bed with no tracks plays its boot track and then falls silent with OBS
-// still reporting a healthy source. album=1 with tracks=0 is that state, and
-// it is the only warning of it.
+// else. Advance keeps such a bed audible by falling back to the drone, but that
+// is a rescue, not a repair: the album the operator selected still cannot play,
+// and album=1 with tracks=0 is the only thing that says so.
 func (s *Store) record() {
 	s.mu.Lock()
 	bed, tracks := s.bed, len(s.tracks)

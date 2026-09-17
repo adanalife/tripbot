@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -103,5 +104,25 @@ func TestGormDB_InstalledHandleSkipsConnect(t *testing.T) {
 	SetGormDB(mock)
 	if got := GormDB(); got != mock {
 		t.Errorf("GormDB() = %p, want the installed handle %p", got, mock)
+	}
+}
+
+// Ping must answer from the existing handle and never dial: connectGorm ends
+// the process on failure, so a health check that dialed would kill the thing
+// it was asked to describe.
+func TestPingWithoutConnectionDoesNotDial(t *testing.T) {
+	SetGormDB(nil)
+	t.Cleanup(func() { SetGormDB(nil) })
+
+	dialed := false
+	orig := connectGormFn
+	connectGormFn = func() *gorm.DB { dialed = true; return nil }
+	t.Cleanup(func() { connectGormFn = orig })
+
+	if err := Ping(context.Background()); err == nil {
+		t.Error("Ping = nil with no connection, want an error")
+	}
+	if dialed {
+		t.Error("Ping dialed the database; it must only report on the existing handle")
 	}
 }

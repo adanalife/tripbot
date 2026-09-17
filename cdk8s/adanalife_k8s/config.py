@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
+from adanalife_k8s.contract import load_contract
 
 # Per-component image pins (cdk8s/versions.yaml). Envs present in the file
 # deploy pinned release tags; the rest float on EnvConfig.image_tag.
@@ -43,6 +44,28 @@ def _load_supported_platforms() -> tuple[str, ...]:
 SUPPORTED_PLATFORMS = _load_supported_platforms()
 
 
+def nats_url(env_name: str) -> str:
+    """The NATS endpoint for an env. NATS runs in the sibling <env>-platform
+    namespace (infra's Helm release), so this is cross-namespace and needs the
+    FQDN. The Service name and port are contract vocabulary — playout and the
+    console dial the same two values from their own synced copies — while the
+    namespace pattern is env topology and belongs here."""
+    c = load_contract()
+    return (
+        f"nats://{c.svc('nats')}.{env_name}-platform.svc.cluster.local:{c.port('nats')}"
+    )
+
+
+def gateway_url(platform: str, namespace: str) -> str:
+    """The in-namespace platform-gateway URL a tripbot instance dials for that
+    platform (its <PLATFORM>_API_URL). The Service name and port are contract
+    vocabulary — the platform-gateway repo's cdk8s authors the Services from its
+    own synced copy of the same file — while the namespace is env topology and
+    belongs here."""
+    c = load_contract()
+    return f"http://{c.svc(f'gateway_{platform}')}.{namespace}.svc.cluster.local:{c.port('gateway_http')}"
+
+
 @dataclass(frozen=True)
 class EnvConfig:
     name: str  # prod-1 | stage-1 | development | local
@@ -65,6 +88,14 @@ class EnvConfig:
     secret_source: str = "eso"  # eso | local
     gpu: bool = False  # request gpu.intel.com/i915
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
+    # Emit the Google Maps ExternalSecret + envFrom it. Off by default: every
+    # runtime geocode caller reads the clip's stored row, so the key is only
+    # wanted in an env that still runs a live-geocode path. GOOGLE_MAPS_API_KEY
+    # is optional to the binary (geo.ErrDisabled), so leaving it off is a warn,
+    # not a boot failure. Turning it on requires the env's AWS account to have
+    # /k8s/tripbot/google-maps-api-key seeded — an unseeded parameter still
+    # holds terraform's placeholder, which ESO cannot unmarshal.
+    maps: bool = False
     postgres_size: str = "5Gi"
     postgres_storage_class: str = ""  # "" = cluster default; local-path-retain on prod
     postgres_backup: bool = False
@@ -74,6 +105,9 @@ class EnvConfig:
     # app namespace can't drop the database. Apps reach it cross-namespace via the
     # postgres_host FQDN.
     data_namespace: str = ""
+    # Service name of the Postgres primary inside the data namespace: the legacy
+    # StatefulSet's "postgres", or CNPG's read-write Service "pg-rw".
+    postgres_service: str = "postgres"
     external_dns_role_arn: str = (
         ""  # cert-manager DNS-01 Route53 role (per AWS account)
     )
@@ -82,8 +116,8 @@ class EnvConfig:
     )
     # Streaming platforms present in this env. twitch everywhere; youtube
     # currently stage-only while the bot side is built out. Drives the per-platform
-    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo now,
-    # which carries its own obs_streaming for the stream-key + --startstreaming).
+    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo, which
+    # carries its own obs_streaming for the stream-key + --startstreaming).
     platforms: tuple[str, ...] = ("twitch",)
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
     # PriorityClassName stamped on the env's app Deployment pods; when set,
@@ -127,11 +161,10 @@ class EnvConfig:
     # leaves the gateway unwired (local/CI only): the Twitch audience/follower/
     # broadcaster-send features are disabled.
     twitch_api_url: str = ""
-    # Like twitch_api_url, but for a youtube instance's outbound chat sends:
-    # gateway-youtube's URL routes them through the platform-gateway
-    # unconditionally (no runtime flag — unlike Twitch). Empty keeps the
-    # in-process pkg/youtube send. The inbound chat poll stays in-process
-    # regardless (no gateway streaming endpoint).
+    # Like twitch_api_url, but for a youtube instance: both chat directions
+    # reach gateway-youtube, so tripbot holds no YouTube credential. Required on
+    # a youtube instance — with the URL empty the pod boots without chat. The
+    # inbound half is separately gated by youtube_inbound_enabled below.
     youtube_api_url: str = ""
     # The gateway-transport platforms: a PLATFORM=facebook/instagram/tiktok
     # instance reaches BOTH chat directions through its per-platform gateway
@@ -157,11 +190,17 @@ class EnvConfig:
         pins it for this env, else the env's floating tag."""
         return self.image_pins.get(component, self.image_tag)
 
+    def is_pinned(self, component: str) -> bool:
+        """Whether versions.yaml pins this component to a release tag in this env.
+        A pinned tag is immutable, and can be synced before its image is
+        published — which is what the PreSync image gate guards."""
+        return component in self.image_pins
+
     def pull_policy_for(self, component: str) -> str:
         """Pinned release tags are immutable → IfNotPresent (no redundant pulls,
         no silent drift). Floating tags (latest/main) need Always to pick up
         rebuilds under the same tag."""
-        return "IfNotPresent" if component in self.image_pins else "Always"
+        return "IfNotPresent" if self.is_pinned(component) else "Always"
 
     @property
     def otel_disabled(self) -> str:
@@ -189,9 +228,9 @@ class EnvConfig:
         """DATABASE_HOST apps connect to: the bare Service name when co-located
         (parity), the cross-namespace FQDN when the DB is isolated."""
         return (
-            f"postgres.{self.data_namespace}.svc.cluster.local"
+            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local"
             if self.data_isolated
-            else "postgres"
+            else self.postgres_service
         )
 
 
@@ -210,12 +249,16 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-prod",
         image_tag="latest",
         dns_base="prod.whereisdana.today",
-        nats_url="nats://nats.prod-1-platform.svc.cluster.local:4222",
+        nats_url=nats_url("prod-1"),
         sentry_env="prod-1",
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
         otel=True,
+        # Prod's key is seeded and syncing; keep it mounted. Nothing on the
+        # runtime path reads it since the offline geocode pass, so this is a
+        # standing capability rather than a dependency.
+        maps=True,
         postgres_size="50Gi",
         postgres_storage_class="local-path-retain",
         postgres_backup=True,
@@ -223,6 +266,8 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
+        # prod runs on the CloudNativePG cluster `pg` in prod-1-data.
+        postgres_service="pg-rw",
         # Every platform's app stack (tripbot / onscreens) is emitted and Argo
         # manages it, but births parked at replicas:0 — a console scale-up brings
         # one live (Argo ignores .spec.replicas, so the scale sticks). Only twitch
@@ -242,21 +287,21 @@ ENVS: dict[str, EnvConfig] = {
         # Route prod tripbot-youtube's outbound chat sends through the in-namespace
         # gateway-youtube (the gateway owns the YouTube token). Mirrors stage.
         # Sends fail if the prod gateway is missing its YouTube token.
-        youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        youtube_api_url=gateway_url("youtube", "prod-1"),
         # Route prod tripbot-facebook's chat sends through the in-namespace
         # gateway-facebook (the gateway owns the Page token). Mirrors stage.
-        facebook_api_url="http://gateway-facebook.prod-1.svc.cluster.local:8080",
+        facebook_api_url=gateway_url("facebook", "prod-1"),
         # Wire prod tripbot-{instagram,tiktok} to their in-namespace gateway,
         # required for inbound chat to come up at all — without it the instance
         # boots chat-less and never polls the gateway. Both are read-only
         # (inbound webcast/Graph comments; no chat-post API), so viewers get
         # command effects through onscreens/playout, not chat replies.
-        instagram_api_url="http://gateway-instagram.prod-1.svc.cluster.local:8080",
-        tiktok_api_url="http://gateway-tiktok.prod-1.svc.cluster.local:8080",
+        instagram_api_url=gateway_url("instagram", "prod-1"),
+        tiktok_api_url=gateway_url("tiktok", "prod-1"),
         # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
         # the gateway is the unconditional single Helix caller, with no
         # in-process fallback.
-        twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
+        twitch_api_url=gateway_url("twitch", "prod-1"),
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv) under node pressure. The playback
         # decode/encode CPU requests live in the playout and obs repos.
@@ -271,7 +316,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-stage",
         image_tag="main",
         dns_base="stage.whereisdana.today",
-        nats_url="nats://nats.stage-1-platform.svc.cluster.local:4222",
+        nats_url=nats_url("stage-1"),
         sentry_env="stage-1",
         binary_env="staging",
         deployment_env="stage-1",
@@ -290,6 +335,8 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
+        # Stage runs on the CloudNativePG cluster `pg` in stage-1-data.
+        postgres_service="pg-rw",
         # Every stage platform is present but births parked at replicas:0 — the
         # resting state is everything-off, and a platform comes online via the
         # console's scale-up button (Argo ignores .spec.replicas, so the hand
@@ -302,17 +349,16 @@ ENVS: dict[str, EnvConfig] = {
         platforms=SUPPORTED_PLATFORMS,
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
-        twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
-        # Route stage tripbot-youtube's outbound chat sends through the
-        # in-namespace gateway-youtube (unconditionally — no flag). The inbound
-        # poll stays in-process.
-        youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
+        twitch_api_url=gateway_url("twitch", "stage-1"),
+        # Route both of stage tripbot-youtube's chat directions through the
+        # in-namespace gateway-youtube.
+        youtube_api_url=gateway_url("youtube", "stage-1"),
         # The parked platform instances point at their in-namespace gateway
         # the same way, so a hand scale-up is a working bring-up rather than
         # a chat-less pod waiting on a config edit.
-        facebook_api_url="http://gateway-facebook.stage-1.svc.cluster.local:8080",
-        instagram_api_url="http://gateway-instagram.stage-1.svc.cluster.local:8080",
-        tiktok_api_url="http://gateway-tiktok.stage-1.svc.cluster.local:8080",
+        facebook_api_url=gateway_url("facebook", "stage-1"),
+        instagram_api_url=gateway_url("instagram", "stage-1"),
+        tiktok_api_url=gateway_url("tiktok", "stage-1"),
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.
@@ -324,8 +370,15 @@ ENVS: dict[str, EnvConfig] = {
         app_quota={
             "requests.cpu": "6",
             "requests.memory": "16Gi",
+            # Usage cap, not just scheduling: without it a stage pod fleet can
+            # burst-OOM the shared node even while its requests fit the quota.
+            "limits.memory": "20Gi",
             "requests.gpu.intel.com/i915": "3",
             "pods": "30",
+            # Scoped to local-path — the class that carves the shared physical
+            # disk — so the NAS-backed NFS claims (the 1Ti dashcam corpus)
+            # don't count against it.
+            "local-path.storageclass.storage.k8s.io/requests.storage": "40Gi",
         },
     ),
     "development": EnvConfig(
@@ -335,7 +388,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-stage",
         image_tag="main",
         dns_base="dev.whereisdana.today",
-        nats_url="nats://nats.development-platform.svc.cluster.local:4222",
+        nats_url=nats_url("development"),
         sentry_env="development",
         binary_env="staging",
         deployment_env="development",

@@ -38,3 +38,25 @@ def emit_stream_protection(scope: Construct, env: EnvConfig) -> None:
                 }
             ),
         )
+        # A quota'd namespace rejects any pod missing a quota'd field, so a
+        # LimitRange backfills per-container defaults for pods that omit them
+        # (one-off debug pods, future naive Jobs). Explicit values always win;
+        # no cpu limit is defaulted — the fleet deliberately leaves cpu
+        # uncapped so idle cycles stay burstable.
+        k8s.KubeLimitRange(
+            scope,
+            "app-limits",
+            metadata=k8s.ObjectMeta(name="app-limits", namespace=ns),
+            spec=k8s.LimitRangeSpec(
+                limits=[
+                    k8s.LimitRangeItem(
+                        type="Container",
+                        default_request={
+                            "cpu": k8s.Quantity.from_string("50m"),
+                            "memory": k8s.Quantity.from_string("64Mi"),
+                        },
+                        default={"memory": k8s.Quantity.from_string("512Mi")},
+                    )
+                ]
+            ),
+        )

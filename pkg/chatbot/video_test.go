@@ -27,6 +27,10 @@ type recordingVideo struct {
 	DaytimeErr      error
 	Moment          video.Moment
 	PlayheadTracked bool
+	// RefreshedVid, when set, becomes Vid on the next GetCurrentlyPlaying —
+	// staging a playhead jump that lands on a different clip, the way a real
+	// refresh re-reads the player after playout shuffles.
+	RefreshedVid *video.Video
 }
 
 func (r *recordingVideo) Current() video.Video {
@@ -35,6 +39,9 @@ func (r *recordingVideo) Current() video.Video {
 }
 func (r *recordingVideo) GetCurrentlyPlaying(_ context.Context) video.Video {
 	r.Calls = append(r.Calls, "GetCurrentlyPlaying()")
+	if r.RefreshedVid != nil {
+		r.Vid = *r.RefreshedVid
+	}
 	return r.Vid
 }
 func (r *recordingVideo) CurrentProgress() time.Duration {

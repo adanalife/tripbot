@@ -17,7 +17,10 @@ import (
 
 // fakeBeds is a BedStore seam for the /api/audio handlers.
 type fakeBeds struct {
-	bed          beds.Bed
+	bed beds.Bed
+	// fallback is the bed the watchdog has on air while bed stays selected; ""
+	// when the selection is what's playing.
+	fallback     beds.Bed
 	track        string
 	station      string
 	artist       string
@@ -38,6 +41,13 @@ type fakeBeds struct {
 }
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+
+func (f *fakeBeds) Playing() (beds.Bed, string) {
+	if f.fallback != "" {
+		return f.fallback, f.track
+	}
+	return f.bed, f.track
+}
 
 func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
 	f.feeds++
@@ -509,5 +519,33 @@ func TestAudioHandler_OmitsPendingWhenNothingIsWaiting(t *testing.T) {
 	_, body := getAudio(t, &Server{beds: &fakeBeds{bed: beds.CarHum}})
 	if _, ok := body["pending"]; ok {
 		t.Errorf("pending shipped with nothing waiting: %v", body["pending"])
+	}
+}
+
+// Mid-outage the watchdog has the album on air with SomaFM still selected. The
+// picker still has to highlight the selection, but the now-playing line must
+// come off the audio: reading the selection here fetches SomaFM's feed and
+// prints a track nobody is hearing.
+func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
+	f := &fakeBeds{
+		bed:          beds.SomaFM,
+		fallback:     beds.Album,
+		track:        "/opt/tripbot/assets/music/fifty-horizons/007 New York - Skyline After Midnight.mp3",
+		playingAlbum: "fifty-horizons",
+		artist:       "Steve Cobby",
+		title:        "Big Wow",
+	}
+	_, body := getAudio(t, &Server{beds: f})
+	if body["bed"] != "somafm" {
+		t.Fatalf("bed: want the selection somafm, got %v", body["bed"])
+	}
+	if body["on_fallback"] != true {
+		t.Fatalf("on_fallback: %v", body["on_fallback"])
+	}
+	if body["track"] != "New York - Skyline After Midnight" {
+		t.Fatalf("track: %v", body["track"])
+	}
+	if f.feeds != 0 {
+		t.Fatal("must not consult the SomaFM feed while another bed is on air")
 	}
 }

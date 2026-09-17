@@ -1,7 +1,5 @@
 // Package playoutEvents holds the wire format for the playout command events
-// published over NATS (subjects of the form tripbot.<env>.vlc.<verb> — the
-// "vlc" segment is the legacy wire name playout serves; it renames with the
-// coordinated contract change).
+// published over NATS (subjects of the form tripbot.<env>.playout.<verb>).
 //
 // It is imported by the publisher (cmd/tripbot, via pkg/playout-client); the
 // subscriber is the playout server (adanalife/playout repo). To stay safe as

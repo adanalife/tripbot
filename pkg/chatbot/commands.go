@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -71,27 +72,15 @@ func targetUsername(param string) string {
 // lastHelloTime is used to rate-limit the hello command
 var lastHelloTime time.Time = time.Now()
 
-var currentVersion string
-
-// versionFilePath is the build-time-baked version file path. Released
-// container images write the tag here (see infra/docker/*/Dockerfile);
-// outside a container the file won't exist and versionCmd falls back to
-// "dev". Overridable in tests.
-var versionFilePath = "/etc/tripbot/version"
-
-func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	n := len(a.helpMessages)
-	// a.help() advances the index, so capture the displayed line's number first.
-	pos := a.helpIndex + 1
-	msg := fmt.Sprintf("%s (%d of %d)", a.help(), pos, n)
-	a.Chat.Say(msg)
-}
-
 // commandsCmd lists a curated set of featured commands — filtered to the ones
 // actually dispatchable on this App's platform, so a YouTube instance doesn't
-// suggest commands that would silently no-op.
-func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
+// suggest commands that would silently no-op. With an argument ("!help
+// timewarp") it answers with that one command's Help line instead.
+func (a *App) commandsCmd(_ context.Context, user *users.User, params []string) {
+	if len(params) > 0 {
+		a.Chat.Say(a.helpFor(user, params[0]))
+		return
+	}
 	featured := []string{
 		"!location", "!guess", "!date", "!state",
 		"!sunset", "!timewarp", "!miles", "!leaderboard", "!guessr", "!song",
@@ -103,6 +92,37 @@ func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
 		}
 	}
 	a.Chat.Say("You can try: " + strings.Join(avail, ", ") + ", and many other hidden commands!")
+}
+
+// helpFor renders one command's Help line for "!help <name>". The name may
+// arrive with or without its bang. The lookup goes through singleWordLookup, so
+// a command disabled on this platform reads as unknown, and an admin command
+// stays unadvertised to anyone who couldn't run it — the same silence it keeps
+// when invoked.
+func (a *App) helpFor(user *users.User, name string) string {
+	trigger := "!" + strings.TrimPrefix(strings.ToLower(name), "!")
+	cmd, ok := a.singleWordLookup[trigger]
+	isAdmin := user != nil && a.Cfg != nil && a.Cfg.UserIsAdmin(user.Username)
+	if !ok || cmd.Help == "" || (cmd.RequiresAdmin && !isAdmin) {
+		return "I don't know " + trigger + " — try !commands"
+	}
+	msg := cmd.Trigger + ": " + cmd.Help
+	switch {
+	case cmd.RequiresSubscriber && platformHasSubscribers[a.platform()]:
+		msg += " (subscribers)"
+	case cmd.RequiresFollow && followerGatingEnabled:
+		msg += " (followers)"
+	}
+	var aliases []string
+	for _, al := range cmd.Aliases {
+		if strings.HasPrefix(al, "!") && !strings.Contains(al, " ") {
+			aliases = append(aliases, al)
+		}
+	}
+	if len(aliases) > 0 {
+		msg += " · also " + strings.Join(aliases, ", ")
+	}
+	return msg
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
@@ -137,30 +157,15 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
-	// Cache the lookup — the file is baked at image build time, so its
-	// contents don't change for the lifetime of the process.
-	if currentVersion == "" {
-		currentVersion = readBuildVersion(ctx)
-	}
-
-	a.Chat.Say("Current version is " + currentVersion)
-}
-
-// readBuildVersion reads the build-time-baked tag from versionFilePath
-// (written by the release Dockerfiles). When the file is missing or
-// empty — i.e. local `go run` outside a container — returns "dev" to
-// match the ldflag default used by the /version HTTP handler.
-func readBuildVersion(ctx context.Context) string {
-	raw, err := os.ReadFile(versionFilePath)
-	if err != nil {
-		slog.DebugContext(ctx, "version file not present, falling back to dev", "err", err, "file", versionFilePath)
-		return "dev"
-	}
-	v := strings.TrimSpace(string(raw))
+	// Directly-constructed Apps (tests, and the window before cmd/tripbot
+	// hands New() the ldflag) leave Version empty; "dev" matches the ldflag
+	// default the /version HTTP handler reports.
+	v := a.Version
 	if v == "" {
-		return "dev"
+		v = "dev"
 	}
-	return v
+
+	a.Chat.Say("Current version is " + v)
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
@@ -434,7 +439,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		a.Chat.Say(fmt.Sprintf("This moment was %s", fmtTime))
+		msg := fmt.Sprintf("This moment was %s", fmtTime)
+		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+			msg += fmt.Sprintf(" (%s)", ago)
+		}
+		a.Chat.Say(msg)
 	}
 }
 
@@ -457,7 +466,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		a.Chat.Say(fmt.Sprintf("This moment was %s", fmtDate))
+		msg := fmt.Sprintf("This moment was %s", fmtDate)
+		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+			msg += fmt.Sprintf(" (%s)", ago)
+		}
+		a.Chat.Say(msg)
 	}
 }
 
@@ -477,6 +490,16 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
 		a.Chat.Say(msg)
+		// The cooldown is per-command state rather than a dispatcher gate, so
+		// this refusal has to be recorded from inside the handler. It's the one
+		// refusal a rollup can compare against a *successful* guess by the same
+		// viewer, which is what makes the guess history readable.
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  "!guess",
+			Args:     strings.Join(params, " "),
+			Reason:   events.RefusedCooldown,
+		})
 		return
 	}
 
@@ -514,16 +537,101 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 
-	if strings.EqualFold(guess, state) {
+	correct := strings.EqualFold(guess, state)
+
+	// Record the guess before a correct one warps the playhead, so the airing
+	// context is the footage the guess was about, not wherever the warp lands.
+	a.recordGuess(ctx, events.GuessSubmission{
+		Username: user.Username,
+		Guessed:  guess,
+		Actual:   state,
+		Correct:  correct,
+	})
+
+	if correct {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, state)
 		// increase their guess score
 		a.Scoreboards.CreditGuess(ctx, user)
 		// do a timewarp, crediting the guesser on the overlay
-		a.timewarp(ctx, user.Username)
+		a.timewarp(ctx, user.Username, events.WarpSourceGuess)
 	} else {
-		msg = "Try again! EarthDay"
+		msg = "Try again! " + a.guessHint(user.Username, guess, s)
 	}
 	a.Chat.Say(msg)
+}
+
+// recordGuess writes a guess_submitted event, stamping the clip being guessed
+// at. Best-effort: the guesser gets their answer in chat either way, so a
+// failed insert is logged and dropped rather than surfaced.
+//
+// The caller supplies the guess and the answer; the airing context is filled
+// in here so no emit site can forget it.
+func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a guess must not cost a round-trip to playout.
+	if a.Video != nil {
+		g.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		g.TsSec = &secs
+	}
+	if err := a.Events.GuessSubmitted(ctx, g); err != nil {
+		slog.ErrorContext(ctx, "error recording guess", "err", err,
+			"username", g.Username)
+	}
+}
+
+// guessMiss is one chatter's last wrong !guess: how far its state's centroid
+// was from the van, and when it happened (see App.guessMisses).
+type guessMiss struct {
+	miles float64
+	at    time.Time
+}
+
+// guessHint picks the emote that closes a wrong-guess reply. A chatter's first
+// miss of a round gets the usual EarthDay; each later miss compares this
+// guess's centroid-to-van distance against their previous one and answers 🔥
+// (warmer) or ❄️ (colder) instead — a hint subtle enough that only someone
+// watching their own replies notices it. Restricting hints to the second miss
+// on, and to one bit each, is what keeps !guess from turning into binary
+// search over the state list.
+//
+// A guess with no centroid (a territory, a typo the fuzzy pass let through) or
+// a spot with no usable coordinate can't be measured, so it neither hints nor
+// disturbs the trail.
+func (a *App) guessHint(username, guess string, s spot) string {
+	const noHint = "EarthDay"
+	if s.at.Lat == 0 && s.at.Lng == 0 {
+		return noHint
+	}
+	lat, lng, ok := helpers.StateCentroid(guess)
+	if !ok {
+		return noHint
+	}
+	miles := helpers.MilesBetween(lat, lng, s.at.Lat, s.at.Lng)
+
+	a.guessMissesMu.Lock()
+	prev, hadPrev := a.guessMisses[username]
+	if a.guessMisses == nil {
+		a.guessMisses = make(map[string]guessMiss)
+	}
+	a.guessMisses[username] = guessMiss{miles: miles, at: time.Now()}
+	a.guessMissesMu.Unlock()
+
+	if !hadPrev || !prev.at.After(lastTimewarpTime) {
+		return noHint
+	}
+	switch {
+	case miles < prev.miles:
+		return "🔥"
+	case miles > prev.miles:
+		return "❄️"
+	default:
+		// Same state twice — same distance, nothing to compare.
+		return noHint
+	}
 }
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
@@ -667,9 +775,6 @@ func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !secretinfo", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	vid := a.Video.Current()
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, a.Video.CurrentProgress())
 	lat, lng, err := vid.Location()
@@ -683,14 +788,12 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
-// manual miles correction (amount may be negative) and logs a correction event
-// so the rollup folds it into user_rollups.extra_miles. Admin-only for now
-// (broadcaster); widen the gate to mods once a mod-status source exists.
+// manual miles correction (amount may be negative) to both the lifetime total
+// and the current monthly scoreboard, and logs a correction event so the rollup
+// folds it into user_rollups.extra_miles. Admin-only for now (broadcaster);
+// widen the gate to mods once a mod-status source exists.
 func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	if len(params) < 2 {
 		a.Chat.Say("usage: !givemiles <user> <amount>")
 		return
@@ -710,7 +813,15 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		}
 		return
 	}
-	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	newTotal, err := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	if err != nil {
+		slog.ErrorContext(ctx, "error correcting miles", "err", err, "username", target)
+		a.Chat.Say("Couldn't apply that right now, try again in a bit")
+		return
+	}
+	// The event only goes in once the correction has persisted: events is
+	// append-only, so a correction event with no matching users row is a
+	// permanent divergence in the rollups derived from it.
 	if err := a.Events.Correction(ctx, target, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}
@@ -723,9 +834,6 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 // — the hourly soft refresh can't revive a crashed CEF webpage.
 func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	n, err := a.OBS.RefreshBrowserSources(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "overlay refresh failed", "err", err)
@@ -737,10 +845,6 @@ func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []stri
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		a.Chat.Say("Nice try bucko")
-		return
-	}
 	a.Chat.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
 	if err := a.Cron.Shutdown(); err != nil {
@@ -758,11 +862,6 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)
-	// don't let strangers run this
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
-
 	// don't do anything if empty
 	if len(params) == 0 {
 		a.Chat.Say("What do you want to say?")
@@ -796,9 +895,6 @@ func (a *App) unBotCmd(ctx context.Context, user *users.User, params []string) {
 // in chat, logs the outcome for ops visibility.
 func (a *App) setBotFlag(ctx context.Context, user *users.User, params []string, isBot bool, trigger string) {
 	slog.InfoContext(ctx, "ran "+trigger, "username", user.Username)
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		return
-	}
 	if len(params) == 0 {
 		slog.WarnContext(ctx, trigger+" called with no target", "username", user.Username)
 		return

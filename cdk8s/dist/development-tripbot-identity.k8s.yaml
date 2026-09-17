@@ -59,26 +59,6 @@ metadata:
   labels:
     app.kubernetes.io/name: tripbot
     app.kubernetes.io/part-of: tripbot
-  name: tripbot-google-maps-api-key
-  namespace: development
-spec:
-  dataFrom:
-    - extract:
-        key: /k8s/tripbot/google-maps-api-key
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: SecretStore
-    name: aws-parameterstore
-  target:
-    creationPolicy: Owner
-    name: tripbot-google-maps-api-key
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  labels:
-    app.kubernetes.io/name: tripbot
-    app.kubernetes.io/part-of: tripbot
   name: tripbot-discord-alerts-webhook
   namespace: development
 spec:

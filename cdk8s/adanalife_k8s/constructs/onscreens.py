@@ -23,9 +23,14 @@ from constructs import Construct
 import imports.k8s as k8s
 from adanalife_k8s import appconfig, configmap, scheduling
 from adanalife_k8s.config import EnvConfig
+from adanalife_k8s.contract import load_contract
+from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.naming import app_name, meta_labels, selector
 
-RUN_DIR = "/opt/data/run"
+
+# The contract's ports, so a rename in pkg/contract reaches the manifests
+# rather than drifting against a literal spelled here.
+_PORTS = load_contract()
 
 
 class OnscreensServer(Construct):
@@ -35,6 +40,7 @@ class OnscreensServer(Construct):
         ns = env.namespace or None
         labels = meta_labels(name)
         sel = selector(name)
+        image = f"adanalife/onscreens-server:{env.tag_for('onscreens-server')}"
 
         # --- ConfigMap (stable name + content-hash annotation) ---
         # Telemetry block (ENV + OTEL_* + SENTRY_ENVIRONMENT) is shared with the
@@ -64,29 +70,28 @@ class OnscreensServer(Construct):
 
         container = k8s.Container(
             name=name,
-            image=f"adanalife/onscreens-server:{env.tag_for('onscreens-server')}",
+            image=image,
             image_pull_policy=env.pull_policy_for("onscreens-server"),
             security_context=k8s.SecurityContext(
                 allow_privilege_escalation=False,
                 capabilities=k8s.Capabilities(drop=["ALL"]),
             ),
-            ports=[k8s.ContainerPort(name="http", container_port=8080)],
+            ports=[
+                k8s.ContainerPort(
+                    name="http", container_port=_PORTS.port("onscreens_http")
+                )
+            ],
             env_from=[
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
                 # onscreens-server reports to its own Sentry project. The
-                # observability Secrets are optional so the pod can start
-                # before the ExternalSecrets sync; Sentry/OTLP just gate off
-                # when the env vars are absent.
+                # Secret is optional so the pod can start before the
+                # ExternalSecrets sync; Sentry gates off when the env vars
+                # are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
                         name="sentry-onscreens-server", optional=True
-                    )
-                ),
-                k8s.EnvFromSource(
-                    secret_ref=k8s.SecretEnvSource(
-                        name="grafana-cloud-otlp", optional=True
                     )
                 ),
             ],
@@ -112,8 +117,6 @@ class OnscreensServer(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("128Mi")},
             ),
-            # Writable tmpfs scratch for RUN_DIR — nothing durable.
-            volume_mounts=[k8s.VolumeMount(name="run", mount_path=RUN_DIR)],
         )
 
         k8s.KubeDeployment(
@@ -138,8 +141,15 @@ class OnscreensServer(Construct):
                         labels=sel, annotations=configmap.pod_annotations(cfg_hash)
                     ),
                     spec=k8s.PodSpec(
+                        # The `restricted` PodSecurity profile requires
+                        # runAsNonRoot as a spec field, whatever USER the image
+                        # declares — and this one declares none. Same uid as
+                        # tripbot: a static Go binary on :8080 (unprivileged)
+                        # that writes nothing to disk.
                         security_context=k8s.PodSecurityContext(
-                            seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
+                            run_as_non_root=True,
+                            run_as_user=65532,
+                            seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault"),
                         ),
                         priority_class_name=env.priority_class or None,
                         # Co-locate with this platform's OBS pod so the overlay
@@ -159,13 +169,21 @@ class OnscreensServer(Construct):
                             else None
                         ),
                         containers=[container],
-                        volumes=[
-                            k8s.Volume(name="run", empty_dir=k8s.EmptyDirVolumeSource())
-                        ],
                     ),
                 ),
             ),
         )
+
+        # Same release bump moves both pins, so onscreens races the registry
+        # exactly as tripbot does (pinned envs only).
+        if env.is_pinned("onscreens-server"):
+            emit_image_gate(
+                self,
+                name=name,
+                namespace=ns,
+                labels=labels,
+                image_ref=image,
+            )
 
         # --- Service (cluster-internal; tripbot + OBS reach :8080 by DNS) ---
         k8s.KubeService(
@@ -178,7 +196,7 @@ class OnscreensServer(Construct):
                 ports=[
                     k8s.ServicePort(
                         name="http",
-                        port=8080,
+                        port=_PORTS.port("onscreens_http"),
                         target_port=k8s.IntOrString.from_string("http"),
                     )
                 ],

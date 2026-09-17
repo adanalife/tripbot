@@ -34,6 +34,18 @@
           "broadcaster": {
             "type": "boolean"
           },
+          "badges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "emotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Emote"
+            }
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
@@ -277,6 +289,26 @@
       },
       "required": [
         "account"
+      ]
+    },
+    "Emote": {
+      "type": "object",
+      "title": "Emote",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer"
+        },
+        "end": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "start",
+        "end"
       ]
     }
   }

@@ -13,8 +13,8 @@
 // (cmd/tripbot runs it in a goroutine that loops with a delay).
 //
 // ErrUnauthorized is the exception the caller must honor: it means Twitch
-// rejected the broadcaster token for every subscription, which no amount of
-// redialing fixes, so the loop stops instead of spinning.
+// refused every subscription, so the session is worthless and the caller should
+// pause for a fresh token before redialing.
 //
 // Subscriptions are created in the OnWelcome callback (per Twitch's
 // protocol — you can't subscribe until you have a session ID). If a
@@ -32,14 +32,16 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	twitch "github.com/joeyak/go-twitch-eventsub/v3"
 )
 
 // ErrUnauthorized reports that Twitch rejected the broadcaster token when
-// creating subscriptions. Callers must not redial on it: the token is read once
-// at startup, so retrying re-runs the same rejection forever (Twitch drops a
-// subscription-less session with close code 4003 after ~10s, so a retry loop
-// spins at that period). Recovery is a re-consent plus a restart.
+// creating subscriptions — a rotated credential and a revoked one look
+// identical from here. Callers must redial more slowly than usual on it rather
+// than at the socket-drop cadence: Twitch hangs up on a subscription-less
+// session after ~10s, so redialing at that period buys nothing but request
+// volume until a newer token is available to read.
 var ErrUnauthorized = errors.New("eventsub: broadcaster token unauthorized")
 
 // The status line Twitch returns for a rejected token, as the library renders it
@@ -63,6 +65,9 @@ type Handlers struct {
 	// and the message they typed. channel.subscribe does not fire for resubs,
 	// so this is the only signal for a continued subscription.
 	OnResub func(username string, cumulativeMonths, streakMonths int, tier, message string)
+	// OnRaid fires on channel.raid — another channel raiding this one,
+	// carrying the raiding broadcaster's name and the party size.
+	OnRaid func(from string, viewers int)
 }
 
 // Config is the static input Run needs to subscribe. ClientID matches
@@ -135,12 +140,25 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			h.OnResub(e.UserName, e.CumulativeMonths, e.StreakMonths, e.Tier, e.Message.Text)
 		})
 	}
+	if h.OnRaid != nil {
+		client.OnEventChannelRaid(func(e twitch.EventChannelRaid) {
+			h.OnRaid(e.FromBroadcasterUserName, e.Viewers)
+		})
+	}
 
 	// Written from the OnWelcome callback, which the library runs on its own read
 	// goroutine, and read after ConnectWithContext returns — hence atomic.
 	var attempted, denied atomic.Int32
 
 	client.OnWelcome(func(msg twitch.WelcomeMessage) {
+		// The library reconnects transparently on a session_reconnect frame, so
+		// OnWelcome can fire more than once per Run and each firing is a fresh
+		// subscribe round. Counting across rounds would let one good round mask a
+		// later wholly-refused one, and would report a subscription count that
+		// only grows.
+		attempted.Store(0)
+		denied.Store(0)
+
 		sid := msg.Payload.Session.ID
 		slog.InfoContext(ctx, "eventsub welcome received; subscribing", "session_id", sid)
 
@@ -180,9 +198,25 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 				"broadcaster_user_id": cfg.BroadcasterUserID,
 			})
 		}
+		if h.OnRaid != nil {
+			sub(twitch.SubChannelRaid, map[string]string{
+				// channel.raid conditions on the raid's direction rather than
+				// a broadcaster: to_ scopes it to raids landing on this
+				// channel. It's the one subscription here that needs no auth
+				// scope beyond a valid token.
+				"to_broadcaster_user_id": cfg.BroadcasterUserID,
+			})
+		}
+
+		held := attempted.Load() - denied.Load()
+		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied.Load())
+		instrumentation.EventSubSubscriptions.Set(int(held), int(denied.Load()))
 	})
 
 	err := client.ConnectWithContext(ctx)
+	// The session is gone whatever ended it, so nothing is arriving until the
+	// caller redials. denied stays as the round recorded it — see the gauge's doc.
+	instrumentation.EventSubSubscriptions.Set(0, int(denied.Load()))
 	// A wholly rejected token outranks whatever closed the socket: Twitch hangs
 	// up on a subscription-less session (close code 4003), so the connection
 	// error here is a symptom and redialing would just repeat it.

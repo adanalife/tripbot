@@ -96,6 +96,12 @@ func boolType() orderedObject { return orderedObject{{"type", "boolean"}} }
 
 func refType(name string) orderedObject { return orderedObject{{"$ref", "#/$defs/" + name}} }
 
+// mapType renders a Go map with string keys: an object whose keys are open and
+// whose values all share one schema.
+func mapType(values orderedObject) orderedObject {
+	return orderedObject{{"type", "object"}, {"additionalProperties", values}}
+}
+
 func arrayType(items orderedObject) orderedObject {
 	return orderedObject{{"type", "array"}, {"items", items}}
 }
@@ -132,7 +138,17 @@ var (
 		{"moderator", boolType(), false},
 		{"subscriber", boolType(), false},
 		{"broadcaster", boolType(), false},
+		{"badges", mapType(intType()), false},
+		{"emotes", arrayType(refType("Emote")), false},
 		{"emitted_at", dateType(), true},
+	}
+	// Start/End index the message text in code points with an inclusive end —
+	// Twitch's own convention, carried through so the console can slice its
+	// (code-point-indexed) strings directly.
+	emoteFields = []field{
+		{"id", strType(), true},
+		{"start", intType(), true},
+		{"end", intType(), true},
 	}
 	subscriberEventFields = []field{
 		{"platform", strType(), false},
@@ -201,6 +217,7 @@ var envelopeFields = map[string][]field{
 	"VideoChanged":      videoChangedFields,
 	"AuthStatus":        authStatusFields,
 	"AuthAccount":       authAccountFields,
+	"Emote":             emoteFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
 	"FacebookBroadcast": facebookBroadcastFields,
 }
@@ -257,6 +274,7 @@ func eventbusContract() orderedObject {
 		}},
 		{"$defs", orderedObject{
 			{"AuthAccount", objectSchema("AuthAccount", authAccountFields)},
+			{"Emote", objectSchema("Emote", emoteFields)},
 		}},
 	}
 }

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Called by .github/workflows/release.yml (after each per-arch build/push):
 # verifies a just-pushed release image has the expected version + SHA stamped
-# into /etc/tripbot/{version,sha}. Pulls the image, runs `cat` via
-# --entrypoint (overriding the image's tini/entrypoint.sh), and compares
-# the contents against expected values.
+# into its binary. Pulls the image, runs it with --version (the image's
+# entrypoint passes the flag through to the binary), and compares the two
+# printed fields against expected values.
 #
 # Usage: verify-stamped-image.sh <image> <expected-version> <expected-sha>
 #
 # Fails (exit 1) if:
-#   - either file is missing or empty
-#   - either file's contents disagree with the expected values
+#   - the binary doesn't print two fields
+#   - either field disagrees with the expected value
 #   - the version reads as the literal string "dev" (build-arg not propagated)
 set -euo pipefail
 
@@ -17,8 +17,7 @@ IMAGE="${1:?missing image arg}"
 EXPECTED_VERSION="${2:?missing version arg}"
 EXPECTED_SHA="${3:?missing sha arg}"
 
-GOT_VERSION=$(docker run --rm --entrypoint cat "$IMAGE" /etc/tripbot/version)
-GOT_SHA=$(docker run --rm --entrypoint cat "$IMAGE" /etc/tripbot/sha)
+read -r GOT_VERSION GOT_SHA <<<"$(docker run --rm "$IMAGE" --version)"
 
 echo "image:    $IMAGE"
 echo "expected: version=$EXPECTED_VERSION sha=$EXPECTED_SHA"

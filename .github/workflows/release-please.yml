@@ -11,18 +11,26 @@ name: release-please
 # onscreens-server (tripbot restarts only the chat bot; onscreens restarts
 # only blip the overlays — the stream itself stays up).
 #
-# Merging the release PR creates the vX.Y.Z tag + GitHub Release; release.yml is
-# then dispatched explicitly at that tag because GITHUB_TOKEN-created tags don't
-# fire push triggers.
+# Merging the release PR creates the vX.Y.Z tag + GitHub Release, and the tag
+# fires release.yml on its own.
+#
+# It runs on the adanalife-automation app token, not GITHUB_TOKEN, and both
+# halves of that matter. Anything github-actions[bot] triggers is held at
+# `action_required` under the repo's first-time-contributor approval policy —
+# a status the bot never outgrows — so a bot-authored release PR parks its
+# gates unrun until someone clicks approve. And a GITHUB_TOKEN-pushed tag
+# fires no push trigger at all, so release.yml would need dispatching by hand.
+# An app token is an ordinary actor on both counts: its pull_request events run
+# unheld and its tag reaches release.yml on its own.
 on:
   push:
     branches:
       - main
 
+# Every write goes through the app token below; the job's own GITHUB_TOKEN
+# needs nothing.
 permissions:
-  contents: write # tag + GitHub Release + release-PR branch
-  pull-requests: write # open/update the release PR
-  actions: write # dispatch release.yml
+  contents: read
 
 concurrency:
   group: release-please
@@ -33,28 +41,52 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: googleapis/release-please-action@v5
-        id: release
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-
-      # On the standing-release-PR run (not the release-created run), stage the
-      # towncrier changelog + re-synthed dist onto the PR branch. Pushed with the
-      # automation app token so the push fires the PR's pull_request events (CI
-      # gates re-run against the final release state); a GITHUB_TOKEN push
-      # wouldn't. release-please recreates this branch from main on every push,
-      # so this rebuild is idempotent.
       - name: Mint automation app token
-        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          # Without these the token carries the app installation's whole
+          # permission set. release-please needs exactly two: contents to push
+          # the branch and cut the tag, pull-requests to maintain the release PR.
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # While a release PR is open (not on the release-created run), stage the
+      # towncrier changelog + re-synthed dist onto its branch. Pushed with the
+      # automation app token so the push fires the PR's pull_request events (CI
+      # gates re-run against the final release state); a GITHUB_TOKEN push
+      # wouldn't. release-please recreates this branch from main on every push,
+      # so this rebuild is idempotent.
+      #
+      # Keyed off the branch existing, not `steps.release.outputs.pr`: that output
+      # is set only on runs where release-please itself changed the PR, and a push
+      # that leaves it empty skips the staging pass — so the PR merges with a stale
+      # dist / unbuilt changelog and, because the app-token push is what fires its
+      # pull_request events, no CI at all (platform-gateway 1.27.1).
+      - name: Check for an open release PR branch
+        if: ${{ !steps.release.outputs.release_created }}
+        id: release-branch
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/release-please--branches--main")
+          echo "Release branch lookup: HTTP $code"
+          echo "exists=$([ "$code" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check out the release PR branch
-        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        if: ${{ steps.release-branch.outputs.exists == 'true' }}
         uses: actions/checkout@v7
         with:
           ref: release-please--branches--main
@@ -64,21 +96,57 @@ jobs:
       # Toolchain for the cdk8s re-synth (cdk8s/.mise.toml pins python / node;
       # uv handles the project-local Python deps on top, npm ci the CLI).
       - uses: jdx/mise-action@v4
-        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        if: ${{ steps.release-branch.outputs.exists == 'true' }}
         with:
           working_directory: cdk8s
 
-      - uses: astral-sh/setup-uv@v9.0.0 # no floating major tag published
-        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+      - uses: astral-sh/setup-uv@v10.0.1 # no floating major tag published
+        if: ${{ steps.release-branch.outputs.exists == 'true' }}
 
       - name: Build changelog + re-synth cdk8s on the release PR branch
-        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        if: ${{ steps.release-branch.outputs.exists == 'true' }}
         run: |
           set -euo pipefail
           # release-please bumped the manifest on this branch — the version is
           # the single source of truth for both the changelog and the cut tag.
           VERSION=$(jq -r '."."' .release-please-manifest.json)
           echo "Release version: $VERSION"
+
+          # A fragment still named "+<slug>.<type>.md" here missed its PR-time
+          # rename: changelog-number.yml checks out the head branch, and a merge
+          # that lands while that job is queued deletes the branch out from under
+          # it. The squash commit that put the fragment on main carries the PR
+          # number in its subject, so recover it from there — this is the last
+          # moment before towncrier turns fragments into permanent changelog
+          # lines, and it needs no branch to still exist.
+          for f in changelog.d/+*.md; do
+            [ -e "$f" ] || continue
+            subject="$(git log --diff-filter=A --format=%s -1 -- "$f")"
+            pr="$(printf '%s' "$subject" | sed -nE 's/.*\(#([0-9]+)\)$/\1/p')"
+            if [ -z "$pr" ]; then
+              echo "::warning title=Unnumbered changelog fragment::${f} has no PR number in the commit that added it (\"${subject}\") — its entry will publish without a link."
+              continue
+            fi
+            base="$(basename "$f" .md)"
+            type="${base##*.}"
+            # `towncrier create` de-duplicates its own output by appending a
+            # counter before .md, so a second +ci.ci.md arrives as +ci.ci.1.md
+            # and the last segment is that counter rather than the type. Reading
+            # it as the type would produce <PR>.1.md, a name towncrier rejects,
+            # so strip the counter and read the type from the segment before it.
+            case "$type" in
+              *[!0-9]*) ;;                        # a real type, not a counter
+              *) stem="${base%.*}"; type="${stem##*.}" ;;
+            esac
+            target="changelog.d/${pr}.${type}.md"
+            n=0
+            while [ -e "$target" ]; do
+              n=$((n + 1))
+              target="changelog.d/${pr}.${type}.${n}.md"
+            done
+            echo "::notice title=Recovered changelog fragment::${f} -> ${target} (from #${pr})."
+            git mv "$f" "$target"
+          done
 
           # Collate the towncrier fragments (if any) into CHANGELOG.md + delete
           # them. A release PR can exist with no fragments (a fix: whose entry
@@ -108,9 +176,3 @@ jobs:
             git commit -m "chore: build changelog + re-synth dist for $VERSION"
             git push origin HEAD:release-please--branches--main
           fi
-
-      - name: Dispatch release workflow at the new tag
-        if: ${{ steps.release.outputs.release_created }}
-        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "${{ steps.release.outputs.tag_name }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

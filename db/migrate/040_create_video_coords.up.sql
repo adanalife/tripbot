@@ -42,7 +42,7 @@ ALTER TABLE videos ADD COLUMN coord_confidence REAL;
    care. NULL until the coords stage has processed the clip. */
 ALTER TABLE videos ADD COLUMN coord_accuracy_m REAL;
 
-/* Tracks are per-moment, so a clip that has one no longer derives its
-   representative coordinate from a single frame's read. */
+/* Tracks are per-moment, so a clip that has one derives its representative
+   coordinate from the track's median rather than a single frame's read. */
 COMMENT ON COLUMN videos.coord_source IS
     'ocr | interpolated | rejected | missing | track (median of a video_coords track)';

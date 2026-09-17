@@ -12,3 +12,7 @@ node = "24"
 # fresh CI resolution picking a new one has broken the synth gate twice. The
 # lockfile also makes the CLI bot-bumpable: Dependabot has no mise backend, but
 # it does have npm.
+
+# kubeconform validates the synthed dist/ against the k8s API schemas
+# (task cdk8s:validate, mirrored in cdk8s-synth.yml).
+kubeconform = "0.8.0"

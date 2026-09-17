@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
-	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 // IncomingGift is one viewer gift from a gateway-wired platform, in the shape
@@ -105,7 +105,7 @@ func (a *App) HandleGatewayGift(ctx context.Context, gift IncomingGift) {
 	}
 
 	// Playout playback isn't wired up on the dev Mac (same guard as !timewarp).
-	if helpers.RunningOnDarwin() {
+	if runningOnDarwin() {
 		return
 	}
 
@@ -121,7 +121,7 @@ func (a *App) HandleGatewayGift(ctx context.Context, gift IncomingGift) {
 
 	switch effect {
 	case effectTimewarp:
-		a.timewarp(ctx, gift.User)
+		a.timewarp(ctx, gift.User, events.WarpSourceGift)
 	}
 
 	lastGiftEffectTime = time.Now()

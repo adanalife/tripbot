@@ -20,14 +20,20 @@ const (
 
 // Videos represent a video file containing dashcam footage
 type Video struct {
-	ID          int `gorm:"primaryKey"`
-	Slug        string
-	Lat         float64
-	Lng         float64
-	NextVid     sql.NullInt64
-	PrevVid     sql.NullInt64
-	Flagged     bool
-	State       string
+	ID      int `gorm:"primaryKey"`
+	Slug    string
+	Lat     float64
+	Lng     float64
+	NextVid sql.NullInt64
+	PrevVid sql.NullInt64
+	Flagged bool
+	State   string
+	// City and CityM are the clip's own coordinate named offline by the pipeline,
+	// the same way a Moment is. They are what answers a clip whose per-moment
+	// track isn't trustworthy enough to read from; empty until the geocode pass
+	// has reached the row. CityM is metres from City, 0 meaning inside it.
+	City        string
+	CityM       *float64
 	CoordSource string
 	// CoordConfidence is how much this clip's per-moment video_coords track is
 	// worth believing, 0..1. NULL — a nil pointer here — means the coords stage

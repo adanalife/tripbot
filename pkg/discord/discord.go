@@ -7,6 +7,7 @@ package discord
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -26,7 +27,7 @@ const FlagKey = "discord.bot_enabled"
 // ShouldStart inspects the loaded config and returns whether to bring up
 // the Discord session. Returns (false, reason) for the three
 // intentionally-disabled cases (missing token, missing guild id,
-// unfilled SM placeholder) so the caller can log a single INFO line
+// unfilled placeholder) so the caller can log a single INFO line
 // rather than the gateway thrashing on auth errors.
 func ShouldStart(cfg *c.TripbotConfig) (bool, string) {
 	if cfg.DiscordBotToken == "" {
@@ -35,13 +36,30 @@ func ShouldStart(cfg *c.TripbotConfig) (bool, string) {
 	if cfg.DiscordGuildID == "" {
 		return false, "guild_id unset"
 	}
-	// The SM container created by terraform writes this literal string
-	// until aws secretsmanager put-secret-value is run. ESO syncs it
-	// faithfully, so we'd otherwise try to auth with garbage.
-	if strings.HasPrefix(cfg.DiscordBotToken, "placeholder") {
-		return false, "token is SM placeholder"
+	// Terraform seeds the parameter with a placeholder until the real token is
+	// put. ESO syncs whatever is there faithfully, so without this an unseeded
+	// env would try to auth with the placeholder text.
+	if isPlaceholderToken(cfg.DiscordBotToken) {
+		return false, "token is the unset placeholder"
 	}
 	return true, ""
+}
+
+// isPlaceholderToken reports whether tok is one of the unset-token values the
+// secret store seeds rather than a real bot token. Those come in two shapes: a
+// bare string starting with "placeholder", and a JSON object carrying a
+// "placeholder" key, which is what a whole-parameter sync delivers. A real bot
+// token is never valid JSON, so decoding is a safe discriminator.
+func isPlaceholderToken(tok string) bool {
+	if tok == "" || strings.HasPrefix(tok, "placeholder") {
+		return true
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(tok), &obj); err != nil {
+		return false
+	}
+	_, ok := obj["placeholder"]
+	return ok
 }
 
 // Session wraps a discordgo session plus the guild we register

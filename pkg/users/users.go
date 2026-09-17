@@ -52,6 +52,10 @@ type User struct {
 	// session (GiveEveryoneMiles), so logout can record the full unreconstructable
 	// bonus. Resets each login (fresh User from FindOrCreate).
 	sessionExtraMiles float32 `gorm:"-"`
+	// milesCheckpointed is how much of this session's accrual CheckpointMiles
+	// has already banked in the DB. sessionMiles subtracts it so the banked
+	// portion isn't also counted as still-in-flight.
+	milesCheckpointed float32 `gorm:"-"`
 }
 
 // this is how long they have before they can guess again
@@ -82,7 +86,18 @@ func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
 	if s.IsSubscriber(u) {
 		sessionMiles += s.BonusMiles(u)
 	}
-	return sessionMiles
+	// Whatever CheckpointMiles already banked is counted in the DB figures
+	// callers add this to, so only the remainder is still in flight. Read from
+	// the live session copy, not u: an other-user lookup passes a fresh DB row,
+	// whose zero value would re-count the banked miles.
+	inFlight := sessionMiles - s.milesCheckpointed(u.Username)
+	// A subscription lapsing mid-session drops the bonus out of sessionMiles
+	// while the banked figure keeps it, which would otherwise show up as a
+	// total that ticks backwards.
+	if inFlight < 0 {
+		return 0.0
+	}
+	return inFlight
 }
 
 func (s *Sessions) CurrentMiles(ctx context.Context, u User) float32 {

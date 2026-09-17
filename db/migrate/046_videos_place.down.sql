@@ -1,0 +1,2 @@
+ALTER TABLE videos DROP COLUMN city_m;
+ALTER TABLE videos DROP COLUMN city;

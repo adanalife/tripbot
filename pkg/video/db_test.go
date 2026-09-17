@@ -23,9 +23,9 @@ func link(t *testing.T, from, to Video) {
 // struct, so a walk must start from the persisted state.
 func reload(t *testing.T, id int) Video {
 	t.Helper()
-	vid, err := loadById(context.Background(), int64(id))
+	vid, err := load(context.Background(), int64(id))
 	if err != nil {
-		t.Fatalf("loadById(%d): %v", id, err)
+		t.Fatalf("load(%d): %v", id, err)
 	}
 	return vid
 }
@@ -123,6 +123,13 @@ func TestLoadOrCreate_CreatesThenLoadsSameRow(t *testing.T) {
 	if loaded.ID != created.ID {
 		t.Errorf("second LoadOrCreate made a new row %d, want the existing %d", loaded.ID, created.ID)
 	}
+	// The create path returns the struct it inserted rather than re-reading it,
+	// so compare it against the row the load path reads back.
+	if loaded.Slug != created.Slug || loaded.Flagged != created.Flagged ||
+		loaded.CoordSource != created.CoordSource || loaded.State != created.State ||
+		!loaded.DateFilmed.Equal(created.DateFilmed) {
+		t.Errorf("created video = %+v, want the persisted %+v", created, loaded)
+	}
 }
 
 func TestFindRandomByState(t *testing.T) {
@@ -141,6 +148,44 @@ func TestFindRandomByState(t *testing.T) {
 		if got.ID != want.ID {
 			t.Errorf("FindRandomByState(%q) = id %d (state %q), want id %d", state, got.ID, got.State, want.ID)
 		}
+	}
+}
+
+func TestFindRandomByState_SpreadsAcrossTheStatesClips(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	want := map[int]bool{}
+	for _, slug := range []string{"2018_0514_224801_050", "2018_0514_224801_051", "2018_0514_224801_052"} {
+		want[insertVideo(t, db, Video{Slug: slug, State: "Wyoming"}).ID] = true
+	}
+
+	// Every draw is one of the state's clips, and 20 draws over 3 clips land on
+	// more than one of them unless the pick is stuck on a fixed row.
+	got := map[int]bool{}
+	for range 20 {
+		vid, err := FindRandomByState(ctx, "WY")
+		if err != nil {
+			t.Fatalf("FindRandomByState(\"WY\"): %v", err)
+		}
+		if !want[vid.ID] {
+			t.Fatalf("FindRandomByState(\"WY\") = id %d (state %q), want one of %v", vid.ID, vid.State, want)
+		}
+		got[vid.ID] = true
+	}
+	if len(got) < 2 {
+		t.Errorf("20 draws returned only %d distinct clip(s) %v, want a spread over %v", len(got), got, want)
+	}
+}
+
+func TestFindRandomByState_NoClipsForState(t *testing.T) {
+	db := testdb.New(t)
+
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_060", State: "Wyoming"})
+
+	_, err := FindRandomByState(context.Background(), "Alaska")
+	if !errors.Is(err, terrors.ErrNoFootageForState) {
+		t.Errorf("FindRandomByState(\"Alaska\") error = %v, want %v", err, terrors.ErrNoFootageForState)
 	}
 }
 
@@ -229,9 +274,9 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	backdate(earlier, "2018-05-14T00:00:00Z")
 	backdate(later, "2018-05-15T00:00:00Z")
 
-	indexOf := func(route [][2]float64, want [2]float64) int {
+	indexOf := func(route []RoutePoint, want [2]float64) int {
 		for i, c := range route {
-			if c == want {
+			if [2]float64{c.Lat, c.Lng} == want {
 				return i
 			}
 		}
@@ -251,5 +296,30 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	}
 	if i := indexOf(route, [2]float64{0, 0}); i >= 0 {
 		t.Errorf("CorpusRoute() included a 0/0 clip at %d", i)
+	}
+}
+
+// TestValidate pins the dash-string rules the package-level regex enforces:
+// the first 20 characters must be digits and underscores only.
+func TestValidate(t *testing.T) {
+	cases := []struct {
+		name    string
+		dashStr string
+		wantErr bool
+	}{
+		{"canonical slug", "2018_0514_224801_001", false},
+		{"trailing extension ignored", "2018_0514_224801_001.mp4", false},
+		{"too short", "2018_0514_2248", true},
+		{"letters in timestamp", "2018_0514_2248a1_001", true},
+		{"dash separators", "2018-0514-224801-001", true},
+		{"hidden file", ".018_0514_224801_001", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validate(tc.dashStr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validate(%q) = %v, wantErr %v", tc.dashStr, err, tc.wantErr)
+			}
+		})
 	}
 }

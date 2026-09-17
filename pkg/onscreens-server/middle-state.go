@@ -17,7 +17,7 @@ import (
 // over the single MiddleStateSubject. A restarted onscreens-server reads it
 // back to restore whatever text was on screen before the restart, so the
 // permanent middle overlay survives a reboot. Same shape as the playout
-// TRIPBOT_VLC_LASTPLAYED cache.
+// TRIPBOT_PLAYOUT_LASTPLAYED cache.
 const middleStateStreamName = "TRIPBOT_ONSCREENS_MIDDLE"
 
 // EnsureMiddleStateStream idempotently declares the middle-text state stream.
@@ -108,7 +108,10 @@ func readMiddleState(ctx context.Context, js jetstream.JetStream, env, platform 
 func (s *Server) RestoreMiddleText(ctx context.Context) {
 	js := natsclient.JetStream()
 	if err := EnsureMiddleStateStream(ctx, js, s.cfg.Environment); err != nil {
-		slog.ErrorContext(ctx, "couldn't ensure middle state stream", "err", err)
+		// Warn rather than error, matching the read failures below: NATS not
+		// being reachable yet at boot is the only way this fails, and the
+		// overlay falls back to its constructed default.
+		slog.WarnContext(ctx, "couldn't ensure middle state stream", "err", err)
 		return
 	}
 	msg, showing, ok := readMiddleState(ctx, js, s.cfg.Environment, s.cfg.Platform)

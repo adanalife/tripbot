@@ -39,8 +39,9 @@ const watermarkName = "user_rollups"
 // — seeing rows newer than the watermark just makes the result more current,
 // and those users get recomputed again next tick anyway.
 //
-// first_seen/last_seen exclude the pre-2000 sentinel: historical events rows
-// carry zero-value (0001-01-01) date_created from an old insert bug.
+// first_seen/last_seen sit behind a pre-2000 floor, so an events row left with
+// an unstamped (0001-01-01) date_created can't drag a user's first_seen back to
+// year zero.
 const reconcileSQL = `
 WITH dirty AS (
     SELECT DISTINCT platform, username FROM events

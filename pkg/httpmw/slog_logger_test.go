@@ -20,6 +20,7 @@ func TestSlogLoggerLevelByPath(t *testing.T) {
 	}{
 		{path: "/health/live", wantLvl: "DEBUG", notLevel: "INFO"},
 		{path: "/health/ready", wantLvl: "DEBUG", notLevel: "INFO"},
+		{path: "/health/deps", wantLvl: "DEBUG", notLevel: "INFO"},
 		{path: "/onscreens/state.json", wantLvl: "DEBUG", notLevel: "INFO"},
 		{path: "/anything-else", wantLvl: "INFO", notLevel: "DEBUG"},
 		{path: "/health/", wantLvl: "INFO", notLevel: "DEBUG"},

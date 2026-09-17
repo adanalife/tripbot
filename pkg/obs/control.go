@@ -106,19 +106,43 @@ func GetStreamStatus(ctx context.Context) (bool, error) {
 	return resp.OutputActive, nil
 }
 
-// GetStreamActiveSteady reports whether OBS is in steady-state streaming —
-// outputActive=true AND outputReconnecting=false. The silent-disconnect
-// watchdog uses this rather than GetStreamStatus because OBS's known-
-// failure reconnect loop also reports outputActive=true; only the "OBS
-// doesn't know it failed" state (reconnecting=false) is the silent half-
-// open the watchdog exists to catch. Without this guard, an OBS-detected
-// disconnect that takes longer than the watchdog's debounce to recover
-// would also force a Stop+Start — harmless but redundant work that races
-// OBS's own reconnect.
-func GetStreamActiveSteady(ctx context.Context) (bool, error) {
+// StreamState is OBS's streaming output as three distinct states rather than a
+// boolean. Reconnecting is deliberately not folded into either neighbour: it is
+// neither healthy nor idle, and a caller that collapses it into "not streaming"
+// stands down on the one state where OBS has already admitted something is
+// wrong.
+type StreamState int
+
+const (
+	// StreamInactive: the output is stopped. Nothing is wrong and nothing is
+	// streaming — a parked or scaled-down instance lives here.
+	StreamInactive StreamState = iota
+	// StreamReconnecting: OBS knows the RTMP session failed and is retrying.
+	// Recovery may be underway, or OBS may have given up after one attempt;
+	// only elapsed time tells those apart from outside.
+	StreamReconnecting
+	// StreamSteady: outputActive with no reconnect in progress. The silent
+	// half-open lives here — OBS believes it is streaming, which is why this
+	// state still has to be cross-checked against the platform.
+	StreamSteady
+)
+
+func (s StreamState) String() string {
+	switch s {
+	case StreamReconnecting:
+		return "reconnecting"
+	case StreamSteady:
+		return "steady"
+	default:
+		return "inactive"
+	}
+}
+
+// GetStreamState reports which of the three streaming states OBS is in.
+func GetStreamState(ctx context.Context) (StreamState, error) {
 	client, err := dial(ctx)
 	if err != nil {
-		return false, errors.Join(ErrUnreachable, err)
+		return StreamInactive, errors.Join(ErrUnreachable, err)
 	}
 	defer func() {
 		if err := client.Disconnect(); err != nil {
@@ -127,7 +151,14 @@ func GetStreamActiveSteady(ctx context.Context) (bool, error) {
 	}()
 	resp, err := client.Stream.GetStreamStatus()
 	if err != nil {
-		return false, err
+		return StreamInactive, err
 	}
-	return resp.OutputActive && !resp.OutputReconnecting, nil
+	switch {
+	case !resp.OutputActive:
+		return StreamInactive, nil
+	case resp.OutputReconnecting:
+		return StreamReconnecting, nil
+	default:
+		return StreamSteady, nil
+	}
 }

@@ -1,7 +1,9 @@
 package database
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -110,6 +112,24 @@ func SetGormDB(db *gorm.DB) {
 	gormMu.Lock()
 	defer gormMu.Unlock()
 	gormConn = db
+}
+
+// Ping reports whether the shared DB handle is usable, for health reporting.
+// It deliberately never builds a connection: an unconnected handle is a
+// "not ready" answer, and GormDB's connect path Fatals on failure, so dialing
+// from a health check would end the process it was asked to describe.
+func Ping(ctx context.Context) error {
+	gormMu.Lock()
+	db := gormConn
+	gormMu.Unlock()
+	if db == nil {
+		return errors.New("no database connection")
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
 }
 
 // Close shuts down the shared DB connection pool.

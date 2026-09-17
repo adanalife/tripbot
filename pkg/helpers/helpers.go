@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"strings"
 	"time"
@@ -18,6 +19,18 @@ import (
 func DurationToMiles(dur time.Duration) float32 {
 	// 0.1mi every 3 minutes
 	return float32(0.1 * dur.Minutes() / 3.0)
+}
+
+// MilesBetween returns the great-circle (haversine) distance in miles between
+// two lat/lng points.
+func MilesBetween(lat1, lng1, lat2, lng2 float64) float64 {
+	const earthRadiusMiles = 3958.8
+	rad := math.Pi / 180
+	dLat := (lat2 - lat1) * rad
+	dLng := (lng2 - lng1) * rad
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
+	return earthRadiusMiles * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
 // GoogleMapsURL returns a google maps link to the coords provided
@@ -46,6 +59,43 @@ func SunsetStr(utcDate time.Time, lat, lon float64) string {
 		return fmt.Sprintf("Sunset on this day was %s ago", durafmt.ParseShort(dateDiff))
 	}
 	return fmt.Sprintf("Sunset on this day is in %s", durafmt.ParseShort(dateDiff))
+}
+
+// TimeAgo renders how long ago t was in the coarse units footage timestamps
+// call for — "3 years 2 months ago". Under a month it falls back to durafmt's
+// finer units ("3 weeks 2 days ago"). Returns "" for a zero or future
+// timestamp, so callers can omit the phrase entirely.
+func TimeAgo(t time.Time) string {
+	return timeAgoSince(t, time.Now())
+}
+
+func timeAgoSince(t, now time.Time) string {
+	if t.IsZero() || !t.Before(now) {
+		return ""
+	}
+	months := int(now.Month()) - int(t.Month()) + 12*(now.Year()-t.Year())
+	if now.Day() < t.Day() {
+		// the calendar month hasn't come round yet
+		months--
+	}
+	if months < 1 {
+		return durafmt.Parse(now.Sub(t)).LimitFirstN(2).String() + " ago"
+	}
+	var parts []string
+	if years := months / 12; years > 0 {
+		parts = append(parts, pluralize(years, "year"))
+	}
+	if rem := months % 12; rem > 0 {
+		parts = append(parts, pluralize(rem, "month"))
+	}
+	return strings.Join(parts, " ") + " ago"
+}
+
+func pluralize(n int, unit string) string {
+	if n == 1 {
+		return fmt.Sprintf("1 %s", unit)
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
 }
 
 // SunsetAt returns the moment the sun set on the day utcDate was filmed, in the
@@ -86,11 +136,6 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
-}
-
-// RunningOnLinux returns true if we're on linux
-func RunningOnLinux() bool {
-	return runtime.GOOS == "linux"
 }
 
 func StripAtSign(username string) string {

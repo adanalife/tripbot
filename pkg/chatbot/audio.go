@@ -33,7 +33,7 @@ func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
 // Nil on an instance with no OBS pairing, which !audio reports rather than
 // panicking on.
 type Beds interface {
-	Current() (beds.Bed, string)
+	Playing() (beds.Bed, string)
 	Station() string
 	Album() string
 	PlayingAlbum() string
@@ -138,7 +138,7 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 // describeAudio renders what's on air for chat, track first: the answer to "what
 // is this song". Reads through a.Beds, so only call it with a store wired.
 func (a *App) describeAudio() string {
-	_, track := a.Beds.Current()
+	_, track := a.Beds.Playing()
 	if t := beds.ParseTrack(track); t.Title != "" {
 		return fmt.Sprintf("%q — %s", t.Title, a.audioSource())
 	}
@@ -170,7 +170,7 @@ func describeSwitch(sw beds.Switch) string {
 // itself. This is what a switch announces — the track it lands on is a second
 // old and about to change, so naming it there answers a question nobody asked.
 func (a *App) audioSource() string {
-	bed, track := a.Beds.Current()
+	bed, track := a.Beds.Playing()
 	if bed == beds.SomaFM {
 		return beds.StationName(a.Beds.Station()) + " on SomaFM"
 	}

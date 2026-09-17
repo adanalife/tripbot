@@ -12,18 +12,18 @@ data:
   DATABASE_HOST: postgres
   ENV: staging
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
-  MAPS_OUTPUT_DIR: /opt/data/maps
   OBS_SERVER_HOST: obs-twitch:8080
   OBS_WEBSOCKET_ADDR: obs-twitch:4455
   ONSCREENS_SERVER_HOST: onscreens-twitch:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
+  PLAYOUT_HOST: playout-twitch:8080
   READ_ONLY: "false"
   SENTRY_ENVIRONMENT: development
   TRIPBOT_SERVER_PORT: "8080"
-  VLC_SERVER_HOST: playout-twitch:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,7 +41,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 9670d662c4
+        adanalife.dev/config-hash: 5ea2b3523f
       labels:
         app: tripbot-twitch
     spec:
@@ -55,15 +55,10 @@ spec:
             - secretRef:
                 name: tripbot-secret
             - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
-            - secretRef:
                 name: sentry-tripbot
                 optional: true
             - secretRef:
                 name: tripbot-twitch-creds
-            - secretRef:
-                name: tripbot-google-maps-api-key
             - secretRef:
                 name: tripbot-discord-alerts-webhook
                 optional: true
@@ -149,25 +144,3 @@ spec:
   selector:
     app: tripbot-twitch
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  labels:
-    app.kubernetes.io/name: tripbot-twitch
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-twitch
-  namespace: default
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-twitch.localhost
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-twitch
-                port:
-                  name: http
-            path: /
-            pathType: Prefix

@@ -100,19 +100,26 @@ func New(onscreens Publisher, geo CityLookup, weather WeatherLookup) *Emitter {
 	return &Emitter{onscreens: onscreens, geo: geo, weather: weather}
 }
 
-// Emit publishes the display data for vid. A flagged clip (no GPS fix) is
+// Emit publishes the display data for vid. A clip that can't be described is
 // skipped — onscreens-server holds the last value (and expires it after its own
 // TTL), so a single bad clip doesn't blank the rotator lines.
+//
+// Two shapes get skipped. A flagged clip has no GPS fix. A clip with a zero
+// DateFilmed is not a clip at all: either the player returned an empty Video, or
+// the row exists but nothing has stamped its date yet — video.Create writes the
+// zero value on insert, unflagged and at 0,0. Neither trips the flagged check,
+// and publishing either paints "Monday January 1, 0001" and a sunset derived
+// from it onto an ambient rotator that nobody has to ask for.
 func (e *Emitter) Emit(ctx context.Context, vid video.Video) {
 	lat, lng, err := vid.Location()
-	if vid.Flagged || err != nil {
+	if vid.Flagged || err != nil || vid.DateFilmed.IsZero() {
 		return
 	}
 	local := helpers.ActualDate(vid.DateFilmed, lat, lng)
 
 	e.mu.Lock()
 	e.invalidateOnJump(local, vid.State)
-	place, conditions := e.place(vid.State, lat, lng), e.conditionsFor(ctx, local, lat, lng)
+	place, conditions := e.place(vid, lat, lng), e.conditionsFor(ctx, local, lat, lng)
 	e.mu.Unlock()
 
 	_ = e.onscreens.UpdateLocation(ctx, oe.LocationData{
@@ -156,13 +163,24 @@ func (e *Emitter) invalidateOnJump(local time.Time, state string) {
 	}
 }
 
-// place returns the display location, re-geocoding at most once per
-// lookupThrottle once the clip has left the cell the cached city was fetched for.
-// Falls back to the clip's state when geocoding is unavailable or hasn't
-// succeeded yet.
+// place returns the display location.
+//
+// A clip the pipeline has named answers from its own row, which is the whole
+// corpus once the geocode pass has run — and it matters more here than anywhere
+// else, because this feed drives an ambient rotator on a 24/7 stream rather
+// than a command someone types.
+//
+// The lookup below is what remains for a clip the pass hasn't reached: it
+// re-geocodes at most once per lookupThrottle, once the clip has left the cell
+// the cached city was fetched for, and falls back to the clip's state when
+// geocoding is unavailable or hasn't succeeded yet.
 //
 // Caller holds e.mu.
-func (e *Emitter) place(state string, lat, lng float64) string {
+func (e *Emitter) place(vid video.Video, lat, lng float64) string {
+	if vid.City != "" {
+		return vid.Place()
+	}
+	state := vid.State
 	cell := cellOf(lat, lng)
 	if (e.city == "" || cell != e.cityCell) && time.Since(e.cityAt) > lookupThrottle {
 		e.cityAt = time.Now()

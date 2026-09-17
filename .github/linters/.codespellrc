@@ -1,5 +1,9 @@
 [codespell]
 # abitrate/commads/quess/loacation/lcoation: quoted in CHANGELOG.md's historical #466 entry.
 # locaiton/stae/comands: used by the fuzzy-router tests.
+# guesss: a deliberate !guess alias (pkg/chatbot/registry.go) — viewers type it,
+# and fuzzyLookup can't resolve it because it's equidistant from !guess and !guessr.
+# loction: the misspelled-variable fixture pkg/rotator's validator is built to
+# reject ("$loction"); spelling it correctly would make those tests assert nothing.
 # unparseable: a legitimate spelling (playback_test.go); codespell wants "unparsable".
-ignore-words-list = caf,nd,abitrate,commads,quess,loacation,lcoation,locaiton,stae,comands,unparseable
+ignore-words-list = caf,nd,abitrate,commads,quess,guesss,loacation,lcoation,locaiton,loction,stae,comands,unparseable

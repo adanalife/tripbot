@@ -9,25 +9,25 @@ metadata:
 data:
   BOT_USERNAME: tripbot4001
   CHANNEL_NAME: adanalife_staging
-  DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   INSTAGRAM_API_URL: http://gateway-instagram.stage-1.svc.cluster.local:8080
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-instagram:8080
   OBS_WEBSOCKET_ADDR: obs-instagram:4455
   ONSCREENS_SERVER_HOST: onscreens-instagram:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=instagram
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
+  PLAYOUT_HOST: playout-instagram:8080
   READ_ONLY: "false"
   SENTRY_ENVIRONMENT: stage-1
   STREAM_PLATFORM: instagram
   TRIPBOT_SERVER_PORT: "8080"
-  VLC_SERVER_HOST: playout-instagram:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -45,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: b1f1d18f94
+        adanalife.dev/config-hash: ed93b2069f
       labels:
         app: tripbot-instagram
     spec:
@@ -69,13 +69,8 @@ spec:
             - secretRef:
                 name: tripbot-database-creds
             - secretRef:
-                name: grafana-cloud-otlp
-                optional: true
-            - secretRef:
                 name: sentry-tripbot
                 optional: true
-            - secretRef:
-                name: tripbot-google-maps-api-key
             - secretRef:
                 name: tripbot-discord-alerts-webhook
                 optional: true
@@ -113,8 +108,8 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - mountPath: /opt/tripbot/assets/music
-              name: music
+            - mountPath: /opt/tripbot/assets/music-index
+              name: music-index
               readOnly: true
       initContainers:
         - args:
@@ -153,10 +148,10 @@ spec:
           key: dana.lol/rpi5
           operator: Exists
       volumes:
-        - name: music
-          persistentVolumeClaim:
-            claimName: obs-music-local
-            readOnly: true
+        - configMap:
+            name: obs-music-index
+            optional: true
+          name: music-index
 ---
 apiVersion: v1
 kind: Service
@@ -174,32 +169,3 @@ spec:
   selector:
     app: tripbot-instagram
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-instagram.stage.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-instagram
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram
-  namespace: stage-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-instagram.stage.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-instagram
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-instagram.stage.whereisdana.today
-      secretName: tripbot-instagram-tls

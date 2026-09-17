@@ -159,6 +159,56 @@ func TestPlace_FallsBackToTheGeocoderWhenUngeocoded(t *testing.T) {
 	}
 }
 
+// The clip's own name answers a clip whose per-moment track isn't trustworthy
+// enough to read — 194 of 4,406 — which is what takes the last live lookup off
+// the command path rather than only the common one.
+func TestPlace_FallsBackToTheClipsOwnNameBeforeTheGeocoder(t *testing.T) {
+	vid := newTestVideo("Wyoming", 43.65, -110.71, time.Time{})
+	cityM := 7700.0
+	vid.City, vid.CityM = "Kelly", &cityM
+	app := newTestApp(vid)
+	geo := &stubGeocoder{city: "somewhere from Google"}
+	app.Geocoder = geo
+
+	s := spot{vid: vid, at: video.Moment{Lat: 43.65, Lng: -110.71}, atPlayhead: false}
+	if got := app.place(context.Background(), s); got != "near Kelly, Wyoming" {
+		t.Errorf("place = %q, want the clip's own near Kelly, Wyoming", got)
+	}
+	if geo.cityCalls != 0 {
+		t.Errorf("geocoder City called %d times, want 0 for a named clip", geo.cityCalls)
+	}
+}
+
+// A clip carries an ingest-time state from the day it lands, so the clip-level
+// fallback has to key on the city the pass writes — not on Place() being
+// non-empty, which is true for every clip in the corpus already and would take
+// the precise answer away before the pass has run anywhere.
+func TestPlace_AStateAloneDoesNotPreemptTheGeocoder(t *testing.T) {
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Time{})
+	app := newTestApp(vid)
+	geo := &stubGeocoder{city: "Golden, Colorado"}
+	app.Geocoder = geo
+
+	s := spot{vid: vid, at: video.Moment{Lat: 39.512, Lng: -105.004}, atPlayhead: true}
+	if got := app.place(context.Background(), s); got != "Golden, Colorado" {
+		t.Errorf("place = %q, want the geocoder's Golden, Colorado", got)
+	}
+	if geo.cityCalls != 1 {
+		t.Errorf("geocoder City called %d times, want 1", geo.cityCalls)
+	}
+}
+
+// A name without a distance can't be rendered honestly: the same city string
+// means "here" at 0 m and "100 km away" at 100 km. A half-filled row degrades to
+// the state rather than claiming the nearest town is the current one.
+func TestVideoPlace_NeedsBothTheNameAndTheDistance(t *testing.T) {
+	vid := newTestVideo("Wyoming", 43.65, -110.71, time.Time{})
+	vid.City = "Kelly" // CityM left nil
+	if got := vid.Place(); got != "Somewhere in Wyoming" {
+		t.Errorf("Place = %q, want the state alone when the distance is missing", got)
+	}
+}
+
 // Same precedence for state: a stored one wins, and costs nothing.
 func TestState_PrefersTheStoredStateOverTheGeocoder(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Time{})
