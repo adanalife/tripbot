@@ -195,6 +195,23 @@ func TestFindCommand_MultiWordAliasWithTrailingText(t *testing.T) {
 	}
 }
 
+// Chat asks "Where is this ??" in prose, so !location carries the phrase as a
+// multi-word alias — in both spellings, since the matcher compares whole words
+// and a question mark welded to "this" makes a different word. Pinned because
+// the trailing punctuation lands in params, which is only harmless as long as
+// locationCmd keeps ignoring them.
+func TestFindCommand_WhereIsThisRoutesToLocation(t *testing.T) {
+	for _, msg := range []string{"where is this", "Where is this ??", "where is this?"} {
+		cmd, _, _ := builtTestApp.findCommand(msg)
+		if cmd == nil {
+			t.Fatalf("%q: expected a command, got nil", msg)
+		}
+		if cmd.Trigger != "!location" {
+			t.Errorf("%q routed to %q, want !location", msg, cmd.Trigger)
+		}
+	}
+}
+
 func TestFindCommand_InvertedBangRoutes(t *testing.T) {
 	// ¡miles should route to the same command as !miles
 	cmd, _, _ := builtTestApp.findCommand("¡miles")
