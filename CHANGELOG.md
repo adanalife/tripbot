@@ -9,6 +9,27 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.12.0] — 2026-09-17
+
+### Chatbot
+
+- Chat trace spans carry platform-neutral `chat.*` attributes instead of `twitch.*` ones — tripbot runs on five platforms, and the old names only told the truth on one. ([#1529](https://github.com/adanalife/tripbot/pull/1529))
+- Chat can ask "where is this" in prose — it now answers as `!location` does, in both spellings a question mark produces. ([#1533](https://github.com/adanalife/tripbot/pull/1533))
+
+### Fixes
+
+- Cron metrics carry their job name as `cron_job`, so they no longer overwrite the Prometheus `job` label that identifies the service. ([#1528](https://github.com/adanalife/tripbot/pull/1528))
+- The mid-session miles checkpoint reads each user from the snapshot it already took, instead of re-locking the session map once per logged-in user every tick. ([#1532](https://github.com/adanalife/tripbot/pull/1532))
+
+### CI / Tooling
+
+- Refuse a `task platforms:sync` that would copy a stale platforms.json from a sibling platform-gateway checkout behind origin/main. ([#1534](https://github.com/adanalife/tripbot/pull/1534))
+- The changelog gate now recognizes any release-please branch, not just the single-package one. ([#1535](https://github.com/adanalife/tripbot/pull/1535))
+
+### Misc
+
+- The tripbot and onscreens-server HTTP ports now come from `pkg/contract` in both the manifests and the binaries, rather than from literals spelled in each place. Same values — nothing changes at runtime. ([#1531](https://github.com/adanalife/tripbot/pull/1531))
+
 ## [v5.11.0] — 2026-09-10
 
 ### Chatbot
