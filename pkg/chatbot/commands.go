@@ -344,6 +344,39 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Chat.Say(desc)
 }
 
+// clipMoment renders a playhead offset the way a citation reads: m:ss, or
+// h:mm:ss once a clip runs past the hour. The corpus is minutes-long, so the
+// hour arm is for a clip that is not, rather than for today's footage.
+func clipMoment(pos time.Duration) string {
+	pos = pos.Truncate(time.Second)
+	if pos < 0 {
+		pos = 0
+	}
+	h := int(pos.Hours())
+	m := int(pos.Minutes()) % 60
+	sec := int(pos.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, sec)
+	}
+	return fmt.Sprintf("%d:%02d", m, sec)
+}
+
+// clipCmd cites the moment on screen — the clip and the offset inside it,
+// which together name a frame. Every other surface gives the clip or the date
+// it was filmed, neither of which can point at a moment: "2018_0603_192712" is
+// 20 minutes long.
+func (a *App) clipCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !clip", "username", user.Username)
+	// Current() is the cached notion of what is playing, no round-trip;
+	// CurrentProgress advances it to now off the same report.
+	vid := a.Video.Current()
+	if vid.Slug == "" {
+		a.Chat.Say("I'm not sure what's playing right now, sorry!")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("%s at %s", vid.Slug, clipMoment(a.Video.CurrentProgress())))
+}
+
 func (a *App) townCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !town", "username", user.Username)
 	s, ok := a.currentSpot(ctx)
