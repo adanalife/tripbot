@@ -105,3 +105,18 @@ func (a *App) state(ctx context.Context, s spot) string {
 	}
 	return state
 }
+
+// town is the place the spot is in or near, as a (city, state) pair a lookup
+// can be keyed on — "Dillon", "Colorado". Empty city when nothing named is
+// close enough, which on this corpus is a large share of moments.
+//
+// Same preference order as place: the playhead's moment answers first, then
+// the clip's own coordinate. There is no live-geocoder fallback — pkg/geo
+// returns the rendered prose place, not the pair — so a row the pass hasn't
+// reached simply has no town, which reads as "nothing nearby" either way.
+func (a *App) town(s spot) (city, state string) {
+	if c, st := s.at.Town(); c != "" {
+		return c, st
+	}
+	return s.vid.Town()
+}
