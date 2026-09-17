@@ -48,7 +48,7 @@ jobs:
     # work it never had to do.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref != 'release-please--branches--main' &&
+      !startsWith(github.head_ref, 'release-please--') &&
       github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Mint automation app token
