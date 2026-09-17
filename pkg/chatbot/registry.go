@@ -208,6 +208,15 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger: "!clip",
+			Help:    "The clip on screen and how far into it we are, for citing a moment",
+			Aliases: []string{"!moment", "!timestamp"},
+			Handler: a.clipCmd,
+			// Info only, but it names a file rather than describing a place,
+			// so it follows !date's bar rather than the static links'.
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!date",
 			Help:           "The date this footage was recorded",
 			Aliases:        []string{"is this live", "is this live?"},
@@ -387,7 +396,7 @@ var v1Commands = map[string]bool{
 	"!song": true, "!audio": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
-	"!state": true, "!location": true, "!wiki": true,
+	"!state": true, "!location": true, "!wiki": true, "!clip": true,
 	// playback control (drives this platform's playout pipeline)
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
 	"!find": true,

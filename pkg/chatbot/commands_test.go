@@ -1589,3 +1589,66 @@ func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
 		t.Errorf("posts = %q, want %q", rec.Says, want)
 	}
 }
+
+// clipMoment is what makes a citation copy-pastable, so its formatting is the
+// whole point: a bare second count ("264s") is not something a viewer reads
+// back, and dropping the zero-pad ("4:2") reads as a different time.
+func TestClipMoment(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want string
+	}{
+		{0, "0:00"},
+		{9 * time.Second, "0:09"},
+		{4*time.Minute + 12*time.Second, "4:12"},
+		{4*time.Minute + 2*time.Second, "4:02"},
+		// Truncated, not rounded: a citation must name the frame on screen, not
+		// the one after it.
+		{4*time.Minute + 12*time.Second + 900*time.Millisecond, "4:12"},
+		{59*time.Minute + 59*time.Second, "59:59"},
+		// Past the hour the minutes have to zero-pad too, or 1:05:00 and
+		// 1:00:05 both come out as ambiguous.
+		{time.Hour + 5*time.Second, "1:00:05"},
+		{time.Hour + 5*time.Minute, "1:05:00"},
+		// A report that arrives from behind the clock reads as a negative
+		// offset; there is no such moment, so it clamps to the top.
+		{-3 * time.Second, "0:00"},
+	}
+	for _, tc := range cases {
+		if got := clipMoment(tc.in); got != tc.want {
+			t.Errorf("clipMoment(%s) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// The citation is clip + offset together; either alone points at 20 minutes of
+// footage or at no clip at all.
+func TestClipCmd_CitesTheClipAndTheOffset(t *testing.T) {
+	app := newTestApp(video.Video{Slug: "2018_0603_192712"})
+	chat := &recordingChat{}
+	app.Chat = chat
+	app.Video = &recordingVideo{Vid: video.Video{Slug: "2018_0603_192712"}}
+
+	app.clipCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(chat.Says) != 1 {
+		t.Fatalf("chat heard %v, want exactly one message", chat.Says)
+	}
+	if !strings.Contains(chat.Says[0], "2018_0603_192712") || !strings.Contains(chat.Says[0], "0:00") {
+		t.Errorf("message %q should name the clip and the offset", chat.Says[0])
+	}
+}
+
+// Nothing playing is a real state at boot, and "" at 0:00 is a citation that
+// looks valid and points nowhere.
+func TestClipCmd_SaysSoWhenNothingIsPlaying(t *testing.T) {
+	app := newTestApp(video.Video{})
+	chat := &recordingChat{}
+	app.Chat = chat
+
+	app.clipCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(chat.Says) != 1 || strings.Contains(chat.Says[0], "0:00") {
+		t.Errorf("chat heard %v, want one message that is not a citation", chat.Says)
+	}
+}
