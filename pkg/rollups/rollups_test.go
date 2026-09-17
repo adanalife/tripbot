@@ -454,7 +454,7 @@ func TestReconcile_ComputesRealMilesFromVideoPlays(t *testing.T) {
 	addPlay(t, db, "twitch", shortClip, base.Add(65*time.Minute))
 	addPlay(t, db, "youtube", longClip, base.Add(20*time.Minute))
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	got := getRollup(t, db, "twitch", "roadtripper")
 	closeTo(t, "real_miles", got.RealMiles, 3.75)
@@ -468,7 +468,7 @@ func TestReconcile_RealMilesZeroWithoutPlays(t *testing.T) {
 
 	addSession(t, db, "quiet_watcher", 0, 30*time.Minute)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	got := getRollup(t, db, "twitch", "quiet_watcher")
 	closeTo(t, "real_miles", got.RealMiles, 0)
