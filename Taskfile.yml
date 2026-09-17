@@ -156,8 +156,24 @@ tasks:
   # bridges use. cdk8s reads it into SUPPORTED_PLATFORMS; never hand-edit it here.
   platforms:sync:
     desc: Re-sync platforms.json from the sibling platform-gateway checkout (the source of truth)
+    vars:
+      # The sibling checkouts sit next to this repo's *main* worktree, which is
+      # not the working directory when this runs from ~/adanalife/worktrees/ —
+      # there, `..` is the worktrees dir. `--git-common-dir` always names the
+      # shared .git regardless of which worktree asks, so its grandparent is the
+      # siblings' parent either way. `--path-format=absolute` matters: from the
+      # main checkout the common dir is the relative `.git`, whose grandparent
+      # would otherwise be `.`.
+      SIBLINGS:
+        sh: dirname "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    preconditions:
+      # The copy reads the sibling's working tree, and a checkout behind
+      # origin/main syncs stale content and succeeds silently. Refuse unless the
+      # synced file matches origin/main.
+      - sh: git -C {{.SIBLINGS}}/platform-gateway fetch -q origin && git -C {{.SIBLINGS}}/platform-gateway diff --quiet origin/main -- platforms.json
+        msg: "{{.SIBLINGS}}/platform-gateway platforms.json differs from origin/main — pull that checkout (or push its change) first; syncing from it copies stale content"
     cmds:
-      - cp ../platform-gateway/platforms.json platforms.json
+      - cp {{.SIBLINGS}}/platform-gateway/platforms.json platforms.json
 
   # cdk8s — the Python authoring layer for tripbot's app workload manifests
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
