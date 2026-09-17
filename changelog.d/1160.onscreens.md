@@ -1,0 +1,1 @@
+Add an `under-construction` render page: a static full-screen roadwork slate that OBS layers beneath the dashcam video, so playout restarts and RTSP drops show a "road work ahead" sign instead of a black screen.
