@@ -127,8 +127,9 @@ func styleFor(slug string) (onscreenStyle, bool) {
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
 // state. The OBS browser-source HTML pages poll this endpoint and re-render.
 //
-// Markdown-flagged onscreens have their Content rendered to HTML here, at the
-// wire boundary, rather than at set time — so the stored Content (and the
+// Markdown-flagged onscreens are served as HTML, rendered from their stored
+// Content by renderedContent — which memoizes, so the render cost tracks content
+// changes rather than the poll rate. The stored Content (and the
 // JetStream-persisted middle-text state) stays the raw markdown source and only
 // the served copy is HTML. The browser injects it via innerHTML because those
 // onscreens are also RenderAsHTML.
@@ -140,7 +141,7 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	for slug, osc := range snap {
 		view := osc.view()
 		if onscreenRegistry[slug].Markdown {
-			view.Content = renderInlineMarkdown(view.Content)
+			view.Content = osc.renderedContent()
 		}
 		out[slug] = view
 	}
