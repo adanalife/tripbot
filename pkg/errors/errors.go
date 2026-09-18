@@ -105,6 +105,11 @@ func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint)
 		if now.Sub(windowStart) > time.Hour {
 			windowStart = now
 			windowCount = 0
+			// Every fingerprint left from the last window is past its
+			// cooldown, and keeping it would grow the map for the life of the
+			// process. Nothing today puts a variable in a message, but one
+			// slog.Error carrying a viewer name would.
+			dropExpired(lastSent, now, fingerprintCooldown)
 		}
 		if windowCount >= hourlyCap {
 			instrumentation.SentryEventsDropped.Inc("cap")
@@ -121,6 +126,16 @@ func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint)
 		lastSent[fp] = now
 		windowCount++
 		return event
+	}
+}
+
+// dropExpired deletes the fingerprints whose cooldown has elapsed, which is
+// every fingerprint older than ttl.
+func dropExpired(seen map[string]time.Time, now time.Time, ttl time.Duration) {
+	for fp, t := range seen {
+		if now.Sub(t) >= ttl {
+			delete(seen, fp)
+		}
 	}
 }
 
