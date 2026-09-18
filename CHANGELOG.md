@@ -9,6 +9,23 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.12.1] — 2026-09-18
+
+### Onscreens
+
+- Onscreens render their inline markdown when the content is set rather than on every browser-source poll. ([#1543](https://github.com/adanalife/tripbot/pull/1543))
+
+### Fixes
+
+- The background-audio watchdog now reads OBS media state and source settings over the volume meter's existing WebSocket connection instead of dialing a fresh one every tick. ([#1538](https://github.com/adanalife/tripbot/pull/1538))
+- A watchdog-forced stream restart now holds a single OBS WebSocket connection across the stop, the output-stopped poll, and the start, instead of re-dialing up to 60 times against an OBS that is already wedged. ([#1539](https://github.com/adanalife/tripbot/pull/1539))
+- The silent-disconnect watchdog reads OBS stream state from the connection the streaming poller already holds instead of dialing a fresh OBS websocket every 60 seconds. ([#1540](https://github.com/adanalife/tripbot/pull/1540))
+
+### Cleanup
+
+- Logging out a user no longer runs two joined scoreboard queries just to decorate the log line. ([#1542](https://github.com/adanalife/tripbot/pull/1542))
+- State name lookups use precomputed tables instead of rescanning and lowercasing the whole state list on every call. ([#1544](https://github.com/adanalife/tripbot/pull/1544))
+
 ## [v5.12.0] — 2026-09-17
 
 ### Chatbot
