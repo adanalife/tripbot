@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -29,23 +30,20 @@ func StateToStateAbbrev(state string) string {
 	// Case-insensitive lookup so names like "district of columbia" still
 	// resolve (title-casing the input would mis-capitalise the internal
 	// "of"/"and" words in multi-word names).
-	want := strings.ToLower(state)
-	for abbrev, name := range stateAbbrevs {
-		if strings.ToLower(name) == want {
-			return abbrev
-		}
-	}
-	return ""
+	return stateAbbrevByName[strings.ToLower(state)]
 }
 
 // StateNames returns the full state/territory names from the abbreviation
-// table. Order is unstable (map iteration); callers must not rely on it.
+// table, sorted. The slice is shared — callers must not mutate it.
 func StateNames() []string {
-	names := make([]string, 0, len(stateAbbrevs))
-	for _, name := range stateAbbrevs {
-		names = append(names, name)
-	}
-	return names
+	return stateNames
+}
+
+// LowercaseStateNames returns StateNames' entries lowercased, at matching
+// indices, for callers that compare a viewer's input case-insensitively
+// against every name. The slice is shared — callers must not mutate it.
+func LowercaseStateNames() []string {
+	return stateNamesLower
 }
 
 // TitlecaseState renders a US state or territory in the canonical display form
@@ -72,6 +70,33 @@ func TitlecaseState(state string) string {
 	// arbitrary input, and Go 1 compatibility keeps it from being removed.
 	//nolint:staticcheck // SA1019: see above
 	return strings.Title(strings.ToLower(state))
+}
+
+// Lookup tables derived from stateAbbrevs. Every caller that resolves a name
+// or scans the whole list does so on a schedule — the playout poller tracks the
+// airing state every 10s, and the chatbot resolves a name per unrecognised
+// !command and per !guess — so the tables are built once rather than rebuilt
+// per call.
+var (
+	// full state/territory names, sorted
+	stateNames []string
+	// stateNames lowercased, at matching indices
+	stateNamesLower []string
+	// lowercased full name -> abbreviation
+	stateAbbrevByName = make(map[string]string, len(stateAbbrevs))
+)
+
+func init() {
+	stateNames = make([]string, 0, len(stateAbbrevs))
+	for abbrev, name := range stateAbbrevs {
+		stateNames = append(stateNames, name)
+		stateAbbrevByName[strings.ToLower(name)] = abbrev
+	}
+	sort.Strings(stateNames)
+	stateNamesLower = make([]string, len(stateNames))
+	for i, name := range stateNames {
+		stateNamesLower[i] = strings.ToLower(name)
+	}
 }
 
 // A handy map of US state codes to full names
