@@ -34,7 +34,8 @@ type WatchdogDeps struct {
 	// OBSState reports OBS's streaming output as steady / reconnecting /
 	// inactive. Three states rather than a boolean because the loop treats
 	// reconnecting differently from both: see the reconnect grace in
-	// WatchSilentDisconnect.
+	// WatchSilentDisconnect. It errors when OBS's state is unknown, which the
+	// loop must not read as a stopped stream.
 	OBSState func(context.Context) (obs.StreamState, error)
 	// ChannelLive reports whether the channel is live. Injected by cmd/tripbot,
 	// which routes it through the platform-gateway — this package must not reach
@@ -60,7 +61,11 @@ type WatchdogDeps struct {
 // caller injects ChannelLive (the gateway live-check).
 func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
-		OBSState: obs.GetStreamState,
+		// Read off the connection the streaming poller already holds rather
+		// than dialing OBS for each answer: the poller learns the same fact
+		// every tick, and it reports OBS unreachable the same way a failed
+		// dial did.
+		OBSState: obs.LastStreamState,
 		Restart:  RestartOBSOutput,
 	}
 }
