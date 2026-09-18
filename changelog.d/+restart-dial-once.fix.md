@@ -1,0 +1,1 @@
+A watchdog-forced stream restart now holds a single OBS WebSocket connection across the stop, the output-stopped poll, and the start, instead of re-dialing up to 60 times against an OBS that is already wedged.
