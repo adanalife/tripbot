@@ -28,7 +28,7 @@ func TestUpsertThenGet(t *testing.T) {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	got, err := Get("twitch", "tripbot4000")
+	got, err := Get(t.Context(), "twitch", "tripbot4000")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -54,45 +54,7 @@ func TestUpsertThenGet(t *testing.T) {
 
 func TestGet_MissReturnsErrNoToken(t *testing.T) {
 	testdb.New(t)
-	if _, err := Get("twitch", "ghost"); !errors.Is(err, ErrNoToken) {
-		t.Fatalf("expected ErrNoToken, got %v", err)
-	}
-}
-
-func TestGetByProvider_MostRecentlyUpdatedWins(t *testing.T) {
-	db := testdb.New(t)
-
-	older := sampleToken()
-	older.Provider, older.Username = "youtube", "UC-old"
-	older.TwitchUserID = sql.NullString{}
-	newer := older
-	newer.Username, newer.AccessToken = "UC-new", "yt-access"
-	for _, tok := range []Token{older, newer} {
-		if err := Upsert(tok); err != nil {
-			t.Fatalf("Upsert(%s): %v", tok.Username, err)
-		}
-	}
-	// Upsert stamps date_updated with NOW(), which is transaction-stable —
-	// both rows tie. Backdate one so the ORDER BY has something to order.
-	if err := db.Exec(`UPDATE oauth_tokens SET date_updated = date_updated - interval '1 hour' WHERE username = 'UC-old'`).Error; err != nil {
-		t.Fatalf("backdate: %v", err)
-	}
-
-	got, err := GetByProvider("youtube")
-	if err != nil {
-		t.Fatalf("GetByProvider: %v", err)
-	}
-	if got.Username != "UC-new" || got.AccessToken != "yt-access" {
-		t.Errorf("expected most recently updated row, got %+v", got)
-	}
-	if got.TwitchUserID.Valid {
-		t.Errorf("twitch_user_id should scan as NULL for youtube rows: %+v", got.TwitchUserID)
-	}
-}
-
-func TestGetByProvider_MissReturnsErrNoToken(t *testing.T) {
-	testdb.New(t)
-	if _, err := GetByProvider("youtube"); !errors.Is(err, ErrNoToken) {
+	if _, err := Get(t.Context(), "twitch", "ghost"); !errors.Is(err, ErrNoToken) {
 		t.Fatalf("expected ErrNoToken, got %v", err)
 	}
 }
@@ -102,7 +64,7 @@ func TestUpsert_OnConflictUpdatesInPlace(t *testing.T) {
 	if err := Upsert(sampleToken()); err != nil {
 		t.Fatalf("first Upsert: %v", err)
 	}
-	first, err := Get("twitch", "tripbot4000")
+	first, err := Get(t.Context(), "twitch", "tripbot4000")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -120,7 +82,7 @@ func TestUpsert_OnConflictUpdatesInPlace(t *testing.T) {
 		t.Fatalf("conflicting Upsert: %v", err)
 	}
 
-	got, err := Get("twitch", "tripbot4000")
+	got, err := Get(t.Context(), "twitch", "tripbot4000")
 	if err != nil {
 		t.Fatalf("Get after upsert: %v", err)
 	}
@@ -151,7 +113,7 @@ func TestIncrementFailCount(t *testing.T) {
 			t.Fatalf("IncrementFailCount: %v", err)
 		}
 	}
-	got, err := Get("twitch", "tripbot4000")
+	got, err := Get(t.Context(), "twitch", "tripbot4000")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

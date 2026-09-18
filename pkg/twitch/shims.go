@@ -1,5 +1,7 @@
 package twitch
 
+import "context"
+
 // This file preserves the package-level free-function API that callers used
 // before pkg/twitch held an *API. Each shim delegates to defaultClient so
 // existing call sites (pkg/users, pkg/server, cmd/tripbot) keep working
@@ -10,8 +12,8 @@ package twitch
 
 // --- auth / token ---
 
-func LoadFromDB(botUser, broadcasterUser string) error {
-	return defaultClient.LoadFromDB(botUser, broadcasterUser)
+func LoadFromDB(ctx context.Context, botUser, broadcasterUser string) error {
+	return defaultClient.LoadFromDB(ctx, botUser, broadcasterUser)
 }
 func BroadcasterUserAccessToken() string { return defaultClient.BroadcasterUserAccessToken() }
 func TokenStatuses(botUser, broadcasterUser string) []AccountTokenStatus {

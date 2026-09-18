@@ -45,32 +45,14 @@ type Token struct {
 func (Token) TableName() string { return "oauth_tokens" }
 
 // Get returns the row for (provider, username) or ErrNoToken if missing.
-func Get(provider, username string) (Token, error) {
+func Get(ctx context.Context, provider, username string) (Token, error) {
 	var t Token
-	err := database.GormDB().Where("provider = ? AND username = ?", provider, username).First(&t).Error
+	err := database.GormDB().WithContext(ctx).Where("provider = ? AND username = ?", provider, username).First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return Token{}, ErrNoToken
 	}
 	if err != nil {
 		return Token{}, fmt.Errorf("oauthtokens.Get: %w", err)
-	}
-	return t, nil
-}
-
-// GetByProvider returns the provider's single row, or ErrNoToken if none
-// exists. Providers with one identity (YouTube: the channel owner) don't
-// know a username ahead of time the way Twitch does (the configured BotUsername) —
-// the identity is discovered at consent time — so boot-time loading keys on
-// the provider alone. If stray extra rows exist, the most recently updated
-// one wins; clean strays up by hand.
-func GetByProvider(provider string) (Token, error) {
-	var t Token
-	err := database.GormDB().Where("provider = ?", provider).Order("date_updated DESC").First(&t).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Token{}, ErrNoToken
-	}
-	if err != nil {
-		return Token{}, fmt.Errorf("oauthtokens.GetByProvider: %w", err)
 	}
 	return t, nil
 }
