@@ -131,11 +131,15 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		},
 		AdvanceAlbum: store.Advance,
 		Resync:       store.Detect,
+		// Both OBS reads go over the meter's connection, which is already open
+		// and subscribed: asked every tick, a fresh dial per call would spend
+		// tens of thousands of connect + auth handshakes a day on two answers
+		// the meter's socket can carry for free.
 		MediaState: func(ctx context.Context) (string, error) {
-			return obs.GetMediaInputState(ctx, BackgroundAudioInputName)
+			return meter.MediaInputState(ctx, BackgroundAudioInputName)
 		},
 		SourceIsLocal: func(ctx context.Context) (bool, error) {
-			settings, err := obs.GetInputSettings(ctx, BackgroundAudioInputName)
+			settings, err := meter.InputSettings(ctx, BackgroundAudioInputName)
 			if err != nil {
 				return false, err
 			}
