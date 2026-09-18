@@ -53,9 +53,24 @@ var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
 // scheduler goroutine. The scheduler's job ctx is the span's parent and
 // is threaded into fn, so DB queries (otelsql) and outbound HTTP
 // (otelhttp) nest under cron.<name> in Tempo as children of the cron tick.
+// jobTimeout bounds every scheduled job's tick. The scheduler hands each tick
+// the process context, which has no deadline, so without this a job that hangs
+// on a slow upstream hangs forever: gocron runs ticks in their own goroutines,
+// so most jobs leak one per tick, and rollups.Reconcile — the one job in
+// LimitModeReschedule — stops running entirely after a single hang, silently.
+//
+// Every job is one gateway call (itself bounded at 15s), one playout read, one
+// NATS publish, or one incremental DB transaction; none sleeps or paginates, so
+// two minutes is an order of magnitude above the slowest legitimate tick. It is
+// also below the 5m interval of the reschedule-mode job, so a timed-out
+// Reconcile is picked up on the next tick rather than skipping one.
+const jobTimeout = 2 * time.Minute
+
 func tracedJob(name string, fn func(context.Context)) func(context.Context) {
 	return func(ctx context.Context) {
 		start := time.Now()
+		ctx, cancel := context.WithTimeout(ctx, jobTimeout)
+		defer cancel()
 		ctx, span := cronTracer.Start(ctx, "cron."+name,
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
