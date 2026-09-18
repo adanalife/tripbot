@@ -388,11 +388,13 @@ func fuzzyStateName(guess string) string {
 	best := ""
 	bestDist := maxDist + 1
 	ambiguous := false
-	for _, name := range helpers.StateNames() {
-		dist := levenshtein(lowered, strings.ToLower(name))
+	names := helpers.StateNames()
+	for i, lowerName := range helpers.LowercaseStateNames() {
+		dist := levenshtein(lowered, lowerName)
 		if dist > maxDist {
 			continue
 		}
+		name := names[i]
 		switch {
 		case dist < bestDist:
 			best, bestDist, ambiguous = name, dist, false
