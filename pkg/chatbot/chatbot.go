@@ -83,6 +83,9 @@ type App struct {
 	// inject noopWeather; production uses pkg/weather's keyless Open-Meteo
 	// archive client.
 	Weather Weather
+	// Encyclopedia describes the town on screen for !town. Tests inject
+	// noopEncyclopedia; production uses pkg/wikipedia's keyless REST client.
+	Encyclopedia Encyclopedia
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
 	// Tests inject a recordingTwitch; production uses the gatewayTwitch adapter,
 	// which reaches the platform-gateway (the out-of-process Helix service).
@@ -145,24 +148,25 @@ type App struct {
 // touches no network or DB — the realX adapters are lazy.
 func New(version string, cfg *c.TripbotConfig) *App {
 	a := &App{
-		Cfg:         cfg,
-		Platform:    cfg.Platform,
-		Version:     version,
-		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
-		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Video:       realVideo{},
-		Chat:        disconnectedChat{},
-		Sessions:    realSessions{},
-		Flags:       feature.NewInMemoryClient(nil),
-		NATS:        realNATS{},
-		Cron:        noopCron{},
-		Geocoder:    realGeocoder{},
-		Weather:     realWeather,
-		OBS:         realOBS{},
-		Search:      realSearch{env: cfg.Environment},
-		Scoreboards: realScoreboards{cfg: cfg},
-		Events:      realEvents{cfg: cfg},
+		Cfg:          cfg,
+		Platform:     cfg.Platform,
+		Version:      version,
+		botless:      cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
+		Onscreens:    realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:      realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Video:        realVideo{},
+		Chat:         disconnectedChat{},
+		Sessions:     realSessions{},
+		Flags:        feature.NewInMemoryClient(nil),
+		NATS:         realNATS{},
+		Cron:         noopCron{},
+		Geocoder:     realGeocoder{},
+		Weather:      realWeather,
+		Encyclopedia: realEncyclopedia,
+		OBS:          realOBS{},
+		Search:       realSearch{env: cfg.Environment},
+		Scoreboards:  realScoreboards{cfg: cfg},
+		Events:       realEvents{cfg: cfg},
 	}
 	// Wired after the literal because the adapter selector takes the App itself.
 	a.Twitch = newTwitch(a)

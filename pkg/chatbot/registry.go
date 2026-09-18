@@ -191,6 +191,17 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger: "!wiki",
+			Help:    "What Wikipedia says about the town on screen",
+			// Not "!town" or "!city", which !location has claimed for a long
+			// time — a viewer who types either is asking where the van is, and
+			// repointing them at an encyclopedia entry is a different command
+			// wearing a familiar name.
+			Aliases:        []string{"!wikipedia"},
+			Handler:        a.townCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!time",
 			Help:           "Local time at the current location",
 			Handler:        a.timeCmd,
@@ -376,7 +387,7 @@ var v1Commands = map[string]bool{
 	"!song": true, "!audio": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
-	"!state": true, "!location": true,
+	"!state": true, "!location": true, "!wiki": true,
 	// playback control (drives this platform's playout pipeline)
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
 	"!find": true,

@@ -22,6 +22,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/wikipedia"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -341,6 +342,37 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 		return
 	}
 	a.Chat.Say(desc)
+}
+
+func (a *App) townCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !town", "username", user.Username)
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
+	}
+	city, state := a.town(s)
+	if city == "" {
+		// The corpus is mostly interstate — 57% of moments sit outside every
+		// incorporated place — so having no town nearby is the ordinary case
+		// here, not a failure.
+		a.Chat.Say("There's no town close enough to the van right now to say anything about, sorry!")
+		return
+	}
+	// US place articles are titled "<City>, <State>", which is why the pair is
+	// enough to ask with and why a bare city name would land on a
+	// disambiguation page as often as not.
+	summary, err := a.Encyclopedia.Summary(ctx, city+", "+state)
+	switch {
+	case errors.Is(err, wikipedia.ErrNoArticle):
+		slog.InfoContext(ctx, "no wikipedia article for the town", "city", city, "state", state)
+		a.Chat.Say(fmt.Sprintf("Wikipedia has nothing to say about %s, %s!", city, state))
+		return
+	case err != nil:
+		slog.ErrorContext(ctx, "wikipedia lookup failed", "err", err, "city", city, "state", state)
+		a.Chat.Say("I couldn't look up this town, sorry!")
+		return
+	}
+	a.Chat.Say(summary)
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {

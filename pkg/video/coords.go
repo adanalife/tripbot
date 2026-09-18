@@ -113,6 +113,18 @@ func (m Moment) Place() string {
 	return ""
 }
 
+// Town names the place the moment is in or near, plus its state — empty when
+// the nearest named place is too far to be what is on screen, which is the same
+// bar Place applies before it says "near X". A caller that needs to look the
+// place up needs the pair, and Place's rendered prose ("near Mammoth, Wyoming")
+// can't be parsed back into one.
+func (m Moment) Town() (city, state string) {
+	if m.City != "" && m.CityM <= nearPlaceLimit {
+		return m.City, m.State
+	}
+	return "", ""
+}
+
 // Place renders the clip's own location the way Moment.Place renders a
 // playhead one, so a clip answering from its representative coordinate reads
 // identically to one answering from the track. Empty until the geocode pass has
@@ -122,11 +134,25 @@ func (m Moment) Place() string {
 // and "Somewhere in California" are 100 km apart — so a half-filled row degrades
 // to the state rather than claiming the nearest town is the current one.
 func (v Video) Place() string {
+	return v.moment().Place()
+}
+
+// Town is Moment.Town for the clip's own location, on the same terms: a city
+// without a distance can't be trusted to be the one on screen, so it degrades
+// to no town rather than naming the wrong one.
+func (v Video) Town() (city, state string) {
+	return v.moment().Town()
+}
+
+// moment renders the clip's own location as the one-point track it stands in
+// for, so Place and Town answer from a clip and from the playhead through the
+// same rules.
+func (v Video) moment() Moment {
 	m := Moment{State: v.State}
 	if v.City != "" && v.CityM != nil {
 		m.City, m.CityM = v.City, *v.CityM
 	}
-	return m.Place()
+	return m
 }
 
 // The two ORDER BY booleans do the preference in one pass: Postgres sorts

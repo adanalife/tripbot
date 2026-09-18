@@ -502,6 +502,20 @@
       ]
     },
     {
+      "trigger": "!wiki",
+      "aliases": [
+        "!wikipedia"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!youtube",
       "aliases": [
         "!yt"
