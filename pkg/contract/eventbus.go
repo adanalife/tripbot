@@ -187,6 +187,12 @@ var (
 		{"expires_at", dateType(), false},
 		{"reason", strType(), false},
 	}
+	obsStreamFields = []field{
+		{"platform", strType(), true},
+		{"state", strType(), false},
+		{"reachable", boolType(), true},
+		{"emitted_at", dateType(), true},
+	}
 	youtubeBroadcastFields = []field{
 		{"video_id", strType(), true},
 		{"live", boolType(), true},
@@ -218,6 +224,7 @@ var envelopeFields = map[string][]field{
 	"AuthStatus":        authStatusFields,
 	"AuthAccount":       authAccountFields,
 	"Emote":             emoteFields,
+	"OBSStream":         obsStreamFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
 	"FacebookBroadcast": facebookBroadcastFields,
 }
@@ -258,6 +265,13 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_AUTH"},
 				{"schema", objectSchema("AuthStatus", authStatusFields)},
+			}},
+			{"obs_stream", orderedObject{
+				{"subject", "tripbot.{env}.obs.stream.{platform}"},
+				{"wildcard", "tripbot.{env}.obs.stream.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_OBS"},
+				{"schema", objectSchema("OBSStream", obsStreamFields)},
 			}},
 			{"youtube_broadcast", orderedObject{
 				{"subject", "tripbot.{env}.youtube.broadcast"},

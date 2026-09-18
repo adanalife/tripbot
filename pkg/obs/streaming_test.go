@@ -36,7 +36,7 @@ func TestPollConnectFailureStaysBelowError(t *testing.T) {
 	defer slog.SetDefault(prev)
 
 	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
-	if poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
+	if poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
 		t.Fatal("poll reported a connection to a refused port")
 	}
 
@@ -107,7 +107,7 @@ func TestPollRepeatConnectFailureIsQuiet(t *testing.T) {
 	slog.SetDefault(slog.New(rec))
 	defer slog.SetDefault(prev)
 
-	poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
 
 	if rec.max >= slog.LevelWarn {
 		t.Fatalf("repeat connect failure logged at %v; expected below WARN", rec.max)
@@ -147,5 +147,28 @@ func TestLastStreamStateUnknownUntilRead(t *testing.T) {
 	state, err := LastStreamState(context.Background())
 	if err != nil || state != StreamSteady {
 		t.Fatalf("LastStreamState after a read: got %v, %v; want steady, nil", state, err)
+	}
+}
+
+// The cache's changed-reporting is what keeps the obs.stream subject quiet
+// between transitions: a repeated read must not re-announce, and a connection
+// dropping must announce exactly once.
+func TestStreamStateCacheReportsChanges(t *testing.T) {
+	var c streamStateCache
+
+	if !c.set(StreamSteady) {
+		t.Error("first set: got changed=false, want true (nothing was known)")
+	}
+	if c.set(StreamSteady) {
+		t.Error("repeat set: got changed=true, want false")
+	}
+	if !c.set(StreamReconnecting) {
+		t.Error("set to a new state: got changed=false, want true")
+	}
+	if !c.forget() {
+		t.Error("first forget: got changed=false, want true (a state was known)")
+	}
+	if c.forget() {
+		t.Error("repeat forget: got changed=true, want false")
 	}
 }

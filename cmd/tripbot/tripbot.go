@@ -308,7 +308,7 @@ func (t *Tripbot) Run() {
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
 	// the stream-health dashboards and alerts.
-	go obs.PollStreamingActive(ctx, t.cfg.Platform, 30*time.Second)
+	go obs.PollStreamingActive(ctx, t.cfg.Environment, t.cfg.Platform, 30*time.Second)
 	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
 	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
 	t.startStreamWatchdog(ctx)          // twitch, tiktok, youtube: recovers a stream the platform stopped showing

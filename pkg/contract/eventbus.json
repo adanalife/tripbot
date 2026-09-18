@@ -199,6 +199,36 @@
         ]
       }
     },
+    "obs_stream": {
+      "subject": "tripbot.{env}.obs.stream.{platform}",
+      "wildcard": "tripbot.{env}.obs.stream.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_OBS",
+      "schema": {
+        "type": "object",
+        "title": "OBSStream",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "reachable",
+          "emitted_at"
+        ]
+      }
+    },
     "youtube_broadcast": {
       "subject": "tripbot.{env}.youtube.broadcast",
       "transport": "jetstream",
