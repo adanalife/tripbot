@@ -71,11 +71,27 @@ func DefaultWatchdogDeps() WatchdogDeps {
 // half-open hit prod (see the 2026-05-27 incident). Exported because a
 // platform whose recovery replaces Restart still needs the push itself
 // re-established afterwards.
+//
+// One connection is held across stop, poll and start: the poll asks every
+// stopPoll for up to stopTimeout, so a per-call dial would mean up to 60
+// WebSocket connect+auth handshakes against an OBS that is already wedged —
+// which is the whole reason this runs. A connection that drops mid-restart
+// fails the restart; the watchdog's next tick starts over.
 func RestartOBSOutput(ctx context.Context) error {
-	if err := obs.StopStream(ctx); err != nil {
+	client, err := obs.Dial(ctx)
+	if err != nil {
 		return err
 	}
-	if err := awaitOutputStopped(ctx, obs.GetStreamStatus); err != nil {
+	defer func() {
+		if err := client.Disconnect(); err != nil {
+			slog.WarnContext(ctx, "obs disconnect", "err", err)
+		}
+	}()
+	if err := obs.StopStreamOn(client); err != nil {
+		return err
+	}
+	active := func(context.Context) (bool, error) { return obs.StreamActiveOn(client) }
+	if err := awaitOutputStopped(ctx, active); err != nil {
 		return err
 	}
 	select {
@@ -83,7 +99,7 @@ func RestartOBSOutput(ctx context.Context) error {
 		return ctx.Err()
 	case <-time.After(teardownSettle):
 	}
-	return obs.StartStream(ctx)
+	return obs.StartStreamOn(client)
 }
 
 // How long to wait for OBS to report the output stopped, how often to ask, and
@@ -105,10 +121,11 @@ const (
 // rejected with request status 500, OutputRunning. The stream stays dark and
 // the retry re-stops an output that was already going down.
 //
-// active is obs.GetStreamStatus in production, injected so the poll is
-// testable without an OBS WebSocket. It must be the raw outputActive read and
-// not a steady-state one: a reconnecting output is still active, and treating
-// it as stopped would let StartStream race the very teardown this waits out.
+// active reads outputActive over the caller's held connection in production,
+// injected so the poll is testable without an OBS WebSocket. It must be the raw
+// outputActive read and not a steady-state one: a reconnecting output is still
+// active, and treating it as stopped would let StartStream race the very
+// teardown this waits out.
 func awaitOutputStopped(ctx context.Context, active func(context.Context) (bool, error)) error {
 	deadline := time.Now().Add(stopTimeout)
 	for {
