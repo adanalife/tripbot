@@ -22,9 +22,9 @@ import (
 // given streaming platform. Intended to be run as a long-lived goroutine.
 // Reconnects automatically on connection loss.
 //
-// Every state change also goes out on the eventbus (tripbot.<env>.obs.stream.
-// <platform>), which is how a consumer learns this without opening an OBS
-// connection of its own.
+// Every read also goes out on the eventbus (tripbot.<env>.obs.stream.<platform>),
+// which is how a consumer learns this without opening an OBS connection of its
+// own.
 func PollStreamingActive(ctx context.Context, env, platform string, interval time.Duration) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
@@ -90,26 +90,18 @@ type streamStateCache struct {
 	updated time.Time
 }
 
-// set records the state and reports whether it differs from what was cached —
-// what the callers publish on, so a subject nobody has changed stays quiet
-// between transitions.
-func (c *streamStateCache) set(state StreamState) (changed bool) {
+func (c *streamStateCache) set(state StreamState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	changed = !c.known || c.state != state
 	c.state, c.known, c.updated = state, true, time.Now()
-	return changed
 }
 
 // forget marks the cached state unknown, for when the connection it was read
-// off is gone. It reports whether anything was known, so a caller publishing
-// the loss doesn't announce it twice.
-func (c *streamStateCache) forget() (changed bool) {
+// off is gone.
+func (c *streamStateCache) forget() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	changed = c.known
 	c.known = false
-	return changed
 }
 
 func (c *streamStateCache) get() (state StreamState, updated time.Time, known bool) {
@@ -188,17 +180,15 @@ func poll(ctx context.Context, env, platform string, obsStats instrumentation.OB
 		}
 		slog.Log(ctx, level, "obs websocket connect failed", "addr", addr, "err", err)
 		obsStats.SetStreaming(false)
-		if lastStreamState.forget() {
-			eventbus.EmitOBSStream(ctx, env, platform, "", false)
-		}
+		lastStreamState.forget()
+		eventbus.EmitOBSStream(ctx, env, platform, "", false)
 		return false
 	}
 	defer func() {
 		// Whatever state was read off this connection stops being current when
 		// the connection does, so LastStreamState goes back to unreachable.
-		if lastStreamState.forget() {
-			eventbus.EmitOBSStream(ctx, env, platform, "", false)
-		}
+		lastStreamState.forget()
+		eventbus.EmitOBSStream(ctx, env, platform, "", false)
 		if err := client.Disconnect(); err != nil {
 			slog.WarnContext(ctx, "obs disconnect", "err", err)
 		}
@@ -248,9 +238,12 @@ func poll(ctx context.Context, env, platform string, obsStats instrumentation.OB
 			// active-or-not but can't tell a reconnect from a steady output,
 			// and collapsing the two is the direction that misleads a caller.
 			state := streamStateFrom(resp.OutputActive, resp.OutputReconnecting)
-			if lastStreamState.set(state) {
-				eventbus.EmitOBSStream(ctx, env, platform, state.String(), true)
-			}
+			lastStreamState.set(state)
+			// Emitted every read rather than on change: emitted_at is then the
+			// freshness of the answer, which is what lets a subscriber tell a
+			// steady stream from a retained snapshot left behind by an instance
+			// that died. A last-value cache keeps only the newest either way.
+			eventbus.EmitOBSStream(ctx, env, platform, state.String(), true)
 			obsStats.UpdateStream(instrumentation.OBSStreamSnapshot{
 				OutputBytes:      resp.OutputBytes,
 				OutputDurationMS: resp.OutputDuration,

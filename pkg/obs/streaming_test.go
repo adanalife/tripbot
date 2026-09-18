@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/andreykaipov/goobs/api/events"
 )
@@ -150,25 +153,39 @@ func TestLastStreamStateUnknownUntilRead(t *testing.T) {
 	}
 }
 
-// The cache's changed-reporting is what keeps the obs.stream subject quiet
-// between transitions: a repeated read must not re-announce, and a connection
-// dropping must announce exactly once.
-func TestStreamStateCacheReportsChanges(t *testing.T) {
-	var c streamStateCache
+// recordingPublisher captures eventbus publishes so a test can read what the
+// poller announced.
+type recordingPublisher struct {
+	mu        sync.Mutex
+	publishes []struct{ subject, payload string }
+}
 
-	if !c.set(StreamSteady) {
-		t.Error("first set: got changed=false, want true (nothing was known)")
+func (r *recordingPublisher) Publish(_ context.Context, subject string, payload []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.publishes = append(r.publishes, struct{ subject, payload string }{subject, string(payload)})
+}
+
+// An OBS that can't be reached must say so on the bus. Publishing nothing would
+// leave the last retained snapshot standing, which is how a subscriber comes to
+// believe a dead instance is still streaming.
+func TestPollAnnouncesAnUnreachableOBS(t *testing.T) {
+	rec := &recordingPublisher{}
+	prev := eventbus.Default
+	eventbus.SetPublisher(rec)
+	defer eventbus.SetPublisher(prev)
+
+	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0)
+
+	if len(rec.publishes) != 1 {
+		t.Fatalf("published %d messages, want 1", len(rec.publishes))
 	}
-	if c.set(StreamSteady) {
-		t.Error("repeat set: got changed=true, want false")
+	got := rec.publishes[0]
+	if want := "tripbot.test.obs.stream.twitch"; got.subject != want {
+		t.Errorf("subject = %q, want %q", got.subject, want)
 	}
-	if !c.set(StreamReconnecting) {
-		t.Error("set to a new state: got changed=false, want true")
-	}
-	if !c.forget() {
-		t.Error("first forget: got changed=false, want true (a state was known)")
-	}
-	if c.forget() {
-		t.Error("repeat forget: got changed=true, want false")
+	if !strings.Contains(got.payload, `"reachable":false`) || strings.Contains(got.payload, `"state"`) {
+		t.Errorf("payload = %s; want reachable:false and no state (an unreachable OBS has none to report)", got.payload)
 	}
 }
