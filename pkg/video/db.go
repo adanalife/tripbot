@@ -98,27 +98,56 @@ func (v *Video) save(ctx context.Context) error {
 	return database.GormDB().WithContext(ctx).Create(v).Error
 }
 
-// NextUnflagged() finds the next unflagged video by walking the next_vid chain.
-// The walk is bounded by the playlist length, so a broken chain or a
-// cycle of flagged videos returns an error instead of spinning forever.
-func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
-	var count int64
-	if err := database.GormDB().WithContext(ctx).Model(&Video{}).Count(&count).Error; err != nil {
-		return Video{}, err
-	}
+// nextUnflaggedQuery walks the next_vid chain server-side from a starting id
+// and stops at the first unflagged clip. The path array is the cycle guard: a
+// chain that loops back on itself ends the recursion rather than spinning.
+// The deepest row reached is either the unflagged answer or the dead end that
+// explains why there isn't one — chain_next names the id the walk could not
+// follow, and next_exists tells a dangling link apart from a closed loop.
+const nextUnflaggedQuery = `
+	WITH RECURSIVE walk AS (
+		SELECT v.id, v.next_vid, v.flagged, ARRAY[v.id] AS path
+		FROM videos v
+		WHERE v.id = @start
+	UNION ALL
+		SELECT n.id, n.next_vid, n.flagged, w.path || n.id
+		FROM walk w
+		JOIN videos n ON n.id = w.next_vid
+		WHERE w.flagged AND NOT n.id = ANY(w.path)
+	)
+	SELECT v.*,
+	       w.next_vid AS chain_next,
+	       EXISTS (SELECT 1 FROM videos x WHERE x.id = w.next_vid) AS next_exists
+	FROM walk w
+	JOIN videos v ON v.id = w.id
+	ORDER BY array_length(w.path, 1) DESC
+	LIMIT 1`
 
-	vid := v
-	for i := int64(0); i < count; i++ {
-		nextID := vid.NextVid.Int64
-		var err error
-		vid, err = load(ctx, nextID)
-		if err != nil {
-			return Video{}, fmt.Errorf("broken next_vid chain at id %d: %w", nextID, err)
-		}
-		// use the first unflagged video we find
-		if !vid.Flagged {
-			return vid, nil
-		}
+// NextUnflagged() finds the next unflagged video by following the next_vid
+// chain forward from this one. The walk happens in a single statement, so the
+// number of hops costs no extra round trips. A broken chain or a cycle of
+// flagged videos returns an error naming where the walk stopped.
+func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
+	startID := v.NextVid.Int64
+
+	var row struct {
+		Video
+		ChainNext  sql.NullInt64
+		NextExists bool
+	}
+	result := database.GormDB().WithContext(ctx).
+		Raw(nextUnflaggedQuery, sql.Named("start", startID)).Scan(&row)
+	if result.Error != nil {
+		return Video{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return Video{}, fmt.Errorf("broken next_vid chain at id %d: no matches found", startID)
+	}
+	if !row.Flagged {
+		return row.Video, nil
+	}
+	if !row.NextExists {
+		return Video{}, fmt.Errorf("broken next_vid chain at id %d", row.ChainNext.Int64)
 	}
 	return Video{}, errors.New("no unflagged video found in next_vid chain")
 }

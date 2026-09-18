@@ -3,6 +3,8 @@ package video
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
@@ -68,8 +70,13 @@ func TestVideoNextUnflagged_BrokenChainReturnsError(t *testing.T) {
 		t.Fatalf("dangle next_vid: %v", err)
 	}
 
-	if _, err := reload(t, start.ID).NextUnflagged(context.Background()); err == nil {
+	_, err := reload(t, start.ID).NextUnflagged(context.Background())
+	if err == nil {
 		t.Fatal("NextUnflagged() over a dangling next_vid returned nil error, want error")
+	}
+	// The id the walk couldn't follow is the whole value of the message.
+	if want := fmt.Sprintf("broken next_vid chain at id %d", missingID); !strings.Contains(err.Error(), want) {
+		t.Errorf("NextUnflagged() error = %q, want it to contain %q", err, want)
 	}
 }
 
@@ -83,8 +90,13 @@ func TestVideoNextUnflagged_AllFlaggedCycleReturnsError(t *testing.T) {
 	link(t, a, b)
 	link(t, b, a)
 
-	if _, err := reload(t, a.ID).NextUnflagged(context.Background()); err == nil {
+	_, err := reload(t, a.ID).NextUnflagged(context.Background())
+	if err == nil {
 		t.Fatal("NextUnflagged() over an all-flagged cycle returned nil error, want error")
+	}
+	// A closed loop is exhausted, not broken — the two report differently.
+	if !strings.Contains(err.Error(), "no unflagged video found") {
+		t.Errorf("NextUnflagged() over a cycle: error = %q, want the exhausted-chain message", err)
 	}
 }
 
