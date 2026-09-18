@@ -80,6 +80,9 @@ func expectedStreams(env string) map[string]wantStream {
 		facebookStreamName: {
 			subjects: []string{FacebookBroadcastSubject(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
 		},
+		obsStreamName: {
+			subjects: []string{OBSStreamWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
 	}
 }
 

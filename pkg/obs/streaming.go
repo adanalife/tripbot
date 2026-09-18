@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	goobs "github.com/andreykaipov/goobs"
 	"github.com/andreykaipov/goobs/api/events"
@@ -20,7 +21,11 @@ import (
 // change, and every interval as a reconcile — stamping the series with the
 // given streaming platform. Intended to be run as a long-lived goroutine.
 // Reconnects automatically on connection loss.
-func PollStreamingActive(ctx context.Context, platform string, interval time.Duration) {
+//
+// Every read also goes out on the eventbus (tripbot.<env>.obs.stream.<platform>),
+// which is how a consumer learns this without opening an OBS connection of its
+// own.
+func PollStreamingActive(ctx context.Context, env, platform string, interval time.Duration) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
 		addr = defaultOBSWebsocketAddr
@@ -38,7 +43,7 @@ func PollStreamingActive(ctx context.Context, platform string, interval time.Dur
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		if poll(ctx, obsStats, addr, passwd, interval, failures) {
+		if poll(ctx, env, platform, obsStats, addr, passwd, interval, failures) {
 			failures = 0
 		} else {
 			failures++
@@ -160,7 +165,7 @@ func streamStateFromEvent(ev any) (active, isStreamState bool) {
 // the interval tick. failures is how many consecutive dials have already
 // failed, which decides how loudly another failure is logged. It reports
 // whether the connection was established.
-func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration, failures int) bool {
+func poll(ctx context.Context, env, platform string, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration, failures int) bool {
 	client, err := goobs.New(addr,
 		goobs.WithPassword(passwd),
 		goobs.WithEventSubscriptions(subscriptions.Outputs))
@@ -176,12 +181,14 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 		slog.Log(ctx, level, "obs websocket connect failed", "addr", addr, "err", err)
 		obsStats.SetStreaming(false)
 		lastStreamState.forget()
+		eventbus.EmitOBSStream(ctx, env, platform, "", false)
 		return false
 	}
 	defer func() {
 		// Whatever state was read off this connection stops being current when
 		// the connection does, so LastStreamState goes back to unreachable.
 		lastStreamState.forget()
+		eventbus.EmitOBSStream(ctx, env, platform, "", false)
 		if err := client.Disconnect(); err != nil {
 			slog.WarnContext(ctx, "obs disconnect", "err", err)
 		}
@@ -230,7 +237,13 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 			// the one that feeds LastStreamState: the pushed event knows
 			// active-or-not but can't tell a reconnect from a steady output,
 			// and collapsing the two is the direction that misleads a caller.
-			lastStreamState.set(streamStateFrom(resp.OutputActive, resp.OutputReconnecting))
+			state := streamStateFrom(resp.OutputActive, resp.OutputReconnecting)
+			lastStreamState.set(state)
+			// Emitted every read rather than on change: emitted_at is then the
+			// freshness of the answer, which is what lets a subscriber tell a
+			// steady stream from a retained snapshot left behind by an instance
+			// that died. A last-value cache keeps only the newest either way.
+			eventbus.EmitOBSStream(ctx, env, platform, state.String(), true)
 			obsStats.UpdateStream(instrumentation.OBSStreamSnapshot{
 				OutputBytes:      resp.OutputBytes,
 				OutputDurationMS: resp.OutputDuration,

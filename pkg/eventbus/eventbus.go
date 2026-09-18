@@ -348,6 +348,46 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 	})
 }
 
+// --- obs.stream -------------------------------------------------------------
+
+// OBSStream is the wire format for tripbot.<env>.obs.stream.<platform> — the
+// streaming state of one platform's OBS, as the instance's held OBS WebSocket
+// connection last read it. State is "inactive"/"reconnecting"/"steady", and is
+// empty when Reachable is false — the instance has no live connection to OBS
+// and therefore no state to report, which is not the same as a stopped stream.
+//
+// Published on change rather than on every read: it is a last-value cache
+// (TRIPBOT_OBS, MaxMsgsPerSubject=1), so a fresh subscriber replays the current
+// state and then sees only transitions.
+type OBSStream struct {
+	Platform  string `json:"platform"`
+	State     string `json:"state,omitempty"`
+	Reachable bool   `json:"reachable"`
+	EmittedAt string `json:"emitted_at"`
+}
+
+// OBSStreamSubject returns the publish subject for one platform instance's OBS
+// stream state. Per-platform for the same reason auth.status is: each instance
+// watches its own OBS deployment, and the leaf lets TRIPBOT_OBS retain a
+// last value per platform instead of the instances clobbering one another.
+func OBSStreamSubject(env, platform string) string {
+	return subject(env, "obs", "stream") + "." + platform
+}
+
+// OBSStreamWildcard returns the subscribe pattern covering every platform's OBS
+// stream state in env.
+func OBSStreamWildcard(env string) string { return subject(env, "obs", "stream") + ".*" }
+
+// EmitOBSStream publishes this instance's OBS streaming state.
+func EmitOBSStream(ctx context.Context, env, platform, state string, reachable bool) {
+	emit(ctx, OBSStreamSubject(env, platform), OBSStream{
+		Platform:  platform,
+		State:     state,
+		Reachable: reachable,
+		EmittedAt: emittedAt(),
+	})
+}
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -407,6 +447,7 @@ const (
 	authStreamName     = "TRIPBOT_AUTH"
 	youtubeStreamName  = "TRIPBOT_YOUTUBE"
 	facebookStreamName = "TRIPBOT_FACEBOOK"
+	obsStreamName      = "TRIPBOT_OBS"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -464,6 +505,16 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			// One retained message per subject leaf (= per platform): a fresh
 			// console replays exactly the latest snapshot from each instance,
 			// then live updates arrive on the same subscription.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:        obsStreamName,
+			Description: "Last-known OBS stream state per platform instance (last-value cache).",
+			Subjects:    []string{OBSStreamWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
 			MaxMsgsPerSubject: 1,
 		},
 		{
