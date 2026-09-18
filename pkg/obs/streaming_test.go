@@ -2,6 +2,7 @@ package obs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 	"time"
@@ -110,5 +111,41 @@ func TestPollRepeatConnectFailureIsQuiet(t *testing.T) {
 
 	if rec.max >= slog.LevelWarn {
 		t.Fatalf("repeat connect failure logged at %v; expected below WARN", rec.max)
+	}
+}
+
+// The watchdog stands down when OBS's state is unknown and acts on a stopped
+// output, so an unknown cache must error rather than answer StreamInactive.
+func TestLastStreamStateUnknownUntilRead(t *testing.T) {
+	var cache streamStateCache
+	if _, _, known := cache.get(); known {
+		t.Fatal("a fresh cache reported a known state")
+	}
+
+	cache.set(StreamReconnecting)
+	state, updated, known := cache.get()
+	if !known || state != StreamReconnecting {
+		t.Fatalf("after set: got %v known=%v, want reconnecting known=true", state, known)
+	}
+	if updated.IsZero() {
+		t.Fatal("set left no timestamp")
+	}
+
+	cache.forget()
+	if _, _, known := cache.get(); known {
+		t.Fatal("a forgotten cache still reported a known state")
+	}
+
+	// The package-level cache is what LastStreamState reads; nothing has
+	// connected in this test binary, so it must report OBS unreachable.
+	if _, err := LastStreamState(context.Background()); !errors.Is(err, ErrUnreachable) {
+		t.Fatalf("LastStreamState with no connection: got %v, want ErrUnreachable", err)
+	}
+
+	lastStreamState.set(StreamSteady)
+	defer lastStreamState.forget()
+	state, err := LastStreamState(context.Background())
+	if err != nil || state != StreamSteady {
+		t.Fatalf("LastStreamState after a read: got %v, %v; want steady, nil", state, err)
 	}
 }

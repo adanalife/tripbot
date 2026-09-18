@@ -3,8 +3,10 @@ package obs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -71,6 +73,76 @@ func reconnectWait(n int) time.Duration {
 	return wait
 }
 
+// streamStateCache holds the streaming state the poller last read off its held
+// connection, so a caller that only wants to know whether OBS is streaming
+// doesn't have to dial OBS itself. known is false until the first successful
+// read of a connection and again once that connection goes away, which is what
+// keeps "OBS unreachable" from reading as "the stream stopped".
+type streamStateCache struct {
+	mu      sync.RWMutex
+	state   StreamState
+	known   bool
+	updated time.Time
+}
+
+func (c *streamStateCache) set(state StreamState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.state, c.known, c.updated = state, true, time.Now()
+}
+
+// forget marks the cached state unknown, for when the connection it was read
+// off is gone.
+func (c *streamStateCache) forget() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.known = false
+}
+
+func (c *streamStateCache) get() (state StreamState, updated time.Time, known bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state, c.updated, c.known
+}
+
+// lastStreamState is written by PollStreamingActive's held connection and read
+// by LastStreamState.
+//
+// ponytail: package-level because a tripbot instance runs exactly one
+// PollStreamingActive; thread it through the caller if a binary ever polls two
+// OBS deployments.
+var lastStreamState streamStateCache
+
+// LastStreamState reports the streaming state PollStreamingActive last read,
+// without dialing OBS: the poller already learns it on a connection it holds
+// open, so a watchdog asking every minute costs nothing instead of a
+// connect/handshake/teardown cycle per answer. Returns ErrUnreachable while the
+// poller has no live connection — the same signal a failed dial gives, so an
+// unreachable OBS can't be mistaken for a stopped stream.
+//
+// The context is unused; it is in the signature so this can be injected
+// wherever a dialing read was.
+func LastStreamState(_ context.Context) (StreamState, error) {
+	state, _, known := lastStreamState.get()
+	if !known {
+		return StreamInactive, errors.Join(ErrUnreachable, errors.New("obs poller has no live connection"))
+	}
+	return state, nil
+}
+
+// streamStateFrom maps OBS's two output flags onto the three states. A
+// reconnecting output still reports active, so the order matters.
+func streamStateFrom(active, reconnecting bool) StreamState {
+	switch {
+	case !active:
+		return StreamInactive
+	case reconnecting:
+		return StreamReconnecting
+	default:
+		return StreamSteady
+	}
+}
+
 // streamStateFromEvent reports the streaming-active flag carried by ev, and
 // whether ev is a stream-state event at all. OutputActive is the same field
 // GetStreamStatus returns — including staying true across an OBS-detected
@@ -103,9 +175,13 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 		}
 		slog.Log(ctx, level, "obs websocket connect failed", "addr", addr, "err", err)
 		obsStats.SetStreaming(false)
+		lastStreamState.forget()
 		return false
 	}
 	defer func() {
+		// Whatever state was read off this connection stops being current when
+		// the connection does, so LastStreamState goes back to unreachable.
+		lastStreamState.forget()
 		if err := client.Disconnect(); err != nil {
 			slog.WarnContext(ctx, "obs disconnect", "err", err)
 		}
@@ -150,6 +226,11 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 				return true // trigger reconnect
 			}
 			obsStats.SetStreaming(resp.OutputActive)
+			// The tick is the only read carrying OutputReconnecting, so it is
+			// the one that feeds LastStreamState: the pushed event knows
+			// active-or-not but can't tell a reconnect from a steady output,
+			// and collapsing the two is the direction that misleads a caller.
+			lastStreamState.set(streamStateFrom(resp.OutputActive, resp.OutputReconnecting))
 			obsStats.UpdateStream(instrumentation.OBSStreamSnapshot{
 				OutputBytes:      resp.OutputBytes,
 				OutputDurationMS: resp.OutputDuration,

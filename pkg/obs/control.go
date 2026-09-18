@@ -152,28 +152,3 @@ func (s StreamState) String() string {
 		return "inactive"
 	}
 }
-
-// GetStreamState reports which of the three streaming states OBS is in.
-func GetStreamState(ctx context.Context) (StreamState, error) {
-	client, err := dial(ctx)
-	if err != nil {
-		return StreamInactive, errors.Join(ErrUnreachable, err)
-	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
-	resp, err := client.Stream.GetStreamStatus()
-	if err != nil {
-		return StreamInactive, err
-	}
-	switch {
-	case !resp.OutputActive:
-		return StreamInactive, nil
-	case resp.OutputReconnecting:
-		return StreamReconnecting, nil
-	default:
-		return StreamSteady, nil
-	}
-}
