@@ -50,7 +50,7 @@ spec:
             - secretRef:
                 name: sentry-onscreens-server
                 optional: true
-          image: adanalife/onscreens-server:5.12.1
+          image: adanalife/onscreens-server:5.13.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -110,7 +110,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/onscreens-server:5.12.1
+            - adanalife/onscreens-server:5.13.0
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:

@@ -9,6 +9,27 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.13.0] — 2026-09-18
+
+### Chatbot
+
+- Location-aware chat commands (`!time`, `!date`, `!location`, `!guess`) now find the next unflagged clip in a single database query instead of one round trip per hop. ([#1548](https://github.com/adanalife/tripbot/pull/1548))
+
+### Console / API
+
+- The OBS stream state each instance already reads on its held connection now goes out on NATS (`tripbot.{env}.obs.stream.{platform}`), so the console can stop opening an OBS session to ask. ([#1545](https://github.com/adanalife/tripbot/pull/1545))
+- The console's audio panel and the album chat commands no longer re-read the music index from disk on every request: it is cached behind the index file's mtime, so newly staged albums still appear without a restart. ([#1547](https://github.com/adanalife/tripbot/pull/1547))
+
+### Fixes
+
+- Bound two call paths that could hang forever: the playout HTTP client now carries a request timeout, and every scheduled background job's tick runs under a deadline. ([#1551](https://github.com/adanalife/tripbot/pull/1551))
+
+### Misc
+
+- The lifetime stats endpoint caches its answer for an hour instead of re-scanning the whole events table on every request. ([#1546](https://github.com/adanalife/tripbot/pull/1546))
+- The Sentry dedup map is swept when its hourly window rolls, instead of holding every distinct message the process ever sent. ([#1549](https://github.com/adanalife/tripbot/pull/1549))
+- The oauth_tokens read carries its caller's context, so it emits a trace span and honours cancellation like every other query. ([#1550](https://github.com/adanalife/tripbot/pull/1550))
+
 ## [v5.12.1] — 2026-09-18
 
 ### Onscreens
