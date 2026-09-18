@@ -92,7 +92,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:5.12.0
+          image: adanalife/tripbot:5.12.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -140,7 +140,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.12.0
+          image: adanalife/tripbot:5.12.1
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -188,7 +188,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.12.0
+            - adanalife/tripbot:5.12.1
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
