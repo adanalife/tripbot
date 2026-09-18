@@ -13,12 +13,13 @@ import (
 // client's own Timeout is the only thing that ends the call.
 func TestGetTimesOutOnHangingServer(t *testing.T) {
 	block := make(chan struct{})
-	defer close(block)
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-block
 	}))
 	defer srv.Close()
+	// Declared after the Close defer so it runs first: Close waits for the
+	// outstanding handler, which only returns once this channel is closed.
+	defer close(block)
 
 	c := New("unused.invalid:0", nil, "test", "twitch")
 	if c.httpClient.Timeout != requestTimeout {
