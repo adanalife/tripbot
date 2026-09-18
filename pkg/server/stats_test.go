@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,10 +13,65 @@ import (
 	"gorm.io/gorm"
 )
 
+// resetLifetimeCache clears the lifetime cache so a test sees its own seeded
+// data rather than whatever the previous test left cached.
+func resetLifetimeCache() {
+	lifetimeCache.Lock()
+	defer lifetimeCache.Unlock()
+	lifetimeCache.stats, lifetimeCache.builtAt = lifetimeStatsResponse{}, time.Time{}
+}
+
+// The lifetime figures are whole-table scans over an append-only log: a page
+// load must not re-run them once the answer is cached.
+func TestLifetimeStatsHandler_CachesTheGatheredStats(t *testing.T) {
+	gathers := 0
+	saved := lifetimeStatsSource
+	t.Cleanup(func() { lifetimeStatsSource = saved; resetLifetimeCache() })
+	lifetimeStatsSource = func(context.Context) (lifetimeStatsResponse, error) {
+		gathers++
+		return lifetimeStatsResponse{EventsTotal: 7, EventKinds: []eventKindCount{}}, nil
+	}
+	resetLifetimeCache()
+
+	for range 3 {
+		rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
+		if !strings.Contains(rec.Body.String(), `"events_total":7`) {
+			t.Fatalf("body = %s, want the gathered stats", rec.Body.String())
+		}
+	}
+	if gathers != 1 {
+		t.Errorf("gathered the stats %d times, want 1", gathers)
+	}
+}
+
+// A failed gather must not be cached, or one DB blip pins a 500 for the whole
+// TTL.
+func TestLifetimeStatsHandler_ErrorIsNotCached(t *testing.T) {
+	gathers := 0
+	saved := lifetimeStatsSource
+	t.Cleanup(func() { lifetimeStatsSource = saved; resetLifetimeCache() })
+	lifetimeStatsSource = func(context.Context) (lifetimeStatsResponse, error) {
+		gathers++
+		return lifetimeStatsResponse{}, errors.New("db is down")
+	}
+	resetLifetimeCache()
+
+	for range 2 {
+		if rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler); rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", rec.Code)
+		}
+	}
+	if gathers != 2 {
+		t.Errorf("gathered the stats %d times, want 2 (a failed gather isn't cached)", gathers)
+	}
+}
+
 // The empty-data contract for the stats page: arrays are [], the nullable
 // scalars (since, hours, peak_chatters) are null, counters are zero.
 func TestLifetimeStatsHandler_EmptyDataShape(t *testing.T) {
 	testdb.New(t)
+	resetLifetimeCache()
+	t.Cleanup(resetLifetimeCache)
 	rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
@@ -126,6 +183,8 @@ func TestLifetimeStatsHandler_Aggregates(t *testing.T) {
 	seedSample(t, db, vid, 9, peakAt)
 	seedSample(t, db, vid, 9, peakAt.Add(time.Minute)) // tie: the earlier peak wins
 
+	resetLifetimeCache()
+	t.Cleanup(resetLifetimeCache)
 	rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())

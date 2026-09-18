@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -16,8 +17,8 @@ import (
 // posture as the insights endpoints — read-only, internal-only, fleet-wide
 // across platforms, bots excluded wherever usernames are counted or shown.
 // The windowed queries ride the events_event_date / viewstats date indexes
-// (migrations 048/049); the lifetime queries are whole-table aggregates the
-// console is expected to cache.
+// (migrations 048/049); the lifetime queries are whole-table aggregates, so
+// they are served from an hour-long cache.
 
 const (
 	playbackStatsDefaultDays  = 7
@@ -103,6 +104,43 @@ SELECT count, sampled_at AS at
 FROM viewer_samples
 ORDER BY count DESC, sampled_at
 LIMIT 1`
+
+// lifetimeTTL is how long a gathered answer is reused. The figures are
+// all-time totals over an append-only log, so an hour of drift is a rounding
+// error against numbers that only grow.
+const lifetimeTTL = time.Hour
+
+// lifetimeStatsSource is the data seam the lifetime endpoint reads through,
+// overridable in tests so the cache is exercised without a DB.
+var lifetimeStatsSource = gatherLifetimeStats
+
+// lifetimeCache holds the gathered answer so the whole-table scans behind it
+// run once an hour rather than once per page load. sinceSQL has no index to
+// ride and the kind census is a GROUP BY over every row, so the cost grows
+// with the log forever while the answer barely moves.
+var lifetimeCache struct {
+	sync.Mutex
+	stats lifetimeStatsResponse
+	// builtAt is zero until the first successful gather; a failed query isn't
+	// cached, so a DB blip doesn't pin an error for an hour.
+	builtAt time.Time
+}
+
+// cachedLifetimeStats returns the lifetime figures, gathering them if the
+// cache is cold or stale.
+func cachedLifetimeStats(ctx context.Context) (lifetimeStatsResponse, error) {
+	lifetimeCache.Lock()
+	defer lifetimeCache.Unlock()
+	if !lifetimeCache.builtAt.IsZero() && time.Since(lifetimeCache.builtAt) < lifetimeTTL {
+		return lifetimeCache.stats, nil
+	}
+	stats, err := lifetimeStatsSource(ctx)
+	if err != nil {
+		return stats, err
+	}
+	lifetimeCache.stats, lifetimeCache.builtAt = stats, time.Now()
+	return stats, nil
+}
 
 func gatherLifetimeStats(ctx context.Context) (lifetimeStatsResponse, error) {
 	out := lifetimeStatsResponse{EventKinds: []eventKindCount{}}
@@ -326,9 +364,10 @@ func gatherCommunityStats(ctx context.Context, days int) (communityStatsResponse
 }
 
 // lifetimeStatsHandler serves GET /api/stats/lifetime: whole-log totals, the
-// user population, the footage corpus, and the all-time chatter peak.
+// user population, the footage corpus, and the all-time chatter peak. The
+// answer is cached an hour (lifetimeTTL).
 func lifetimeStatsHandler(w http.ResponseWriter, r *http.Request) {
-	payload, err := gatherLifetimeStats(r.Context())
+	payload, err := cachedLifetimeStats(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "lifetime stats query failed", "err", err)
 		insightsError(w, "couldn't gather lifetime stats")
