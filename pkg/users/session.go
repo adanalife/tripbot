@@ -260,8 +260,6 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
 			"session_miles", sessionMiles,
-			"monthly_miles", s.CurrentMonthlyMiles(ctx, u),
-			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
 		)
 	}
 
