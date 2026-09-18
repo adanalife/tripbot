@@ -1068,7 +1068,7 @@ func (t *Tripbot) startCron() {
 // reach this instance to show what's wrong; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
-	if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+	if err := mytwitch.LoadFromDB(ctx, t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
 			"login_as", t.cfg.BotUsername,
 			"fix", "re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
@@ -1099,7 +1099,7 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+			if err := mytwitch.LoadFromDB(ctx, t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 				if time.Since(lastLogged) >= logEvery {
 					slog.WarnContext(ctx, "still waiting for Twitch token (re-auth via the platform-gateway consent flow, surfaced in tripbot-console)",
 						"login_as", t.cfg.BotUsername, "err", err)
@@ -1273,7 +1273,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// gateway's rotations — EventSub's redial token and the token-expiry gauge
 	// (both fed by LoadFromDB) — without tripbot ever refreshing itself.
 	t.addJob(tokenReloadInterval, "twitch.ReloadTokens", func(ctx context.Context) {
-		if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+		if err := mytwitch.LoadFromDB(ctx, t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
 		}
 	})

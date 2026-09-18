@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"time"
@@ -18,8 +19,8 @@ var ErrNoToken = oauthtokens.ErrNoToken
 // broadcaster row is optional — when missing, EventSub skips until it's seeded.
 //
 // Returns ErrNoToken only when the bot row is missing.
-func (cl *API) LoadFromDB(botUser, broadcasterUser string) error {
-	t, err := oauthtokens.Get("twitch", botUser)
+func (cl *API) LoadFromDB(ctx context.Context, botUser, broadcasterUser string) error {
+	t, err := oauthtokens.Get(ctx, "twitch", botUser)
 	if err != nil {
 		return err
 	}
@@ -31,7 +32,7 @@ func (cl *API) LoadFromDB(botUser, broadcasterUser string) error {
 	if broadcasterUser == "" || broadcasterUser == botUser {
 		return nil
 	}
-	bt, berr := oauthtokens.Get("twitch", broadcasterUser)
+	bt, berr := oauthtokens.Get(ctx, "twitch", broadcasterUser)
 	if berr != nil {
 		// Broadcaster row absent / unreadable — surface as "no token" so the
 		// alert can fire instead of going silent on a missing series.
