@@ -145,6 +145,22 @@ type Store struct {
 	pending *Switch
 	timer   *time.Timer
 	gen     uint64
+
+	// albums caches the library read, guarded by its own lock: the listings are
+	// taken while s.mu is already held (see loadAlbumLocked).
+	albums albumCache
+}
+
+// albumCache holds the last library read and the index file it came from, so
+// the repeated listings — the console polling every few seconds per platform,
+// a lookup per chat command — cost one stat instead of a read and unmarshal.
+// Keyed on the file's mtime and size rather than a TTL: new music arrives while
+// the bot runs, and the album has to appear the moment the index does.
+type albumCache struct {
+	mu      sync.Mutex
+	tracks  map[string][]string
+	modTime time.Time
+	size    int64
 }
 
 // advanceDebounce is how soon after a track starts another advance is taken to
@@ -318,9 +334,10 @@ func (s *Store) SetShuffle(ctx context.Context, on bool) error {
 	return nil
 }
 
-// Albums lists the selectable albums on the share, in display order. Read on
-// every call rather than cached at startup: new music arrives while the bot is
-// running, and a list cached at boot would hide an album until the next restart.
+// Albums lists the selectable albums on the share, in display order. The
+// underlying library read is cached behind the index file's mtime, not held from
+// startup: new music arrives while the bot is running, and an album has to show
+// up without waiting for a restart.
 func (s *Store) Albums() []string {
 	albums := slices.Collect(maps.Keys(s.albumTracks()))
 	sort.Strings(albums)
@@ -336,7 +353,7 @@ func (s *Store) Albums() []string {
 // IS the grouping, so a new album joins its groups by being named like its
 // siblings, with nothing to keep in sync.
 func (s *Store) Groups() []string {
-	return scanGroups(s.Albums())
+	return GroupsOf(s.Albums())
 }
 
 // ValidAlbum reports whether album names something playable on the share: one
@@ -853,11 +870,11 @@ func albumsFor(albums []string, selection string) []string {
 	return out
 }
 
-// scanGroups finds the prefixes shared by more than one album — every "-"
+// GroupsOf finds the prefixes shared by more than one album — every "-"
 // boundary of every name, kept when at least two albums sit under it. Sorted, so
 // "streambeats" precedes "streambeats-lofi": broad group first, then the narrow
 // ones inside it.
-func scanGroups(albums []string) []string {
+func GroupsOf(albums []string) []string {
 	counts := map[string]int{}
 	for _, a := range albums {
 		for i, c := range a {
@@ -885,11 +902,33 @@ func scanGroups(albums []string) []string {
 // list makes the album bed refuse to start, which leaves whatever bed is on air
 // playing rather than switching the stream to silence.
 func (s *Store) albumTracks() map[string][]string {
+	// ponytail: only the index read is cached. With no index configured the
+	// library is a directory walk, and no cheap stat says whether a track
+	// appeared inside an album — the share root's mtime doesn't move for it. That
+	// path is the laptop run with the share mounted; cache it behind a walk of
+	// the album mtimes if it ever serves a poll.
 	if s.indexFile == "" {
 		return scanShare(s.musicDir)
 	}
+
+	// Stat outside the lock's decision so a rewritten index is picked up on the
+	// first call after it lands. The returned map is never mutated by callers,
+	// so one copy is shared rather than cloned per read.
+	fi, statErr := os.Stat(s.indexFile)
+
+	s.albums.mu.Lock()
+	defer s.albums.mu.Unlock()
+	if statErr == nil && s.albums.tracks != nil &&
+		fi.ModTime().Equal(s.albums.modTime) && fi.Size() == s.albums.size {
+		return s.albums.tracks
+	}
+	s.albums.tracks = nil
+
 	byAlbum, err := readIndex(s.indexFile)
 	if err == nil {
+		if statErr == nil {
+			s.albums.tracks, s.albums.modTime, s.albums.size = byAlbum, fi.ModTime(), fi.Size()
+		}
 		return byAlbum
 	}
 	// A corrupt index is worth a shout; an absent one is the optional mount

@@ -1227,3 +1227,46 @@ func TestMissingIndexFallsBackToTheShare(t *testing.T) {
 		t.Fatal("SetAlbum with no library succeeded; want a refusal so the bed on air keeps playing")
 	}
 }
+
+// The console polls the album list every few seconds per platform and every
+// chat command resolving an album name reads it again, so the index is read
+// once and served from the cache until its mtime moves. Rewriting the file
+// under a pinned mtime and size proves the repeat read never opened it;
+// moving the mtime proves an album staged while the bot runs still shows up.
+func TestAlbumIndexIsCachedUntilItsMtimeMoves(t *testing.T) {
+	index := writeIndex(t, map[string][]string{"aaa": {MusicDir + "/aaa/one.mp3"}})
+	fi, err := os.Stat(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewStore(&fakeOBS{}, CarHum, "/nonexistent-share", "twitch").WithIndex(index)
+
+	if got, want := s.Albums(), []string{"aaa"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() = %v, want %v", got, want)
+	}
+
+	// Same byte count, so only a read of the file could tell the two apart.
+	rewrite := func(byAlbum map[string][]string, mod time.Time) {
+		t.Helper()
+		raw, err := json.Marshal(byAlbum)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(index, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(index, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rewrite(map[string][]string{"bbb": {MusicDir + "/bbb/one.mp3"}}, fi.ModTime())
+	if got, want := s.Albums(), []string{"aaa"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() with the index rewritten under its own mtime = %v, want the cached %v", got, want)
+	}
+
+	rewrite(map[string][]string{"bbb": {MusicDir + "/bbb/one.mp3"}}, fi.ModTime().Add(time.Hour))
+	if got, want := s.Albums(), []string{"bbb"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() after the index mtime moved = %v, want %v", got, want)
+	}
+}

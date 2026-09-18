@@ -20,7 +20,6 @@ type BedStore interface {
 	Album() string
 	PlayingAlbum() string
 	Albums() []string
-	Groups() []string
 	ValidAlbum(album string) bool
 	Shuffle() bool
 	SetShuffle(ctx context.Context, on bool) error
@@ -57,16 +56,18 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		body["on_fallback"] = playing != bed
 		body["track"] = s.track(r.Context(), playing, track)
 		body["station"] = s.beds.Station()
-		// The album list ships for the same reason the stations do, but it's read
-		// off the share per request rather than from a constant: new music appears
-		// there without a deploy, so a picker built from a compiled-in list would
-		// be wrong the first time Dana drops an album on the NAS.
+		// The album list ships for the same reason the stations do, but it comes
+		// off the share rather than a constant: new music appears there without a
+		// deploy, so a picker built from a compiled-in list would be wrong the
+		// first time Dana drops an album on the NAS.
 		body["album"] = s.beds.Album()
-		body["albums"] = s.beds.Albums()
+		albums := s.beds.Albums()
+		body["albums"] = albums
 		// Groups are prefixes covering several albums ("streambeats-lofi"). They
 		// travel beside the albums because the picker offers both, and both are
-		// derived from the share rather than declared anywhere.
-		body["groups"] = s.beds.Groups()
+		// derived from the share rather than declared anywhere — so they come off
+		// the list already read rather than a second listing.
+		body["groups"] = beds.GroupsOf(albums)
 		// On a group selection the chosen name isn't what's on air, so the album
 		// the current track sits in ships too — that's the one the console shows
 		// and the one you'd act on to drop something from the rotation.
