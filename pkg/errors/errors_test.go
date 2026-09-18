@@ -2,6 +2,7 @@ package errors
 
 import (
 	"testing"
+	"time"
 
 	"github.com/getsentry/sentry-go"
 )
@@ -59,5 +60,24 @@ func TestThrottleCollapsesRepeatsInProduction(t *testing.T) {
 	}
 	if hook(&sentry.Event{Message: "different"}, nil) == nil {
 		t.Error("a distinct message should send")
+	}
+}
+
+// The dedup map is swept when the hourly window rolls; without that it grows
+// for the life of the process, one entry per distinct message ever sent.
+func TestDropExpiredKeepsOnlyTheLiveCooldowns(t *testing.T) {
+	now := time.Now()
+	seen := map[string]time.Time{
+		"old":    now.Add(-time.Hour),
+		"recent": now.Add(-time.Minute),
+	}
+
+	dropExpired(seen, now, fingerprintCooldown)
+
+	if _, ok := seen["old"]; ok {
+		t.Error("a fingerprint past its cooldown should be dropped")
+	}
+	if _, ok := seen["recent"]; !ok {
+		t.Error("a fingerprint still inside its cooldown must survive — dropping it would let the repeat it is suppressing through")
 	}
 }
