@@ -85,6 +85,10 @@ func Initialize(c config.Config, version string) {
 // has the complete record; Sentry receives a deduplicated sample. Drops are
 // counted in SentryEventsDropped, so a silenced env is visible rather than
 // merely quiet.
+//
+// Surviving events are tagged with their environment class where they have one
+// (see noise.go), which is what makes the cluster's routine churn filterable
+// without dropping the first event of a real outage along with it.
 func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 	if c == nil || !c.IsProduction() {
 		return func(*sentry.Event, *sentry.EventHint) *sentry.Event {
@@ -125,6 +129,7 @@ func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint)
 		}
 		lastSent[fp] = now
 		windowCount++
+		tagNoise(event)
 		return event
 	}
 }
