@@ -70,10 +70,14 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 
 	// bring up the full-screen warp overlay, then give the browser source a
 	// beat to render the opaque cover before we hard-cut
+	// Evaluated without Username/Roles on purpose. This flag is how the
+	// overlay looks, not what a given chatter may do, so it's global-default
+	// only — and the console publishes the same warp command with its own read
+	// of the flag, where only the global default is visible (it has no DB, and
+	// tripbot's /api/flags write surface flips nothing else). A bare context
+	// keeps both triggers computing the same answer from the same row.
 	noBackground := a.Flags.Bool(ctx, timewarpNoBackgroundFlagKey, feature.EvalContext{
-		Username: username,
-		Channel:  a.Cfg.ChannelName,
-		Env:      a.Cfg.Environment,
+		Env: a.Cfg.Environment,
 	})
 
 	a.Onscreens.ShowTimewarp(ctx, credit, noBackground)
