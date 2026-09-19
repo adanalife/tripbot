@@ -20,7 +20,6 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20231112130812-98d82c75e49b
 	github.com/lib/pq v1.12.3
-	github.com/logrusorgru/aurora/v3 v3.0.0
 	github.com/nathan-osman/go-sunrise v1.1.0
 	github.com/nats-io/nats-server/v2 v2.14.6
 	github.com/nats-io/nats.go v1.53.1

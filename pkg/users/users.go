@@ -11,7 +11,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"github.com/logrusorgru/aurora/v3"
 	"gorm.io/gorm"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -188,13 +187,12 @@ func (s *Sessions) SubscriberTier(u User) int {
 	return s.source.SubscriberTier(u.Username)
 }
 
-// User.String prints a colored version of the user
-func (u User) String() string {
-	if u.IsBot {
-		return aurora.Gray(15, u.Username).String()
-	}
-	return aurora.Magenta(u.Username).String()
-}
+// User.String is the user's name. Both callers are slog attribute values, so
+// it has to stay plain text: an escape sequence in an attribute is shipped
+// verbatim to Loki and OTLP, where it makes the field unmatchable rather than
+// colored. Colouring belongs in the handler, which knows whether it is writing
+// to a terminal.
+func (u User) String() string { return u.Username }
 
 // ErrLookupFailed and ErrCreateFailed mark which half of FindOrCreate gave up:
 // an existing row that couldn't be read, versus a new row that couldn't be

@@ -1,0 +1,1 @@
+The `session snapshot` and `logging out user` log lines carry plain usernames again. Both put terminal colour codes into structured slog attributes, which shipped the escapes verbatim to Loki and made `user` / `logged_in` unmatchable by a query.
