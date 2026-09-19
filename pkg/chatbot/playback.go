@@ -25,6 +25,12 @@ import (
 // verified on stream. The warp itself always runs; only the credit is gated.
 const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 
+// timewarpNoBackgroundFlagKey strips the warp overlay's opaque cover, leaving
+// the wordmark and speed-lines over the live video. Named for the removal so
+// an unknown key (which evaluates false) keeps the cover — it masks the video
+// gap the playhead jump causes, so losing it by accident is visible on stream.
+const timewarpNoBackgroundFlagKey = "chatbot.timewarp_no_background"
+
 // lastTimewarpTime is used to rate-limit users so they can't
 // over-do the time-skip features (including !skip and !back)
 // plus it's also used to reset peoples lastLocation time
@@ -64,7 +70,13 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 
 	// bring up the full-screen warp overlay, then give the browser source a
 	// beat to render the opaque cover before we hard-cut
-	a.Onscreens.ShowTimewarp(ctx, credit)
+	noBackground := a.Flags.Bool(ctx, timewarpNoBackgroundFlagKey, feature.EvalContext{
+		Username: username,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
+	})
+
+	a.Onscreens.ShowTimewarp(ctx, credit, noBackground)
 	time.Sleep(timewarpCoverDelay)
 }
 

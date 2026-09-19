@@ -1,0 +1,1 @@
+The timewarp overlay can drop its opaque background, leaving the wordmark and speed-lines over the live video. Gated on the `chatbot.timewarp_no_background` feature flag, off by default — the cover masks the video gap the playhead jump causes.

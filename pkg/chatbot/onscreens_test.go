@@ -12,13 +12,16 @@ type noopOnscreens struct{}
 func (noopOnscreens) ShowLeaderboard(_ context.Context, _ string, _ [][]string) error { return nil }
 func (noopOnscreens) HideMiddleText(_ context.Context) error                          { return nil }
 func (noopOnscreens) ShowMiddleText(_ context.Context, _ string) error                { return nil }
-func (noopOnscreens) ShowTimewarp(_ context.Context, _ string) error                  { return nil }
+func (noopOnscreens) ShowTimewarp(_ context.Context, _ string, _ bool) error          { return nil }
 
 // recordingOnscreens captures every call made to it so tests can assert
 // the chatbot invoked the expected overlay method with the expected args.
 // All call records are appended in order to Calls.
 type recordingOnscreens struct {
 	Calls []string
+	// NoBackground is the last ShowTimewarp call's background choice, kept off
+	// Calls so the existing call-sequence assertions stay readable.
+	NoBackground bool
 }
 
 func (r *recordingOnscreens) ShowLeaderboard(_ context.Context, title string, lb [][]string) error {
@@ -33,7 +36,8 @@ func (r *recordingOnscreens) ShowMiddleText(_ context.Context, msg string) error
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowMiddleText(%q)", msg))
 	return nil
 }
-func (r *recordingOnscreens) ShowTimewarp(_ context.Context, username string) error {
+func (r *recordingOnscreens) ShowTimewarp(_ context.Context, username string, noBackground bool) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowTimewarp(%q)", username))
+	r.NoBackground = noBackground
 	return nil
 }

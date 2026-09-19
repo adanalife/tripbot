@@ -100,6 +100,33 @@ func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
 	}
 }
 
+// The no-background flag rides the same overlay call: off (the default) keeps
+// the opaque cover, on strips it.
+func TestTimewarpCmd_NoBackgroundFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		on   bool
+	}{{"flag off", false}, {"flag on", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			enablePlayback(t)
+			app := newTestApp(video.Video{})
+			recOverlay := &recordingOnscreens{}
+			app.Onscreens = recOverlay
+			app.Playout = &recordingPlayout{}
+			app.Video = &recordingVideo{}
+			app.Flags = &recordingFlags{Set: map[string]bool{timewarpNoBackgroundFlagKey: tc.on}}
+
+			runAsAdmin(t, func() {
+				app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+			})
+
+			if recOverlay.NoBackground != tc.on {
+				t.Errorf("ShowTimewarp noBackground = %v, want %v", recOverlay.NoBackground, tc.on)
+			}
+		})
+	}
+}
+
 // --- skipCmd ---
 
 func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
