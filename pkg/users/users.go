@@ -10,6 +10,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/logrusorgru/aurora/v3"
 	"gorm.io/gorm"
 
@@ -48,6 +49,11 @@ type User struct {
 	sessionID    uuid.UUID `gorm:"-"`
 	lastCmd      time.Time `gorm:"-"`
 	lastLocation time.Time `gorm:"-"`
+	// platformUserIDTaken records that another row on this platform already
+	// holds the id this chatter reports, so the stamp is not retried for the
+	// rest of the session. Not stored: the duplicate pair is the DB's to
+	// resolve, and a fresh login re-checks rather than inheriting the verdict.
+	platformUserIDTaken bool `gorm:"-"`
 	// sessionExtraMiles accumulates community sub-grants received during this
 	// session (GiveEveryoneMiles), so logout can record the full unreconstructable
 	// bonus. Resets each login (fresh User from FindOrCreate).
@@ -262,20 +268,47 @@ func RecordPlatformUserID(ctx context.Context, u *User, platformUserID string) {
 	if platformUserID == "" || u == nil || u.PlatformUserID == platformUserID {
 		return
 	}
+	if u.platformUserIDTaken {
+		return
+	}
 	if u.ID == 0 {
 		// No DB row (transient Find error, or a transient user on a platform
 		// that doesn't persist). Updates() without a primary key would build an
 		// UPDATE with no WHERE, which GORM refuses — same guard as save().
 		return
 	}
-	err := database.GormDB().WithContext(ctx).Model(u).
+	// Update through a bare row carrying only the primary key, not through u:
+	// GORM writes the new value into the struct it is given whether or not the
+	// statement succeeds, so a rejected write would leave the in-memory user —
+	// and the session entry mirroring it — claiming an id the DB never took.
+	row := User{ID: u.ID}
+	err := database.GormDB().WithContext(ctx).Model(&row).
 		Update("platform_user_id", platformUserID).Error
 	if err != nil {
+		if isUniqueViolation(err) {
+			// Another row on this platform already holds the id, so this
+			// chatter has two rows: the id followed the person, the username
+			// followed a rename. Which row wins is an identity-merge question
+			// no single-column write can answer, so record that the stamp is
+			// contested and stop re-issuing it on every message they send.
+			u.platformUserIDTaken = true
+			slog.WarnContext(ctx, "platform user id belongs to another row",
+				"username", u.Username, "platform", u.Platform,
+				"platform_user_id", platformUserID, "user_id", u.ID)
+			return
+		}
 		slog.ErrorContext(ctx, "couldn't record platform user id", "err", err,
 			"username", u.Username, "platform", u.Platform)
 		return
 	}
 	u.PlatformUserID = platformUserID
+}
+
+// isUniqueViolation reports whether err is postgres' 23505 — the only failure
+// this path can say something specific about.
+func isUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 
 // HasCommandAvailable lets users run a command once a day,
