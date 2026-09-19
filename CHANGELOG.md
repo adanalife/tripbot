@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.14.0] — 2026-09-19
+
+### Onscreens
+
+- The timewarp overlay can drop its opaque background, leaving the wordmark and speed-lines over the live video. Gated on the `chatbot.timewarp_no_background` feature flag, off by default — the cover masks the video gap the playhead jump causes. ([#1556](https://github.com/adanalife/tripbot/pull/1556))
+
 ## [v5.13.0] — 2026-09-19
 
 ### Chatbot
