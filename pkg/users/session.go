@@ -161,6 +161,7 @@ func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUse
 	s.mu.Lock()
 	if live, ok := s.loggedIn[u.Username]; ok {
 		live.PlatformUserID = u.PlatformUserID
+		live.platformUserIDTaken = u.platformUserIDTaken
 	}
 	s.mu.Unlock()
 	return u
