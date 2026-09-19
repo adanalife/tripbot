@@ -2,6 +2,17 @@
   "_comment": "Generated from pkg/chatbot's command registry via `go generate ./pkg/contract` — do not hand-edit. Every chat command tripbot answers: its trigger, aliases, access gate, and the platforms it dispatches on (already resolved). Synced into the admin console alongside contract.json / eventbus.json / commands.json.",
   "commands": [
     {
+      "trigger": "!achievements",
+      "aliases": [
+        "!achievement",
+        "!badges"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!audio",
       "aliases": [
         "!bed",

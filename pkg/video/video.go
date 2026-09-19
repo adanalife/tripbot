@@ -34,6 +34,10 @@ type Player struct {
 	cfg              *c.TripbotConfig
 	onscreens        onscreens
 	playout          *playoutClient.Client
+	// OnChange, when set, is called with the new Video after each clip
+	// transition (including ones where LoadOrCreate failed — handlers check
+	// v.ID). Set once during boot, before the cron starts ticking.
+	OnChange func(ctx context.Context, v Video)
 
 	// airing is the US state the footage on screen was last seen in, and the
 	// clip it was seen in — what TrackState compares each tick against. Its own
@@ -102,6 +106,10 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// true start time wasn't observed.
 		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
 			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+
+		if p.OnChange != nil {
+			p.OnChange(ctx, p.CurrentlyPlaying)
+		}
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
