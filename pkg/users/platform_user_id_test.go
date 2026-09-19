@@ -167,6 +167,38 @@ func TestRecordPlatformUserID(t *testing.T) {
 		}
 	})
 
+	// Two rows on one platform reporting the same id is one person with two
+	// rows — a rename left the id behind on the old one. The write can't pick a
+	// winner, so it must not keep re-attempting it on every message they send.
+	t.Run("an id another row already holds is recorded as contested, once", func(t *testing.T) {
+		db := testdb.New(t)
+		seedUsers(t, db,
+			User{Username: "oldname", PlatformUserID: "12345"},
+			User{Username: "newname"},
+		)
+		u, err := Find(ctx, testConf.Platform, "newname")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+
+		RecordPlatformUserID(ctx, &u, "12345")
+
+		if !u.platformUserIDTaken {
+			t.Error("collision should mark the stamp contested")
+		}
+		if u.PlatformUserID != "" {
+			t.Errorf("in-memory id = %q, want it left unset", u.PlatformUserID)
+		}
+		// A second message from the same chatter must not re-issue the write.
+		// The rejected statement aborts testdb's surrounding transaction, so a
+		// retry here would fail on 25P02 rather than on the constraint — which
+		// is exactly what the flag has to prevent.
+		RecordPlatformUserID(ctx, &u, "12345")
+		if u.PlatformUserID != "" {
+			t.Errorf("in-memory id = %q, want the retry skipped", u.PlatformUserID)
+		}
+	})
+
 	// A transient user (no DB row) has no primary key, so an Updates() would
 	// build an UPDATE with no WHERE — the same trap save() guards.
 	t.Run("a row-less user is a no-op, not an error", func(t *testing.T) {
