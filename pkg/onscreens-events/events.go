@@ -61,6 +61,11 @@ type LeaderboardShow struct {
 type TimewarpShow struct {
 	Envelope
 	Username string `json:"username"`
+	// NoBackground strips the overlay's opaque cover, leaving the wordmark
+	// over the live video. Feature-flagged by the caller, and optional on the
+	// wire: a publisher that omits it (the console's timewarp button) gets the
+	// normal warp, cover and all.
+	NoBackground bool `json:"no_background,omitempty"`
 }
 
 // LocationData is the payload for the location.update subject — everything

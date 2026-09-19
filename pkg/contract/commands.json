@@ -101,6 +101,9 @@
           },
           "username": {
             "type": "string"
+          },
+          "no_background": {
+            "type": "boolean"
           }
         },
         "required": [

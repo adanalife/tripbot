@@ -45,6 +45,7 @@ var (
 	timewarpShowFields = []field{
 		{"emitted_at", dateType(), true},
 		{"username", strType(), true},
+		{"no_background", boolType(), false},
 	}
 	leaderboardShowFields = []field{
 		{"emitted_at", dateType(), true},

@@ -132,5 +132,6 @@ func (s *Server) handleTimewarpShow(m *nats.Msg) {
 		slog.Error("nats: decode timewarp.show", "err", err, "subject", m.Subject)
 		return
 	}
+	s.timewarpNoBackground.Store(ev.NoBackground)
 	s.Timewarp.ShowFor(ev.Username, timewarpDuration)
 }

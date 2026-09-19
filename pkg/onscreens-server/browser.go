@@ -143,6 +143,9 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 		if onscreenRegistry[slug].Markdown {
 			view.Content = osc.renderedContent()
 		}
+		if slug == SlugTimewarp {
+			view.NoBackground = s.timewarpNoBackground.Load()
+		}
 		out[slug] = view
 	}
 	if err := json.NewEncoder(w).Encode(out); err != nil {

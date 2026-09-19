@@ -43,6 +43,9 @@ type Onscreen struct {
 type onscreenView struct {
 	Content   string `json:"content"`
 	IsShowing bool   `json:"showing"`
+	// NoBackground is set only on the timewarp overlay, whose browser source
+	// reads it to drop the opaque cover. Omitted everywhere else.
+	NoBackground bool `json:"no_background,omitempty"`
 }
 
 // newOnscreen returns a freshly-initialized *Onscreen with an expiry pinned to
