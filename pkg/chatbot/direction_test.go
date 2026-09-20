@@ -1,0 +1,73 @@
+package chatbot
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/adanalife/tripbot/pkg/video"
+)
+
+// directionApp wires a recordingVideo staging one heading reading, plus a
+// recordingChat to read the answer back off.
+func directionApp(t *testing.T, bearing float64, moving, tracked bool) (*App, *recordingChat) {
+	t.Helper()
+	app := newTestApp(video.Video{})
+	chat := &recordingChat{}
+	app.Chat = chat
+	app.Video = &recordingVideo{Bearing: bearing, Moving: moving, HeadingTracked: tracked}
+	return app, chat
+}
+
+func TestDirectionCmd_NamesTheHeading(t *testing.T) {
+	app, chat := directionApp(t, 315, true, true)
+
+	app.directionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(chat.Says) != 1 {
+		t.Fatalf("expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
+	}
+	if !strings.Contains(chat.Says[0], "northwest") {
+		t.Errorf("message %q does not name the heading", chat.Says[0])
+	}
+}
+
+// A stopped van and an untrackable clip are different answers, and the one
+// thing neither may do is invent a direction.
+func TestDirectionCmd_StoppedAndUntrackedNameNoDirection(t *testing.T) {
+	tests := []struct {
+		name    string
+		moving  bool
+		tracked bool
+	}{
+		{"stopped", false, true},
+		{"no track", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// A bearing is staged deliberately: the command must ignore it
+			// when moving or ok is false rather than read it anyway.
+			app, chat := directionApp(t, 90, tc.moving, tc.tracked)
+
+			app.directionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+			if len(chat.Says) != 1 {
+				t.Fatalf("expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
+			}
+			for _, point := range []string{"north", "east", "south", "west"} {
+				if strings.Contains(chat.Says[0], point) {
+					t.Errorf("message %q names a direction it does not have", chat.Says[0])
+				}
+			}
+		})
+	}
+}
+
+func TestDirectionCmd_IsRegistered(t *testing.T) {
+	app := newTestApp(video.Video{})
+	for _, trigger := range []string{"!direction", "!heading", "!compass", "!bearing"} {
+		if _, ok := app.singleWordLookup[trigger]; !ok {
+			t.Errorf("%s does not resolve to a command", trigger)
+		}
+	}
+}
