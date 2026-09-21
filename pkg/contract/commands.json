@@ -15,6 +15,9 @@
           },
           "msg": {
             "type": "string"
+          },
+          "hide_after_seconds": {
+            "type": "integer"
           }
         },
         "required": [
