@@ -645,11 +645,13 @@ type fakeUser struct {
 	follower   bool
 	subscriber bool
 	admin      bool
+	mod        bool
 }
 
 func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
 func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
 func (f *fakeUser) IsAdmin() bool                              { return f.admin }
+func (f *fakeUser) IsMod() bool                                { return f.admin || f.mod }
 
 // sessionUser (a *users.User + the installed *Sessions) is the production
 // chatUser; this asserts it satisfies the seam.
@@ -878,5 +880,49 @@ func TestFindCommand_BareCommandWordsNeedTheWholeMessage(t *testing.T) {
 func TestFindCommand_UnlistedBareWordStillMisses(t *testing.T) {
 	if cmd, _, _ := builtTestApp.findCommand("location"); cmd != nil {
 		t.Errorf("bare \"location\" dispatched to %q, want no command", cmd.Trigger)
+	}
+}
+
+// The mod gate admits the broadcaster and moderators, declines everyone else
+// in silence, and names itself on the refusal event.
+func TestCheckAccess_RequiresMod(t *testing.T) {
+	cmd := &Command{Trigger: "!test", RequiresMod: true}
+	for _, tc := range []struct {
+		name string
+		user *fakeUser
+		want bool
+	}{
+		{"viewer", &fakeUser{follower: true, subscriber: true}, false},
+		{"mod", &fakeUser{mod: true}, true},
+		{"admin", &fakeUser{admin: true}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var said string
+			ok, refused := cmd.checkAccess(context.Background(), platformTwitch, tc.user, func(msg string) { said = msg })
+			if ok != tc.want {
+				t.Errorf("ok = %v, want %v", ok, tc.want)
+			}
+			if said != "" {
+				t.Errorf("said %q, want silence", said)
+			}
+			if !tc.want && refused != events.RefusedModGate {
+				t.Errorf("refused = %q, want %q", refused, events.RefusedModGate)
+			}
+		})
+	}
+}
+
+// The moderator flag arrives on the message, not the user row, so HandleMessage
+// has to carry it across for the mod gate to ever open for a moderator.
+func TestSessionUser_IsModReadsTheMessageFlag(t *testing.T) {
+	cfg := testConf
+	if (sessionUser{cfg: cfg, u: &users.User{Username: "viewer1"}}).IsMod() {
+		t.Error("a plain viewer reads as a mod")
+	}
+	if !(sessionUser{cfg: cfg, u: &users.User{Username: "viewer1", Moderator: true}}).IsMod() {
+		t.Error("a flagged moderator does not read as a mod")
+	}
+	if !(sessionUser{cfg: cfg, u: &users.User{Username: adminUser}}).IsMod() {
+		t.Error("the broadcaster does not read as a mod")
 	}
 }

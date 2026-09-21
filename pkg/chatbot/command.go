@@ -20,6 +20,9 @@ type Command struct {
 	RequiresFollow     bool
 	RequiresSubscriber bool
 	RequiresAdmin      bool
+	// RequiresMod opens the command to the channel's moderators as well as
+	// the broadcaster. Declines silently, like the admin gate.
+	RequiresMod bool
 
 	// Help is the one-line answer to "!help <trigger>": what the command does,
 	// in chat-sized viewer-facing prose. Every command sets it — the registry
