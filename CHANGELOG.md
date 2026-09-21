@@ -9,6 +9,26 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.15.0] — 2026-09-21
+
+### Chatbot
+
+- The timewarp background flag is evaluated as a global default rather than per-chatter, so a warp fired from the console looks the same as one fired by `!timewarp`. ([#1559](https://github.com/adanalife/tripbot/pull/1559))
+- `!direction` (also `!heading`, `!compass`, `!bearing`) names which way the van is travelling, read off the clip's per-moment coordinate track. ([#1560](https://github.com/adanalife/tripbot/pull/1560))
+- Added `!speed`, a mod-only command that names the van's ground speed and heading, derived from the per-moment coordinate track. Commands can now be gated to moderators with `RequiresMod`. ([#1563](https://github.com/adanalife/tripbot/pull/1563), [#1564](https://github.com/adanalife/tripbot/pull/1564))
+
+### Onscreens
+
+- Add your info here ([#1561](https://github.com/adanalife/tripbot/pull/1561))
+
+### Console / API
+
+- The `video.changed` envelope carries the van's `heading` and `speed_mps` at the playhead, read off the per-moment coordinate track, so the console can point its map marker the way the van is driving. ([#1564](https://github.com/adanalife/tripbot/pull/1564))
+
+### Fixes
+
+- The `session snapshot` and `logging out user` log lines carry plain usernames again. Both put terminal colour codes into structured slog attributes, which shipped the escapes verbatim to Loki and made `user` / `logged_in` unmatchable by a query. ([#1557](https://github.com/adanalife/tripbot/pull/1557))
+
 ## [v5.14.0] — 2026-09-19
 
 ### Onscreens
