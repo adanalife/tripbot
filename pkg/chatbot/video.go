@@ -25,11 +25,11 @@ type Video interface {
 	// false when that clip has no per-moment track worth believing, and the
 	// caller falls back to the clip's single fix.
 	PlayheadLocation(ctx context.Context) (vid video.Video, at video.Moment, ok bool)
-	// PlayheadHeading reports which way the van is travelling at the playhead,
-	// as a bearing in degrees clockwise from north. moving is false when the
-	// van is sitting still, so the caller says so instead of naming a
-	// direction; ok is false when the clip has no track to measure along.
-	PlayheadHeading(ctx context.Context) (bearing float64, moving, ok bool)
+	// PlayheadVelocity reports which way and how fast the van is travelling at
+	// the playhead. v.Moving is false when the van is sitting still, so the
+	// caller says so instead of naming a direction; ok is false when the clip
+	// has no track to measure along.
+	PlayheadVelocity(ctx context.Context) (v video.Velocity, ok bool)
 	// FindRandomByState returns a random video filmed in the given US state.
 	// Returns terrors.ErrNoFootageForState when no rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
@@ -84,12 +84,12 @@ func (r realVideo) PlayheadLocation(ctx context.Context) (video.Video, video.Mom
 	return vid, at, ok
 }
 
-func (r realVideo) PlayheadHeading(ctx context.Context) (float64, bool, bool) {
+func (r realVideo) PlayheadVelocity(ctx context.Context) (video.Velocity, bool) {
 	if r.player == nil {
-		return 0, false, false
+		return video.Velocity{}, false
 	}
 	vid, elapsed := r.player.Playhead(ctx)
-	return video.HeadingAt(ctx, vid, elapsed)
+	return video.VelocityAt(ctx, vid, elapsed)
 }
 
 func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {

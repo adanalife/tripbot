@@ -27,12 +27,13 @@ type recordingVideo struct {
 	DaytimeErr      error
 	Moment          video.Moment
 	PlayheadTracked bool
-	// Bearing / Moving / HeadingTracked stage what PlayheadHeading reports:
-	// a direction, a van sitting still, or a clip with no track to measure
-	// along. HeadingTracked is separate from PlayheadTracked because a clip
-	// can have a coordinate at the playhead and still have nothing a
-	// headingLookback behind it.
+	// Bearing / SpeedMPS / Moving / HeadingTracked stage what PlayheadVelocity
+	// reports: a direction and speed, a van sitting still, or a clip with no
+	// track to measure along. HeadingTracked is separate from PlayheadTracked
+	// because a clip can have a coordinate at the playhead and still have
+	// nothing a headingLookback behind it.
 	Bearing        float64
+	SpeedMPS       float64
 	Moving         bool
 	HeadingTracked bool
 	// RefreshedVid, when set, becomes Vid on the next GetCurrentlyPlaying —
@@ -60,9 +61,9 @@ func (r *recordingVideo) PlayheadLocation(_ context.Context) (video.Video, video
 	r.Calls = append(r.Calls, "PlayheadLocation()")
 	return r.Vid, r.Moment, r.PlayheadTracked
 }
-func (r *recordingVideo) PlayheadHeading(_ context.Context) (float64, bool, bool) {
-	r.Calls = append(r.Calls, "PlayheadHeading()")
-	return r.Bearing, r.Moving, r.HeadingTracked
+func (r *recordingVideo) PlayheadVelocity(_ context.Context) (video.Velocity, bool) {
+	r.Calls = append(r.Calls, "PlayheadVelocity()")
+	return video.Velocity{Bearing: r.Bearing, SpeedMPS: r.SpeedMPS, Moving: r.Moving}, r.HeadingTracked
 }
 func (r *recordingVideo) FindRandomByState(_ context.Context, state string) (video.Video, error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("FindRandomByState(%q)", state))
