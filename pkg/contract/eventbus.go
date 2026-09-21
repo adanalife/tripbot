@@ -174,6 +174,8 @@ var (
 		{"flagged", boolType(), true},
 		{"lat", numType(), true},
 		{"lng", numType(), true},
+		{"heading", numType(), false},
+		{"speed_mps", numType(), false},
 		{"emitted_at", dateType(), true},
 	}
 	authStatusFields = []field{

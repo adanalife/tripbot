@@ -201,32 +201,32 @@ type VideoChanged struct {
 	// subject; this is what lets the console keep a separate now-playing card
 	// and map trail per platform. Empty on events emitted before the tag
 	// existed.
-	Platform  string  `json:"platform,omitempty"`
-	File      string  `json:"file"`
-	State     string  `json:"state"`
-	Flagged   bool    `json:"flagged"`
-	Lat       float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
-	Lng       float64 `json:"lng"`
-	EmittedAt string  `json:"emitted_at"`
+	Platform string  `json:"platform,omitempty"`
+	File     string  `json:"file"`
+	State    string  `json:"state"`
+	Flagged  bool    `json:"flagged"`
+	Lat      float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
+	Lng      float64 `json:"lng"`
+	// Heading is the direction of travel at the playhead in degrees clockwise
+	// from north, and SpeedMPS the ground speed in metres per second, both
+	// read off the clip's per-moment coordinate track. Heading is absent when
+	// the van is stopped or the clip has no track; SpeedMPS is absent only
+	// without a track, so a stopped van reports 0 with no heading.
+	Heading   *float64 `json:"heading,omitempty"`
+	SpeedMPS  *float64 `json:"speed_mps,omitempty"`
+	EmittedAt string   `json:"emitted_at"`
 }
 
 // VideoChangedSubject returns the subscribe/publish subject for video-change
 // events in env.
 func VideoChangedSubject(env string) string { return subject(env, "video", "changed") }
 
-// EmitVideoChanged publishes a video switch for this instance's platform. The
-// emitted_at doubles as the clip's start time, so the console can tick an
-// elapsed timer from it.
-func EmitVideoChanged(ctx context.Context, env, platform, file, state string, flagged bool, lat, lng float64) {
-	emit(ctx, VideoChangedSubject(env), VideoChanged{
-		Platform:  platform,
-		File:      file,
-		State:     state,
-		Flagged:   flagged,
-		Lat:       lat,
-		Lng:       lng,
-		EmittedAt: emittedAt(),
-	})
+// EmitVideoChanged publishes a video switch for this instance's platform,
+// stamping emitted_at — which doubles as the clip's start time, so the console
+// can tick an elapsed timer from it.
+func EmitVideoChanged(ctx context.Context, env string, ev VideoChanged) {
+	ev.EmittedAt = emittedAt()
+	emit(ctx, VideoChangedSubject(env), ev)
 }
 
 // --- auth.status ------------------------------------------------------------
