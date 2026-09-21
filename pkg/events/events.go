@@ -309,6 +309,9 @@ const (
 	RefusedSubGate = "sub_gate"
 	// RefusedAdminGate — the command is admin-only and the viewer isn't one.
 	RefusedAdminGate = "admin_gate"
+	// RefusedModGate — the command is mod-only and the viewer is neither a
+	// moderator nor the broadcaster.
+	RefusedModGate = "mod_gate"
 	// RefusedCooldown — the viewer ran it too recently to run it again.
 	RefusedCooldown = "cooldown"
 )

@@ -63,6 +63,60 @@ func TestDirectionCmd_StoppedAndUntrackedNameNoDirection(t *testing.T) {
 	}
 }
 
+func TestSpeedCmd_NamesSpeedAndHeading(t *testing.T) {
+	app, chat := directionApp(t, 90, true, true)
+	app.Video.(*recordingVideo).SpeedMPS = 27.5 // 61.5 mph, 99 km/h
+
+	app.speedCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(chat.Says) != 1 {
+		t.Fatalf("expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
+	}
+	for _, want := range []string{"62 mph", "99 km/h", "east"} {
+		if !strings.Contains(chat.Says[0], want) {
+			t.Errorf("message %q lacks %q", chat.Says[0], want)
+		}
+	}
+}
+
+func TestSpeedCmd_StoppedAndUntrackedNameNoSpeed(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		moving  bool
+		tracked bool
+	}{
+		{"stopped", false, true},
+		{"no track", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app, chat := directionApp(t, 90, tc.moving, tc.tracked)
+			app.Video.(*recordingVideo).SpeedMPS = 30
+
+			app.speedCmd(context.Background(), newTestUser("viewer1"), nil)
+
+			if len(chat.Says) != 1 {
+				t.Fatalf("expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
+			}
+			if strings.Contains(chat.Says[0], "mph") {
+				t.Errorf("message %q quotes a speed it does not have", chat.Says[0])
+			}
+		})
+	}
+}
+
+// !speed is for the broadcaster and mods while the derived speed is being
+// checked against the corpus; the registry must say so.
+func TestSpeedCmd_IsModOnly(t *testing.T) {
+	app := newTestApp(video.Video{})
+	cmd, ok := app.singleWordLookup["!speed"]
+	if !ok {
+		t.Fatal("!speed does not resolve to a command")
+	}
+	if !cmd.RequiresMod {
+		t.Error("!speed is not mod-gated")
+	}
+}
+
 func TestDirectionCmd_IsRegistered(t *testing.T) {
 	app := newTestApp(video.Video{})
 	for _, trigger := range []string{"!direction", "!heading", "!compass", "!bearing"} {

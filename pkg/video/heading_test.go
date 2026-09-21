@@ -100,3 +100,15 @@ func TestStoppedMetresSeparatesScatterFromDriving(t *testing.T) {
 		t.Errorf("a driving leg of %v m reads as stopped", driving)
 	}
 }
+
+// The speed is the baseline distance over the baseline time, and the unit
+// helpers are what chat reads — a slip in either is a wrong number on stream.
+func TestVelocityUnits(t *testing.T) {
+	v := Velocity{SpeedMPS: 10, Moving: true}
+	if got := v.KPH(); math.Abs(got-36) > 0.01 {
+		t.Errorf("KPH = %v, want 36", got)
+	}
+	if got := v.MPH(); math.Abs(got-22.37) > 0.01 {
+		t.Errorf("MPH = %v, want 22.37", got)
+	}
+}

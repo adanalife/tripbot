@@ -346,16 +346,35 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) directionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !direction", "username", user.Username)
 
-	bearing, moving, ok := a.Video.PlayheadHeading(ctx)
+	v, ok := a.Video.PlayheadVelocity(ctx)
 	if !ok {
 		a.Chat.Say("I can't tell which way we're pointed right now, sorry!")
 		return
 	}
-	if !moving {
+	if !v.Moving {
 		a.Chat.Say("We're not going anywhere at the moment.")
 		return
 	}
-	a.Chat.Say(fmt.Sprintf("We're heading %s.", video.Compass(bearing)))
+	a.Chat.Say(fmt.Sprintf("We're heading %s.", video.Compass(v.Bearing)))
+}
+
+// speedCmd answers with the van's ground speed and heading. Mod-gated while
+// the derived speed is being checked against the corpus: a bad fix reads as
+// an absurd number, and an interpolated span reads eerily flat.
+func (a *App) speedCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !speed", "username", user.Username)
+
+	v, ok := a.Video.PlayheadVelocity(ctx)
+	if !ok {
+		a.Chat.Say("I can't tell how fast we're going right now, sorry!")
+		return
+	}
+	if !v.Moving {
+		a.Chat.Say("We're stopped right now.")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("We're doing about %.0f mph (%.0f km/h), heading %s.",
+		v.MPH(), v.KPH(), video.Compass(v.Bearing)))
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
