@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -61,6 +62,12 @@ type Server struct {
 	// to apply. Server-level rather than a field on the Onscreen: it's styling
 	// for one overlay, not state every overlay has.
 	timewarpNoBackground atomic.Bool
+
+	// middleExpiry is the pending auto-hide for the middle text, when the show
+	// that set it asked for one. Held so the next show can cancel it —
+	// otherwise the previous message's timer hides the new one early.
+	middleExpiryMu sync.Mutex
+	middleExpiry   *time.Timer
 
 	http *http.Server
 }

@@ -73,12 +73,35 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 	s.MiddleText.Show(ev.Msg)
 	// Persist the new state so the overlay survives a server restart.
 	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, ev.Msg, true)
+	s.scheduleMiddleHide(time.Duration(ev.HideAfterSeconds) * time.Second)
+}
+
+// scheduleMiddleHide arms the auto-hide a middle.show asked for, replacing any
+// timer an earlier show left pending. A non-positive duration means "stay up",
+// which is also how it cancels the previous message's timer.
+//
+// The hide goes through handleMiddleHide rather than the overlay's own expiry
+// sweep, so an expired message persists as hidden the way a console hide does
+// — the sweep only flips the in-memory flag, and a restart after it would
+// restore the text as showing.
+func (s *Server) scheduleMiddleHide(after time.Duration) {
+	s.middleExpiryMu.Lock()
+	defer s.middleExpiryMu.Unlock()
+	if s.middleExpiry != nil {
+		s.middleExpiry.Stop()
+		s.middleExpiry = nil
+	}
+	if after <= 0 {
+		return
+	}
+	s.middleExpiry = time.AfterFunc(after, func() { s.handleMiddleHide(nil) })
 }
 
 // handleMiddleHide hides the middle text. Hide retains the overlay's Content,
 // so the persisted state keeps the text (showing=false) — a restart restores
 // it hidden, matching the live state rather than blanking it.
 func (s *Server) handleMiddleHide(_ *nats.Msg) {
+	s.scheduleMiddleHide(0)
 	s.MiddleText.Hide()
 	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, s.MiddleText.Content(), false)
 }

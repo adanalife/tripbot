@@ -31,6 +31,10 @@ func NewEnvelope() Envelope {
 type MiddleShow struct {
 	Envelope
 	Msg string `json:"msg"`
+	// HideAfterSeconds auto-hides the text that many seconds after it lands.
+	// Optional on the wire: omitted (or zero) leaves the text up until
+	// something hides it, which is what every publisher before this field did.
+	HideAfterSeconds int `json:"hide_after_seconds,omitempty"`
 }
 
 // MiddleState is the last-value state onscreens-server publishes about the
