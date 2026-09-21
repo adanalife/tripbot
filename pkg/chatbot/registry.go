@@ -274,6 +274,13 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!direction",
+			Help:           "Which way the van is heading right now",
+			Aliases:        []string{"!heading", "!compass", "!bearing"},
+			Handler:        a.directionCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger: "!location",
 			Help:    "Where the van is: the town and state, with a map link",
 			// "!loclistion" stays: 3 edits from !location, beyond
@@ -376,7 +383,7 @@ var v1Commands = map[string]bool{
 	"!song": true, "!audio": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
-	"!state": true, "!location": true,
+	"!state": true, "!location": true, "!direction": true,
 	// playback control (drives this platform's playout pipeline)
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
 	"!find": true,

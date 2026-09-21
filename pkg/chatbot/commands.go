@@ -343,6 +343,21 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Chat.Say(desc)
 }
 
+func (a *App) directionCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !direction", "username", user.Username)
+
+	bearing, moving, ok := a.Video.PlayheadHeading(ctx)
+	if !ok {
+		a.Chat.Say("I can't tell which way we're pointed right now, sorry!")
+		return
+	}
+	if !moving {
+		a.Chat.Say("We're not going anywhere at the moment.")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("We're heading %s.", video.Compass(bearing)))
+}
+
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
 	s, ok := a.currentSpot(ctx)

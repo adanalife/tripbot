@@ -95,6 +95,22 @@
       ]
     },
     {
+      "trigger": "!direction",
+      "aliases": [
+        "!heading",
+        "!compass",
+        "!bearing"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!discord",
       "platforms": [
         "facebook",
