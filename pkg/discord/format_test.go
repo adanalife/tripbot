@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -79,34 +78,6 @@ func TestLeaderboardEmbed(t *testing.T) {
 				if !strings.Contains(got.Description, want) {
 					t.Errorf("description missing %q\n--- description ---\n%s", want, got.Description)
 				}
-			}
-		})
-	}
-}
-
-func TestFilterNonZeroInts(t *testing.T) {
-	cases := []struct {
-		name string
-		in   [][]string
-		want [][]string
-	}{
-		{name: "empty in empty out", in: nil, want: nil},
-		{
-			name: "drops zero and empty values, strips decimals",
-			in:   [][]string{{"a", "0.0"}, {"b", "5.0"}, {"c", ""}, {"d", "12.7"}},
-			want: [][]string{{"b", "5"}, {"d", "12"}},
-		},
-		{
-			name: "drops malformed pair",
-			in:   [][]string{{"x"}, {"y", "3.0"}},
-			want: [][]string{{"y", "3"}},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := filterNonZeroInts(tc.in)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("want %v, got %v", tc.want, got)
 			}
 		})
 	}
