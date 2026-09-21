@@ -154,6 +154,12 @@
           "lng": {
             "type": "number"
           },
+          "heading": {
+            "type": "number"
+          },
+          "speed_mps": {
+            "type": "number"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
