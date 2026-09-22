@@ -3,7 +3,6 @@ package obs
 import (
 	"context"
 	"errors"
-	"log/slog"
 
 	"github.com/andreykaipov/goobs/api/requests/mediainputs"
 )
@@ -28,11 +27,7 @@ func GetMediaInputState(ctx context.Context, inputName string) (string, error) {
 	if err != nil {
 		return "", errors.Join(ErrUnreachable, err)
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 	resp, err := client.MediaInputs.GetMediaInputStatus(
 		mediainputs.NewGetMediaInputStatusParams().WithInputName(inputName),
 	)
