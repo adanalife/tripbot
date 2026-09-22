@@ -155,6 +155,29 @@ func StateCrossing(ctx context.Context, cfg *c.TripbotConfig, from, to string, a
 	return record(ctx, cfg, e)
 }
 
+// viewerRecordMeta is a viewer_record event's meta payload. The platform isn't
+// in here because every event row already carries one — a reader gets it from
+// the column.
+type viewerRecordMeta struct {
+	Viewers int `json:"viewers"`
+	// Previous is the high this reading beat, so the row says how big a jump it
+	// was without re-querying the series it came from.
+	Previous int `json:"previous"`
+}
+
+// ViewerRecord records the concurrent-viewer count setting a new all-time high
+// for this platform. A system event — no viewer did it — so Username is empty,
+// and no airing context: a record belongs to the stream, not to whichever clip
+// happened to be on screen when the counter ticked over.
+func ViewerRecord(ctx context.Context, cfg *c.TripbotConfig, viewers, previous int) error {
+	payload, err := json.Marshal(viewerRecordMeta{Viewers: viewers, Previous: previous})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Event: "viewer_record", Meta: &meta})
+}
+
 // guessMeta is a guess_submitted event's meta payload. Guessed and Actual are
 // post-normalization (two-letter code expanded, close misspelling corrected),
 // so rows that differ only in spelling still group together in a rollup.
