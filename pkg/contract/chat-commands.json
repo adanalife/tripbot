@@ -232,7 +232,7 @@
         "!guessrecord",
         "!battingaverage"
       ],
-      "requires_follow": true,
+      "requires_subscriber": true,
       "platforms": [
         "twitch"
       ]

@@ -316,11 +316,11 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!guessstats",
-			Help:           "Your state-guess batting average: how many you got right, out of how many you answered",
-			Aliases:        []string{"!guessrecord", "!battingaverage"},
-			Handler:        a.guessStatsCmd,
-			RequiresFollow: true,
+			Trigger:            "!guessstats",
+			Help:               "Your state-guess batting average, a subscriber perk: how many you got right, out of how many you answered",
+			Aliases:            []string{"!guessrecord", "!battingaverage"},
+			Handler:            a.guessStatsCmd,
+			RequiresSubscriber: true,
 		},
 		{
 			Trigger:        "!guessleaderboard",
