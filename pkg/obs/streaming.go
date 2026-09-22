@@ -189,9 +189,7 @@ func poll(ctx context.Context, env, platform string, obsStats instrumentation.OB
 		// the connection does, so LastStreamState goes back to unreachable.
 		lastStreamState.forget()
 		eventbus.EmitOBSStream(ctx, env, platform, "", false)
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
+		disconnect(ctx, client)
 	}()
 
 	slog.InfoContext(ctx, "obs websocket connected", "addr", addr)
