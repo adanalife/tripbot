@@ -17,6 +17,7 @@ type BedStore interface {
 	Current() (beds.Bed, string)
 	Playing() (beds.Bed, string)
 	Station() string
+	Voicing() string
 	Album() string
 	PlayingAlbum() string
 	Albums() []string
@@ -27,6 +28,7 @@ type BedStore interface {
 	Pending() (beds.Switch, bool)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
+	SetVoicing(ctx context.Context, voicing string) error
 	SetAlbum(ctx context.Context, album string) error
 }
 
@@ -43,7 +45,10 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	// The station list travels with the state so the console's picker is built
 	// from what this tripbot will actually accept, the same way the bed buttons
 	// are — nothing about SomaFM's lineup is duplicated in the console.
-	body := map[string]any{"ok": false, "beds": options, "stations": beds.Stations}
+	// The voicings travel for the same reason the stations do: the renders are
+	// baked into the OBS image this tripbot is paired with, so the picker is
+	// built from what will actually play rather than a list the console repeats.
+	body := map[string]any{"ok": false, "beds": options, "stations": beds.Stations, "voicings": beds.Voicings}
 	if s.beds != nil {
 		bed, _ := s.beds.Current()
 		playing, track := s.beds.Playing()
@@ -56,6 +61,7 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		body["on_fallback"] = playing != bed
 		body["track"] = s.track(r.Context(), playing, track)
 		body["station"] = s.beds.Station()
+		body["voicing"] = s.beds.Voicing()
 		// The album list ships for the same reason the stations do, but it comes
 		// off the share rather than a constant: new music appears there without a
 		// deploy, so a picker built from a compiled-in list would be wrong the
@@ -82,6 +88,7 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 				"bed":     string(sw.Bed),
 				"station": sw.Station,
 				"album":   sw.Album,
+				"voicing": sw.Voicing,
 				// Seconds left rather than a timestamp: the console renders a
 				// countdown, and clock skew between the two would show in it.
 				"in_seconds": max(0, int(time.Until(sw.At).Round(time.Second).Seconds())),
@@ -117,9 +124,10 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 
 // audioSetHandler switches the background-audio bed. The console POSTs
 // {"bed": "album"} to /api/audio, {"station": "dronezone"} to tune the SomaFM
-// bed to another channel, or {"album": "lofi-secluded"} to narrow the album
-// bed to one album — the latter two select their bed too, since tuning a station
-// or picking an album you can't hear isn't a thing anyone means. {"album": ""}
+// bed to another channel, {"voicing": "highway"} to pick which car-hum render
+// the drone plays, or {"album": "lofi-secluded"} to narrow the album bed to one
+// album — the latter three select their bed too, since tuning a station or
+// picking an album you can't hear isn't a thing anyone means. {"album": ""}
 // widens that bed back to the whole share. A name we don't know is a 400; a
 // switch OBS rejects (unreachable, or an album with no share mounted) is a 502
 // — either way the previous bed keeps playing and the re-read reports it, so a
@@ -132,6 +140,7 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Bed     string `json:"bed"`
 		Station string `json:"station"`
+		Voicing string `json:"voicing"`
 		// A pointer because "" is a meaningful album: it widens the bed back to
 		// the whole share. Absent and empty have to be different requests, which a
 		// plain string can't express.
@@ -153,6 +162,12 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = s.beds.SetStation(r.Context(), body.Station)
+	case body.Voicing != "":
+		if !beds.ValidVoicing(body.Voicing) {
+			http.Error(w, "unknown car-hum voicing", http.StatusBadRequest)
+			return
+		}
+		err = s.beds.SetVoicing(r.Context(), body.Voicing)
 	case body.Album != nil:
 		// Asked of the store rather than a list this handler re-derives: the store
 		// owns the share, so its answer is the one that will load tracks. Checking
@@ -181,13 +196,15 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	current, _ := s.beds.Current()
 	playing, track := s.beds.Playing()
 	slog.InfoContext(r.Context(), "background audio switched via console",
-		"bed", current, "station", s.beds.Station(), "album", s.beds.Album())
+		"bed", current, "station", s.beds.Station(), "album", s.beds.Album(),
+		"voicing", s.beds.Voicing())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":            true,
 		"bed":           string(current),
 		"track":         s.track(r.Context(), playing, track),
 		"station":       s.beds.Station(),
+		"voicing":       s.beds.Voicing(),
 		"album":         s.beds.Album(),
 		"playing_album": s.beds.PlayingAlbum(),
 		"shuffle":       s.beds.Shuffle(),

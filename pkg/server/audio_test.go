@@ -23,6 +23,8 @@ type fakeBeds struct {
 	fallback     beds.Bed
 	track        string
 	station      string
+	voicing      string
+	voicings     []string // SetVoicing calls, in order
 	artist       string
 	title        string
 	feedErr      error
@@ -69,6 +71,22 @@ func (f *fakeBeds) Station() string {
 		return beds.DefaultStation
 	}
 	return f.station
+}
+
+func (f *fakeBeds) Voicing() string {
+	if f.voicing == "" {
+		return beds.DefaultVoicing
+	}
+	return f.voicing
+}
+
+func (f *fakeBeds) SetVoicing(_ context.Context, voicing string) error {
+	f.voicings = append(f.voicings, voicing)
+	if f.setErr != nil {
+		return f.setErr
+	}
+	f.bed, f.voicing = beds.CarHum, voicing
+	return nil
 }
 
 func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
@@ -547,5 +565,50 @@ func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 	}
 	if f.feeds != 0 {
 		t.Fatal("must not consult the SomaFM feed while another bed is on air")
+	}
+}
+
+func TestAudioSetHandler_SelectsAVoicing(t *testing.T) {
+	f := &fakeBeds{bed: beds.SomaFM}
+	w := postAudio(t, &Server{beds: f}, `{"voicing":"highway"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d, body %q", w.Code, w.Body.String())
+	}
+	if len(f.voicings) != 1 || f.voicings[0] != "highway" {
+		t.Fatalf("expected one selection of highway, got %v", f.voicings)
+	}
+	if len(f.sets) != 0 {
+		t.Errorf("a voicing selects its own bed, no separate switch: %v", f.sets)
+	}
+}
+
+// A voicing the paired OBS image never rendered is a path nothing can open, so
+// it stops at the handler rather than reaching OBS and going silent.
+func TestAudioSetHandler_UnknownVoicingIs400(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum}
+	w := postAudio(t, &Server{beds: f}, `{"voicing":"spaceship"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d (%q)", w.Code, w.Body.String())
+	}
+	if len(f.voicings) != 0 {
+		t.Errorf("an unknown voicing must not reach the store, got %v", f.voicings)
+	}
+}
+
+func TestAudioHandler_ReportsTheVoicingAndItsOptions(t *testing.T) {
+	_, body := getAudio(t, &Server{beds: &fakeBeds{bed: beds.CarHum, voicing: "mountain"}})
+	if body["voicing"] != "mountain" {
+		t.Errorf("voicing: want mountain, got %v", body["voicing"])
+	}
+	// The picker is built from what this tripbot will accept, so the option
+	// list has to travel with the state the way the stations do.
+	got, _ := body["voicings"].([]any)
+	if len(got) != len(beds.Voicings) {
+		t.Fatalf("voicings: want %d options, got %v", len(beds.Voicings), body["voicings"])
+	}
+	for i, want := range beds.Voicings {
+		if got[i] != want {
+			t.Errorf("voicings[%d]: want %s, got %v", i, want, got[i])
+		}
 	}
 }
