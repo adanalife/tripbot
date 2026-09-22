@@ -73,9 +73,11 @@ func Valid(b Bed) bool {
 // mounts that same claim at the same path, so a path chosen here resolves
 // identically inside the OBS container.
 const (
-	InputName  = "Background Audio"
-	CarHumFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
-	MusicDir   = "/opt/tripbot/assets/music"
+	InputName = "Background Audio"
+	// CarHumDir holds one FLAC per voicing, named car-hum-<voicing>.flac by the
+	// obs repo's carhum/render-variants.sh.
+	CarHumDir = "/opt/tripbot/assets/carhum"
+	MusicDir  = "/opt/tripbot/assets/music"
 
 	// MusicIndexFile is where cdk8s mounts the album track index that
 	// bin/stage-streambeats emits — a ConfigMap, so a missing one leaves the
@@ -92,6 +94,47 @@ const (
 	// distinction the process loses on restart and can only read back here.
 	FallbackFile = "/opt/tripbot/assets/carhum/car-hum-fallback.flac"
 )
+
+// Voicings are the car-hum renders the OBS image ships, in display order. The
+// names are a contract with the obs repo's carhum/render-variants.sh, which
+// renders one preset per name; a voicing missing there is a source OBS cannot
+// open, which is silence.
+var Voicings = []string{"idle", "highway", "backroad", "mountain"}
+
+// DefaultVoicing is the drone a store starts on and the one the audio watchdog
+// falls back to — FallbackFile is a copy of it.
+const DefaultVoicing = "idle"
+
+// ValidVoicing reports whether v is a car-hum voicing the image ships.
+func ValidVoicing(v string) bool {
+	return slices.Contains(Voicings, v)
+}
+
+// CarHumFile is the drone file for a voicing. An unknown one yields the
+// default rather than a path that isn't there: this is what OBS is handed, and
+// a bed that refuses to play is worse than the wrong flavour of drone.
+func CarHumFile(voicing string) string {
+	if !ValidVoicing(voicing) {
+		voicing = DefaultVoicing
+	}
+	return filepath.Join(CarHumDir, "car-hum-"+voicing+".flac")
+}
+
+// voicingFromFile recovers the voicing from a drone path, so the store can read
+// the live one back off OBS at startup — the counterpart of stationFromURL and
+// albumFromFile. "" for anything that isn't one of the shipped renders,
+// including the watchdog's FallbackFile, which names an outage rather than a
+// choice.
+func voicingFromFile(file string) string {
+	if filepath.Dir(file) != CarHumDir {
+		return ""
+	}
+	v := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(file), "car-hum-"), ".flac")
+	if !ValidVoicing(v) {
+		return ""
+	}
+	return v
+}
 
 // audioExts are the track extensions scanned for under MusicDir. Matches the
 // find in the obs repo's script/background-audio.sh.
@@ -126,7 +169,10 @@ type Store struct {
 	station string // SomaFM channel id the SomaFM bed plays
 	// album is the Album bed's selection: one album's directory, a prefix naming
 	// a group of them ("streambeats-lofi"), or "" for the whole share.
-	album     string
+	album string
+	// voicing is which car-hum render the CarHum bed plays. Like station and
+	// album it survives a switch away, so the bed returns to the one chosen.
+	voicing   string
 	shuffle   bool     // play order is shuffled rather than sequential
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
@@ -186,6 +232,7 @@ type Switch struct {
 	Bed     Bed
 	Station string
 	Album   string
+	Voicing string
 	// At is when the switch lands. A deadline rather than a duration so a value
 	// read once doesn't go stale while it's being rendered.
 	At time.Time
@@ -208,6 +255,7 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		musicDir: musicDir,
 		platform: platform,
 		station:  DefaultStation,
+		voicing:  DefaultVoicing,
 		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
 	}
@@ -269,6 +317,14 @@ func (s *Store) Station() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.station
+}
+
+// Voicing reports which car-hum render the CarHum bed plays. Like Station, it
+// answers whichever bed is live — it's the one that bed returns to.
+func (s *Store) Voicing() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.voicing
 }
 
 // Album reports the Album bed's selection: one album, a group prefix, or "" for
@@ -436,6 +492,12 @@ func (s *Store) Detect(ctx context.Context) {
 	if album := albumFromFile(file, s.musicDir); album != "" {
 		s.album = album
 	}
+	// And the drone file names the voicing, the same way. "" covers both a
+	// non-drone file and the watchdog's fallback copy, neither of which is a
+	// choice anyone made.
+	if voicing := voicingFromFile(file); voicing != "" {
+		s.voicing = voicing
+	}
 	var loadErr error
 	if bed == Album {
 		// OBS booted straight onto the album — its per-platform default, no Set
@@ -512,9 +574,9 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 		return fmt.Errorf("unknown background-audio bed %q", bed)
 	}
 	s.mu.Lock()
-	station, album := s.station, s.album
+	station, album, voicing := s.station, s.album, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album})
+	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album, Voicing: voicing})
 }
 
 // setNow switches to bed and applies it to OBS. Switching to the album
@@ -563,9 +625,9 @@ func (s *Store) SetAlbum(ctx context.Context, album string) error {
 		return fmt.Errorf("unknown album %q", album)
 	}
 	s.mu.Lock()
-	station := s.station
+	station, voicing := s.station, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album})
+	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album, Voicing: voicing})
 }
 
 // SetStation tunes the SomaFM bed to another channel and switches to it, so
@@ -575,9 +637,22 @@ func (s *Store) SetStation(ctx context.Context, station string) error {
 		return fmt.Errorf("unknown somafm station %q", station)
 	}
 	s.mu.Lock()
-	album := s.album
+	album, voicing := s.album, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: SomaFM, Station: station, Album: album})
+	return s.schedule(ctx, Switch{Bed: SomaFM, Station: station, Album: album, Voicing: voicing})
+}
+
+// SetVoicing picks which car-hum render the drone plays and switches to it, so
+// picking a voicing is one action rather than "select carhum, then voice it" —
+// the same shape as SetStation.
+func (s *Store) SetVoicing(ctx context.Context, voicing string) error {
+	if !ValidVoicing(voicing) {
+		return fmt.Errorf("unknown car-hum voicing %q", voicing)
+	}
+	s.mu.Lock()
+	station, album := s.station, s.album
+	s.mu.Unlock()
+	return s.schedule(ctx, Switch{Bed: CarHum, Station: station, Album: album, Voicing: voicing})
 }
 
 // schedule holds sw for switchDelay and then applies it, replacing whatever was
@@ -634,13 +709,13 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 // a caller read the new station off a store still playing the old bed.
 func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	s.mu.Lock()
-	prevStation, prevAlbum := s.station, s.album
-	s.station, s.album = sw.Station, sw.Album
+	prevStation, prevAlbum, prevVoicing := s.station, s.album, s.voicing
+	s.station, s.album, s.voicing = sw.Station, sw.Album, sw.Voicing
 	s.mu.Unlock()
 
 	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
-		s.station, s.album = prevStation, prevAlbum
+		s.station, s.album, s.voicing = prevStation, prevAlbum, prevVoicing
 		s.pending = nil
 		s.mu.Unlock()
 		return err
@@ -650,7 +725,7 @@ func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	s.pending = nil
 	s.mu.Unlock()
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
-		"station", sw.Station, "album", sw.Album)
+		"station", sw.Station, "album", sw.Album, "voicing", sw.Voicing)
 	return nil
 }
 
@@ -835,7 +910,7 @@ func (s *Store) loadAlbumLocked(playing string) error {
 func (s *Store) trackLocked(bed Bed) string {
 	switch bed {
 	case CarHum:
-		return CarHumFile
+		return CarHumFile(s.voicing)
 	case Album:
 		if s.idx < len(s.tracks) {
 			return s.tracks[s.idx]
