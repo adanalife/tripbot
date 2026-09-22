@@ -227,6 +227,17 @@
       ]
     },
     {
+      "trigger": "!guessstats",
+      "aliases": [
+        "!guessrecord",
+        "!battingaverage"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!instagram",
       "aliases": [
         "!ig",

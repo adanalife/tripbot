@@ -583,6 +583,31 @@ func SessionCount(ctx context.Context, platform, username string) int64 {
 	return n
 }
 
+// GuessRecord returns one viewer's answerable-!guess history: how many they
+// submitted and how many of those were right. Both come from a single scan of
+// their guess_submitted rows, over the same events_username_date index
+// SessionCount uses.
+//
+// meta->>'correct' reads 'true' whether the writer stored a JSON boolean or
+// the string "true", matching the server-side guess rollups. Returns 0, 0 on
+// error — a chat command would rather say "no guesses yet" than fail.
+func GuessRecord(ctx context.Context, platform, username string) (total, correct int64) {
+	var row struct {
+		Total   int64
+		Correct int64
+	}
+	err := database.GormDB().WithContext(ctx).
+		Model(&Event{}).
+		Select("COUNT(*) AS total, COUNT(*) FILTER (WHERE meta->>'correct' = 'true') AS correct").
+		Where("platform = ? AND username = ? AND event = ?", platform, username, "guess_submitted").
+		Scan(&row).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "guess record lookup failed", "err", err, "username", username)
+		return 0, 0
+	}
+	return row.Total, row.Correct
+}
+
 // raidMeta is a raid event's meta payload.
 type raidMeta struct {
 	// From is the raiding channel's name, duplicated from the row's username

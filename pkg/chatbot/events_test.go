@@ -25,6 +25,9 @@ func (noopEvents) CommandRefused(_ context.Context, _ events.CommandRefusal) err
 func (noopEvents) CommandRan(_ context.Context, _ events.CommandRun) error {
 	return nil
 }
+func (noopEvents) GuessRecord(_ context.Context, _, _ string) (int64, int64) {
+	return 0, 0
+}
 
 // recordingEvents captures the event rows a run produced, so the emit sites
 // can be asserted on without a database.
@@ -47,6 +50,15 @@ type recordingEvents struct {
 	Refusals []events.CommandRefusal
 	Raids    []events.Raid
 	Runs     []events.CommandRun
+
+	// GuessTotal/GuessCorrect is what GuessRecord answers, for the commands
+	// that read a viewer's history back rather than adding to it.
+	GuessTotal   int64
+	GuessCorrect int64
+}
+
+func (r *recordingEvents) GuessRecord(_ context.Context, _, _ string) (int64, int64) {
+	return r.GuessTotal, r.GuessCorrect
 }
 
 func (r *recordingEvents) Correction(_ context.Context, username string, delta float64) error {
