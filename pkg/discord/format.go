@@ -42,23 +42,3 @@ func leaderboardEmbed(title string, entries [][]string) *discordgo.MessageEmbed 
 		Color:       0xff7a00,
 	}
 }
-
-// filterNonZeroInts strips entries whose value is "0" or empty and
-// drops the decimal portion. Mirrors the guess-leaderboard transform
-// in pkg/chatbot/commands.go:307-315 (guesses are stored as floats
-// but always whole numbers, and AddToScoreByName upserts 0-rows for
-// everyone who's ever guessed).
-func filterNonZeroInts(entries [][]string) [][]string {
-	var out [][]string
-	for _, pair := range entries {
-		if len(pair) < 2 {
-			continue
-		}
-		intVersion := strings.Split(pair[1], ".")[0]
-		if intVersion == "0" || intVersion == "" {
-			continue
-		}
-		out = append(out, []string{pair[0], intVersion})
-	}
-	return out
-}

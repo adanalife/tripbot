@@ -126,6 +126,11 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
 
+	// The monthly miles and guess boards for one month, plus the months that
+	// have data — the console's leaderboard pane builds its selector from the
+	// same call that fills it.
+	r.Handle("/api/leaderboards", tagged("/api/leaderboards", s.leaderboardsHandler)).Methods("GET")
+
 	// Background audio: which bed this platform's OBS is playing, and the
 	// switch between them.
 	r.Handle("/api/audio", tagged("/api/audio", s.audioHandler)).Methods("GET")

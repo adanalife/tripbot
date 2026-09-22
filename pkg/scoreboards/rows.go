@@ -19,7 +19,7 @@ func TopMilesRows(ctx context.Context, cfg *c.TripbotConfig, size int) [][]strin
 // has a row — many at 0 early in the month), and the float values are
 // rendered as ints. May return an empty slice.
 func TopGuessRows(ctx context.Context, cfg *c.TripbotConfig, size int) [][]string {
-	return guessRows(TopUsers(ctx, cfg, CurrentGuessScoreboard(), size))
+	return GuessRows(TopUsers(ctx, cfg, CurrentGuessScoreboard(), size))
 }
 
 // Ranks returns the 1-based place of each row, sharing the best place across a
@@ -43,13 +43,18 @@ func Ranks(rows [][]string) []int {
 	return ranks
 }
 
-// guessRows applies the guess-board presentation rules to raw [username,
+// GuessRows applies the guess-board presentation rules to raw [username,
 // value] pairs: drop the zero-scorers, render the rest as whole numbers. Split
 // out from the query so it can be tested as what it is — string shaping —
-// rather than through a mocked JOIN.
-func guessRows(pairs [][]string) [][]string {
+// rather than through a mocked JOIN, and exported because every guess-board
+// surface needs it — the snapshot reads go through SnapshotTopUsers, which
+// returns the same one-decimal pairs TopUsers does.
+func GuessRows(pairs [][]string) [][]string {
 	var rows [][]string
 	for _, pair := range pairs {
+		if len(pair) < 2 {
+			continue
+		}
 		// guesses are ints not floats, so remove the decimal place
 		guesses := strings.Split(pair[1], ".")[0]
 		if guesses == "0" || guesses == "" {
