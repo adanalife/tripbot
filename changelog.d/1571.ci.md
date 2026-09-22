@@ -1,0 +1,1 @@
+`task test:pkg -- ./pkg/users/` runs one package against the compose postgres without rebuilding the test image — the run that tells a DB-backed package's real verdict apart from the `ok` a bare host `go test` gives for skipping every test in it.
