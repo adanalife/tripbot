@@ -23,6 +23,8 @@ func setup(t *testing.T) *gorm.DB {
 
 	resetOpenPlays()
 	t.Cleanup(resetOpenPlays)
+	resetPeaks()
+	t.Cleanup(resetPeaks)
 	return db
 }
 
@@ -30,6 +32,38 @@ func resetOpenPlays() {
 	openPlayMu.Lock()
 	openPlayIDs = map[string]int{}
 	openPlayMu.Unlock()
+}
+
+func resetPeaks() {
+	peakMu.Lock()
+	peaks = map[string]int{}
+	peakMu.Unlock()
+}
+
+// recordEvents reads the viewer_record rows the events table holds. Queried by
+// raw SQL rather than through pkg/events' model so this package's tests don't
+// take a dependency on that package's schema type.
+func recordEvents(t *testing.T, db *gorm.DB) []struct {
+	Platform string
+	Meta     string
+} {
+	t.Helper()
+	var rows []struct {
+		Platform string
+		Meta     string
+	}
+	err := db.Raw(`SELECT platform, meta::text AS meta FROM events
+		WHERE event = 'viewer_record' ORDER BY id`).Scan(&rows).Error
+	if err != nil {
+		t.Fatalf("read viewer_record events: %v", err)
+	}
+	return rows
+}
+
+// sample takes one tick with a reported audience of n.
+func sample(t *testing.T, n int) {
+	t.Helper()
+	RecordSample(context.Background(), testConf, 0, Audience{Count: n, Live: true, Reported: true}, 0, nil)
 }
 
 func allPlays(t *testing.T, db *gorm.DB) []VideoPlay {
@@ -308,5 +342,105 @@ func TestRecordSample_UnreportedAudienceWritesNull(t *testing.T) {
 	}
 	if samples[0].Viewers != nil || samples[0].Live != nil {
 		t.Errorf("viewers = %v live = %v, want both NULL", samples[0].Viewers, samples[0].Live)
+	}
+}
+
+func TestRecordSample_FirstReadingSetsTheBarWithoutAnnouncingIt(t *testing.T) {
+	db := setup(t)
+
+	// An empty series has no high to beat, so the first number reported is not
+	// a record — announcing it would make every fresh database claim one.
+	sample(t, 11)
+
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("expected no viewer_record event on the first reading, got %d", len(got))
+	}
+}
+
+func TestRecordSample_RecordsANewHigh(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 11) // sets the bar
+	sample(t, 9)  // under it
+	sample(t, 14) // clears it
+
+	events := recordEvents(t, db)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 viewer_record event, got %d", len(events))
+	}
+	if events[0].Platform != "twitch" {
+		t.Errorf("platform = %q, want twitch", events[0].Platform)
+	}
+	// Previous names the high it beat — 11, not the 9 immediately before it.
+	if want := `{"viewers": 14, "previous": 11}`; events[0].Meta != want {
+		t.Errorf("meta = %s, want %s", events[0].Meta, want)
+	}
+}
+
+func TestRecordSample_TyingTheHighIsNotARecord(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 11)
+	sample(t, 11)
+
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("equalling the high is not beating it, got %d events", len(got))
+	}
+}
+
+func TestRecordSample_UnreportedAndZeroCountsCannotSetARecord(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 11)
+	// NULL viewers means nobody counted, and nobody watching is not a
+	// milestone — neither may move the bar or announce one.
+	RecordSample(context.Background(), testConf, 5, Audience{}, 0, nil)
+	RecordSample(context.Background(), testConf, 5, Audience{Count: 0, Live: true, Reported: true}, 0, nil)
+	sample(t, 12)
+
+	events := recordEvents(t, db)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 viewer_record event, got %d", len(events))
+	}
+	if want := `{"viewers": 12, "previous": 11}`; events[0].Meta != want {
+		t.Errorf("meta = %s, want %s", events[0].Meta, want)
+	}
+}
+
+func TestRecordSample_SeedsThePeakFromTheSeries(t *testing.T) {
+	db := setup(t)
+
+	// History this process did not write — a restart, or another replica.
+	sample(t, 40)
+	resetPeaks()
+
+	sample(t, 30) // under the stored high: no record
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("a reading under the stored high is not a record, got %d", len(got))
+	}
+
+	sample(t, 41)
+	events := recordEvents(t, db)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 viewer_record event, got %d", len(events))
+	}
+	// The bar came from the table, so previous is 40 even though this process
+	// never saw that reading.
+	if want := `{"viewers": 41, "previous": 40}`; events[0].Meta != want {
+		t.Errorf("meta = %s, want %s", events[0].Meta, want)
+	}
+}
+
+func TestRecordSample_ReadOnlyRecordsNothing(t *testing.T) {
+	db := setup(t)
+	ro := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
+
+	RecordSample(context.Background(), ro, 0, Audience{Count: 99, Live: true, Reported: true}, 0, nil)
+
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("a read-only instance must write nothing, got %d events", len(got))
+	}
+	if got := allSamples(t, db); len(got) != 0 {
+		t.Fatalf("a read-only instance must write no samples, got %d", len(got))
 	}
 }
