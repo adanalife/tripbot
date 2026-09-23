@@ -1,3 +1,18 @@
+// Package users tracks who is in chat and the miles they earn by being there.
+//
+// Miles are connected time: DurationToMiles converts a session's length at
+// 0.1 mi per 3 minutes, banked by the checkpoint cron and at logout. Presence
+// is the platform's chatters list, so a silent lurker earns exactly what a
+// talkative viewer does — on slow TV the lurker is the audience, and gating
+// miles on activity would punish the viewers the stream is for.
+//
+// The same property means an idle account, or many, can farm the leaderboard,
+// and nothing in the chatters list tells a farm from a room of lurkers. That
+// residual is accepted. The defense is to bound it and make it visible, not
+// to block it: a session stops accruing after 24h (maxSessionDuration) and
+// records a session_over_24h event when it crosses, and an admin reviewing
+// presence hours flips a suspect account's is_bot or exclude_from_leaderboard
+// flag to take it off the board.
 package users
 
 import (
