@@ -21,6 +21,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/knownbots"
 	"github.com/adanalife/tripbot/pkg/locationfeed"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
@@ -134,6 +135,10 @@ type Tripbot struct {
 	// stop it.
 	scheduler gocron.Scheduler
 
+	// knownBots is the outside bot list new accounts are checked against,
+	// constructed beside sessions and refreshed by a background job.
+	knownBots *knownbots.List
+
 	// srv is the console-API / metrics HTTP server, constructed in NewTripbot.
 	// cmd installs the build version through it (SetVersion) and starts it
 	// (Start). The rich admin panel lives in the standalone tripbot-console;
@@ -237,6 +242,10 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	// Stamp login/logout events with what's airing, so joins and leaves can be
 	// attributed to the footage that earned them.
 	t.sessions.SetVideoSource(playerVideoSource{t: t})
+	// Classify a view-bot on its first login rather than waiting on !makebot.
+	// Filled by the Twitch-only knownbots.Refresh job; empty elsewhere.
+	t.knownBots = knownbots.New(knownbots.URL)
+	t.sessions.SetBotRegistry(t.knownBots)
 	// Feed the rotators what's playing, so their $variables resolve. Reuses the
 	// chatbot's Geocoder and Weather adapters (the pkg/geo default is installed by
 	// whichever Connect* path this platform takes).
@@ -1264,6 +1273,15 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		// IRC client this instance never constructs.
 		return
 	}
+	// A failed refresh keeps the last list, and until the first one lands new
+	// accounts are created as people.
+	t.addJob(6*time.Hour, "knownbots.Refresh", func(ctx context.Context) {
+		if err := t.knownBots.Refresh(ctx); err != nil {
+			slog.WarnContext(ctx, "known-bots refresh failed", "err", err, "kept", t.knownBots.Len())
+			return
+		}
+		slog.InfoContext(ctx, "known-bots list refreshed", "bots", t.knownBots.Len())
+	}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
 	// Session miles are otherwise only written at logout, so anything that
 	// kills the process mid-session loses them all. Banking on a timer bounds
