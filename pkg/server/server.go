@@ -120,6 +120,7 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/insights/footage", tagged("/api/insights/footage", footageInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/regions", tagged("/api/insights/regions", regionInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/viewers", tagged("/api/insights/viewers", viewerSeriesHandler)).Methods("GET")
+	r.Handle("/api/insights/sessions", tagged("/api/insights/sessions", sessionInsightsHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
@@ -735,4 +736,90 @@ func pointsDiff(got, want []viewerPoint) string {
 		return "got " + string(g) + ", want " + string(w)
 	}
 	return ""
+}
+
+// seedSession inserts a login and, when minutes >= 0, the logout sharing its
+// session_id. A negative minutes leaves the login open.
+func seedSession(t *testing.T, db *gorm.DB, platform, username string, at time.Time, minutes float64) {
+	t.Helper()
+	id := uuid.New()
+	insert := `INSERT INTO events (platform, username, event, session_id, date_created) VALUES (?, ?, ?, ?, ?)`
+	if err := db.Exec(insert, platform, username, "login", id, at).Error; err != nil {
+		t.Fatalf("insert login: %v", err)
+	}
+	if minutes < 0 {
+		return
+	}
+	out := at.Add(time.Duration(minutes * float64(time.Minute)))
+	if err := db.Exec(insert, platform, username, "logout", id, out).Error; err != nil {
+		t.Fatalf("insert logout: %v", err)
+	}
+}
+
+func TestSessionInsightsHandler_EmptyDataShape(t *testing.T) {
+	testdb.New(t)
+	rec := insightsGET(t, "/api/insights/sessions", sessionInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	for _, want := range []string{`"days":7`, `"platforms":[]`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body missing %s: %s", want, rec.Body.String())
+		}
+	}
+}
+
+func TestSessionInsightsHandler_Aggregates(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "ses_alice", false)
+	seedUser(t, db, "ses_bob", false)
+	seedUser(t, db, "ses_bot", true)
+	if err := db.Exec(`INSERT INTO users (username, platform, is_bot) VALUES ('ses_yt', 'youtube', false)`).Error; err != nil {
+		t.Fatalf("insert youtube user: %v", err)
+	}
+	day := time.Now().Add(-24 * time.Hour)
+
+	// Five twitch visits, one per bucket boundary side: 2, 10, 20, 60, 180 min.
+	for i, m := range []float64{2, 10, 20, 60, 180} {
+		who := "ses_alice"
+		if i%2 == 1 {
+			who = "ses_bob"
+		}
+		seedSession(t, db, "twitch", who, day.Add(time.Duration(i)*time.Hour), m)
+	}
+	// Left out: a bot's visit, an open login, a 26h missed logout, and a visit
+	// older than the window.
+	seedSession(t, db, "twitch", "ses_bot", day, 500)
+	seedSession(t, db, "twitch", "ses_alice", day, -1)
+	seedSession(t, db, "twitch", "ses_bob", day.Add(-3*24*time.Hour), 26*60)
+	seedSession(t, db, "twitch", "ses_alice", time.Now().Add(-10*24*time.Hour), 45)
+	// A second platform keeps its own row.
+	seedSession(t, db, "youtube", "ses_yt", day, 30)
+
+	rec := insightsGET(t, "/api/insights/sessions", sessionInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got sessionInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	want := sessionInsightsResponse{Days: 7, Platforms: []sessionStats{
+		{Platform: "twitch", Sessions: 5, MedianMinutes: 20, MeanMinutes: 54.4, P90Minutes: 132,
+			Under5m: 1, Under30m: 2, Under2h: 1, TwoHoursUp: 1},
+		{Platform: "youtube", Sessions: 1, MedianMinutes: 30, MeanMinutes: 30, P90Minutes: 30,
+			Under2h: 1},
+	}}
+	if !slices.Equal(got.Platforms, want.Platforms) || got.Days != want.Days {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+
+	// The window reaches back to the ten-day-old visit once asked to.
+	rec = insightsGET(t, "/api/insights/sessions?days=14", sessionInsightsHandler)
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Platforms[0].Sessions != 6 {
+		t.Errorf("14-day twitch sessions = %d, want 6", got.Platforms[0].Sessions)
+	}
 }

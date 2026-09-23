@@ -1,0 +1,1 @@
+`GET /api/insights/sessions` reports how long a human stays once they arrive — median, mean and p90 minutes per platform, with a four-bucket split — from the login/logout pairs tripbot already records.
