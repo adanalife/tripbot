@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.16.0] — 2026-09-22
+
+### Chatbot
+
+- The console can pick which car-hum voicing the drone plays — idle, highway, backroad or mountain. All four have shipped in the OBS image since the variant set was rendered; nothing selected them. ([#1569](https://github.com/adanalife/tripbot/pull/1569))
+- `!guessstats` answers a viewer's state-guess batting average — how many they got right, out of how many they answered. The correct-guess leaderboard already rewards volume; the ratio is the stat someone who guesses twice a night has to show for it. ([#1570](https://github.com/adanalife/tripbot/pull/1570))
+
+### Console / API
+
+- `GET /api/leaderboards` serves the monthly miles and guess boards for any month the project has data for — the month in progress from the live scores, a finished month from its frozen snapshot — plus the list of months that have one, so a client builds its month selector from the same call that fills it. ([#1566](https://github.com/adanalife/tripbot/pull/1566))
+
+### Misc
+
+- A concurrent-viewer count that beats every previous reading for its platform now writes a `viewer_record` event, carrying the new high and the one it beat. ([#1568](https://github.com/adanalife/tripbot/pull/1568))
+
 ## [v5.15.0] — 2026-09-21
 
 ### Chatbot
