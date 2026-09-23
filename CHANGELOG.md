@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.17.0] — 2026-09-23
+
+### Console / API
+
+- `GET /api/insights/sessions` reports how long a human stays once they arrive — median, mean and p90 minutes per platform, with a four-bucket split — from the login/logout pairs tripbot already records. ([#1575](https://github.com/adanalife/tripbot/pull/1575))
+
+### CI / Tooling
+
+- `task test:pkg -- ./pkg/users/` runs one package against the compose postgres without rebuilding the test image — the run that tells a DB-backed package's real verdict apart from the `ok` a bare host `go test` gives for skipping every test in it. ([#1571](https://github.com/adanalife/tripbot/pull/1571))
+- Tell tripbot-console the moment a contract changes on main, so its sync PR opens within minutes instead of at the daily sweep. ([#1572](https://github.com/adanalife/tripbot/pull/1572))
+
+### Cleanup
+
+- Every short-lived OBS connection in `pkg/obs` closes through the one `disconnect` helper. ([#1573](https://github.com/adanalife/tripbot/pull/1573))
+
 ## [v5.16.0] — 2026-09-22
 
 ### Chatbot
