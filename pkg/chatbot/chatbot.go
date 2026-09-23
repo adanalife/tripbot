@@ -2,7 +2,9 @@ package chatbot
 
 import (
 	"context"
+	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -130,6 +132,11 @@ type App struct {
 	helpMessages []string
 	helpIndex    int
 
+	// heardHuman is set when a human (not the bot, not a flagged bot) speaks
+	// in chat, and cleared by each Chatter post. Chatter stays quiet while it
+	// is unset, so the bot never talks into an empty room — nor to itself.
+	heardHuman atomic.Bool
+
 	// guessMisses remembers each chatter's most recent wrong !guess this round,
 	// so the next miss can hint warmer or colder. Entries stamped before
 	// lastTimewarpTime belong to a previous round and are ignored rather than
@@ -184,9 +191,15 @@ var followerGatingEnabled = false
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-// ctx is forward-compat plumbing — a.Chat.Say doesn't take ctx yet, so it's
-// not propagated into the chat write.
-func (a *App) Chatter(_ context.Context) {
+//
+// It posts only if a human has spoken since the last post, so a quiet room
+// gets one tip per visitor rather than one per tick. A bot-less instance
+// can't hear chat at all, so it keeps posting on every tick.
+func (a *App) Chatter(ctx context.Context) {
+	if !a.botless && !a.heardHuman.Swap(false) {
+		slog.DebugContext(ctx, "chatter skipped: no human has spoken since the last post")
+		return
+	}
 	// the "/me " twitch emote prefix adds some color on Twitch; gatewayYouTubeChat.Say
 	// strips it (it would render as literal text on YouTube).
 	a.Chat.Say("/me " + a.help())
