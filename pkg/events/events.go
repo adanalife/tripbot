@@ -354,6 +354,9 @@ type commandMeta struct {
 	// are often the point (which state they guessed, what they searched for).
 	Args   string `json:"args,omitempty"`
 	Reason string `json:"reason,omitempty"`
+	// Detail is what a run answered, when the answer is worth querying later
+	// (the track !song named).
+	Detail map[string]string `json:"detail,omitempty"`
 }
 
 // CommandRefusal describes one declined command for CommandRefused.
@@ -412,6 +415,9 @@ type CommandRun struct {
 	VideoID int
 	// TsSec is seconds into that clip; nil writes NULL.
 	TsSec *float64
+	// Detail is what the command answered, for the commands whose answer is
+	// the point (the track !song named); nil omits it.
+	Detail map[string]string
 }
 
 // CommandRan records a command the bot dispatched and ran. Paired with
@@ -423,6 +429,7 @@ func CommandRan(ctx context.Context, cfg *c.TripbotConfig, r CommandRun) error {
 		Command: r.Command,
 		Typed:   r.Typed,
 		Args:    r.Args,
+		Detail:  r.Detail,
 	})
 	if err != nil {
 		return err
