@@ -126,6 +126,7 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/songs", tagged("/api/stats/songs", songStatsHandler)).Methods("GET")
 
 	// The monthly miles and guess boards for one month, plus the months that
 	// have data — the console's leaderboard pane builds its selector from the
