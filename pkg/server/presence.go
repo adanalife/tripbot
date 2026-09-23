@@ -3,9 +3,15 @@ package server
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 
 	"github.com/adanalife/tripbot/pkg/database"
 )
@@ -102,4 +108,67 @@ func presenceInsightsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeInsights(w, r, payload)
+}
+
+// UserFlagger writes the two account flags the presence report surfaces.
+// *users.Sessions implements it, which keeps the live session copy in step:
+// a DB-only is_bot write would be reverted by the next miles checkpoint's
+// save of a logged-in viewer.
+type UserFlagger interface {
+	SetBot(ctx context.Context, username string, isBot bool) error
+	SetExcludeFromLeaderboard(ctx context.Context, username string, exclude bool) error
+}
+
+// SetUserFlags injects the flag writer backing POST /api/user/{username}/flags.
+// Called from cmd/tripbot before Start runs the HTTP server (so there's no race
+// on the field). Left nil, the endpoint answers 503.
+func (s *Server) SetUserFlags(f UserFlagger) {
+	s.userFlags = f
+}
+
+// userFlagsHandler serves POST /api/user/{username}/flags. The body sets
+// either flag or both — {"is_bot": true}, {"exclude_from_leaderboard": false}
+// — for the account on this instance's platform, so the console sends it to
+// the instance matching the report row's platform. An account with no row on
+// this platform is a 404. The response echoes what was written.
+func (s *Server) userFlagsHandler(w http.ResponseWriter, r *http.Request) {
+	if s.userFlags == nil {
+		http.Error(w, "user flags unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	username := strings.ToLower(strings.TrimSpace(mux.Vars(r)["username"]))
+	var body struct {
+		IsBot                  *bool `json:"is_bot"`
+		ExcludeFromLeaderboard *bool `json:"exclude_from_leaderboard"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || (body.IsBot == nil && body.ExcludeFromLeaderboard == nil) {
+		http.Error(w, "body must set is_bot or exclude_from_leaderboard", http.StatusBadRequest)
+		return
+	}
+	var err error
+	if body.IsBot != nil {
+		err = s.userFlags.SetBot(r.Context(), username, *body.IsBot)
+	}
+	if err == nil && body.ExcludeFromLeaderboard != nil {
+		err = s.userFlags.SetExcludeFromLeaderboard(r.Context(), username, *body.ExcludeFromLeaderboard)
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		http.Error(w, "no such user on this platform", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "user flag write failed", "err", err, "username", username)
+		http.Error(w, "couldn't write user flags", http.StatusInternalServerError)
+		return
+	}
+	slog.InfoContext(r.Context(), "user flags set via console", "username", username,
+		"is_bot", body.IsBot, "exclude_from_leaderboard", body.ExcludeFromLeaderboard)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":                       true,
+		"platform":                 s.cfg.Platform,
+		"username":                 username,
+		"is_bot":                   body.IsBot,
+		"exclude_from_leaderboard": body.ExcludeFromLeaderboard,
+	})
 }

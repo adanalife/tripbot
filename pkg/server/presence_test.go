@@ -1,12 +1,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 )
 
 func TestPresenceInsightsHandler(t *testing.T) {
@@ -56,5 +61,65 @@ func TestPresenceInsightsHandler(t *testing.T) {
 	}
 	if len(got.Accounts) != 1 || got.Accounts[0].Username != "pr_farm" {
 		t.Errorf("limit=1 returned %+v, want only pr_farm", got.Accounts)
+	}
+}
+
+// stubFlagger records the flag writes it receives; a username of "ghost" has
+// no row.
+type stubFlagger struct{ got []string }
+
+func (f *stubFlagger) write(username, flag string, v bool) error {
+	if username == "ghost" {
+		return gorm.ErrRecordNotFound
+	}
+	f.got = append(f.got, username+" "+flag+"="+map[bool]string{true: "true", false: "false"}[v])
+	return nil
+}
+
+func (f *stubFlagger) SetBot(_ context.Context, u string, v bool) error {
+	return f.write(u, "is_bot", v)
+}
+
+func (f *stubFlagger) SetExcludeFromLeaderboard(_ context.Context, u string, v bool) error {
+	return f.write(u, "exclude_from_leaderboard", v)
+}
+
+func TestUserFlagsHandler(t *testing.T) {
+	post := func(s *Server, username, body string) *httptest.ResponseRecorder {
+		r := mux.NewRouter()
+		r.Handle("/api/user/{username}/flags", http.HandlerFunc(s.userFlagsHandler)).Methods("POST")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/user/"+username+"/flags", strings.NewReader(body)))
+		return rec
+	}
+
+	if rec := post(New(testConf), "farm", `{"is_bot":true}`); rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("unwired: status = %d, want 503", rec.Code)
+	}
+
+	f := &stubFlagger{}
+	s := New(testConf)
+	s.SetUserFlags(f)
+	for _, body := range []string{``, `{}`, `{"is_bot":"yes"}`} {
+		if rec := post(s, "farm", body); rec.Code != http.StatusBadRequest {
+			t.Errorf("body %q: status = %d, want 400", body, rec.Code)
+		}
+	}
+	if rec := post(s, "ghost", `{"is_bot":true}`); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown user: status = %d, want 404", rec.Code)
+	}
+
+	rec := post(s, "Farm", `{"is_bot":true,"exclude_from_leaderboard":false}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	want := []string{"farm is_bot=true", "farm exclude_from_leaderboard=false"}
+	if strings.Join(f.got, ",") != strings.Join(want, ",") {
+		t.Errorf("writes = %v, want %v", f.got, want)
+	}
+	for _, field := range []string{`"is_bot":true`, `"exclude_from_leaderboard":false`, `"username":"farm"`} {
+		if !strings.Contains(rec.Body.String(), field) {
+			t.Errorf("body missing %s: %s", field, rec.Body.String())
+		}
 	}
 }

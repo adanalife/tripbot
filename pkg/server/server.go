@@ -37,6 +37,7 @@ type Server struct {
 	beds       BedStore
 	rotators   RotatorStore
 	rotatorPub RotatorPublisher
+	userFlags  UserFlagger
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
@@ -92,6 +93,9 @@ func (s *Server) Start(ctx context.Context) error {
 	//
 	// read-only JSON profile for the console's user popover.
 	r.Handle("/api/user/{username}", tagged("/api/user/{username}", s.userProfileAPIHandler)).Methods("GET")
+	// the write behind the presence report: flag an account as a bot or keep
+	// it off the leaderboard.
+	r.Handle("/api/user/{username}/flags", tagged("/api/user/{username}/flags", s.userFlagsHandler)).Methods("POST")
 	// read-only JSON list of the logins currently in chat, for the console's
 	// currently-active-chatters panel.
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
