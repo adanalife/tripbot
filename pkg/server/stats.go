@@ -23,6 +23,8 @@ import (
 const (
 	playbackStatsDefaultDays  = 7
 	communityStatsDefaultDays = 30
+	songStatsDefaultDays      = 90
+	songStatsLimit            = 20
 )
 
 // eventKindCount is one event kind's all-time row count — a census of the
@@ -401,4 +403,55 @@ func communityStatsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeInsights(w, r, payload)
+}
+
+// songCount is one track's tally of !song answers that named it.
+type songCount struct {
+	Title     string    `json:"title"`
+	Artist    string    `json:"artist"`
+	Count     int64     `json:"count"`
+	Askers    int64     `json:"askers"`
+	LastAsked time.Time `json:"last_asked"`
+}
+
+// songStatsResponse is the wire shape of GET /api/stats/songs.
+type songStatsResponse struct {
+	Days  int         `json:"days"`
+	Songs []songCount `json:"songs"`
+}
+
+// songStatsSQL ranks the tracks !song named, read from the detail its
+// command_run rows carry. A run that named no track (the car hum, a failed
+// feed fetch) has no detail title and drops out.
+const songStatsSQL = `
+SELECT e.meta->'detail'->>'title'                 AS title,
+       COALESCE(e.meta->'detail'->>'artist', '') AS artist,
+       COUNT(*)                                   AS count,
+       COUNT(DISTINCT e.username)                 AS askers,
+       MAX(e.date_created)                        AS last_asked
+FROM events e
+JOIN users u ON u.platform = e.platform AND u.username = e.username
+WHERE e.event = 'command_run'
+  AND e.meta->>'command' = '!song'
+  AND e.meta->'detail'->>'title' IS NOT NULL
+  AND e.date_created >= now() - make_interval(days => @days)
+  AND u.is_bot = false
+GROUP BY 1, 2
+ORDER BY count DESC, last_asked DESC
+LIMIT @limit`
+
+// songStatsHandler serves GET /api/stats/songs: the tracks chat asked about
+// most with !song over the ?days window.
+func songStatsHandler(w http.ResponseWriter, r *http.Request) {
+	days := insightsDays(r, songStatsDefaultDays)
+	out := songStatsResponse{Days: days, Songs: []songCount{}}
+	err := database.GormDB().WithContext(r.Context()).
+		Raw(songStatsSQL, sql.Named("days", days), sql.Named("limit", songStatsLimit)).
+		Scan(&out.Songs).Error
+	if err != nil {
+		slog.ErrorContext(r.Context(), "song stats query failed", "err", err, "days", days)
+		insightsError(w, "couldn't gather song stats")
+		return
+	}
+	writeInsights(w, r, out)
 }

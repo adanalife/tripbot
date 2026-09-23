@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"testing"
 
@@ -119,5 +120,42 @@ func TestSongCmd_NoBedStoreSaysSo(t *testing.T) {
 	}
 	if says() != 1 {
 		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
+// The track !song named rides into its command_run row, which is what the
+// most-asked-songs ranking reads. Driven through dispatch, since that is where
+// the row is written.
+func TestSongCmd_RecordsTheNamedTrack(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fake *fakeBeds
+		want map[string]string
+	}{
+		{"somafm", &fakeBeds{bed: beds.SomaFM, station: "dronezone", artist: "Steve Cobby", title: "Big Wow"},
+			map[string]string{"bed": "somafm", "station": "dronezone", "artist": "Steve Cobby", "title": "Big Wow"}},
+		{"album", &fakeBeds{bed: beds.Album, track: testTrack},
+			map[string]string{"bed": "album", "album": beds.ParseTrack(testTrack).Album,
+				"artist": beds.ParseTrack(testTrack).Artist, "title": "Colorado Sunrise"}},
+		{"car hum names no track", &fakeBeds{bed: beds.CarHum}, nil},
+		{"feed error names no track", &fakeBeds{bed: beds.SomaFM, feedErr: errors.New("down")}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			app.Beds = tc.fake
+			rec := &recordingEvents{}
+			app.Events = rec
+			captureSay(t, app)
+
+			app.dispatch(context.Background(), &Command{Trigger: "!song", Handler: app.songCmd},
+				"!song", newTestUser("viewer1"), nil)
+
+			if len(rec.Runs) != 1 {
+				t.Fatalf("runs = %d, want 1", len(rec.Runs))
+			}
+			if got := rec.Runs[0].Detail; !maps.Equal(got, tc.want) {
+				t.Errorf("detail = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

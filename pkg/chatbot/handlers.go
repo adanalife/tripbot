@@ -144,6 +144,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 	// cooldown); the mark lets dispatch see that and skip the command_run row,
 	// so each attempt lands in exactly one event kind — a run or a refusal.
 	ctx, refused := withRefusalMark(ctx)
+	ctx, detail := withRunDetail(ctx)
 
 	start := time.Now()
 	cmd.Handler(ctx, user, params)
@@ -160,7 +161,27 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 		Command:  cmd.Trigger,
 		Typed:    typed,
 		Args:     strings.Join(params, " "),
+		Detail:   *detail,
 	})
+}
+
+// runDetailKey carries the per-dispatch slot setRunDetail fills with what a
+// handler answered, for the command_run row.
+type runDetailKey struct{}
+
+// withRunDetail returns ctx carrying an empty run-detail slot, and the slot.
+func withRunDetail(ctx context.Context) (context.Context, *map[string]string) {
+	detail := new(map[string]string)
+	return context.WithValue(ctx, runDetailKey{}, detail), detail
+}
+
+// setRunDetail records what the running command answered, so its command_run
+// row can be queried by answer rather than only by trigger. A no-op outside a
+// dispatch (tests calling a handler directly).
+func setRunDetail(ctx context.Context, detail map[string]string) {
+	if slot, ok := ctx.Value(runDetailKey{}).(*map[string]string); ok {
+		*slot = detail
+	}
 }
 
 // refusalMarkKey carries the per-dispatch flag recordRefusal flips when a
