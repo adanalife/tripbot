@@ -288,6 +288,7 @@ func (t *Tripbot) Run() {
 	ctx, flush := bootstrap.Start("tripbot", t.version, t.cfg)
 	defer flush()
 	t.srv.SetVersion(t.version)
+	t.srv.SetUserFlags(t.sessions) // the console's presence report flips is_bot / exclude_from_leaderboard through it
 	httpDone := t.startHttpServer(ctx)
 	t.findInitialVideo()
 	// after findInitialVideo: its DB round-trip proves the DB is reachable

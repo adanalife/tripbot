@@ -175,6 +175,26 @@ func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) erro
 	return nil
 }
 
+// SetExcludeFromLeaderboard flips users.exclude_from_leaderboard for a
+// username. It writes the column directly because save() deliberately leaves
+// it alone. Returns gorm.ErrRecordNotFound if the user doesn't exist in the DB.
+func (s *Sessions) SetExcludeFromLeaderboard(ctx context.Context, username string, exclude bool) error {
+	user, err := Find(ctx, s.cfg.Platform, username)
+	if err != nil {
+		return err
+	}
+	if err := database.GormDB().WithContext(ctx).Model(&user).
+		Update("exclude_from_leaderboard", exclude).Error; err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if loggedIn, ok := s.loggedIn[username]; ok {
+		loggedIn.ExcludeFromLeaderboard = exclude
+	}
+	s.mu.Unlock()
+	return nil
+}
+
 // IsFollower returns true if the user is a follower
 func (s *Sessions) IsFollower(u User) bool {
 	return s.source.IsFollower(u.Username)

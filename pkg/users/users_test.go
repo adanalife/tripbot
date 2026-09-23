@@ -319,6 +319,39 @@ func TestSetBot(t *testing.T) {
 	})
 }
 
+func TestSetExcludeFromLeaderboard(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	user, err := FindOrCreate(ctx, testConf.Platform, "farmed")
+	if err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
+	s.loggedIn["farmed"] = &user
+
+	if err := s.SetExcludeFromLeaderboard(ctx, "farmed", true); err != nil {
+		t.Fatalf("SetExcludeFromLeaderboard: %v", err)
+	}
+	// A later save of the session copy, as a checkpoint does, must not undo it.
+	live, _ := s.get("farmed")
+	live.save(ctx)
+
+	got, err := Find(ctx, testConf.Platform, "farmed")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if !got.ExcludeFromLeaderboard {
+		t.Error("expected exclude_from_leaderboard persisted as true")
+	}
+	if !live.ExcludeFromLeaderboard {
+		t.Error("expected the live session copy flipped too")
+	}
+	if err := s.SetExcludeFromLeaderboard(ctx, "ghost", true); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Errorf("unknown user: want gorm.ErrRecordNotFound, got %v", err)
+	}
+}
+
 func TestGuessCooldownRemaining(t *testing.T) {
 	t.Run("zero lastLocation returns no cooldown", func(t *testing.T) {
 		u := User{}
