@@ -75,7 +75,15 @@ type User struct {
 	// has already banked in the DB. sessionMiles subtracts it so the banked
 	// portion isn't also counted as still-in-flight.
 	milesCheckpointed float32 `gorm:"-"`
+	// overCapReported records that this session's session_over_24h event is
+	// already written, so the checkpoint cron and logout emit it once.
+	overCapReported bool `gorm:"-"`
 }
+
+// maxSessionDuration caps how long one session accrues miles, matching the
+// 24h bound cmd/backfill-miles applies to the events-table recompute. Past it
+// the session keeps its miles but earns no more until the viewer's next login.
+const maxSessionDuration = 24 * time.Hour
 
 // this is how long they have before they can guess again
 var guessCooldown = 3 * time.Minute
@@ -95,11 +103,12 @@ func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
 	return s.inFlightMiles(live)
 }
 
-// inFlightMiles is the accrual of a session entry not yet banked in the DB.
+// inFlightMiles is the accrual of a session entry not yet banked in the DB,
+// with the session's duration capped at maxSessionDuration.
 // It reads nothing from the session map, so logout can apply it to the entry
 // it has already claimed.
 func (s *Sessions) inFlightMiles(live User) float32 {
-	sessionMiles := helpers.DurationToMiles(time.Since(live.LoggedIn))
+	sessionMiles := helpers.DurationToMiles(min(time.Since(live.LoggedIn), maxSessionDuration))
 	// give subscribers a miles bonus
 	if s.IsSubscriber(live) {
 		sessionMiles += s.sessionBonus(live)
@@ -134,7 +143,7 @@ func (s *Sessions) BonusMiles(u User) float32 {
 
 // sessionBonus is BonusMiles for a session entry the caller already holds.
 func (s *Sessions) sessionBonus(live User) float32 {
-	sessionMiles := helpers.DurationToMiles(time.Since(live.LoggedIn))
+	sessionMiles := helpers.DurationToMiles(min(time.Since(live.LoggedIn), maxSessionDuration))
 	tier := s.source.SubscriberTier(live.Username)
 	if tier < 1 {
 		tier = 1
