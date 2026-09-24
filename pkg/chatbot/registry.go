@@ -261,6 +261,13 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:            "!realmiles",
+			Help:               "Real road miles you've watched",
+			Aliases:            []string{"!odometer"},
+			Handler:            a.realMilesCmd,
+			RequiresSubscriber: true,
+		},
+		{
 			Trigger:       "!givemiles",
 			Help:          "Grant a viewer miles: !givemiles @user <miles>",
 			Handler:       a.giveMilesCmd,
