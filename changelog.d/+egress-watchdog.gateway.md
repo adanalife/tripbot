@@ -1,0 +1,1 @@
+The YouTube silent-disconnect watchdog reads liveness from the egress snapshot platform-gateway pushes to NATS, and only asks the gateway's broadcast lookup when that snapshot is missing or more than 90 seconds old, so it spends no YouTube quota of its own in steady state. The TikTok watchdog logs the gateway's relay-binding detail when it re-mints a room.
