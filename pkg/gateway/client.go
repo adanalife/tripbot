@@ -50,7 +50,8 @@ const (
 //
 //   - ErrNoBroadcast (409) — the call needed a live broadcast and there is
 //     none. A definite negative answer: there is nowhere to post right now.
-//   - ErrUpstreamUnavailable (503) — the platform refused the call rather than
+//   - ErrUpstreamUnavailable (503, or 429 when the platform's rate limit is
+//     spent) — the platform refused the call rather than
 //     answering it. The answer is unknown, not negative, so it must not be read
 //     as "no"; retrying is the recovery.
 //
@@ -67,7 +68,7 @@ func statusErr(op string, status int) error {
 	switch status {
 	case http.StatusConflict:
 		return fmt.Errorf("gateway %s: %w", op, ErrNoBroadcast)
-	case http.StatusServiceUnavailable:
+	case http.StatusServiceUnavailable, http.StatusTooManyRequests:
 		return fmt.Errorf("gateway %s: %w", op, ErrUpstreamUnavailable)
 	}
 	return fmt.Errorf("gateway %s: unexpected status %d", op, status)
@@ -444,7 +445,7 @@ func (c *Client) postEmpty(ctx context.Context, path string) error {
 	instrumentation.GatewayConnection.Set(true)
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+		return statusErr(path, resp.StatusCode)
 	}
 	return nil
 }
@@ -458,7 +459,7 @@ func (c *Client) getJSON(ctx context.Context, path string, dest any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+		return statusErr(path, resp.StatusCode)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(dest); err != nil {
 		return fmt.Errorf("gateway %s decode: %w", path, err)

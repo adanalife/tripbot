@@ -130,7 +130,12 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-			slog.ErrorContext(ctx, "gateway inbound poll failed", "err", err)
+			if errors.Is(err, gateway.ErrUpstreamUnavailable) {
+				// The platform declined to answer; the retry is the recovery.
+				slog.WarnContext(ctx, "gateway inbound poll unavailable", "err", err)
+			} else {
+				slog.ErrorContext(ctx, "gateway inbound poll failed", "err", err)
+			}
 			if p.setChatConnected != nil {
 				p.setChatConnected(false)
 			}
