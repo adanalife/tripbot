@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.20.0] — 2026-09-24
+
+### Platform gateway
+
+- The YouTube silent-disconnect watchdog reads liveness from the egress snapshot platform-gateway pushes to NATS, and only asks the gateway's broadcast lookup when that snapshot is missing or more than 90 seconds old, so it spends no YouTube quota of its own in steady state. The TikTok watchdog logs the gateway's relay-binding detail when it re-mints a room. ([#1585](https://github.com/adanalife/tripbot/pull/1585))
+
 ## [v5.19.0] — 2026-09-24
 
 ### Platform gateway
