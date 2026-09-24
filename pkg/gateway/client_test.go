@@ -312,6 +312,7 @@ func TestSendChat_ClassifiesToleratedStatuses(t *testing.T) {
 	}{
 		{"nothing live", http.StatusConflict, ErrNoBroadcast},
 		{"platform refused", http.StatusServiceUnavailable, ErrUpstreamUnavailable},
+		{"platform throttled", http.StatusTooManyRequests, ErrUpstreamUnavailable},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -337,6 +338,20 @@ func TestSendChat_ClassifiesToleratedStatuses(t *testing.T) {
 	}
 	if errors.Is(err, ErrNoBroadcast) || errors.Is(err, ErrUpstreamUnavailable) {
 		t.Errorf("502 matched a tolerated sentinel: %v", err)
+	}
+}
+
+// A GET reply classifies the same way as a send: a throttled broadcast lookup
+// is the platform refusing, not a defect.
+func TestActiveBroadcast_ThrottleIsUpstreamUnavailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL).ActiveBroadcast(context.Background())
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want %v", err, ErrUpstreamUnavailable)
 	}
 }
 
