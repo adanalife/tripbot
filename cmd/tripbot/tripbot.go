@@ -1247,6 +1247,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		ytGateway := gateway.New(t.cfg.YouTubeAPIURL)
 		t.addJob(2*time.Minute, "youtube.BroadcastDiscovery", func(ctx context.Context) {
 			b, err := ytGateway.ActiveBroadcast(ctx)
+			if errors.Is(err, gateway.ErrUpstreamUnavailable) {
+				slog.WarnContext(ctx, "youtube broadcast discovery unavailable", "err", err)
+				return
+			}
 			if err != nil {
 				slog.ErrorContext(ctx, "youtube broadcast discovery failed", "err", err)
 				return
@@ -1267,6 +1271,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		fbGateway := gateway.New(t.cfg.FacebookAPIURL)
 		t.addJob(2*time.Minute, "facebook.BroadcastDiscovery", func(ctx context.Context) {
 			b, err := fbGateway.ActiveBroadcast(ctx)
+			if errors.Is(err, gateway.ErrUpstreamUnavailable) {
+				slog.WarnContext(ctx, "facebook broadcast discovery unavailable", "err", err)
+				return
+			}
 			if err != nil {
 				slog.ErrorContext(ctx, "facebook broadcast discovery failed", "err", err)
 				return
