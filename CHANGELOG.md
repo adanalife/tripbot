@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.18.0] — 2026-09-23
+
+### Chatbot
+
+- `!song` answers are recorded with the track they named, and `GET /api/stats/songs` ranks the songs chat asked about most. ([#1579](https://github.com/adanalife/tripbot/pull/1579))
+
+### Console / API
+
+- `GET /api/insights/presence` ranks accounts by connected time over the last week — presence hours, sessions, longest session, and their `is_bot` / `exclude_from_leaderboard` flags — and `POST /api/user/{username}/flags` flips either flag, so an idle account farming the leaderboard can be found and taken off it. ([#1580](https://github.com/adanalife/tripbot/pull/1580))
+
 ## [v5.17.0] — 2026-09-23
 
 ### Console / API
