@@ -653,7 +653,8 @@ func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 	deps.Platform = "twitch"
 	// A nil gateway is a misconfigured Twitch instance (TWITCH_API_URL unset) —
 	// report the check as errored rather than force-restarting on a false
-	// negative.
+	// negative. Polled: the Twitch gateway manages no broadcast, so it publishes
+	// no egress snapshot to read instead.
 	deps.ChannelLive = func(ctx context.Context) (bool, error) {
 		if t.gateway == nil {
 			return false, errors.New("watchdog live-check: no gateway configured")
@@ -691,10 +692,22 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	// No gauge write here: the inbound chat poll already owns
 	// tripbot_channel_live for TikTok (gatewayPlatform.reportsLiveness), and two
 	// writers on one gauge would fight.
+	//
+	// Polled rather than read off the egress snapshot: the snapshot's live is
+	// Streamlabs' restream is-live, which reports OBS pushing to the ingest — true
+	// throughout the reaped-room failure this watchdog exists to catch. Only the
+	// room lookup behind IsLive sees the room gone.
 	deps.ChannelLive = func(ctx context.Context) (bool, error) {
 		return gw.IsLive(ctx, t.cfg.ChannelName)
 	}
+	readEgress := t.egressSnapshotReader("tiktok")
 	deps.Restart = func(ctx context.Context) error {
+		// The gateway's relay-binding detail is the one clue to why the room was
+		// reaped, and the re-mint is about to replace it.
+		if s, err := readEgress(ctx); err == nil {
+			slog.InfoContext(ctx, "tiktok watchdog: re-minting egress",
+				"egress_detail", s.Detail, "egress_live", s.Live, "egress_emitted_at", s.EmittedAt)
+		}
 		return remintTikTokEgress(ctx, gw, tiktokRemintGap, watchdog.RestartOBSOutput)
 	}
 	deps.OnRestart = t.watchdogRestartHook("tiktok")
@@ -717,6 +730,12 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 // bot-less — so the tick trades detection latency for quota deliberately. Three
 // misses is six minutes, against an outage this exists to stop measuring in
 // hours.
+//
+// The live-check reads the gateway's pushed egress snapshot first and only asks
+// ActiveBroadcast when no fresh one is retained, so in steady state the
+// watchdog spends no quota of its own. The snapshot's live is the managed
+// broadcast's lifecycle reading "live", which answers false for a pending
+// broadcast just as ActiveBroadcast does.
 func (t *Tripbot) startYouTubeWatchdog(ctx context.Context) {
 	if t.cfg.YouTubeAPIURL == "" {
 		slog.WarnContext(ctx, "no YOUTUBE_API_URL: silent-disconnect watchdog disabled (gateway not wired)")
@@ -727,7 +746,7 @@ func (t *Tripbot) startYouTubeWatchdog(ctx context.Context) {
 	deps.Platform = "youtube"
 	// No gauge write here: the BroadcastDiscovery job already owns
 	// tripbot_channel_live for YouTube, and two writers on one gauge would fight.
-	deps.ChannelLive = youtubeChannelLive(gw)
+	deps.ChannelLive = snapshotThenPoll(t.egressSnapshotReader("youtube"), youtubeChannelLive(gw))
 	deps.Restart = func(ctx context.Context) error {
 		return recoverYouTubeEgress(ctx, gw, watchdog.RestartOBSOutput)
 	}

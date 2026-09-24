@@ -19,6 +19,7 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -418,6 +419,30 @@ func EgressStateSubject(env, platform string) string {
 // EgressStateWildcard returns the subscribe pattern covering every platform's
 // egress state in env.
 func EgressStateWildcard(env string) string { return subject(env, "egress", "state") + ".*" }
+
+// LastEgressState reads the egress snapshot TRIPBOT_EGRESS retains for one
+// platform. The error is jetstream.ErrMsgNotFound when the gateway has published
+// nothing for it yet; a nil js is an error too, so a caller with NATS off falls
+// back the same way it does for a missing snapshot. Freshness is the caller's
+// call: the stream keeps the last value however old it is.
+func LastEgressState(ctx context.Context, js jetstream.JetStream, env, platform string) (EgressState, error) {
+	if js == nil {
+		return EgressState{}, errors.New("egress state: jetstream unavailable")
+	}
+	stream, err := js.Stream(ctx, egressStreamName)
+	if err != nil {
+		return EgressState{}, err
+	}
+	raw, err := stream.GetLastMsgForSubject(ctx, EgressStateSubject(env, platform))
+	if err != nil {
+		return EgressState{}, err
+	}
+	var s EgressState
+	if err := json.Unmarshal(raw.Data, &s); err != nil {
+		return EgressState{}, fmt.Errorf("egress state: decode: %w", err)
+	}
+	return s, nil
+}
 
 // --- chat.subscriber --------------------------------------------------------
 
