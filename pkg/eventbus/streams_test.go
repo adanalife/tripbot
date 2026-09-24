@@ -83,6 +83,9 @@ func expectedStreams(env string) map[string]wantStream {
 		obsStreamName: {
 			subjects: []string{OBSStreamWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
 		},
+		egressStreamName: {
+			subjects: []string{EgressStateWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
 	}
 }
 
