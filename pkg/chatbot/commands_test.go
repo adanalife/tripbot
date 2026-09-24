@@ -1579,6 +1579,7 @@ func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
 	app.helpIndex = 0
 
 	for range 3 {
+		app.heardHuman.Store(true)
 		app.Chatter(context.Background())
 	}
 
@@ -1586,6 +1587,37 @@ func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
 	want := []string{"/me first tip", "/me second tip", "/me first tip"}
 	if !slices.Equal(rec.Says, want) {
 		t.Errorf("posts = %q, want %q", rec.Says, want)
+	}
+}
+
+// Chatter speaks once per human who spoke, never into a room where only the
+// bot itself or a flagged bot has talked. A bot-less instance can't hear the
+// room, so it posts regardless.
+func TestChatter_WaitsForAHuman(t *testing.T) {
+	ctx := context.Background()
+	app := newTestApp(video.Video{})
+	rec := &recordingChat{}
+	app.Chat = rec
+	app.helpMessages = []string{"tip"}
+
+	app.Chatter(ctx)
+	app.HandleMessage(ctx, IncomingMessage{User: strings.ToUpper(testConf.BotUsername), Text: "hello"})
+	app.Chatter(ctx)
+	if len(rec.Says) != 0 {
+		t.Fatalf("posted %q with no human in chat", rec.Says)
+	}
+
+	app.HandleMessage(ctx, IncomingMessage{User: "viewer", Text: "hi"})
+	app.Chatter(ctx)
+	app.Chatter(ctx)
+	if len(rec.Says) != 1 {
+		t.Fatalf("posts = %q, want exactly one after one human line", rec.Says)
+	}
+
+	app.botless = true
+	app.Chatter(ctx)
+	if len(rec.Says) != 2 {
+		t.Errorf("bot-less instance stayed quiet: %q", rec.Says)
 	}
 }
 

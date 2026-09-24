@@ -596,6 +596,9 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// through: runCommand folds only the trigger token for matching.
 	user := a.chatUser(ctx, msg.User, msg.UserID)
 	user.Moderator = msg.Moderator
+	if !user.IsBot && !strings.EqualFold(msg.User, a.Cfg.BotUsername) {
+		a.heardHuman.Store(true)
+	}
 	a.runCommand(ctx, user, msg.Text)
 }
 
