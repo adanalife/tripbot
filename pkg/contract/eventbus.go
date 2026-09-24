@@ -195,6 +195,15 @@ var (
 		{"reachable", boolType(), true},
 		{"emitted_at", dateType(), true},
 	}
+	egressStateFields = []field{
+		{"platform", strType(), true},
+		{"configured", boolType(), true},
+		{"live", boolType(), true},
+		{"title", strType(), false},
+		{"detail", strType(), false},
+		{"lifecycle", strType(), false},
+		{"emitted_at", dateType(), true},
+	}
 	youtubeBroadcastFields = []field{
 		{"video_id", strType(), true},
 		{"live", boolType(), true},
@@ -227,6 +236,7 @@ var envelopeFields = map[string][]field{
 	"AuthAccount":       authAccountFields,
 	"Emote":             emoteFields,
 	"OBSStream":         obsStreamFields,
+	"EgressState":       egressStateFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
 	"FacebookBroadcast": facebookBroadcastFields,
 }
@@ -274,6 +284,13 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_OBS"},
 				{"schema", objectSchema("OBSStream", obsStreamFields)},
+			}},
+			{"egress_state", orderedObject{
+				{"subject", "tripbot.{env}.egress.state.{platform}"},
+				{"wildcard", "tripbot.{env}.egress.state.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_EGRESS"},
+				{"schema", objectSchema("EgressState", egressStateFields)},
 			}},
 			{"youtube_broadcast", orderedObject{
 				{"subject", "tripbot.{env}.youtube.broadcast"},

@@ -235,6 +235,46 @@
         ]
       }
     },
+    "egress_state": {
+      "subject": "tripbot.{env}.egress.state.{platform}",
+      "wildcard": "tripbot.{env}.egress.state.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_EGRESS",
+      "schema": {
+        "type": "object",
+        "title": "EgressState",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "configured",
+          "live",
+          "emitted_at"
+        ]
+      }
+    },
     "youtube_broadcast": {
       "subject": "tripbot.{env}.youtube.broadcast",
       "transport": "jetstream",
