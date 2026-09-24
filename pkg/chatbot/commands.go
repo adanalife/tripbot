@@ -343,6 +343,40 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Chat.Say(desc)
 }
 
+func (a *App) directionCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !direction", "username", user.Username)
+
+	v, ok := a.Video.PlayheadVelocity(ctx)
+	if !ok {
+		a.Chat.Say("I can't tell which way we're pointed right now, sorry!")
+		return
+	}
+	if !v.Moving {
+		a.Chat.Say("We're not going anywhere at the moment.")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("We're heading %s.", video.Compass(v.Bearing)))
+}
+
+// speedCmd answers with the van's ground speed and heading. Mod-gated while
+// the derived speed is being checked against the corpus: a bad fix reads as
+// an absurd number, and an interpolated span reads eerily flat.
+func (a *App) speedCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !speed", "username", user.Username)
+
+	v, ok := a.Video.PlayheadVelocity(ctx)
+	if !ok {
+		a.Chat.Say("I can't tell how fast we're going right now, sorry!")
+		return
+	}
+	if !v.Moving {
+		a.Chat.Say("We're stopped right now.")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("We're doing about %.0f mph (%.0f km/h), heading %s.",
+		v.MPH(), v.KPH(), video.Compass(v.Bearing)))
+}
+
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
 	s, ok := a.currentSpot(ctx)
@@ -581,6 +615,41 @@ func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
 		slog.ErrorContext(ctx, "error recording guess", "err", err,
 			"username", g.Username)
 	}
+}
+
+// guessStatsCmd answers a viewer's own state-guess record: how many they got
+// right, out of how many they answered, as a batting average. The ratio is the
+// point — the correct-guess leaderboard already rewards volume, and someone
+// who guesses twice a night and is right half the time has nothing to show
+// there.
+//
+// Only the caller's own record, deliberately: a hit rate is a nicer thing to
+// share than to look up about someone else.
+func (a *App) guessStatsCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !guessstats", "username", user.Username)
+	if a.Events == nil {
+		return
+	}
+
+	total, correct := a.Events.GuessRecord(ctx, a.Platform, user.Username)
+	if total == 0 {
+		a.Chat.Say(fmt.Sprintf("@%s hasn't guessed a state yet — try !guess Utah", user.Username))
+		return
+	}
+
+	a.Chat.Say(fmt.Sprintf("@%s is batting %s on state guesses: %d right out of %d.",
+		user.Username, battingAverage(correct, total), correct, total))
+}
+
+// battingAverage renders a hit rate the way baseball does — three decimals,
+// no leading zero (".392"), and "1.000" for a perfect record, which is the
+// one case that keeps its leading digit.
+func battingAverage(correct, total int64) string {
+	if total == 0 {
+		return ".000"
+	}
+	avg := fmt.Sprintf("%.3f", float64(correct)/float64(total))
+	return strings.TrimPrefix(avg, "0")
 }
 
 // guessMiss is one chatter's last wrong !guess: how far its state's centroid

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -201,32 +202,32 @@ type VideoChanged struct {
 	// subject; this is what lets the console keep a separate now-playing card
 	// and map trail per platform. Empty on events emitted before the tag
 	// existed.
-	Platform  string  `json:"platform,omitempty"`
-	File      string  `json:"file"`
-	State     string  `json:"state"`
-	Flagged   bool    `json:"flagged"`
-	Lat       float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
-	Lng       float64 `json:"lng"`
-	EmittedAt string  `json:"emitted_at"`
+	Platform string  `json:"platform,omitempty"`
+	File     string  `json:"file"`
+	State    string  `json:"state"`
+	Flagged  bool    `json:"flagged"`
+	Lat      float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
+	Lng      float64 `json:"lng"`
+	// Heading is the direction of travel at the playhead in degrees clockwise
+	// from north, and SpeedMPS the ground speed in metres per second, both
+	// read off the clip's per-moment coordinate track. Heading is absent when
+	// the van is stopped or the clip has no track; SpeedMPS is absent only
+	// without a track, so a stopped van reports 0 with no heading.
+	Heading   *float64 `json:"heading,omitempty"`
+	SpeedMPS  *float64 `json:"speed_mps,omitempty"`
+	EmittedAt string   `json:"emitted_at"`
 }
 
 // VideoChangedSubject returns the subscribe/publish subject for video-change
 // events in env.
 func VideoChangedSubject(env string) string { return subject(env, "video", "changed") }
 
-// EmitVideoChanged publishes a video switch for this instance's platform. The
-// emitted_at doubles as the clip's start time, so the console can tick an
-// elapsed timer from it.
-func EmitVideoChanged(ctx context.Context, env, platform, file, state string, flagged bool, lat, lng float64) {
-	emit(ctx, VideoChangedSubject(env), VideoChanged{
-		Platform:  platform,
-		File:      file,
-		State:     state,
-		Flagged:   flagged,
-		Lat:       lat,
-		Lng:       lng,
-		EmittedAt: emittedAt(),
-	})
+// EmitVideoChanged publishes a video switch for this instance's platform,
+// stamping emitted_at — which doubles as the clip's start time, so the console
+// can tick an elapsed timer from it.
+func EmitVideoChanged(ctx context.Context, env string, ev VideoChanged) {
+	ev.EmittedAt = emittedAt()
+	emit(ctx, VideoChangedSubject(env), ev)
 }
 
 // --- auth.status ------------------------------------------------------------
@@ -348,6 +349,76 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 	})
 }
 
+// --- obs.stream -------------------------------------------------------------
+
+// OBSStream is the wire format for tripbot.<env>.obs.stream.<platform> — the
+// streaming state of one platform's OBS, as the instance's held OBS WebSocket
+// connection last read it. State is "inactive"/"reconnecting"/"steady", and is
+// empty when Reachable is false — the instance has no live connection to OBS
+// and therefore no state to report, which is not the same as a stopped stream.
+//
+// Published on change rather than on every read: it is a last-value cache
+// (TRIPBOT_OBS, MaxMsgsPerSubject=1), so a fresh subscriber replays the current
+// state and then sees only transitions.
+type OBSStream struct {
+	Platform  string `json:"platform"`
+	State     string `json:"state,omitempty"`
+	Reachable bool   `json:"reachable"`
+	EmittedAt string `json:"emitted_at"`
+}
+
+// OBSStreamSubject returns the publish subject for one platform instance's OBS
+// stream state. Per-platform for the same reason auth.status is: each instance
+// watches its own OBS deployment, and the leaf lets TRIPBOT_OBS retain a
+// last value per platform instead of the instances clobbering one another.
+func OBSStreamSubject(env, platform string) string {
+	return subject(env, "obs", "stream") + "." + platform
+}
+
+// OBSStreamWildcard returns the subscribe pattern covering every platform's OBS
+// stream state in env.
+func OBSStreamWildcard(env string) string { return subject(env, "obs", "stream") + ".*" }
+
+// EmitOBSStream publishes this instance's OBS streaming state.
+func EmitOBSStream(ctx context.Context, env, platform, state string, reachable bool) {
+	emit(ctx, OBSStreamSubject(env, platform), OBSStream{
+		Platform:  platform,
+		State:     state,
+		Reachable: reachable,
+		EmittedAt: emittedAt(),
+	})
+}
+
+// --- egress.state -----------------------------------------------------------
+
+// EgressState is platform-gateway's snapshot of one platform's broadcast egress:
+// whether the platform reports the stream live, plus the gateway's prose detail
+// (e.g. TikTok's relay binding, Facebook's published/unpublished state). Published
+// as a full snapshot on a ticker and after an operator start/stop, never as a delta.
+// Ingest server/key are deliberately absent: those stay on the in-cluster HTTP response.
+//
+// tripbot declares the subject and the TRIPBOT_EGRESS last-value stream; the
+// gateway is the only publisher, so there is no Emit helper here.
+type EgressState struct {
+	Platform   string `json:"platform"`
+	Configured bool   `json:"configured"` // false when the platform has no egress credential yet (the HTTP route's 503)
+	Live       bool   `json:"live"`
+	Title      string `json:"title,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	Lifecycle  string `json:"lifecycle,omitempty"` // platform-native lifecycle; YouTube only
+	EmittedAt  string `json:"emitted_at"`
+}
+
+// EgressStateSubject returns the publish subject for one platform's egress
+// state. Per-platform so TRIPBOT_EGRESS retains a last value per platform.
+func EgressStateSubject(env, platform string) string {
+	return subject(env, "egress", "state") + "." + platform
+}
+
+// EgressStateWildcard returns the subscribe pattern covering every platform's
+// egress state in env.
+func EgressStateWildcard(env string) string { return subject(env, "egress", "state") + ".*" }
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -407,6 +478,8 @@ const (
 	authStreamName     = "TRIPBOT_AUTH"
 	youtubeStreamName  = "TRIPBOT_YOUTUBE"
 	facebookStreamName = "TRIPBOT_FACEBOOK"
+	obsStreamName      = "TRIPBOT_OBS"
+	egressStreamName   = "TRIPBOT_EGRESS"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -467,6 +540,26 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 		{
+			Name:        obsStreamName,
+			Description: "Last-known OBS stream state per platform instance (last-value cache).",
+			Subjects:    []string{OBSStreamWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:        egressStreamName,
+			Description: "Last-known egress.state snapshot per platform (last-value cache); published by platform-gateway.",
+			Subjects:    []string{EgressStateWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
 			Name:        youtubeStreamName,
 			Description: "Last-known YouTube broadcast snapshot (last-value cache).",
 			Subjects:    []string{YoutubeBroadcastSubject(env)},
@@ -489,11 +582,13 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 	}
+	names := make([]string, 0, len(configs))
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
+		names = append(names, cfg.Name)
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", strings.Join(names, ","), "env", env)
 	return nil
 }

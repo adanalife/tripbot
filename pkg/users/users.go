@@ -10,7 +10,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/google/uuid"
-	"github.com/logrusorgru/aurora/v3"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -34,6 +34,10 @@ type User struct {
 	// while leaving it a normal chatter everywhere else. Independent of
 	// IsBot, which carries behavioral meaning beyond ranking.
 	ExcludeFromLeaderboard bool
+	// Moderator is the platform's word, on the message being handled, that
+	// this chatter moderates the channel. Per message, never persisted: a
+	// mod gate should track the platform's roster, not a snapshot of it.
+	Moderator bool `gorm:"-"`
 	// autoCreateTime stamps these with the current time on insert. create()
 	// builds a User without setting them, so without the tag GORM writes the
 	// zero value (0001-01-01) into columns whose DEFAULT is CURRENT_TIMESTAMP —
@@ -48,6 +52,11 @@ type User struct {
 	sessionID    uuid.UUID `gorm:"-"`
 	lastCmd      time.Time `gorm:"-"`
 	lastLocation time.Time `gorm:"-"`
+	// platformUserIDTaken records that another row on this platform already
+	// holds the id this chatter reports, so the stamp is not retried for the
+	// rest of the session. Not stored: the duplicate pair is the DB's to
+	// resolve, and a fresh login re-checks rather than inheriting the verdict.
+	platformUserIDTaken bool `gorm:"-"`
 	// sessionExtraMiles accumulates community sub-grants received during this
 	// session (GiveEveryoneMiles), so logout can record the full unreconstructable
 	// bonus. Resets each login (fresh User from FindOrCreate).
@@ -166,6 +175,26 @@ func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) erro
 	return nil
 }
 
+// SetExcludeFromLeaderboard flips users.exclude_from_leaderboard for a
+// username. It writes the column directly because save() deliberately leaves
+// it alone. Returns gorm.ErrRecordNotFound if the user doesn't exist in the DB.
+func (s *Sessions) SetExcludeFromLeaderboard(ctx context.Context, username string, exclude bool) error {
+	user, err := Find(ctx, s.cfg.Platform, username)
+	if err != nil {
+		return err
+	}
+	if err := database.GormDB().WithContext(ctx).Model(&user).
+		Update("exclude_from_leaderboard", exclude).Error; err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if loggedIn, ok := s.loggedIn[username]; ok {
+		loggedIn.ExcludeFromLeaderboard = exclude
+	}
+	s.mu.Unlock()
+	return nil
+}
+
 // IsFollower returns true if the user is a follower
 func (s *Sessions) IsFollower(u User) bool {
 	return s.source.IsFollower(u.Username)
@@ -182,13 +211,12 @@ func (s *Sessions) SubscriberTier(u User) int {
 	return s.source.SubscriberTier(u.Username)
 }
 
-// User.String prints a colored version of the user
-func (u User) String() string {
-	if u.IsBot {
-		return aurora.Gray(15, u.Username).String()
-	}
-	return aurora.Magenta(u.Username).String()
-}
+// User.String is the user's name. Both callers are slog attribute values, so
+// it has to stay plain text: an escape sequence in an attribute is shipped
+// verbatim to Loki and OTLP, where it makes the field unmatchable rather than
+// colored. Colouring belongs in the handler, which knows whether it is writing
+// to a terminal.
+func (u User) String() string { return u.Username }
 
 // ErrLookupFailed and ErrCreateFailed mark which half of FindOrCreate gave up:
 // an existing row that couldn't be read, versus a new row that couldn't be
@@ -262,20 +290,47 @@ func RecordPlatformUserID(ctx context.Context, u *User, platformUserID string) {
 	if platformUserID == "" || u == nil || u.PlatformUserID == platformUserID {
 		return
 	}
+	if u.platformUserIDTaken {
+		return
+	}
 	if u.ID == 0 {
 		// No DB row (transient Find error, or a transient user on a platform
 		// that doesn't persist). Updates() without a primary key would build an
 		// UPDATE with no WHERE, which GORM refuses — same guard as save().
 		return
 	}
-	err := database.GormDB().WithContext(ctx).Model(u).
+	// Update through a bare row carrying only the primary key, not through u:
+	// GORM writes the new value into the struct it is given whether or not the
+	// statement succeeds, so a rejected write would leave the in-memory user —
+	// and the session entry mirroring it — claiming an id the DB never took.
+	row := User{ID: u.ID}
+	err := database.GormDB().WithContext(ctx).Model(&row).
 		Update("platform_user_id", platformUserID).Error
 	if err != nil {
+		if isUniqueViolation(err) {
+			// Another row on this platform already holds the id, so this
+			// chatter has two rows: the id followed the person, the username
+			// followed a rename. Which row wins is an identity-merge question
+			// no single-column write can answer, so record that the stamp is
+			// contested and stop re-issuing it on every message they send.
+			u.platformUserIDTaken = true
+			slog.WarnContext(ctx, "platform user id belongs to another row",
+				"username", u.Username, "platform", u.Platform,
+				"platform_user_id", platformUserID, "user_id", u.ID)
+			return
+		}
 		slog.ErrorContext(ctx, "couldn't record platform user id", "err", err,
 			"username", u.Username, "platform", u.Platform)
 		return
 	}
 	u.PlatformUserID = platformUserID
+}
+
+// isUniqueViolation reports whether err is postgres' 23505 — the only failure
+// this path can say something specific about.
+func isUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 
 // HasCommandAvailable lets users run a command once a day,

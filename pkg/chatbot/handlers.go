@@ -52,6 +52,7 @@ type chatUser interface {
 	HasCommandAvailable(ctx context.Context) bool
 	IsSubscriber() bool
 	IsAdmin() bool
+	IsMod() bool
 }
 
 // checkAccess returns true when the user is allowed to run cmd on platform.
@@ -66,14 +67,20 @@ type chatUser interface {
 // a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
 // instead.
 //
-// The admin gate is silent unless the command sets AdminDeniedMsg, where the
-// follower and subscriber gates always explain themselves.
+// The admin and mod gates are silent unless the command sets AdminDeniedMsg,
+// where the follower and subscriber gates always explain themselves.
 func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) (ok bool, refused string) {
 	if cmd.RequiresAdmin && !user.IsAdmin() {
 		if cmd.AdminDeniedMsg != "" {
 			say(cmd.AdminDeniedMsg)
 		}
 		return false, events.RefusedAdminGate
+	}
+	if cmd.RequiresMod && !user.IsMod() {
+		if cmd.AdminDeniedMsg != "" {
+			say(cmd.AdminDeniedMsg)
+		}
+		return false, events.RefusedModGate
 	}
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		say(followerMsg)
@@ -105,6 +112,12 @@ func (su sessionUser) IsAdmin() bool {
 	return su.cfg.UserIsAdmin(su.u.Username)
 }
 
+// IsMod is the broadcaster or anyone the platform flagged as a moderator on
+// the message being handled — the admin gate's superset.
+func (su sessionUser) IsMod() bool {
+	return su.IsAdmin() || su.u.Moderator
+}
+
 // dispatch runs cmd for user. typed is the token that matched the command —
 // the alias, state shortcut, or misspelling as the viewer wrote it — which the
 // command_run event keeps when it differs from the canonical trigger.
@@ -131,6 +144,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 	// cooldown); the mark lets dispatch see that and skip the command_run row,
 	// so each attempt lands in exactly one event kind — a run or a refusal.
 	ctx, refused := withRefusalMark(ctx)
+	ctx, detail := withRunDetail(ctx)
 
 	start := time.Now()
 	cmd.Handler(ctx, user, params)
@@ -147,7 +161,27 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 		Command:  cmd.Trigger,
 		Typed:    typed,
 		Args:     strings.Join(params, " "),
+		Detail:   *detail,
 	})
+}
+
+// runDetailKey carries the per-dispatch slot setRunDetail fills with what a
+// handler answered, for the command_run row.
+type runDetailKey struct{}
+
+// withRunDetail returns ctx carrying an empty run-detail slot, and the slot.
+func withRunDetail(ctx context.Context) (context.Context, *map[string]string) {
+	detail := new(map[string]string)
+	return context.WithValue(ctx, runDetailKey{}, detail), detail
+}
+
+// setRunDetail records what the running command answered, so its command_run
+// row can be queried by answer rather than only by trigger. A no-op outside a
+// dispatch (tests calling a handler directly).
+func setRunDetail(ctx context.Context, detail map[string]string) {
+	if slot, ok := ctx.Value(runDetailKey{}).(*map[string]string); ok {
+		*slot = detail
+	}
 }
 
 // refusalMarkKey carries the per-dispatch flag recordRefusal flips when a
@@ -388,11 +422,13 @@ func fuzzyStateName(guess string) string {
 	best := ""
 	bestDist := maxDist + 1
 	ambiguous := false
-	for _, name := range helpers.StateNames() {
-		dist := levenshtein(lowered, strings.ToLower(name))
+	names := helpers.StateNames()
+	for i, lowerName := range helpers.LowercaseStateNames() {
+		dist := levenshtein(lowered, lowerName)
 		if dist > maxDist {
 			continue
 		}
+		name := names[i]
 		switch {
 		case dist < bestDist:
 			best, bestDist, ambiguous = name, dist, false
@@ -501,9 +537,11 @@ type IncomingMessage struct {
 	MessageID string
 	// Moderator, Subscriber, and Broadcaster are the sender's role in this
 	// channel as the platform reported it on this message. They ride the event
-	// bus for display; the access checks in checkAccess still read the
-	// persisted session, which is the answer that survives a platform that
-	// reports no roles at all.
+	// bus for display; the follower and subscriber checks in checkAccess read
+	// the persisted session, which is the answer that survives a platform that
+	// reports no roles at all. Moderator alone also gates commands: there is
+	// no persisted mod list, so the platform's word on the message is the one
+	// source.
 	Moderator   bool
 	Subscriber  bool
 	Broadcaster bool
@@ -556,7 +594,9 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.
-	a.runCommand(ctx, a.chatUser(ctx, msg.User, msg.UserID), msg.Text)
+	user := a.chatUser(ctx, msg.User, msg.UserID)
+	user.Moderator = msg.Moderator
+	a.runCommand(ctx, user, msg.Text)
 }
 
 // chatUser resolves a sender to the user the command path runs as.

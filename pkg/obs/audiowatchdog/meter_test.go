@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/andreykaipov/goobs/api/events"
 	"github.com/andreykaipov/goobs/api/typedefs"
 )
@@ -44,6 +45,20 @@ func TestHandle_SurvivesAFailingHandler(t *testing.T) {
 	})
 	if db, fresh := m.Level(); !fresh || db != 0 {
 		t.Errorf("level after a failed advance: got %v (fresh=%v), want 0 dB fresh", db, fresh)
+	}
+}
+
+// A meter with no connection is the shape OBS being down takes, and Watch
+// leans on obs.ErrUnreachable to tell that apart from a source that simply
+// isn't playing.
+func TestRequestsWithNoConnectionAreUnreachable(t *testing.T) {
+	m := NewVolumeMeter("Background Audio", time.Minute, nil)
+
+	if _, err := m.MediaInputState(context.Background(), "Background Audio"); !errors.Is(err, obs.ErrUnreachable) {
+		t.Errorf("MediaInputState err = %v, want obs.ErrUnreachable", err)
+	}
+	if _, err := m.InputSettings(context.Background(), "Background Audio"); !errors.Is(err, obs.ErrUnreachable) {
+		t.Errorf("InputSettings err = %v, want obs.ErrUnreachable", err)
 	}
 }
 

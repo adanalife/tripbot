@@ -53,9 +53,24 @@ var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
 // scheduler goroutine. The scheduler's job ctx is the span's parent and
 // is threaded into fn, so DB queries (otelsql) and outbound HTTP
 // (otelhttp) nest under cron.<name> in Tempo as children of the cron tick.
+// jobTimeout bounds every scheduled job's tick. The scheduler hands each tick
+// the process context, which has no deadline, so without this a job that hangs
+// on a slow upstream hangs forever: gocron runs ticks in their own goroutines,
+// so most jobs leak one per tick, and rollups.Reconcile — the one job in
+// LimitModeReschedule — stops running entirely after a single hang, silently.
+//
+// Every job is one gateway call (itself bounded at 15s), one playout read, one
+// NATS publish, or one incremental DB transaction; none sleeps or paginates, so
+// two minutes is an order of magnitude above the slowest legitimate tick. It is
+// also below the 5m interval of the reschedule-mode job, so a timed-out
+// Reconcile is picked up on the next tick rather than skipping one.
+const jobTimeout = 2 * time.Minute
+
 func tracedJob(name string, fn func(context.Context)) func(context.Context) {
 	return func(ctx context.Context) {
 		start := time.Now()
+		ctx, cancel := context.WithTimeout(ctx, jobTimeout)
+		defer cancel()
 		ctx, span := cronTracer.Start(ctx, "cron."+name,
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
@@ -273,6 +288,7 @@ func (t *Tripbot) Run() {
 	ctx, flush := bootstrap.Start("tripbot", t.version, t.cfg)
 	defer flush()
 	t.srv.SetVersion(t.version)
+	t.srv.SetUserFlags(t.sessions) // the console's presence report flips is_bot / exclude_from_leaderboard through it
 	httpDone := t.startHttpServer(ctx)
 	t.findInitialVideo()
 	// after findInitialVideo: its DB round-trip proves the DB is reachable
@@ -308,7 +324,7 @@ func (t *Tripbot) Run() {
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
 	// the stream-health dashboards and alerts.
-	go obs.PollStreamingActive(ctx, t.cfg.Platform, 30*time.Second)
+	go obs.PollStreamingActive(ctx, t.cfg.Environment, t.cfg.Platform, 30*time.Second)
 	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
 	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
 	t.startStreamWatchdog(ctx)          // twitch, tiktok, youtube: recovers a stream the platform stopped showing
@@ -1068,7 +1084,7 @@ func (t *Tripbot) startCron() {
 // reach this instance to show what's wrong; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
-	if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+	if err := mytwitch.LoadFromDB(ctx, t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
 			"login_as", t.cfg.BotUsername,
 			"fix", "re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
@@ -1099,7 +1115,7 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+			if err := mytwitch.LoadFromDB(ctx, t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 				if time.Since(lastLogged) >= logEvery {
 					slog.WarnContext(ctx, "still waiting for Twitch token (re-auth via the platform-gateway consent flow, surfaced in tripbot-console)",
 						"login_as", t.cfg.BotUsername, "err", err)
@@ -1273,7 +1289,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// gateway's rotations — EventSub's redial token and the token-expiry gauge
 	// (both fed by LoadFromDB) — without tripbot ever refreshing itself.
 	t.addJob(tokenReloadInterval, "twitch.ReloadTokens", func(ctx context.Context) {
-		if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+		if err := mytwitch.LoadFromDB(ctx, t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
 		}
 	})

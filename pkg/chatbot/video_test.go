@@ -27,6 +27,15 @@ type recordingVideo struct {
 	DaytimeErr      error
 	Moment          video.Moment
 	PlayheadTracked bool
+	// Bearing / SpeedMPS / Moving / HeadingTracked stage what PlayheadVelocity
+	// reports: a direction and speed, a van sitting still, or a clip with no
+	// track to measure along. HeadingTracked is separate from PlayheadTracked
+	// because a clip can have a coordinate at the playhead and still have
+	// nothing a headingLookback behind it.
+	Bearing        float64
+	SpeedMPS       float64
+	Moving         bool
+	HeadingTracked bool
 	// RefreshedVid, when set, becomes Vid on the next GetCurrentlyPlaying —
 	// staging a playhead jump that lands on a different clip, the way a real
 	// refresh re-reads the player after playout shuffles.
@@ -51,6 +60,10 @@ func (r *recordingVideo) CurrentProgress() time.Duration {
 func (r *recordingVideo) PlayheadLocation(_ context.Context) (video.Video, video.Moment, bool) {
 	r.Calls = append(r.Calls, "PlayheadLocation()")
 	return r.Vid, r.Moment, r.PlayheadTracked
+}
+func (r *recordingVideo) PlayheadVelocity(_ context.Context) (video.Velocity, bool) {
+	r.Calls = append(r.Calls, "PlayheadVelocity()")
+	return video.Velocity{Bearing: r.Bearing, SpeedMPS: r.SpeedMPS, Moving: r.Moving}, r.HeadingTracked
 }
 func (r *recordingVideo) FindRandomByState(_ context.Context, state string) (video.Video, error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("FindRandomByState(%q)", state))

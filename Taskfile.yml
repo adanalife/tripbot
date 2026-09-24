@@ -38,6 +38,18 @@ tasks:
     cmds:
       - "{{.COMPOSE}} run --rm test go test ./..."
 
+  # No test:image dep, deliberately: rebuilding the image is what makes a
+  # `task test` run exceed an agent's command timeout, and it is wasted work
+  # when the question is whether one package passes. The stack's
+  # TESTDB_REQUIRED turns a postgres-unreachable skip into a failure, which is
+  # the point — a bare host `go test` over a DB-backed package answers `ok` in
+  # under a second having run nothing, and the SKIP lines only appear under -v.
+  # GOTOOLCHAIN=auto covers a test image whose Go is older than go.mod asks.
+  test:pkg:
+    desc: 'Run one package''s tests against the compose postgres, skipping the image rebuild: task test:pkg -- ./pkg/users/'
+    cmds:
+      - "{{.COMPOSE}} run --rm -e GOTOOLCHAIN=auto test go test {{.CLI_ARGS}} -count=1"
+
   test:cover:
     desc: Run tests with coverage + race detector; prints per-function and total coverage
     deps: [test:image]

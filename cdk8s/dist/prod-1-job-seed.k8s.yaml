@@ -15,10 +15,12 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.11.0
+          image: adanalife/tripbot:5.18.0
           imagePullPolicy: IfNotPresent
           name: seed
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -30,6 +32,8 @@ spec:
           image: busybox:1.36
           name: wait-for-postgres
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -46,10 +50,12 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.11.0
+          image: adanalife/tripbot:5.18.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi

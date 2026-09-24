@@ -174,6 +174,8 @@ var (
 		{"flagged", boolType(), true},
 		{"lat", numType(), true},
 		{"lng", numType(), true},
+		{"heading", numType(), false},
+		{"speed_mps", numType(), false},
 		{"emitted_at", dateType(), true},
 	}
 	authStatusFields = []field{
@@ -186,6 +188,21 @@ var (
 		{"login_as", strType(), false},
 		{"expires_at", dateType(), false},
 		{"reason", strType(), false},
+	}
+	obsStreamFields = []field{
+		{"platform", strType(), true},
+		{"state", strType(), false},
+		{"reachable", boolType(), true},
+		{"emitted_at", dateType(), true},
+	}
+	egressStateFields = []field{
+		{"platform", strType(), true},
+		{"configured", boolType(), true},
+		{"live", boolType(), true},
+		{"title", strType(), false},
+		{"detail", strType(), false},
+		{"lifecycle", strType(), false},
+		{"emitted_at", dateType(), true},
 	}
 	youtubeBroadcastFields = []field{
 		{"video_id", strType(), true},
@@ -218,6 +235,8 @@ var envelopeFields = map[string][]field{
 	"AuthStatus":        authStatusFields,
 	"AuthAccount":       authAccountFields,
 	"Emote":             emoteFields,
+	"OBSStream":         obsStreamFields,
+	"EgressState":       egressStateFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
 	"FacebookBroadcast": facebookBroadcastFields,
 }
@@ -258,6 +277,20 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_AUTH"},
 				{"schema", objectSchema("AuthStatus", authStatusFields)},
+			}},
+			{"obs_stream", orderedObject{
+				{"subject", "tripbot.{env}.obs.stream.{platform}"},
+				{"wildcard", "tripbot.{env}.obs.stream.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_OBS"},
+				{"schema", objectSchema("OBSStream", obsStreamFields)},
+			}},
+			{"egress_state", orderedObject{
+				{"subject", "tripbot.{env}.egress.state.{platform}"},
+				{"wildcard", "tripbot.{env}.egress.state.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_EGRESS"},
+				{"schema", objectSchema("EgressState", egressStateFields)},
 			}},
 			{"youtube_broadcast", orderedObject{
 				{"subject", "tripbot.{env}.youtube.broadcast"},

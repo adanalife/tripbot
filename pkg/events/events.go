@@ -155,6 +155,29 @@ func StateCrossing(ctx context.Context, cfg *c.TripbotConfig, from, to string, a
 	return record(ctx, cfg, e)
 }
 
+// viewerRecordMeta is a viewer_record event's meta payload. The platform isn't
+// in here because every event row already carries one — a reader gets it from
+// the column.
+type viewerRecordMeta struct {
+	Viewers int `json:"viewers"`
+	// Previous is the high this reading beat, so the row says how big a jump it
+	// was without re-querying the series it came from.
+	Previous int `json:"previous"`
+}
+
+// ViewerRecord records the concurrent-viewer count setting a new all-time high
+// for this platform. A system event — no viewer did it — so Username is empty,
+// and no airing context: a record belongs to the stream, not to whichever clip
+// happened to be on screen when the counter ticked over.
+func ViewerRecord(ctx context.Context, cfg *c.TripbotConfig, viewers, previous int) error {
+	payload, err := json.Marshal(viewerRecordMeta{Viewers: viewers, Previous: previous})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Event: "viewer_record", Meta: &meta})
+}
+
 // guessMeta is a guess_submitted event's meta payload. Guessed and Actual are
 // post-normalization (two-letter code expanded, close misspelling corrected),
 // so rows that differ only in spelling still group together in a rollup.
@@ -309,6 +332,9 @@ const (
 	RefusedSubGate = "sub_gate"
 	// RefusedAdminGate — the command is admin-only and the viewer isn't one.
 	RefusedAdminGate = "admin_gate"
+	// RefusedModGate — the command is mod-only and the viewer is neither a
+	// moderator nor the broadcaster.
+	RefusedModGate = "mod_gate"
 	// RefusedCooldown — the viewer ran it too recently to run it again.
 	RefusedCooldown = "cooldown"
 )
@@ -328,6 +354,9 @@ type commandMeta struct {
 	// are often the point (which state they guessed, what they searched for).
 	Args   string `json:"args,omitempty"`
 	Reason string `json:"reason,omitempty"`
+	// Detail is what a run answered, when the answer is worth querying later
+	// (the track !song named).
+	Detail map[string]string `json:"detail,omitempty"`
 }
 
 // CommandRefusal describes one declined command for CommandRefused.
@@ -386,6 +415,9 @@ type CommandRun struct {
 	VideoID int
 	// TsSec is seconds into that clip; nil writes NULL.
 	TsSec *float64
+	// Detail is what the command answered, for the commands whose answer is
+	// the point (the track !song named); nil omits it.
+	Detail map[string]string
 }
 
 // CommandRan records a command the bot dispatched and ran. Paired with
@@ -397,6 +429,7 @@ func CommandRan(ctx context.Context, cfg *c.TripbotConfig, r CommandRun) error {
 		Command: r.Command,
 		Typed:   r.Typed,
 		Args:    r.Args,
+		Detail:  r.Detail,
 	})
 	if err != nil {
 		return err
@@ -555,6 +588,31 @@ func SessionCount(ctx context.Context, platform, username string) int64 {
 		return 0
 	}
 	return n
+}
+
+// GuessRecord returns one viewer's answerable-!guess history: how many they
+// submitted and how many of those were right. Both come from a single scan of
+// their guess_submitted rows, over the same events_username_date index
+// SessionCount uses.
+//
+// meta->>'correct' reads 'true' whether the writer stored a JSON boolean or
+// the string "true", matching the server-side guess rollups. Returns 0, 0 on
+// error — a chat command would rather say "no guesses yet" than fail.
+func GuessRecord(ctx context.Context, platform, username string) (total, correct int64) {
+	var row struct {
+		Total   int64
+		Correct int64
+	}
+	err := database.GormDB().WithContext(ctx).
+		Model(&Event{}).
+		Select("COUNT(*) AS total, COUNT(*) FILTER (WHERE meta->>'correct' = 'true') AS correct").
+		Where("platform = ? AND username = ? AND event = ?", platform, username, "guess_submitted").
+		Scan(&row).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "guess record lookup failed", "err", err, "username", username)
+		return 0, 0
+	}
+	return row.Total, row.Correct
 }
 
 // raidMeta is a raid event's meta payload.

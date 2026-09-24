@@ -102,7 +102,7 @@ func (s *Session) runLeaderboard(
 	}
 	entries := scoreboards.TopUsers(ctx, s.cfg, scoreboardFn(), leaderboardSize)
 	if filterZeros {
-		entries = filterNonZeroInts(entries)
+		entries = scoreboards.GuessRows(entries)
 	}
 	if len(entries) == 0 {
 		s.editReplyText(ctx, i, "No one is on that leaderboard yet!")
@@ -144,7 +144,7 @@ func (s *Session) runLastMonth(ctx context.Context, i *discordgo.InteractionCrea
 	}
 	month := scoreboards.PreviousMonthLabel()
 	miles := scoreboards.SnapshotTopUsers(ctx, s.cfg, scoreboards.PreviousMilesScoreboard(), leaderboardSize)
-	guesses := filterNonZeroInts(scoreboards.SnapshotTopUsers(ctx, s.cfg, scoreboards.PreviousGuessScoreboard(), leaderboardSize))
+	guesses := scoreboards.GuessRows(scoreboards.SnapshotTopUsers(ctx, s.cfg, scoreboards.PreviousGuessScoreboard(), leaderboardSize))
 	var embeds []*discordgo.MessageEmbed
 	for _, board := range []struct {
 		title   string

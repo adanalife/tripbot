@@ -11,10 +11,12 @@ import (
 // the durable history behind "when was this viewer subscribed" and "where did
 // these miles come from". Tests inject a fake; production uses realEvents.
 //
-// The table is append-only by design, so every method here is a write that is
-// never revised — nothing updates or deletes a row. Each returns
-// its error rather than logging: a lost event is a hole in that history, and
-// the caller is the one that knows whether it can say so in chat.
+// The table is append-only by design, so a recorded event is never revised —
+// nothing updates or deletes a row. The writers return their error rather than
+// logging: a lost event is a hole in that history, and the caller is the one
+// that knows whether it can say so in chat. The reads at the bottom answer
+// from that same history, and swallow their errors instead: a command asking
+// what a viewer has done can fall back on "nothing yet".
 type Events interface {
 	// Follow records that a viewer followed the channel — the rows behind
 	// any "followers gained" count.
@@ -43,6 +45,10 @@ type Events interface {
 	// CommandRefused, every command attempt lands in exactly one of the two
 	// kinds — the split any refusal rate or usage rollup is computed over.
 	CommandRan(ctx context.Context, r events.CommandRun) error
+
+	// GuessRecord reads back a viewer's answerable-!guess history as
+	// (total, correct) — the two numbers a batting average is the ratio of.
+	GuessRecord(ctx context.Context, platform, username string) (int64, int64)
 }
 
 // realEvents is the production Events adapter, holding only the config
@@ -85,4 +91,8 @@ func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusa
 
 func (r realEvents) CommandRan(ctx context.Context, run events.CommandRun) error {
 	return events.CommandRan(ctx, r.cfg, run)
+}
+
+func (r realEvents) GuessRecord(ctx context.Context, platform, username string) (int64, int64) {
+	return events.GuessRecord(ctx, platform, username)
 }

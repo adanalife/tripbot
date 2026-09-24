@@ -37,11 +37,7 @@ func RefreshBrowserSources(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 
 	list, err := client.Inputs.GetInputList(inputs.NewGetInputListParams())
 	if err != nil {
@@ -124,11 +120,7 @@ func GetInputSettings(ctx context.Context, inputName string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 	resp, err := client.Inputs.GetInputSettings(
 		inputs.NewGetInputSettingsParams().WithInputName(inputName),
 	)
@@ -161,11 +153,7 @@ func setInputSettings(ctx context.Context, inputName string, settings map[string
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 	_, err = client.Inputs.SetInputSettings(
 		inputs.NewSetInputSettingsParams().
 			WithInputName(inputName).

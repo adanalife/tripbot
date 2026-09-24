@@ -60,33 +60,57 @@ func TestRenderMiddleTextEmitsHTMLMode(t *testing.T) {
 	}
 }
 
-// state.json renders the markdown source of a Markdown-flagged onscreen to
-// HTML at the wire boundary, while the stored Content stays the raw source.
+// state.json serves a Markdown-flagged onscreen as rendered HTML and a
+// non-flagged one verbatim, while the stored Content stays the raw source in
+// both cases. Re-setting the content re-renders, which is what keeps the memo
+// behind renderedContent honest.
 func TestStateHandlerRendersMarkdown(t *testing.T) {
 	s := newTestServer(t)
 	s.MiddleText.Show("use `!find` to search")
+	// Timewarp is registered without Markdown, so its backticks stay literal.
+	s.Timewarp.Show("use `!find` to search")
 
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/state.json", nil)
-	rec := httptest.NewRecorder()
-	s.onscreensStateHandler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got status %d, want 200", rec.Code)
-	}
 	// Decode the wire JSON (the encoder \u-escapes '<'/'>'; the browser's
 	// JSON.parse decodes them back to real tags before innerHTML).
-	var got map[string]struct {
+	state := func() map[string]struct {
 		Content string `json:"content"`
+	} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/onscreens/state.json", nil)
+		rec := httptest.NewRecorder()
+		s.onscreensStateHandler(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("got status %d, want 200", rec.Code)
+		}
+		var got map[string]struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decoding state.json: %v", err)
+		}
+		return got
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decoding state.json: %v", err)
-	}
+
+	got := state()
 	if want := "use <code>!find</code> to search"; got[SlugMiddleText].Content != want {
 		t.Fatalf("middle-text wire content = %q, want %q", got[SlugMiddleText].Content, want)
+	}
+	if want := "use `!find` to search"; got[SlugTimewarp].Content != want {
+		t.Fatalf("timewarp wire content = %q, want %q (not markdown-flagged)", got[SlugTimewarp].Content, want)
 	}
 	// Stored Content stays untouched raw markdown.
 	if c := s.MiddleText.Content(); c != "use `!find` to search" {
 		t.Fatalf("stored Content was mutated: %q", c)
+	}
+
+	// A second poll over unchanged content serves the same HTML...
+	if got2 := state(); got2[SlugMiddleText].Content != got[SlugMiddleText].Content {
+		t.Fatalf("repeat poll content = %q, want %q", got2[SlugMiddleText].Content, got[SlugMiddleText].Content)
+	}
+	// ...and a re-set renders the new content.
+	s.MiddleText.Show("try `!miles` instead")
+	if want := "try <code>!miles</code> instead"; state()[SlugMiddleText].Content != want {
+		t.Fatalf("after re-set, middle-text wire content = %q, want %q", state()[SlugMiddleText].Content, want)
 	}
 }
 

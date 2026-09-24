@@ -75,10 +75,11 @@ func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard 
 	return nil
 }
 
-func (c *Client) ShowTimewarp(ctx context.Context, username string) error {
+func (c *Client) ShowTimewarp(ctx context.Context, username string, noBackground bool) error {
 	c.publish(ctx, oe.TimewarpShowSubject(c.env, c.platform), oe.TimewarpShow{
-		Envelope: oe.NewEnvelope(),
-		Username: username,
+		Envelope:     oe.NewEnvelope(),
+		Username:     username,
+		NoBackground: noBackground,
 	})
 	return nil
 }

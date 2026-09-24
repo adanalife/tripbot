@@ -92,9 +92,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
-			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
-			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+		p.emitVideoChanged(ctx, 0)
 
 		// Persist the switch as a video_plays row — the durable half of the
 		// emission above (NATS core is fire-and-forget). The first tick after a
@@ -210,7 +208,27 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	if p.CurrentlyPlaying.Slug == "" {
 		return
 	}
-	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
-		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
-		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+	p.emitVideoChanged(ctx, p.CurrentProgress())
+}
+
+// emitVideoChanged publishes the current clip with the van's velocity `at`
+// into it, so the console can point its marker and glide it between clips.
+// A clip with no track publishes without one; a stopped van publishes a
+// speed of 0 and no heading.
+func (p *Player) emitVideoChanged(ctx context.Context, at time.Duration) {
+	ev := eventbus.VideoChanged{
+		Platform: p.cfg.Platform,
+		File:     p.CurrentlyPlaying.File(),
+		State:    p.CurrentlyPlaying.State,
+		Flagged:  p.CurrentlyPlaying.Flagged,
+		Lat:      p.CurrentlyPlaying.Lat,
+		Lng:      p.CurrentlyPlaying.Lng,
+	}
+	if v, ok := VelocityAt(ctx, p.CurrentlyPlaying, at); ok {
+		ev.SpeedMPS = &v.SpeedMPS
+		if v.Moving {
+			ev.Heading = &v.Bearing
+		}
+	}
+	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, ev)
 }

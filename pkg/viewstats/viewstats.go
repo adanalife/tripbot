@@ -16,6 +16,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 )
 
 // VideoPlay is one video_plays row: a clip landed on screen at StartedAt.
@@ -135,6 +136,73 @@ type Audience struct {
 	Reported bool
 }
 
+// peaks caches, per platform, the highest concurrent-viewer count the series
+// holds, so the record check costs a comparison rather than a query every tick.
+// Seeded once per platform from the table itself, which is what makes it
+// survive a restart: the high is a property of the history, not of this
+// process. Unlike openPlayIDs above, a value carried over from a previous
+// process is exactly what's wanted here.
+var (
+	peakMu sync.Mutex
+	peaks  = map[string]int{}
+)
+
+// storedPeak reads the platform's highest recorded concurrent-viewer count.
+// 0 when the series holds none — an empty table, or a platform that has never
+// had a number reported. Errors read as 0 and log, which costs at most one
+// missed record announcement rather than a wrong one, because the very next
+// tick reseeds.
+func storedPeak(ctx context.Context, platform string) int {
+	var peak int
+	err := database.GormDB().WithContext(ctx).Model(&ViewerSample{}).
+		Where("platform = ?", platform).
+		Select("COALESCE(MAX(viewers), 0)").Scan(&peak).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "error reading peak viewer count", "err", err, "platform", platform)
+		return 0
+	}
+	return peak
+}
+
+// checkPeak emits a viewer_record event when this tick's audience beats the
+// platform's all-time high. Called before the sample row is written, so the
+// high it compares against is the history this reading is about to join rather
+// than one that already includes it.
+//
+// An unreported or zero count can't set a record: NULL means nobody counted,
+// and nobody watching is not a milestone.
+func checkPeak(ctx context.Context, cfg *c.TripbotConfig, audience Audience) {
+	if !audience.Reported || audience.Count <= 0 {
+		return
+	}
+
+	peakMu.Lock()
+	previous, seeded := peaks[cfg.Platform]
+	if !seeded {
+		previous = storedPeak(ctx, cfg.Platform)
+	}
+	beaten := audience.Count > previous
+	if beaten || !seeded {
+		peaks[cfg.Platform] = max(previous, audience.Count)
+	}
+	peakMu.Unlock()
+
+	if !beaten {
+		return
+	}
+	if previous == 0 {
+		// Nothing to beat. Announcing "a new all-time high" against an empty
+		// series would make the first number ever reported a milestone, so the
+		// bar gets set silently and the next reading that clears it is the
+		// first real record.
+		return
+	}
+	if err := events.ViewerRecord(ctx, cfg, audience.Count, previous); err != nil {
+		slog.ErrorContext(ctx, "error recording viewer record", "err", err,
+			"viewers", audience.Count, "previous", previous)
+	}
+}
+
 // RecordSample writes a viewer_samples row for one viewer-count tick.
 // chatters is the in-chat total; audience is the watching total, which the two
 // columns keep apart because they answer different questions and only one of
@@ -150,6 +218,7 @@ func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audie
 	if cfg.ReadOnly {
 		return
 	}
+	checkPeak(ctx, cfg, audience)
 	var vid *int
 	if videoID != 0 {
 		vid = &videoID

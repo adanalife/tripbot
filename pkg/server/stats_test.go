@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,10 +13,65 @@ import (
 	"gorm.io/gorm"
 )
 
+// resetLifetimeCache clears the lifetime cache so a test sees its own seeded
+// data rather than whatever the previous test left cached.
+func resetLifetimeCache() {
+	lifetimeCache.Lock()
+	defer lifetimeCache.Unlock()
+	lifetimeCache.stats, lifetimeCache.builtAt = lifetimeStatsResponse{}, time.Time{}
+}
+
+// The lifetime figures are whole-table scans over an append-only log: a page
+// load must not re-run them once the answer is cached.
+func TestLifetimeStatsHandler_CachesTheGatheredStats(t *testing.T) {
+	gathers := 0
+	saved := lifetimeStatsSource
+	t.Cleanup(func() { lifetimeStatsSource = saved; resetLifetimeCache() })
+	lifetimeStatsSource = func(context.Context) (lifetimeStatsResponse, error) {
+		gathers++
+		return lifetimeStatsResponse{EventsTotal: 7, EventKinds: []eventKindCount{}}, nil
+	}
+	resetLifetimeCache()
+
+	for range 3 {
+		rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
+		if !strings.Contains(rec.Body.String(), `"events_total":7`) {
+			t.Fatalf("body = %s, want the gathered stats", rec.Body.String())
+		}
+	}
+	if gathers != 1 {
+		t.Errorf("gathered the stats %d times, want 1", gathers)
+	}
+}
+
+// A failed gather must not be cached, or one DB blip pins a 500 for the whole
+// TTL.
+func TestLifetimeStatsHandler_ErrorIsNotCached(t *testing.T) {
+	gathers := 0
+	saved := lifetimeStatsSource
+	t.Cleanup(func() { lifetimeStatsSource = saved; resetLifetimeCache() })
+	lifetimeStatsSource = func(context.Context) (lifetimeStatsResponse, error) {
+		gathers++
+		return lifetimeStatsResponse{}, errors.New("db is down")
+	}
+	resetLifetimeCache()
+
+	for range 2 {
+		if rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler); rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", rec.Code)
+		}
+	}
+	if gathers != 2 {
+		t.Errorf("gathered the stats %d times, want 2 (a failed gather isn't cached)", gathers)
+	}
+}
+
 // The empty-data contract for the stats page: arrays are [], the nullable
 // scalars (since, hours, peak_chatters) are null, counters are zero.
 func TestLifetimeStatsHandler_EmptyDataShape(t *testing.T) {
 	testdb.New(t)
+	resetLifetimeCache()
+	t.Cleanup(resetLifetimeCache)
 	rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
@@ -126,6 +183,8 @@ func TestLifetimeStatsHandler_Aggregates(t *testing.T) {
 	seedSample(t, db, vid, 9, peakAt)
 	seedSample(t, db, vid, 9, peakAt.Add(time.Minute)) // tie: the earlier peak wins
 
+	resetLifetimeCache()
+	t.Cleanup(resetLifetimeCache)
 	rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
@@ -302,5 +361,56 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	}
 	if miles.Rows[4].Rank != 5 || miles.Rows[4].Username != "g5" {
 		t.Errorf("miles rows[4] = %+v, want rank 5 g5", miles.Rows[4])
+	}
+}
+
+// seedSongRun writes a command_run row for !song carrying the track it named;
+// an empty title writes a run that named nothing.
+func seedSongRun(t *testing.T, db *gorm.DB, username, title, artist string, at time.Time) {
+	t.Helper()
+	meta := `{"command":"!song"}`
+	if title != "" {
+		b, _ := json.Marshal(map[string]any{"command": "!song",
+			"detail": map[string]string{"bed": "somafm", "title": title, "artist": artist}})
+		meta = string(b)
+	}
+	err := db.Exec(`INSERT INTO events (platform, username, event, meta, date_created)
+	                VALUES ('twitch', ?, 'command_run', ?::jsonb, ?)`, username, meta, at).Error
+	if err != nil {
+		t.Fatalf("insert !song run for %s: %v", username, err)
+	}
+}
+
+func TestSongStatsHandler_RanksTheNamedTracks(t *testing.T) {
+	db := testdb.New(t)
+	seedMilesUser(t, db, "song_alice", 0, false, false)
+	seedMilesUser(t, db, "song_bob", 0, false, false)
+	seedMilesUser(t, db, "song_bot", 0, true, false)
+	in := time.Now().Add(-1 * time.Hour)
+
+	seedSongRun(t, db, "song_alice", "Big Wow", "Steve Cobby", in)
+	seedSongRun(t, db, "song_alice", "Big Wow", "Steve Cobby", in.Add(time.Minute))
+	seedSongRun(t, db, "song_bob", "Big Wow", "Steve Cobby", in.Add(2*time.Minute))
+	seedSongRun(t, db, "song_bob", "Colorado Sunrise", "Fifty Horizons", in)
+	seedSongRun(t, db, "song_bot", "Colorado Sunrise", "Fifty Horizons", in)             // bot: not counted
+	seedSongRun(t, db, "song_bob", "", "", in)                                           // named nothing
+	seedSongRun(t, db, "song_bob", "Stale", "Nobody", time.Now().Add(-100*24*time.Hour)) // outside the window
+
+	rec := insightsGET(t, "/api/stats/songs", songStatsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got songStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if got.Days != 90 || len(got.Songs) != 2 {
+		t.Fatalf("got %+v, want days 90 and two songs", got)
+	}
+	if s := got.Songs[0]; s.Title != "Big Wow" || s.Artist != "Steve Cobby" || s.Count != 3 || s.Askers != 2 {
+		t.Errorf("songs[0] = %+v, want Big Wow ×3 by 2 askers", s)
+	}
+	if s := got.Songs[1]; s.Title != "Colorado Sunrise" || s.Count != 1 || s.Askers != 1 {
+		t.Errorf("songs[1] = %+v, want Colorado Sunrise ×1 (bot excluded)", s)
 	}
 }

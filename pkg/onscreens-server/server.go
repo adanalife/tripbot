@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
@@ -54,6 +56,18 @@ type Server struct {
 	// live pools.
 	left  *rotator
 	right *rotator
+
+	// timewarpNoBackground is the last warp's "strip the opaque cover" choice,
+	// carried on timewarp.show and served in state.json for the browser source
+	// to apply. Server-level rather than a field on the Onscreen: it's styling
+	// for one overlay, not state every overlay has.
+	timewarpNoBackground atomic.Bool
+
+	// middleExpiry is the pending auto-hide for the middle text, when the show
+	// that set it asked for one. Held so the next show can cancel it —
+	// otherwise the previous message's timer hides the new one early.
+	middleExpiryMu sync.Mutex
+	middleExpiry   *time.Timer
 
 	http *http.Server
 }

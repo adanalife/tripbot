@@ -73,9 +73,11 @@ func Valid(b Bed) bool {
 // mounts that same claim at the same path, so a path chosen here resolves
 // identically inside the OBS container.
 const (
-	InputName  = "Background Audio"
-	CarHumFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
-	MusicDir   = "/opt/tripbot/assets/music"
+	InputName = "Background Audio"
+	// CarHumDir holds one FLAC per voicing, named car-hum-<voicing>.flac by the
+	// obs repo's carhum/render-variants.sh.
+	CarHumDir = "/opt/tripbot/assets/carhum"
+	MusicDir  = "/opt/tripbot/assets/music"
 
 	// MusicIndexFile is where cdk8s mounts the album track index that
 	// bin/stage-streambeats emits — a ConfigMap, so a missing one leaves the
@@ -92,6 +94,47 @@ const (
 	// distinction the process loses on restart and can only read back here.
 	FallbackFile = "/opt/tripbot/assets/carhum/car-hum-fallback.flac"
 )
+
+// Voicings are the car-hum renders the OBS image ships, in display order. The
+// names are a contract with the obs repo's carhum/render-variants.sh, which
+// renders one preset per name; a voicing missing there is a source OBS cannot
+// open, which is silence.
+var Voicings = []string{"idle", "highway", "backroad", "mountain"}
+
+// DefaultVoicing is the drone a store starts on and the one the audio watchdog
+// falls back to — FallbackFile is a copy of it.
+const DefaultVoicing = "idle"
+
+// ValidVoicing reports whether v is a car-hum voicing the image ships.
+func ValidVoicing(v string) bool {
+	return slices.Contains(Voicings, v)
+}
+
+// CarHumFile is the drone file for a voicing. An unknown one yields the
+// default rather than a path that isn't there: this is what OBS is handed, and
+// a bed that refuses to play is worse than the wrong flavour of drone.
+func CarHumFile(voicing string) string {
+	if !ValidVoicing(voicing) {
+		voicing = DefaultVoicing
+	}
+	return filepath.Join(CarHumDir, "car-hum-"+voicing+".flac")
+}
+
+// voicingFromFile recovers the voicing from a drone path, so the store can read
+// the live one back off OBS at startup — the counterpart of stationFromURL and
+// albumFromFile. "" for anything that isn't one of the shipped renders,
+// including the watchdog's FallbackFile, which names an outage rather than a
+// choice.
+func voicingFromFile(file string) string {
+	if filepath.Dir(file) != CarHumDir {
+		return ""
+	}
+	v := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(file), "car-hum-"), ".flac")
+	if !ValidVoicing(v) {
+		return ""
+	}
+	return v
+}
 
 // audioExts are the track extensions scanned for under MusicDir. Matches the
 // find in the obs repo's script/background-audio.sh.
@@ -126,7 +169,10 @@ type Store struct {
 	station string // SomaFM channel id the SomaFM bed plays
 	// album is the Album bed's selection: one album's directory, a prefix naming
 	// a group of them ("streambeats-lofi"), or "" for the whole share.
-	album     string
+	album string
+	// voicing is which car-hum render the CarHum bed plays. Like station and
+	// album it survives a switch away, so the bed returns to the one chosen.
+	voicing   string
 	shuffle   bool     // play order is shuffled rather than sequential
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
@@ -145,6 +191,22 @@ type Store struct {
 	pending *Switch
 	timer   *time.Timer
 	gen     uint64
+
+	// albums caches the library read, guarded by its own lock: the listings are
+	// taken while s.mu is already held (see loadAlbumLocked).
+	albums albumCache
+}
+
+// albumCache holds the last library read and the index file it came from, so
+// the repeated listings — the console polling every few seconds per platform,
+// a lookup per chat command — cost one stat instead of a read and unmarshal.
+// Keyed on the file's mtime and size rather than a TTL: new music arrives while
+// the bot runs, and the album has to appear the moment the index does.
+type albumCache struct {
+	mu      sync.Mutex
+	tracks  map[string][]string
+	modTime time.Time
+	size    int64
 }
 
 // advanceDebounce is how soon after a track starts another advance is taken to
@@ -170,6 +232,7 @@ type Switch struct {
 	Bed     Bed
 	Station string
 	Album   string
+	Voicing string
 	// At is when the switch lands. A deadline rather than a duration so a value
 	// read once doesn't go stale while it's being rendered.
 	At time.Time
@@ -192,6 +255,7 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		musicDir: musicDir,
 		platform: platform,
 		station:  DefaultStation,
+		voicing:  DefaultVoicing,
 		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
 	}
@@ -253,6 +317,14 @@ func (s *Store) Station() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.station
+}
+
+// Voicing reports which car-hum render the CarHum bed plays. Like Station, it
+// answers whichever bed is live — it's the one that bed returns to.
+func (s *Store) Voicing() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.voicing
 }
 
 // Album reports the Album bed's selection: one album, a group prefix, or "" for
@@ -318,9 +390,10 @@ func (s *Store) SetShuffle(ctx context.Context, on bool) error {
 	return nil
 }
 
-// Albums lists the selectable albums on the share, in display order. Read on
-// every call rather than cached at startup: new music arrives while the bot is
-// running, and a list cached at boot would hide an album until the next restart.
+// Albums lists the selectable albums on the share, in display order. The
+// underlying library read is cached behind the index file's mtime, not held from
+// startup: new music arrives while the bot is running, and an album has to show
+// up without waiting for a restart.
 func (s *Store) Albums() []string {
 	albums := slices.Collect(maps.Keys(s.albumTracks()))
 	sort.Strings(albums)
@@ -336,7 +409,7 @@ func (s *Store) Albums() []string {
 // IS the grouping, so a new album joins its groups by being named like its
 // siblings, with nothing to keep in sync.
 func (s *Store) Groups() []string {
-	return scanGroups(s.Albums())
+	return GroupsOf(s.Albums())
 }
 
 // ValidAlbum reports whether album names something playable on the share: one
@@ -419,6 +492,12 @@ func (s *Store) Detect(ctx context.Context) {
 	if album := albumFromFile(file, s.musicDir); album != "" {
 		s.album = album
 	}
+	// And the drone file names the voicing, the same way. "" covers both a
+	// non-drone file and the watchdog's fallback copy, neither of which is a
+	// choice anyone made.
+	if voicing := voicingFromFile(file); voicing != "" {
+		s.voicing = voicing
+	}
 	var loadErr error
 	if bed == Album {
 		// OBS booted straight onto the album — its per-platform default, no Set
@@ -495,9 +574,9 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 		return fmt.Errorf("unknown background-audio bed %q", bed)
 	}
 	s.mu.Lock()
-	station, album := s.station, s.album
+	station, album, voicing := s.station, s.album, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album})
+	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album, Voicing: voicing})
 }
 
 // setNow switches to bed and applies it to OBS. Switching to the album
@@ -546,9 +625,9 @@ func (s *Store) SetAlbum(ctx context.Context, album string) error {
 		return fmt.Errorf("unknown album %q", album)
 	}
 	s.mu.Lock()
-	station := s.station
+	station, voicing := s.station, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album})
+	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album, Voicing: voicing})
 }
 
 // SetStation tunes the SomaFM bed to another channel and switches to it, so
@@ -558,9 +637,22 @@ func (s *Store) SetStation(ctx context.Context, station string) error {
 		return fmt.Errorf("unknown somafm station %q", station)
 	}
 	s.mu.Lock()
-	album := s.album
+	album, voicing := s.album, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: SomaFM, Station: station, Album: album})
+	return s.schedule(ctx, Switch{Bed: SomaFM, Station: station, Album: album, Voicing: voicing})
+}
+
+// SetVoicing picks which car-hum render the drone plays and switches to it, so
+// picking a voicing is one action rather than "select carhum, then voice it" —
+// the same shape as SetStation.
+func (s *Store) SetVoicing(ctx context.Context, voicing string) error {
+	if !ValidVoicing(voicing) {
+		return fmt.Errorf("unknown car-hum voicing %q", voicing)
+	}
+	s.mu.Lock()
+	station, album := s.station, s.album
+	s.mu.Unlock()
+	return s.schedule(ctx, Switch{Bed: CarHum, Station: station, Album: album, Voicing: voicing})
 }
 
 // schedule holds sw for switchDelay and then applies it, replacing whatever was
@@ -617,13 +709,13 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 // a caller read the new station off a store still playing the old bed.
 func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	s.mu.Lock()
-	prevStation, prevAlbum := s.station, s.album
-	s.station, s.album = sw.Station, sw.Album
+	prevStation, prevAlbum, prevVoicing := s.station, s.album, s.voicing
+	s.station, s.album, s.voicing = sw.Station, sw.Album, sw.Voicing
 	s.mu.Unlock()
 
 	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
-		s.station, s.album = prevStation, prevAlbum
+		s.station, s.album, s.voicing = prevStation, prevAlbum, prevVoicing
 		s.pending = nil
 		s.mu.Unlock()
 		return err
@@ -633,7 +725,7 @@ func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	s.pending = nil
 	s.mu.Unlock()
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
-		"station", sw.Station, "album", sw.Album)
+		"station", sw.Station, "album", sw.Album, "voicing", sw.Voicing)
 	return nil
 }
 
@@ -818,7 +910,7 @@ func (s *Store) loadAlbumLocked(playing string) error {
 func (s *Store) trackLocked(bed Bed) string {
 	switch bed {
 	case CarHum:
-		return CarHumFile
+		return CarHumFile(s.voicing)
 	case Album:
 		if s.idx < len(s.tracks) {
 			return s.tracks[s.idx]
@@ -853,11 +945,11 @@ func albumsFor(albums []string, selection string) []string {
 	return out
 }
 
-// scanGroups finds the prefixes shared by more than one album — every "-"
+// GroupsOf finds the prefixes shared by more than one album — every "-"
 // boundary of every name, kept when at least two albums sit under it. Sorted, so
 // "streambeats" precedes "streambeats-lofi": broad group first, then the narrow
 // ones inside it.
-func scanGroups(albums []string) []string {
+func GroupsOf(albums []string) []string {
 	counts := map[string]int{}
 	for _, a := range albums {
 		for i, c := range a {
@@ -885,11 +977,33 @@ func scanGroups(albums []string) []string {
 // list makes the album bed refuse to start, which leaves whatever bed is on air
 // playing rather than switching the stream to silence.
 func (s *Store) albumTracks() map[string][]string {
+	// ponytail: only the index read is cached. With no index configured the
+	// library is a directory walk, and no cheap stat says whether a track
+	// appeared inside an album — the share root's mtime doesn't move for it. That
+	// path is the laptop run with the share mounted; cache it behind a walk of
+	// the album mtimes if it ever serves a poll.
 	if s.indexFile == "" {
 		return scanShare(s.musicDir)
 	}
+
+	// Stat outside the lock's decision so a rewritten index is picked up on the
+	// first call after it lands. The returned map is never mutated by callers,
+	// so one copy is shared rather than cloned per read.
+	fi, statErr := os.Stat(s.indexFile)
+
+	s.albums.mu.Lock()
+	defer s.albums.mu.Unlock()
+	if statErr == nil && s.albums.tracks != nil &&
+		fi.ModTime().Equal(s.albums.modTime) && fi.Size() == s.albums.size {
+		return s.albums.tracks
+	}
+	s.albums.tracks = nil
+
 	byAlbum, err := readIndex(s.indexFile)
 	if err == nil {
+		if statErr == nil {
+			s.albums.tracks, s.albums.modTime, s.albums.size = byAlbum, fi.ModTime(), fi.Size()
+		}
 		return byAlbum
 	}
 	// A corrupt index is worth a shout; an absent one is the optional mount

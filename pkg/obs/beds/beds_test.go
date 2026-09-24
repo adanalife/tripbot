@@ -522,8 +522,8 @@ func TestSet_CarHumLoops(t *testing.T) {
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
-	if o.file != CarHumFile {
-		t.Fatalf("carhum file: want %s, got %s", CarHumFile, o.file)
+	if o.file != CarHumFile(DefaultVoicing) {
+		t.Fatalf("carhum file: want %s, got %s", CarHumFile(DefaultVoicing), o.file)
 	}
 	// A drone that stops leaves dead air — it has to loop.
 	if !o.loop {
@@ -701,7 +701,7 @@ func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 	if err := s.Advance(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if o.file != CarHumFile {
+	if o.file != CarHumFile(DefaultVoicing) {
 		t.Fatalf("advance moved a non-album bed: %s", o.file)
 	}
 }
@@ -869,7 +869,7 @@ func TestSet_ClearsTheAlbumFallback(t *testing.T) {
 	if err := s.Advance(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if o.file != CarHumFile {
+	if o.file != CarHumFile(DefaultVoicing) {
 		t.Fatalf("advance walked the album after the drone was chosen: %s", o.file)
 	}
 }
@@ -882,7 +882,7 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 		want     Bed
 	}{
 		{"network stream", map[string]any{"is_local_file": false}, SomaFM},
-		{"carhum flac", map[string]any{"is_local_file": true, "local_file": CarHumFile}, CarHum},
+		{"carhum flac", map[string]any{"is_local_file": true, "local_file": CarHumFile(DefaultVoicing)}, CarHum},
 		// The watchdog's copy of the same drone means SomaFM is still the
 		// selected bed, mid-outage. Reading it as CarHum switches the outage
 		// machinery off and strands the stream on the drone after SomaFM
@@ -1061,7 +1061,7 @@ func TestSchedule_SupersedesASwitchStillWaiting(t *testing.T) {
 	if o.network {
 		t.Errorf("the superseded somafm switch reached OBS: url=%q", o.url)
 	}
-	if o.file != CarHumFile {
+	if o.file != CarHumFile(DefaultVoicing) {
 		t.Errorf("OBS is playing %q, want the car hum", o.file)
 	}
 }
@@ -1225,5 +1225,122 @@ func TestMissingIndexFallsBackToTheShare(t *testing.T) {
 	}
 	if err := s.SetAlbum(context.Background(), ""); err == nil {
 		t.Fatal("SetAlbum with no library succeeded; want a refusal so the bed on air keeps playing")
+	}
+}
+
+// The console polls the album list every few seconds per platform and every
+// chat command resolving an album name reads it again, so the index is read
+// once and served from the cache until its mtime moves. Rewriting the file
+// under a pinned mtime and size proves the repeat read never opened it;
+// moving the mtime proves an album staged while the bot runs still shows up.
+func TestAlbumIndexIsCachedUntilItsMtimeMoves(t *testing.T) {
+	index := writeIndex(t, map[string][]string{"aaa": {MusicDir + "/aaa/one.mp3"}})
+	fi, err := os.Stat(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewStore(&fakeOBS{}, CarHum, "/nonexistent-share", "twitch").WithIndex(index)
+
+	if got, want := s.Albums(), []string{"aaa"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() = %v, want %v", got, want)
+	}
+
+	// Same byte count, so only a read of the file could tell the two apart.
+	rewrite := func(byAlbum map[string][]string, mod time.Time) {
+		t.Helper()
+		raw, err := json.Marshal(byAlbum)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(index, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(index, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rewrite(map[string][]string{"bbb": {MusicDir + "/bbb/one.mp3"}}, fi.ModTime())
+	if got, want := s.Albums(), []string{"aaa"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() with the index rewritten under its own mtime = %v, want the cached %v", got, want)
+	}
+
+	rewrite(map[string][]string{"bbb": {MusicDir + "/bbb/one.mp3"}}, fi.ModTime().Add(time.Hour))
+	if got, want := s.Albums(), []string{"bbb"}; !slices.Equal(got, want) {
+		t.Fatalf("Albums() after the index mtime moved = %v, want %v", got, want)
+	}
+}
+
+func TestSetVoicing_PlaysThatRenderAndSelectsTheDrone(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
+	if err := s.SetVoicing(context.Background(), "highway"); err != nil {
+		t.Fatal(err)
+	}
+	// Picking a voicing you can't hear isn't a thing anyone means, so it
+	// selects the drone too — the same shape as SetStation.
+	if bed, _ := s.Current(); bed != CarHum {
+		t.Fatalf("bed: want %s, got %s", CarHum, bed)
+	}
+	if want := CarHumFile("highway"); o.file != want {
+		t.Fatalf("file: want %s, got %s", want, o.file)
+	}
+	if s.Voicing() != "highway" {
+		t.Fatalf("voicing: want highway, got %s", s.Voicing())
+	}
+}
+
+func TestSetVoicing_RefusesAnUnrenderedName(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, shareDir(t, 2), "twitch")
+	// The image ships one FLAC per voicing; a name it never rendered is a path
+	// OBS cannot open, which is silence.
+	if err := s.SetVoicing(context.Background(), "spaceship"); err == nil {
+		t.Fatal("want an error for a voicing the image does not ship")
+	}
+	if s.Voicing() != DefaultVoicing {
+		t.Fatalf("a refused voicing changed the selection: %s", s.Voicing())
+	}
+}
+
+func TestVoicing_SurvivesASwitchAwayAndBack(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, shareDir(t, 2), "twitch")
+	ctx := context.Background()
+	if err := s.SetVoicing(ctx, "mountain"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, SomaFM); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, CarHum); err != nil {
+		t.Fatal(err)
+	}
+	if want := CarHumFile("mountain"); o.file != want {
+		t.Fatalf("the drone returned to the default instead of the chosen voicing: %s", o.file)
+	}
+}
+
+func TestDetect_ReadsTheVoicingOffTheDroneFile(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file string
+		want string
+	}{
+		{"a shipped render", CarHumFile("backroad"), "backroad"},
+		// The watchdog's copy is the same audio under its own name. It means an
+		// outage, not a choice, so it must leave the selection alone.
+		{"the watchdog's fallback", FallbackFile, DefaultVoicing},
+		{"a name the image never rendered", filepath.Join(CarHumDir, "car-hum-spaceship.flac"), DefaultVoicing},
+		{"a file outside the drone directory", "/opt/tripbot/assets/other/car-hum-highway.flac", DefaultVoicing},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": tc.file}}
+			s := NewStore(o, SomaFM, shareDir(t, 1), "twitch")
+			s.Detect(context.Background())
+			if s.Voicing() != tc.want {
+				t.Fatalf("voicing: want %s, got %s", tc.want, s.Voicing())
+			}
+		})
 	}
 }

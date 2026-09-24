@@ -2,10 +2,14 @@ package obs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/andreykaipov/goobs/api/events"
 )
@@ -35,7 +39,7 @@ func TestPollConnectFailureStaysBelowError(t *testing.T) {
 	defer slog.SetDefault(prev)
 
 	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
-	if poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
+	if poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
 		t.Fatal("poll reported a connection to a refused port")
 	}
 
@@ -106,9 +110,82 @@ func TestPollRepeatConnectFailureIsQuiet(t *testing.T) {
 	slog.SetDefault(slog.New(rec))
 	defer slog.SetDefault(prev)
 
-	poll(context.Background(), instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
 
 	if rec.max >= slog.LevelWarn {
 		t.Fatalf("repeat connect failure logged at %v; expected below WARN", rec.max)
+	}
+}
+
+// The watchdog stands down when OBS's state is unknown and acts on a stopped
+// output, so an unknown cache must error rather than answer StreamInactive.
+func TestLastStreamStateUnknownUntilRead(t *testing.T) {
+	var cache streamStateCache
+	if _, _, known := cache.get(); known {
+		t.Fatal("a fresh cache reported a known state")
+	}
+
+	cache.set(StreamReconnecting)
+	state, updated, known := cache.get()
+	if !known || state != StreamReconnecting {
+		t.Fatalf("after set: got %v known=%v, want reconnecting known=true", state, known)
+	}
+	if updated.IsZero() {
+		t.Fatal("set left no timestamp")
+	}
+
+	cache.forget()
+	if _, _, known := cache.get(); known {
+		t.Fatal("a forgotten cache still reported a known state")
+	}
+
+	// The package-level cache is what LastStreamState reads; nothing has
+	// connected in this test binary, so it must report OBS unreachable.
+	if _, err := LastStreamState(context.Background()); !errors.Is(err, ErrUnreachable) {
+		t.Fatalf("LastStreamState with no connection: got %v, want ErrUnreachable", err)
+	}
+
+	lastStreamState.set(StreamSteady)
+	defer lastStreamState.forget()
+	state, err := LastStreamState(context.Background())
+	if err != nil || state != StreamSteady {
+		t.Fatalf("LastStreamState after a read: got %v, %v; want steady, nil", state, err)
+	}
+}
+
+// recordingPublisher captures eventbus publishes so a test can read what the
+// poller announced.
+type recordingPublisher struct {
+	mu        sync.Mutex
+	publishes []struct{ subject, payload string }
+}
+
+func (r *recordingPublisher) Publish(_ context.Context, subject string, payload []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.publishes = append(r.publishes, struct{ subject, payload string }{subject, string(payload)})
+}
+
+// An OBS that can't be reached must say so on the bus. Publishing nothing would
+// leave the last retained snapshot standing, which is how a subscriber comes to
+// believe a dead instance is still streaming.
+func TestPollAnnouncesAnUnreachableOBS(t *testing.T) {
+	rec := &recordingPublisher{}
+	prev := eventbus.Default
+	eventbus.SetPublisher(rec)
+	defer eventbus.SetPublisher(prev)
+
+	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0)
+
+	if len(rec.publishes) != 1 {
+		t.Fatalf("published %d messages, want 1", len(rec.publishes))
+	}
+	got := rec.publishes[0]
+	if want := "tripbot.test.obs.stream.twitch"; got.subject != want {
+		t.Errorf("subject = %q, want %q", got.subject, want)
+	}
+	if !strings.Contains(got.payload, `"reachable":false`) || strings.Contains(got.payload, `"state"`) {
+		t.Errorf("payload = %s; want reachable:false and no state (an unreachable OBS has none to report)", got.payload)
 	}
 }

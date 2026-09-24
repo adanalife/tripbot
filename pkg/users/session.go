@@ -161,6 +161,7 @@ func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUse
 	s.mu.Lock()
 	if live, ok := s.loggedIn[u.Username]; ok {
 		live.PlatformUserID = u.PlatformUserID
+		live.platformUserIDTaken = u.platformUserIDTaken
 	}
 	s.mu.Unlock()
 	return u
@@ -260,8 +261,6 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
 			"session_miles", sessionMiles,
-			"monthly_miles", s.CurrentMonthlyMiles(ctx, u),
-			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
 		)
 	}
 
@@ -446,7 +445,7 @@ func (s *Sessions) correctMonthly(ctx context.Context, u User, delta float32) {
 	u.AddToScore(ctx, board, delta)
 }
 
-// The snapshot helpers below (sortedUsernameList, colorizeUsernames, humans,
+// The snapshot helpers below (sortedUsernameList, humanUsernames, humans,
 // countHumans, bots, countBots) read loggedIn directly and assume the caller
 // holds mu.
 
@@ -460,19 +459,18 @@ func (s *Sessions) sortedUsernameList() []string {
 	return usernames
 }
 
-// colorizeUsernames loops over the sorted names and colorizes them
-func (s *Sessions) colorizeUsernames(usernames []string) []string {
-	coloredUsernames := make([]string, 0, len(usernames))
+// humanUsernames drops the bots from a sorted name list — the snapshot counts
+// them separately, so naming them too would just make the line longer.
+func (s *Sessions) humanUsernames(usernames []string) []string {
+	humans := make([]string, 0, len(usernames))
 	for _, username := range usernames {
 		user := *s.loggedIn[username]
 		if user.IsBot {
-			// don't add them to the output
 			continue
 		}
-		// add the colored username to the list
-		coloredUsernames = append(coloredUsernames, user.String())
+		humans = append(humans, user.String())
 	}
-	return coloredUsernames
+	return humans
 }
 
 // humans returns the users in the session who are not bots
@@ -511,7 +509,7 @@ func (s *Sessions) countBots() int {
 // ctx links the snapshot log line to the parent cron-tick span.
 func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 	s.mu.Lock()
-	coloredUsernames := s.colorizeUsernames(s.sortedUsernameList())
+	loggedIn := s.humanUsernames(s.sortedUsernameList())
 	humanCount := s.countHumans()
 	botCount := s.countBots()
 	s.mu.Unlock()
@@ -520,7 +518,7 @@ func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 		"chatters", s.source.ChatterCount(),
 		"humans", humanCount,
 		"bots", botCount,
-		"logged_in", strings.Join(coloredUsernames, ", "),
+		"logged_in", strings.Join(loggedIn, ", "),
 	)
 }
 

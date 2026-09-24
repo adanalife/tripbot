@@ -1588,3 +1588,37 @@ func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
 		t.Errorf("posts = %q, want %q", rec.Says, want)
 	}
 }
+
+// --- guessStatsCmd ---
+
+func TestGuessStatsCmd(t *testing.T) {
+	cases := []struct {
+		name           string
+		total, correct int64
+		want           string
+	}{
+		{"no guesses yet", 0, 0, "hasn't guessed a state yet"},
+		// The leading zero is trimmed, baseball-style.
+		{"a partial record", 120, 47, "batting .392 on state guesses: 47 right out of 120."},
+		// A perfect record is the one average that keeps its leading digit.
+		{"perfect", 3, 3, "batting 1.000 on state guesses: 3 right out of 3."},
+		{"never right", 5, 0, "batting .000 on state guesses: 0 right out of 5."},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			app.Events = &recordingEvents{GuessTotal: tc.total, GuessCorrect: tc.correct}
+
+			out, says := captureSay(t, app)
+			app.guessStatsCmd(context.Background(), newTestUser("viewer1"), nil)
+
+			if !strings.Contains(out(), tc.want) {
+				t.Errorf("expected reply containing %q, got %q", tc.want, out())
+			}
+			if says() != 1 {
+				t.Errorf("expected exactly one Say() call, got %d", says())
+			}
+		})
+	}
+}

@@ -82,7 +82,7 @@ jobs:
       # release-please's own release PR is exempt by head branch — it collates
       # the fragments, it doesn't add one.
       - name: Require a changelog fragment
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && github.head_ref != 'release-please--branches--main' }}
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && !startsWith(github.head_ref, 'release-please--') }}
         env:
           BASE: ${{ github.base_ref }}
         run: uvx towncrier check --config towncrier.toml --compare-with "origin/$BASE"

@@ -37,6 +37,7 @@ type Server struct {
 	beds       BedStore
 	rotators   RotatorStore
 	rotatorPub RotatorPublisher
+	userFlags  UserFlagger
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
@@ -92,6 +93,9 @@ func (s *Server) Start(ctx context.Context) error {
 	//
 	// read-only JSON profile for the console's user popover.
 	r.Handle("/api/user/{username}", tagged("/api/user/{username}", s.userProfileAPIHandler)).Methods("GET")
+	// the write behind the presence report: flag an account as a bot or keep
+	// it off the leaderboard.
+	r.Handle("/api/user/{username}/flags", tagged("/api/user/{username}/flags", s.userFlagsHandler)).Methods("POST")
 	// read-only JSON list of the logins currently in chat, for the console's
 	// currently-active-chatters panel.
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
@@ -120,11 +124,19 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/insights/footage", tagged("/api/insights/footage", footageInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/regions", tagged("/api/insights/regions", regionInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/viewers", tagged("/api/insights/viewers", viewerSeriesHandler)).Methods("GET")
+	r.Handle("/api/insights/sessions", tagged("/api/insights/sessions", sessionInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/presence", tagged("/api/insights/presence", presenceInsightsHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/songs", tagged("/api/stats/songs", songStatsHandler)).Methods("GET")
+
+	// The monthly miles and guess boards for one month, plus the months that
+	// have data — the console's leaderboard pane builds its selector from the
+	// same call that fills it.
+	r.Handle("/api/leaderboards", tagged("/api/leaderboards", s.leaderboardsHandler)).Methods("GET")
 
 	// Background audio: which bed this platform's OBS is playing, and the
 	// switch between them.

@@ -19,6 +19,8 @@ spec:
           imagePullPolicy: Always
           name: seed
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -30,6 +32,8 @@ spec:
           image: busybox:1.36
           name: wait-for-postgres
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -50,6 +54,8 @@ spec:
           imagePullPolicy: Always
           name: migrate
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi

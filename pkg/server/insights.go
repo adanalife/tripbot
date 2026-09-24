@@ -38,6 +38,8 @@ const (
 	// state needs many plays before its churn settles, and a week of airtime
 	// spread over ~50 states rarely gets there.
 	regionInsightsDefaultDays = 30
+	// Sessions are counted per visit, so a week is plenty of them.
+	sessionInsightsDefaultDays = 7
 )
 
 // insightsDays parses ?days, falling back to def when absent or unparseable
@@ -707,6 +709,91 @@ func viewerSeriesHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "viewer series query failed", "err", err, "hours", hours)
 		insightsError(w, "couldn't gather the viewer series")
+		return
+	}
+	writeInsights(w, r, payload)
+}
+
+// sessionStats is one platform's row in GET /api/insights/sessions: how long a
+// human stays once they arrive, the number that says whether ambient viewing
+// is working at all.
+type sessionStats struct {
+	Platform string `json:"platform"`
+	// Sessions is the closed visits in the window: a login paired with the
+	// logout carrying its session_id.
+	Sessions      int     `json:"sessions"`
+	MedianMinutes float64 `json:"median_minutes"`
+	MeanMinutes   float64 `json:"mean_minutes"`
+	P90Minutes    float64 `json:"p90_minutes"`
+	// The buckets split Sessions, so they sum to it: a glance, not a
+	// histogram. Under five minutes is roughly one chatter-list tick either
+	// side of a visit, the drive-bys.
+	Under5m    int `json:"under_5m"`
+	Under30m   int `json:"under_30m"`
+	Under2h    int `json:"under_2h"`
+	TwoHoursUp int `json:"two_hours_up"`
+}
+
+// sessionInsightsResponse is the wire shape of GET /api/insights/sessions.
+type sessionInsightsResponse struct {
+	Days      int            `json:"days"`
+	Platforms []sessionStats `json:"platforms"`
+}
+
+// sessionsSQL pairs each login with the logout sharing its session_id. Both
+// sides are windowed, as orphanedSessionsSQL does it: a logout for a login in
+// the window can only be at or after the window's start. Logins with no
+// logout (an ungraceful exit, or a viewer still here) and pairs over 24h
+// (missed logouts, the rollups' rule) are left out rather than guessed at.
+// The all-zero UUID is what a row without a session writes.
+const sessionsSQL = `
+WITH visits AS (
+    SELECT l.platform,
+           EXTRACT(EPOCH FROM (o.date_created - l.date_created)) / 60.0 AS minutes
+    FROM events l
+    JOIN events o ON o.session_id = l.session_id
+                 AND o.event = 'logout'
+                 AND o.date_created >= now() - make_interval(days => @days)
+    JOIN users u  ON u.platform = l.platform AND u.username = l.username
+    WHERE l.event = 'login'
+      AND l.session_id IS NOT NULL
+      AND l.session_id <> '00000000-0000-0000-0000-000000000000'
+      AND l.date_created >= now() - make_interval(days => @days)
+      AND u.is_bot = false
+      AND o.date_created >= l.date_created
+      AND o.date_created - l.date_created <= interval '24 hours'
+)
+SELECT platform,
+       COUNT(*) AS sessions,
+       ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes)::numeric, 1)::float8 AS median_minutes,
+       ROUND(AVG(minutes)::numeric, 1)::float8                                         AS mean_minutes,
+       ROUND(percentile_cont(0.9) WITHIN GROUP (ORDER BY minutes)::numeric, 1)::float8 AS p90_minutes,
+       COUNT(*) FILTER (WHERE minutes < 5)                     AS under5m,
+       COUNT(*) FILTER (WHERE minutes >= 5  AND minutes < 30)  AS under30m,
+       COUNT(*) FILTER (WHERE minutes >= 30 AND minutes < 120) AS under2h,
+       COUNT(*) FILTER (WHERE minutes >= 120)                  AS two_hours_up
+FROM visits
+GROUP BY platform
+ORDER BY platform`
+
+func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsResponse, error) {
+	out := sessionInsightsResponse{Days: days, Platforms: []sessionStats{}}
+	if err := database.GormDB().WithContext(ctx).
+		Raw(sessionsSQL, sql.Named("days", days)).
+		Scan(&out.Platforms).Error; err != nil {
+		return out, fmt.Errorf("sessions: %w", err)
+	}
+	return out, nil
+}
+
+// sessionInsightsHandler serves GET /api/insights/sessions: per-platform
+// human session length over the ?days window.
+func sessionInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	days := insightsDays(r, sessionInsightsDefaultDays)
+	payload, err := gatherSessionInsights(r.Context(), days)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "session insights query failed", "err", err, "days", days)
+		insightsError(w, "couldn't gather session insights")
 		return
 	}
 	writeInsights(w, r, payload)

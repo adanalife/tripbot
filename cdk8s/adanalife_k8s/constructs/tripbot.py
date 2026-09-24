@@ -68,12 +68,17 @@ MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 # Small but explicit requests for the helper containers (migrate init, one-shot
 # Job containers). Namespaces under a ResourceQuota that enforces requests.*
 # (stage-1's app-quota) reject any pod whose containers omit requests for the
-# quota'd resources — so every container must declare them.
+# quota'd resources — so every container must declare them. The memory limit
+# satisfies the cluster's require-requests-limits policy; it sits at 4x the
+# request because an OOMKilled migrate blocks the rollout it gates, and the
+# helpers are too short-lived for cAdvisor to record a peak to size from. No
+# cpu limit, deliberately.
 SMALL_RESOURCES = k8s.ResourceRequirements(
     requests={
         "cpu": k8s.Quantity.from_string("100m"),
         "memory": k8s.Quantity.from_string("128Mi"),
-    }
+    },
+    limits={"memory": k8s.Quantity.from_string("512Mi")},
 )
 
 # The contract's ports, so a rename in pkg/contract reaches the manifests

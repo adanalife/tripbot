@@ -2,6 +2,7 @@ package audiowatchdog
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"sync"
@@ -11,6 +12,8 @@ import (
 	goobs "github.com/andreykaipov/goobs"
 	"github.com/andreykaipov/goobs/api/events"
 	"github.com/andreykaipov/goobs/api/events/subscriptions"
+	"github.com/andreykaipov/goobs/api/requests/inputs"
+	"github.com/andreykaipov/goobs/api/requests/mediainputs"
 )
 
 // silenceFloorDB is the dBFS value reported for a multiplier of 0 (true
@@ -29,6 +32,10 @@ const meterReconnectDelay = 5 * time.Second
 // ~50ms), and the end of a track is a moment, not a state you can poll without
 // leaving dead air behind. Read the current level with Level(); the connection
 // self-heals on drop.
+//
+// The connection is also the watchdog's request channel: MediaInputState and
+// InputSettings ride it, so the every-7s probes cost no connect + auth
+// handshake of their own.
 type VolumeMeter struct {
 	inputName  string
 	staleAfter time.Duration
@@ -37,6 +44,12 @@ type VolumeMeter struct {
 	mu       sync.RWMutex
 	lastDB   float64
 	lastSeen time.Time
+
+	// clientMu guards client, which is nil whenever the meter is between
+	// connections. Separate from mu so a request in flight can't hold up the
+	// level updates arriving on the same connection.
+	clientMu sync.RWMutex
+	client   *goobs.Client
 }
 
 // NewVolumeMeter builds a meter for the named OBS input. staleAfter is how
@@ -93,7 +106,9 @@ func (m *VolumeMeter) connectAndConsume(ctx context.Context) {
 		slog.WarnContext(ctx, "obs volume meter: connect failed", "err", err)
 		return
 	}
+	m.setClient(client)
 	defer func() {
+		m.setClient(nil)
 		if err := client.Disconnect(); err != nil {
 			slog.WarnContext(ctx, "obs volume meter: disconnect", "err", err)
 		}
@@ -112,6 +127,63 @@ func (m *VolumeMeter) connectAndConsume(ctx context.Context) {
 			m.handle(ctx, ev)
 		}
 	}
+}
+
+// setClient records the connection the meter is currently consuming, or nil
+// while it has none.
+func (m *VolumeMeter) setClient(client *goobs.Client) {
+	m.clientMu.Lock()
+	m.client = client
+	m.clientMu.Unlock()
+}
+
+// heldClient returns the connection the meter is consuming. With no connection
+// it returns ErrUnreachable wrapped, matching what pkg/obs's per-call helpers
+// return when the dial fails — the meter is disconnected exactly when OBS is
+// unreachable, so callers keep telling "OBS is down" apart from "the source
+// isn't playing."
+func (m *VolumeMeter) heldClient() (*goobs.Client, error) {
+	m.clientMu.RLock()
+	defer m.clientMu.RUnlock()
+	if m.client == nil {
+		return nil, fmt.Errorf("%w: volume meter not connected", obs.ErrUnreachable)
+	}
+	return m.client, nil
+}
+
+// MediaInputState returns the OBS media state string for a media-source input
+// (e.g. "OBS_MEDIA_STATE_PLAYING") over the meter's held connection. The
+// same answer obs.GetMediaInputState gives, without a connection of its own —
+// which matters because the watchdog asks every tick, all day.
+func (m *VolumeMeter) MediaInputState(_ context.Context, inputName string) (string, error) {
+	client, err := m.heldClient()
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.MediaInputs.GetMediaInputStatus(
+		mediainputs.NewGetMediaInputStatusParams().WithInputName(inputName),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.MediaState, nil
+}
+
+// InputSettings reads an input's current settings over the meter's held
+// connection. The request form of obs.GetInputSettings, on the same terms as
+// MediaInputState.
+func (m *VolumeMeter) InputSettings(_ context.Context, inputName string) (map[string]any, error) {
+	client, err := m.heldClient()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Inputs.GetInputSettings(
+		inputs.NewGetInputSettingsParams().WithInputName(inputName),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.InputSettings, nil
 }
 
 // handle routes one event off the subscription; anything else on the stream is

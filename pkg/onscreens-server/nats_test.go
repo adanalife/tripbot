@@ -3,6 +3,7 @@ package onscreensServer
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats.go"
 )
@@ -179,5 +180,36 @@ func TestHideLenientOnEmptyBody(t *testing.T) {
 	s.handleMiddleHide(&nats.Msg{Subject: "tripbot.test.onscreens.middle.hide", Data: nil})
 	if s.MiddleText.IsShowing() {
 		t.Error("hide should act regardless of body")
+	}
+}
+
+// TestHandleMiddleShow_AutoHides asserts hide_after_seconds arms an auto-hide,
+// and that a second show without the field cancels the first one's timer
+// rather than letting it hide the newer message.
+func TestHandleMiddleShow_AutoHides(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+
+	show := func(body string) {
+		s.handleMiddleShow(&nats.Msg{Subject: "tripbot.test.onscreens.middle.show", Data: []byte(body)})
+	}
+	// Seconds are the wire unit, so the shortest expiry this can ask for is 1s;
+	// the timer is replaced below before it ever runs.
+	show(`{"msg":"briefly","emitted_at":"2026-05-28T16:00:00Z","hide_after_seconds":1}`)
+	if s.middleExpiry == nil {
+		t.Fatal("hide_after_seconds did not arm an auto-hide")
+	}
+	show(`{"msg":"indefinitely","emitted_at":"2026-05-28T16:00:00Z"}`)
+	if s.middleExpiry != nil {
+		t.Fatal("a show with no expiry left the previous show's timer armed")
+	}
+
+	// And the armed timer really does hide, rather than only being stored.
+	s.scheduleMiddleHide(time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
+	for s.MiddleText.IsShowing() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if s.MiddleText.IsShowing() {
+		t.Error("MiddleText still showing after its auto-hide fired")
 	}
 }

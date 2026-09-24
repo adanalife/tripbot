@@ -95,6 +95,22 @@
       ]
     },
     {
+      "trigger": "!direction",
+      "aliases": [
+        "!heading",
+        "!compass",
+        "!bearing"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!discord",
       "platforms": [
         "facebook",
@@ -206,6 +222,17 @@
         "!grlb"
       ],
       "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!guessstats",
+      "aliases": [
+        "!guessrecord",
+        "!battingaverage"
+      ],
+      "requires_subscriber": true,
       "platforms": [
         "twitch"
       ]
@@ -371,6 +398,21 @@
       "aliases": [
         "!music"
       ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!speed",
+      "aliases": [
+        "!velocity",
+        "!speedometer"
+      ],
+      "requires_mod": true,
       "platforms": [
         "facebook",
         "instagram",
