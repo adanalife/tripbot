@@ -1,0 +1,1 @@
+Declare the `tripbot.<env>.egress.state.<platform>` snapshot subject and the `TRIPBOT_EGRESS` last-value stream, so platform-gateway can push each platform's egress state instead of the console polling it.

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -388,6 +389,36 @@ func EmitOBSStream(ctx context.Context, env, platform, state string, reachable b
 	})
 }
 
+// --- egress.state -----------------------------------------------------------
+
+// EgressState is platform-gateway's snapshot of one platform's broadcast egress:
+// whether the platform reports the stream live, plus the gateway's prose detail
+// (e.g. TikTok's relay binding, Facebook's published/unpublished state). Published
+// as a full snapshot on a ticker and after an operator start/stop, never as a delta.
+// Ingest server/key are deliberately absent: those stay on the in-cluster HTTP response.
+//
+// tripbot declares the subject and the TRIPBOT_EGRESS last-value stream; the
+// gateway is the only publisher, so there is no Emit helper here.
+type EgressState struct {
+	Platform   string `json:"platform"`
+	Configured bool   `json:"configured"` // false when the platform has no egress credential yet (the HTTP route's 503)
+	Live       bool   `json:"live"`
+	Title      string `json:"title,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	Lifecycle  string `json:"lifecycle,omitempty"` // platform-native lifecycle; YouTube only
+	EmittedAt  string `json:"emitted_at"`
+}
+
+// EgressStateSubject returns the publish subject for one platform's egress
+// state. Per-platform so TRIPBOT_EGRESS retains a last value per platform.
+func EgressStateSubject(env, platform string) string {
+	return subject(env, "egress", "state") + "." + platform
+}
+
+// EgressStateWildcard returns the subscribe pattern covering every platform's
+// egress state in env.
+func EgressStateWildcard(env string) string { return subject(env, "egress", "state") + ".*" }
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -448,6 +479,7 @@ const (
 	youtubeStreamName  = "TRIPBOT_YOUTUBE"
 	facebookStreamName = "TRIPBOT_FACEBOOK"
 	obsStreamName      = "TRIPBOT_OBS"
+	egressStreamName   = "TRIPBOT_EGRESS"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -518,6 +550,16 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 		{
+			Name:        egressStreamName,
+			Description: "Last-known egress.state snapshot per platform (last-value cache); published by platform-gateway.",
+			Subjects:    []string{EgressStateWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
 			Name:        youtubeStreamName,
 			Description: "Last-known YouTube broadcast snapshot (last-value cache).",
 			Subjects:    []string{YoutubeBroadcastSubject(env)},
@@ -540,11 +582,13 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 	}
+	names := make([]string, 0, len(configs))
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
+		names = append(names, cfg.Name)
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", strings.Join(names, ","), "env", env)
 	return nil
 }
