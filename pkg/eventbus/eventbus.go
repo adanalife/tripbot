@@ -419,6 +419,35 @@ func EgressStateSubject(env, platform string) string {
 // egress state in env.
 func EgressStateWildcard(env string) string { return subject(env, "egress", "state") + ".*" }
 
+// --- chat.deleted -----------------------------------------------------------
+
+// ChatDeleted is the wire format for tripbot.<env>.chat.deleted — a moderation
+// removal of chat already published on chat.message, so a consumer holding the
+// log can strike or drop the lines it names. It rides the TRIPBOT_CHAT stream
+// beside the messages it addresses, so a replay from the stream applies the
+// removal in the same order the platform did and a restarted console does not
+// resurrect a deleted line.
+//
+// MessageID set names one message (the platform's own id, the same value the
+// matching ChatMessage carries). MessageID empty means every message by UserID
+// — a timeout, ban, or clear-user action, which Twitch reports as one event
+// with no message list.
+//
+// platform-gateway is the only publisher (its EventSub session is where the
+// platform reports the removal), so there is no Emit helper here; tripbot
+// declares the subject and the stream.
+type ChatDeleted struct {
+	Platform  string `json:"platform"`
+	UserID    string `json:"user_id"`              // the sender whose line(s) were removed
+	Username  string `json:"username,omitempty"`   // their login, for a consumer that logs by name
+	MessageID string `json:"message_id,omitempty"` // one message; empty = all of user_id's
+	EmittedAt string `json:"emitted_at"`
+}
+
+// ChatDeletedSubject returns the subscribe/publish subject for chat removals in
+// env. The console builds the same string to subscribe.
+func ChatDeletedSubject(env string) string { return subject(env, "chat", "deleted") }
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -511,8 +540,8 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 	configs := []jetstream.StreamConfig{
 		{
 			Name:        chatStreamName,
-			Description: "Admin live-console chat history (bounded recent ring).",
-			Subjects:    []string{ChatMessageSubject(env)},
+			Description: "Admin live-console chat history (bounded recent ring), with the removals that apply to it.",
+			Subjects:    []string{ChatMessageSubject(env), ChatDeletedSubject(env)},
 			Storage:     jetstream.FileStorage,
 			Retention:   jetstream.LimitsPolicy,
 			Discard:     jetstream.DiscardOld,

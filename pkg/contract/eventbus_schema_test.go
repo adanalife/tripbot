@@ -23,6 +23,7 @@ import (
 func TestEventbusSchemaMatchesStructs(t *testing.T) {
 	structs := map[string]reflect.Type{
 		"ChatMessage":       reflect.TypeOf(eventbus.ChatMessage{}),
+		"ChatDeleted":       reflect.TypeOf(eventbus.ChatDeleted{}),
 		"SubscriberEvent":   reflect.TypeOf(eventbus.SubscriberEvent{}),
 		"ViewerCount":       reflect.TypeOf(eventbus.ViewerCount{}),
 		"VideoChanged":      reflect.TypeOf(eventbus.VideoChanged{}),
