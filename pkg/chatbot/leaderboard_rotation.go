@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/feature"
+	le "github.com/adanalife/tripbot/pkg/leaderboard-events"
 )
 
 // totalMilesOdds is the chance a given rotation tick shows the lifetime
@@ -134,4 +135,35 @@ func (a *App) guessrLeaderboard(ctx context.Context, board, parse, display strin
 		title = when.Format(display) + " Guessr"
 	}
 	return title, rows
+}
+
+// boardsByName maps the leaderboard-events wire vocabulary onto the kinds
+// fetchLeaderboard understands. It is what lets a console button and a rotation
+// tick put up the identical overlay — same fetch, same title, same row count.
+var boardsByName = map[string]leaderboardKind{
+	le.BoardMiles:         monthlyMilesLeaderboard,
+	le.BoardTotalMiles:    totalMilesLeaderboard,
+	le.BoardGuesses:       guessLeaderboard,
+	le.BoardGuessrDaily:   guessrDailyLeaderboard,
+	le.BoardGuessrMonthly: guessrMonthlyLeaderboard,
+}
+
+// ShowNamedLeaderboard puts the named board on screen and reports whether it
+// rendered. Unlike the rotation it does not fall back to monthly miles on an
+// empty board: an operator asked for one board in particular, and quietly
+// showing a different one would read as the button being broken. Unknown names
+// and empty boards are both reported as false.
+func (a *App) ShowNamedLeaderboard(ctx context.Context, board string) bool {
+	kind, ok := boardsByName[board]
+	if !ok {
+		slog.ErrorContext(ctx, "unknown leaderboard", "board", board)
+		return false
+	}
+	title, rows := a.fetchLeaderboard(ctx, kind)
+	if len(rows) == 0 {
+		slog.InfoContext(ctx, "leaderboard is empty, showing nothing", "board", board)
+		return false
+	}
+	a.Onscreens.ShowLeaderboard(ctx, title, rows)
+	return true
 }
