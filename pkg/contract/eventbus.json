@@ -58,6 +58,38 @@
         ]
       }
     },
+    "chat_deleted": {
+      "subject": "tripbot.{env}.chat.deleted",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT",
+      "schema": {
+        "type": "object",
+        "title": "ChatDeleted",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "user_id",
+          "emitted_at"
+        ]
+      }
+    },
     "chat_subscriber": {
       "subject": "tripbot.{env}.chat.subscriber",
       "transport": "core",

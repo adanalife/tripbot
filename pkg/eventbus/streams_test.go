@@ -66,7 +66,7 @@ type wantStream struct {
 func expectedStreams(env string) map[string]wantStream {
 	return map[string]wantStream{
 		chatStreamName: {
-			subjects: []string{ChatMessageSubject(env)}, maxMsgs: chatStreamMaxMsgs, maxMsgsPerSubject: -1,
+			subjects: []string{ChatMessageSubject(env), ChatDeletedSubject(env)}, maxMsgs: chatStreamMaxMsgs, maxMsgsPerSubject: -1,
 		},
 		videoStreamName: {
 			subjects: []string{VideoChangedSubject(env)}, maxMsgs: videoStreamMaxMsgs, maxMsgsPerSubject: -1,
