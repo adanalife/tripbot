@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -581,11 +582,13 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 	}
+	names := make([]string, 0, len(configs))
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
+		names = append(names, cfg.Name)
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", strings.Join(names, ","), "env", env)
 	return nil
 }
