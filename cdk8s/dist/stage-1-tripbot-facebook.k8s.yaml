@@ -129,6 +129,8 @@ spec:
           imagePullPolicy: Always
           name: migrate
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
