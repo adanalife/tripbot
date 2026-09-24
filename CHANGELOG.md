@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.19.0] — 2026-09-24
+
+### Platform gateway
+
+- Declare the `tripbot.<env>.egress.state.<platform>` snapshot subject and the `TRIPBOT_EGRESS` last-value stream, so platform-gateway can push each platform's egress state instead of the console polling it. ([#1583](https://github.com/adanalife/tripbot/pull/1583))
+
+### Chatbot
+
+- Each clip now knows the real road distance the van covered during it (`videos.miles_driven`, computed from consecutive GPS fixes by the new `cmd/backfill-miles-driven`) — the primitive behind real-odometer viewer miles. ([#1146](https://github.com/adanalife/tripbot/pull/1146))
+
+### Deploy / Infra
+
+- The migrate init container and the seed Job's helper containers carry a 512Mi memory limit, so every tripbot Deployment passes the cluster's require-requests-limits policy. ([#1582](https://github.com/adanalife/tripbot/pull/1582))
+
 ## [v5.18.0] — 2026-09-23
 
 ### Chatbot

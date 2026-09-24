@@ -69,7 +69,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.18.0
+          image: adanalife/tripbot:5.19.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -117,10 +117,12 @@ spec:
                 name: tripbot-tiktok-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.18.0
+          image: adanalife/tripbot:5.19.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -165,7 +167,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.18.0
+            - adanalife/tripbot:5.19.0
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
