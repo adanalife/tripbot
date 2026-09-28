@@ -33,10 +33,10 @@ tasks:
         { echo "test image ships Go $got, but go.mod requires >= $want" >&2; exit 1; }'
 
   test:
-    desc: Run all unit tests
+    desc: 'Run all unit tests; flags pass through: task test -- -run TestName'
     deps: [test:image]
     cmds:
-      - "{{.COMPOSE}} run --rm test go test ./..."
+      - "{{.COMPOSE}} run --rm test go test ./... {{.CLI_ARGS}}"
 
   # No test:image dep, deliberately: rebuilding the image is what makes a
   # `task test` run exceed an agent's command timeout, and it is wasted work
