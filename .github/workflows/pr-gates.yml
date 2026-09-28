@@ -10,10 +10,7 @@
 # hang as "Expected" and block merges instead. Expensive steps stay cheap by
 # checking the PR's changed paths first.
 #
-# Deliberately NOT folded in: changelog-number.yml, which needs `contents:
-# write` to push the fragment rename (job-level permissions apply to every step,
-# so merging it would put a write token in scope for all the read-only gates);
-# and contract.yml, which is tripbot-only and would drag a Go toolchain into a
+# Deliberately NOT folded in: contract.yml, which is tripbot-only and would drag a Go toolchain into a
 # job every other repo runs without one.
 name: pr-gates
 

@@ -99,12 +99,20 @@ tasks:
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
   changelog:add:
-    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; CI numbers it on push). Pass PR=123 to name it directly. Types: gateway chatbot onscreens playout console fix deploy ci cleanup misc summary'
+    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; the release numbers it). Types: gateway chatbot onscreens playout console fix deploy ci cleanup misc summary'
     vars:
       TYPE: '{{.TYPE | default "misc"}}'
-      # No PR yet? Drop a "+" placeholder (towncrier's issue-less convention) —
-      # changelog-number.yml renames it to <PR#>.<type>.md once the PR is open.
-      NAME: '{{if .PR}}{{.PR}}{{else}}+{{.SLUG | default .TYPE}}{{end}}'
+      # The branch is the fallback slug because it is unique per PR. Defaulting
+      # to the type instead gives every no-SLUG entry the same +<type>.<type>.md.
+      BRANCH:
+        sh: git rev-parse --abbrev-ref HEAD | tr -c '[:alnum:]' '-' | sed 's/-\{1,\}/-/g; s/^-//; s/-$//'
+      # Placeholders wait on main until a release numbers them, so a slug has to
+      # stay unique across every open PR and every unreleased one — a reused
+      # SLUG or branch name would otherwise land on the same file. Four hex
+      # digits make that a 1-in-65536 accident rather than a habit.
+      SUFFIX:
+        sh: openssl rand -hex 2
+      NAME: '+{{.SLUG | default .BRANCH}}-{{.SUFFIX}}'
     cmds:
       - uvx towncrier create --config towncrier.toml {{.NAME}}.{{.TYPE}}.md
 
@@ -118,6 +126,7 @@ tasks:
     requires:
       vars: [VERSION]
     cmds:
+      - scripts/number-fragments.sh
       - uvx towncrier build --yes --config towncrier.toml --version {{trimPrefix "v" .VERSION}}
 
   # Release smoke flow.
