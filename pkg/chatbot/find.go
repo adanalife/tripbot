@@ -328,3 +328,32 @@ func (a *App) jumpToHit(ctx context.Context, username string, hit SearchHit) err
 	lastTimewarpTime = time.Now()
 	return nil
 }
+
+// Find is !find for an operator: the same search and jump with nothing said in
+// chat, answering with a verdict worth reading back instead. Unlike the chat
+// command it skips the rate limit (operators are admins) and names the state,
+// which only viewers playing along need kept from them.
+func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return false, "Find what?"
+	}
+	if runningOnDarwin() {
+		return false, "Find isn't available on this machine."
+	}
+	hit, err := a.findHit(ctx, query)
+	if errors.Is(err, errFindMiss) {
+		return false, fmt.Sprintf("Couldn't find anything like %s.", query)
+	}
+	if err != nil {
+		return false, "Search isn't available right now."
+	}
+	where := ""
+	if hit.State != "" {
+		where = " in " + hit.State
+	}
+	if err := a.jumpToHit(ctx, "", hit); err != nil {
+		return false, fmt.Sprintf("Found %s%s, but couldn't jump there.", query, where)
+	}
+	return true, fmt.Sprintf("Found %s%s. Jumping there.", query, where)
+}

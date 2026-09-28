@@ -1,0 +1,1 @@
+An operator can run `!find` without a word in chat: a request on `tripbot.<env>.find.run.<platform>` searches, jumps that platform's stream, and replies with a verdict that names the state ("Found a sailboat in Oregon. Jumping there."). The console's find verb and tempomat's Siri intent build on it.

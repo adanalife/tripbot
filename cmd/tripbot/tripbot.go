@@ -321,6 +321,7 @@ func (t *Tripbot) Run() {
 		t.emitAuthStatus(ctx)
 	}
 	t.startOBSRefreshSubscriber(ctx) // after startNATS: per-platform (each instance owns its OBS)
+	t.startFindRunSubscriber(ctx)    // after startNATS: per-platform (each instance drives its playout)
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
 	// the stream-health dashboards and alerts.

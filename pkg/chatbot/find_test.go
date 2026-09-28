@@ -243,3 +243,45 @@ func TestVectorLiteral(t *testing.T) {
 		t.Errorf("vectorLiteral(nil) = %q, want []", got)
 	}
 }
+
+// Find is the operator path: same search and jump as !find, silent in chat,
+// with a verdict that names the state.
+func TestFind_OperatorVerdicts(t *testing.T) {
+	cases := []struct {
+		name       string
+		query      string
+		search     *recordingSearch
+		wantOK     bool
+		wantDetail string
+		wantJump   bool
+	}{
+		{"jumps", "a sailboat", &recordingSearch{Hits: []SearchHit{{Slug: "2018_0514_224801_013", TsSec: 60, State: "Oregon", Distance: 0.2}}},
+			true, "Found a sailboat in Oregon. Jumping there.", true},
+		{"miss", "unicorns", &recordingSearch{Hits: []SearchHit{{Slug: "x", Distance: 0.99}}},
+			false, "Couldn't find anything like unicorns.", false},
+		{"search down", "rain", &recordingSearch{Err: errors.New("responder down")},
+			false, "Search isn't available right now.", false},
+		{"empty", "  ", &recordingSearch{}, false, "Find what?", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			enablePlayback(t)
+			pinFindRandIntn(t, 0)
+			app, recPlayout, recChat := newFindTestApp(t, c.search)
+
+			var ok bool
+			var detail string
+			runAsAdmin(t, func() { ok, detail = app.Find(context.Background(), c.query) })
+
+			if ok != c.wantOK || detail != c.wantDetail {
+				t.Errorf("Find(%q) = %v, %q; want %v, %q", c.query, ok, detail, c.wantOK, c.wantDetail)
+			}
+			if jumped := len(recPlayout.Calls) > 0; jumped != c.wantJump {
+				t.Errorf("jumped = %v, want %v (calls %v)", jumped, c.wantJump, recPlayout.Calls)
+			}
+			if got := recChat.Output(); got != "" {
+				t.Errorf("Find should say nothing in chat, got %q", got)
+			}
+		})
+	}
+}
