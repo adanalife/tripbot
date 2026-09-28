@@ -9,6 +9,26 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.21.0] — 2026-09-28
+
+### Platform gateway
+
+- **The TikTok watchdog reads its live-check off the gateway's egress snapshot.** The snapshot's `live` is the LIVE room itself (platform-gateway 1.35.1), the same lookup `GET /v1/live` makes, so a reaped room reads not-live from either; a fresh configured snapshot answers the check without a gateway round trip, and a missing or stale one falls back to the poll. ([#1592](https://github.com/adanalife/tripbot/pull/1592))
+
+### Chatbot
+
+- `!goto` is now an alias of `!find`, since that is what chat keeps reaching for it to do. A `!find` (or `!goto`) whose whole query is a state name — `!goto utah` — jumps straight to that state. Jumping to a state also works as `!state <state>` (`!state ma`); bare `!state` still says where the van is, and `!jump <state>` keeps working. ([#1593](https://github.com/adanalife/tripbot/pull/1593))
+- An operator can run `!find` without a word in chat: a request on `tripbot.<env>.find.run.<platform>` searches, jumps that platform's stream, and replies with a verdict that names the state ("Found a sailboat in Oregon. Jumping there."). The console's find verb and tempomat's Siri intent build on it. ([#1594](https://github.com/adanalife/tripbot/pull/1594))
+- **Command answers are replies.** The bot now answers a command as a reply to the message that ran it, so on Twitch the answer threads under the viewer's line and two people running `!find` at once can each tell which verdict is theirs. Platforms whose chat can't thread (YouTube) get the same answer as a plain line; timed announcements and the help rotation stay plain. Needs a gateway that reads `reply_to` on its send (platform-gateway 1.37.0+); an older one ignores the field. ([#1596](https://github.com/adanalife/tripbot/pull/1596))
+
+### Console / API
+
+- **`tripbot.<env>.chat.deleted` joins the eventbus contract.** A moderation removal of chat already on `chat.message` — one `message_id`, or every line by `user_id` when the id is empty (a timeout, ban, or clear-user) — so a consumer holding the log can strike what the platform removed instead of showing it until the ring rolls over. It rides the `TRIPBOT_CHAT` stream beside the messages it names, so a replay applies the removal in order and a restarted console does not resurrect a deleted line. platform-gateway is the publisher (its EventSub session is where Twitch reports the removal); tripbot declares the subject and widens the stream. `EnsureStreams` reconciles the extra subject onto an existing stream in place. ([#1586](https://github.com/adanalife/tripbot/pull/1586))
+
+### CI / Tooling
+
+- `task test -- <flags>` passes its flags to `go test` (e.g. `task test -- -run TestName`) instead of dropping them and running the whole suite. ([#1595](https://github.com/adanalife/tripbot/pull/1595))
+
 ## [v5.20.1] — 2026-09-24
 
 ### Fixes
