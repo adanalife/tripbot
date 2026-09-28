@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
 	"gorm.io/gorm"
@@ -270,6 +271,14 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 	query := strings.Join(params, " ")
+
+	// "!find utah" (usually typed as its !goto alias) means the state, not a
+	// scene that looks like one. Full names only: two-letter codes collide with
+	// real words ("ok", "hi", "or").
+	if helpers.StateToStateAbbrev(query) != "" {
+		a.jumpCmd(ctx, user, params)
+		return
+	}
 
 	// Acknowledge immediately — the embed + pgvector search can take several
 	// seconds, and without a reply the command looks dead. Remove once the
