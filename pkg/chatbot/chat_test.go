@@ -13,15 +13,22 @@ import (
 // instead.
 type noopChat struct{}
 
-func (noopChat) Say(_ string) {}
+func (noopChat) Say(_ string)      {}
+func (noopChat) Reply(_, _ string) {}
 
 // recordingChat captures every Say call so tests can assert on chat output.
 // Messages are appended in order.
 type recordingChat struct {
-	Says []string // ordered list of Say() messages
+	Says    []string // ordered list of Say() and Reply() messages
+	Parents []string // the parent of each Reply(), in order
 }
 
 func (r *recordingChat) Say(msg string) {
+	r.Says = append(r.Says, msg)
+}
+
+func (r *recordingChat) Reply(parentID, msg string) {
+	r.Parents = append(r.Parents, parentID)
 	r.Says = append(r.Says, msg)
 }
 

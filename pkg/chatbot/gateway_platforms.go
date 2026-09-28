@@ -46,11 +46,15 @@ type gatewayChat struct {
 	keepActions bool
 }
 
-func (g gatewayChat) Say(msg string) {
+func (g gatewayChat) Say(msg string) { g.send(msg, "") }
+
+func (g gatewayChat) Reply(parentID, msg string) { g.send(msg, parentID) }
+
+func (g gatewayChat) send(msg, parentID string) {
 	if !g.keepActions {
 		msg = strings.TrimPrefix(msg, "/me ")
 	}
-	err := g.client.SendChat(context.Background(), g.identity, msg)
+	err := g.client.SendChatReply(context.Background(), g.identity, msg, parentID)
 	switch {
 	case err == nil:
 	case errors.Is(err, gateway.ErrNoBroadcast), errors.Is(err, gateway.ErrUpstreamUnavailable):
@@ -76,6 +80,8 @@ type noOutboundChat struct {
 func (c noOutboundChat) Say(msg string) {
 	slog.Debug(c.platform+" has no chat send; dropped", "text", msg)
 }
+
+func (c noOutboundChat) Reply(_, msg string) { c.Say(msg) }
 
 // connectViaGateway installs inner as the App's outbound chat client behind the
 // console mirror and warms the process-wide geocoder. There is no connection to

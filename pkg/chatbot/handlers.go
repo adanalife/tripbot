@@ -123,7 +123,7 @@ func (su sessionUser) IsMod() bool {
 // command_run event keeps when it differs from the canonical trigger.
 func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, a.Chat.Say); !ok {
+	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, func(m string) { a.Reply(ctx, m) }); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
 			Username: user.Username,
 			Command:  cmd.Trigger,
@@ -182,6 +182,31 @@ func setRunDetail(ctx context.Context, detail map[string]string) {
 	if slot, ok := ctx.Value(runDetailKey{}).(*map[string]string); ok {
 		*slot = detail
 	}
+}
+
+// replyParentKey carries the MessageID of the inbound line a dispatch is
+// answering, so App.Reply can thread the answer under it.
+type replyParentKey struct{}
+
+// withReplyParent returns ctx carrying the message id to reply to; an empty id
+// leaves ctx unchanged, which is every platform that surfaces none.
+func withReplyParent(ctx context.Context, messageID string) context.Context {
+	if messageID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, replyParentKey{}, messageID)
+}
+
+// Reply posts msg as a reply to the message ctx is answering — the inbound
+// line HandleMessage stashed — or as a plain Say when ctx carries none: a timed
+// job, a test, or a platform whose inbound has no message ids. Handlers reach
+// chat through this so a viewer can tell which answer is theirs.
+func (a *App) Reply(ctx context.Context, msg string) {
+	if parent, ok := ctx.Value(replyParentKey{}).(string); ok {
+		a.Chat.Reply(parent, msg)
+		return
+	}
+	a.Chat.Say(msg)
 }
 
 // refusalMarkKey carries the per-dispatch flag recordRefusal flips when a
@@ -484,7 +509,7 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 			reason = events.RefusedWrongPlatform
 			// Say so rather than swallowing it: the viewer typed a real
 			// trigger, and silence reads as a broken bot.
-			a.Chat.Say(fmt.Sprintf(wrongPlatformMsg, command))
+			a.Reply(ctx, fmt.Sprintf(wrongPlatformMsg, command))
 		}
 		slog.InfoContext(ctx, "unknown chat command", "command", command, "reason", reason)
 		a.recordRefusal(ctx, events.CommandRefusal{
@@ -596,7 +621,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// through: runCommand folds only the trigger token for matching.
 	user := a.chatUser(ctx, msg.User, msg.UserID)
 	user.Moderator = msg.Moderator
-	a.runCommand(ctx, user, msg.Text)
+	a.runCommand(withReplyParent(ctx, msg.MessageID), user, msg.Text)
 }
 
 // chatUser resolves a sender to the user the command path runs as.

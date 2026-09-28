@@ -119,11 +119,11 @@ func (a *App) guessrLeaderboardCmd(ctx context.Context, user *users.User, params
 	// No rows covers both a board nobody has played and a game this cluster
 	// can't reach, so the reply has to be true of either.
 	if len(rows) == 0 {
-		a.Chat.Say("No " + board + " guessr scores to show right now — play at " + guessrGameURL)
+		a.Reply(ctx, "No "+board+" guessr scores to show right now — play at "+guessrGameURL)
 		return
 	}
 
 	a.Onscreens.ShowLeaderboard(ctx, title, overlayRows(rows, size))
 
-	a.Chat.Say(title + ": " + rankedList(rows, ""))
+	a.Reply(ctx, title+": "+rankedList(rows, ""))
 }

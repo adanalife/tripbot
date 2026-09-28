@@ -14,6 +14,10 @@ import (
 // ones that can't. Tests inject a recordingChat / noopChat fake.
 type ChatClient interface {
 	Say(msg string) // post a message in chat
+	// Reply posts msg threaded under the message parentID, where the platform
+	// can thread; elsewhere it posts msg plain. Callers reach it through
+	// App.Reply, which knows the message being answered.
+	Reply(parentID, msg string)
 }
 
 // consoleMirror wraps a ChatClient so the bot's own outbound messages are
@@ -30,6 +34,18 @@ type consoleMirror struct {
 }
 
 func (m consoleMirror) Say(msg string) {
+	m.mirror(msg)
+	m.inner.Say(msg)
+}
+
+// Reply mirrors like Say: the bus line carries no parent, so the console shows
+// a reply as a plain bot line.
+func (m consoleMirror) Reply(parentID, msg string) {
+	m.mirror(msg)
+	m.inner.Reply(parentID, msg)
+}
+
+func (m consoleMirror) mirror(msg string) {
 	// include the message in the log
 	mylog.ChatMsg(m.botUsername, m.channel, msg)
 	// mirror the bot's own output onto the event bus so it shows in the admin
@@ -41,7 +57,6 @@ func (m consoleMirror) Say(msg string) {
 		Username: m.botUsername,
 		Text:     msg,
 	})
-	m.inner.Say(msg)
 }
 
 // disconnectedChat is App.Chat's default between New() and the connect path,
@@ -50,4 +65,5 @@ func (m consoleMirror) Say(msg string) {
 // that startup window (and any New()-built App a test doesn't override).
 type disconnectedChat struct{}
 
-func (disconnectedChat) Say(_ string) {}
+func (disconnectedChat) Say(_ string)      {}
+func (disconnectedChat) Reply(_, _ string) {}

@@ -90,7 +90,7 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	if a.Beds == nil {
-		a.Chat.Say("🎵 Background audio isn't wired up on this stream")
+		a.Reply(ctx, "🎵 Background audio isn't wired up on this stream")
 		return
 	}
 
@@ -109,7 +109,7 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 			// Groups first: "streambeats" is a more useful thing to be told about
 			// than any one of the 29 albums under it.
 			options := append(bedNameList(), a.Beds.Groups()...)
-			a.Chat.Say(fmt.Sprintf("🎵 No background audio called %q. Options: %s, "+
+			a.Reply(ctx, fmt.Sprintf("🎵 No background audio called %q. Options: %s, "+
 				"any album on the share, or any SomaFM channel id from "+
 				"https://somafm.com/listen/", arg, strings.Join(options, ", ")))
 			return
@@ -119,7 +119,7 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	if err != nil {
 		slog.ErrorContext(ctx, "background audio switch failed",
 			"err", err, "arg", arg, "username", user.Username)
-		a.Chat.Say("🎵 Couldn't switch the background audio right now, try again in a bit")
+		a.Reply(ctx, "🎵 Couldn't switch the background audio right now, try again in a bit")
 		return
 	}
 
@@ -128,11 +128,11 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	// tense would name audio nobody can hear yet — and the wait is worth saying out
 	// loud, since it's the window another `!audio` can correct this one in.
 	if sw, ok := a.Beds.Pending(); ok {
-		a.Chat.Say(fmt.Sprintf("🎵 Switching to %s in %s",
+		a.Reply(ctx, fmt.Sprintf("🎵 Switching to %s in %s",
 			describeSwitch(sw), time.Until(sw.At).Round(time.Second)))
 		return
 	}
-	a.Chat.Say("🎵 Switched to " + a.audioSource())
+	a.Reply(ctx, "🎵 Switched to "+a.audioSource())
 }
 
 // describeAudio renders what's on air for chat, track first: the answer to "what

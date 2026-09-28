@@ -30,13 +30,13 @@ func (a *App) currentSpot(ctx context.Context) (spot, bool) {
 	vid, at, atPlayhead := a.Video.PlayheadLocation(ctx)
 
 	if vid.Flagged {
-		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
+		a.Reply(ctx, "I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
 		next, err := vid.NextUnflagged(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
-			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
 			return spot{}, false
 		}
 		// The playhead is inside the flagged clip, so its offset says nothing

@@ -170,7 +170,22 @@ func (c *Client) UserID(ctx context.Context, login string) (string, error) {
 // SendChat posts text to the channel's chat as identity ("bot" / "broadcaster";
 // "" lets the gateway pick its default) via POST /v1/chat.
 func (c *Client) SendChat(ctx context.Context, identity, text string) error {
-	payload, err := json.Marshal(map[string]string{"identity": identity, "text": text})
+	return c.sendChat(ctx, identity, text, "")
+}
+
+// SendChatReply is SendChat threaded under parentID, the MessageID of an
+// inbound line. The gateway threads it where the platform can (Twitch) and
+// sends it plain where it can't (YouTube), so the reply always goes out.
+func (c *Client) SendChatReply(ctx context.Context, identity, text, parentID string) error {
+	return c.sendChat(ctx, identity, text, parentID)
+}
+
+func (c *Client) sendChat(ctx context.Context, identity, text, parentID string) error {
+	body := map[string]string{"identity": identity, "text": text}
+	if parentID != "" {
+		body["reply_to"] = parentID
+	}
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("gateway send-chat encode: %w", err)
 	}

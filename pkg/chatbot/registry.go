@@ -98,61 +98,61 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!socialmedia",
 			Help:    "All the places to find me off-stream",
 			Aliases: []string{"!social", "!socials"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky — or play the dashcam guessing game at " + guessrGameURL)
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky — or play the dashcam guessing game at "+guessrGameURL)
 			},
 		},
 		{
 			Trigger: "!discord",
 			Help:    "The Discord invite link",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Join us on Discord: https://discord.gg/hKvNgZrk52")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Join us on Discord: https://discord.gg/hKvNgZrk52")
 			},
 		},
 		{
 			Trigger: "!twitter",
 			Help:    "The Twitter link",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Twitter: https://twitter.com/adanalife_")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Twitter: https://twitter.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!instagram",
 			Help:    "The Instagram link",
 			Aliases: []string{"!ig", "!insta"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Instagram: https://instagram.com/adanalife_")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Instagram: https://instagram.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!facebook",
 			Help:    "The Facebook link",
 			Aliases: []string{"!fb"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
 			},
 		},
 		{
 			Trigger: "!youtube",
 			Help:    "The YouTube channel link",
 			Aliases: []string{"!yt"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
 			},
 		},
 		{
 			Trigger: "!tiktok",
 			Help:    "The TikTok link",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on TikTok: https://tiktok.com/@adanalife")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on TikTok: https://tiktok.com/@adanalife")
 			},
 		},
 		{
 			Trigger: "!bluesky",
 			Help:    "The Bluesky link",
 			Aliases: []string{"!bsky"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Bluesky: https://bsky.app/profile/dana.lol")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Bluesky: https://bsky.app/profile/dana.lol")
 			},
 		},
 		{
@@ -230,8 +230,8 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!gas",
 			Help:    "How's the tank?",
 			Aliases: []string{"!fuel", "!petrol"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("About full, thanks for asking")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "About full, thanks for asking")
 			},
 		},
 		{
@@ -351,8 +351,8 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!somafm",
 			Help:    "The SomaFM link, whose channels are the background audio",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Stream music by SomaFM — https://somafm.com")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Stream music by SomaFM — https://somafm.com")
 			},
 		},
 	}

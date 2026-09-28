@@ -290,6 +290,32 @@ func TestCachedReads_ErrorOnNon200(t *testing.T) {
 	}
 }
 
+// SendChatReply carries the parent as reply_to; a plain SendChat omits the key
+// so an older gateway sees the body it always did.
+func TestSendChatReply(t *testing.T) {
+	var gotBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody = nil
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &gotBody)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL).SendChatReply(context.Background(), "bot", "hello", "m1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotBody["reply_to"] != "m1" {
+		t.Errorf("reply_to = %q, want m1", gotBody["reply_to"])
+	}
+	if err := New(srv.URL).SendChat(context.Background(), "bot", "hello"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := gotBody["reply_to"]; ok {
+		t.Errorf("plain SendChat sent reply_to = %q, want none", gotBody["reply_to"])
+	}
+}
+
 func TestSendChat_ErrorsOnNon2xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented) // e.g. a platform with no chat send
