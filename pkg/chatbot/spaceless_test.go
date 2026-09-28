@@ -8,9 +8,9 @@ func TestFindCommand_SpacelessSplitsAtTrigger(t *testing.T) {
 		trigger string
 		params  []string
 	}{
-		{"!gotowyoming", "!goto", []string{"wyoming"}},
-		{"!GotoWyoming", "!goto", []string{"wyoming"}},
-		{"!gotowyoming now", "!goto", []string{"wyoming", "now"}},
+		{"!gotowyoming", "!find", []string{"wyoming"}},
+		{"!GotoWyoming", "!find", []string{"wyoming"}},
+		{"!gotowyoming now", "!find", []string{"wyoming", "now"}},
 		{"!guessflorida", "!guess", []string{"florida"}},
 		// longest trigger wins: !timewarp + "back", not !time + "warpback"
 		{"!timewarpback", "!timewarp", []string{"back"}},
@@ -47,10 +47,10 @@ func TestFindCommand_SpacelessLeavesUnknownAlone(t *testing.T) {
 }
 
 func TestFindCommand_FuzzyBeatsSpaceless(t *testing.T) {
-	// "!gotoo" is one edit from !goto — a typo, not "!goto o"
+	// "!gotoo" is one edit from the !goto alias — a typo, not "!goto o"
 	cmd, _, params := builtTestApp.findCommand("!gotoo")
-	if cmd == nil || cmd.Trigger != "!goto" {
-		t.Fatalf("findCommand(!gotoo) = %v, want !goto", cmd)
+	if cmd == nil || cmd.Trigger != "!find" {
+		t.Fatalf("findCommand(!gotoo) = %v, want !find (!goto is its alias)", cmd)
 	}
 	if len(params) != 0 {
 		t.Errorf("params = %v, want none", params)

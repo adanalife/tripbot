@@ -257,8 +257,8 @@ func TestFindCommand_WithParams(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
-	if cmd.Trigger != "!goto" {
-		t.Errorf("got trigger %q, want !goto", cmd.Trigger)
+	if cmd.Trigger != "!find" {
+		t.Errorf("got trigger %q, want !find (!goto is its alias)", cmd.Trigger)
 	}
 	if len(params) != 1 || params[0] != "42" {
 		t.Errorf("unexpected params: %v", params)
