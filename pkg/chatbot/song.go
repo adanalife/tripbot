@@ -22,7 +22,7 @@ func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !song", "username", user.Username)
 
 	if a.Beds == nil {
-		a.Chat.Say("♪ Background audio isn't wired up on this stream")
+		a.Reply(ctx, "♪ Background audio isn't wired up on this stream")
 		return
 	}
 	if bed, track := a.Beds.Playing(); bed != beds.SomaFM {
@@ -31,7 +31,7 @@ func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 				"bed": string(bed), "album": t.Album, "artist": t.Artist, "title": t.Title,
 			})
 		}
-		a.Chat.Say("♪ Now playing: " + a.describeAudio())
+		a.Reply(ctx, "♪ Now playing: "+a.describeAudio())
 		return
 	}
 
@@ -39,7 +39,7 @@ func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	if err != nil {
 		slog.ErrorContext(ctx, "now-playing fetch failed", "err", err,
 			"station", a.Beds.Station())
-		a.Chat.Say("Couldn't reach the music source for the current track, sorry!")
+		a.Reply(ctx, "Couldn't reach the music source for the current track, sorry!")
 		return
 	}
 	setRunDetail(ctx, map[string]string{
@@ -47,6 +47,6 @@ func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	})
 	// Naming the channel matters once there are 40-odd of them: "Drone Zone" is
 	// half the answer to "what is this".
-	a.Chat.Say(fmt.Sprintf("♪ Now playing on %s: %s — %s",
+	a.Reply(ctx, fmt.Sprintf("♪ Now playing on %s: %s — %s",
 		beds.StationName(a.Beds.Station()), title, artist))
 }

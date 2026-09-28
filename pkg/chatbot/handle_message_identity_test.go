@@ -67,3 +67,20 @@ func TestHandleMessage_TwitchLogsTheSenderIn(t *testing.T) {
 		t.Errorf("Twitch inbound did not log the sender in; calls = %v", ses.Calls)
 	}
 }
+
+// A command answer threads under the inbound line's MessageID; a line with no
+// id (a platform that surfaces none) is answered plain.
+func TestHandleMessage_AnswersAsReplyToTheMessage(t *testing.T) {
+	app, rec, _ := gatewayPlatformApp(t)
+
+	app.HandleMessage(context.Background(), IncomingMessage{User: "YouTubeViewer", Text: "!help", MessageID: "m1"})
+	if !slices.Equal(rec.Parents, []string{"m1"}) {
+		t.Fatalf("reply parents = %v, want [m1]; says=%v", rec.Parents, rec.Says)
+	}
+
+	rec.Says, rec.Parents = nil, nil
+	app.HandleMessage(context.Background(), IncomingMessage{User: "YouTubeViewer", Text: "!help"})
+	if len(rec.Says) == 0 || len(rec.Parents) != 0 {
+		t.Fatalf("no-id message: says=%v parents=%v, want a plain Say", rec.Says, rec.Parents)
+	}
+}

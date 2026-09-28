@@ -254,20 +254,20 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 
 	// Playout playback isn't wired up on the dev Mac (same guard as !jump).
 	if runningOnDarwin() {
-		a.Chat.Say("Sorry, find isn't available right now")
+		a.Reply(ctx, "Sorry, find isn't available right now")
 		return
 	}
 
 	// rate-limit non-admins, shared with the other playback jumps.
 	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
+			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	if len(params) == 0 {
-		a.Chat.Say("Usage: !find <something you want to see, e.g. a tunnel at sunset>")
+		a.Reply(ctx, "Usage: !find <something you want to see, e.g. a tunnel at sunset>")
 		return
 	}
 	query := strings.Join(params, " ")
@@ -283,23 +283,23 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	// Acknowledge immediately — the embed + pgvector search can take several
 	// seconds, and without a reply the command looks dead. Remove once the
 	// search is consistently fast.
-	a.Chat.Say(fmt.Sprintf("@%s 👀", user.Username))
+	a.Reply(ctx, fmt.Sprintf("@%s 👀", user.Username))
 
 	hit, err := a.findHit(ctx, query)
 	if errors.Is(err, errFindMiss) {
-		a.Chat.Say(fmt.Sprintf("Couldn't find anything like %q 😔", query))
+		a.Reply(ctx, fmt.Sprintf("Couldn't find anything like %q 😔", query))
 		return
 	}
 	if err != nil {
-		a.Chat.Say("Search isn't available right now, sorry!")
+		a.Reply(ctx, "Search isn't available right now, sorry!")
 		return
 	}
 
 	// Don't name the state — a viewer can still guess where this is.
-	a.Chat.Say(fmt.Sprintf("Found %q! Jumping there...", query))
+	a.Reply(ctx, fmt.Sprintf("Found %q! Jumping there...", query))
 
 	if err := a.jumpToHit(ctx, user.Username, hit); err != nil {
-		a.Chat.Say("Found it, but couldn't jump there — sorry!")
+		a.Reply(ctx, "Found it, but couldn't jump there — sorry!")
 	}
 }
 
