@@ -693,14 +693,13 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	// tripbot_channel_live for TikTok (gatewayPlatform.reportsLiveness), and two
 	// writers on one gauge would fight.
 	//
-	// Polled rather than read off the egress snapshot: the snapshot's live is
-	// Streamlabs' restream is-live, which reports OBS pushing to the ingest — true
-	// throughout the reaped-room failure this watchdog exists to catch. Only the
-	// room lookup behind IsLive sees the room gone.
-	deps.ChannelLive = func(ctx context.Context) (bool, error) {
-		return gw.IsLive(ctx, t.cfg.ChannelName)
-	}
+	// The live-check reads the gateway's pushed egress snapshot first and only
+	// asks IsLive when no fresh one is retained. The snapshot's live is the same
+	// room lookup IsLive makes, so a reaped room reads not-live from either.
 	readEgress := t.egressSnapshotReader("tiktok")
+	deps.ChannelLive = snapshotThenPoll(readEgress, func(ctx context.Context) (bool, error) {
+		return gw.IsLive(ctx, t.cfg.ChannelName)
+	})
 	deps.Restart = func(ctx context.Context) error {
 		// The gateway's relay-binding detail is the one clue to why the room was
 		// reaped, and the re-mint is about to replace it.
