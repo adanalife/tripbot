@@ -1,1 +1,0 @@
-Changelog fragments are numbered at release instead of on the PR, so a PR no longer runs its checks twice — once for the push and again for CI's rename commit — and merging early can't strand an unnumbered entry. `task changelog:add` suffixes every placeholder so two open PRs can't pick the same name.
