@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.22.0] — 2026-09-28
+
+### Chatbot
+
+- **Chat lines on the bus say what they answer.** `tripbot.{env}.chat.message` carries an optional `reply` object — `parent_message_id`, plus the parent's username, user id and text when the platform reported them — on a viewer's threaded Twitch reply, and on the bot's own answers to commands (parent id only). A console can show the line being answered and thread its own replies under the same parent. ([#1597](https://github.com/adanalife/tripbot/pull/1597))
+
+### CI / Tooling
+
+- Changelog fragments are numbered at release instead of on the PR, so a PR no longer runs its checks twice — once for the push and again for CI's rename commit — and merging early can't strand an unnumbered entry. `task changelog:add` suffixes every placeholder so two open PRs can't pick the same name. ([#1599](https://github.com/adanalife/tripbot/pull/1599))
+
 ## [v5.21.0] — 2026-09-28
 
 ### Platform gateway
