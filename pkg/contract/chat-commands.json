@@ -136,7 +136,8 @@
     {
       "trigger": "!find",
       "aliases": [
-        "!search"
+        "!search",
+        "!goto"
       ],
       "requires_subscriber": true,
       "platforms": [
@@ -175,20 +176,6 @@
       "requires_admin": true,
       "platforms": [
         "twitch"
-      ]
-    },
-    {
-      "trigger": "!goto",
-      "aliases": [
-        "!jump"
-      ],
-      "requires_follow": true,
-      "platforms": [
-        "facebook",
-        "instagram",
-        "tiktok",
-        "twitch",
-        "youtube"
       ]
     },
     {
@@ -243,6 +230,17 @@
         "!ig",
         "!insta"
       ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!jump",
+      "requires_follow": true,
       "platforms": [
         "facebook",
         "instagram",

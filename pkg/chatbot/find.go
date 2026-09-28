@@ -247,11 +247,11 @@ func pickFindHit(hits []SearchHit) SearchHit {
 
 // findCmd implements !find: visual search over the dashcam corpus, jumping the
 // stream to the closest matching moment. Shares the playback-jump rate-limiter
-// with !timewarp / !goto so the playhead can't be yanked too often.
+// with !timewarp / !jump so the playhead can't be yanked too often.
 func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !find", "username", user.Username)
 
-	// Playout playback isn't wired up on the dev Mac (same guard as !goto).
+	// Playout playback isn't wired up on the dev Mac (same guard as !jump).
 	if runningOnDarwin() {
 		a.Chat.Say("Sorry, find isn't available right now")
 		return

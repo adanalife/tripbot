@@ -1,0 +1,1 @@
+`!goto` is now an alias of `!find`, since that is what chat keeps reaching for it to do. Jumping to a state moves to `!state <state>` (`!state ma`); bare `!state` still says where the van is, and `!jump <state>` keeps working.

@@ -776,3 +776,22 @@ func TestPlaybackCmds_WithoutPlayoutApologizeAndDoNothing(t *testing.T) {
 		})
 	}
 }
+
+// "!state <state>" is the jump; bare "!state" stays the where-are-we read.
+func TestStateCmd_WithArgJumps(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "Massachusetts"}}
+	app.Onscreens = &recordingOnscreens{}
+	app.Playout = &recordingPlayout{}
+	app.Video = recVideo
+	app.Chat = &recordingChat{}
+
+	runAsAdmin(t, func() {
+		app.stateCmd(context.Background(), newTestUser(adminUser), []string{"ma"})
+	})
+
+	if len(recVideo.Calls) == 0 || recVideo.Calls[0] != `FindRandomByState("ma")` {
+		t.Errorf("!state ma should jump via FindRandomByState, got calls %v", recVideo.Calls)
+	}
+}

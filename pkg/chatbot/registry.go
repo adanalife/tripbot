@@ -49,16 +49,15 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!goto",
-			Help:           "Jump to footage from a specific state: !goto [state]",
-			Aliases:        []string{"!jump"},
+			Trigger:        "!jump",
+			Help:           "Jump to footage from a specific state: !jump [state]",
 			Handler:        a.jumpCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:            "!find",
 			Help:               "Search the footage for a scene and jump to it: !find <a tunnel at sunset>",
-			Aliases:            []string{"!search"},
+			Aliases:            []string{"!search", "!goto"},
 			Handler:            a.findCmd,
 			RequiresSubscriber: true,
 		},
@@ -217,7 +216,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!state",
-			Help:           "The state the van is in right now",
+			Help:           "The state the van is in right now, or jump to one: !state [state]",
 			Handler:        a.stateCmd,
 			RequiresFollow: true,
 		},
@@ -399,7 +398,7 @@ var v1Commands = map[string]bool{
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true, "!direction": true, "!speed": true,
 	// playback control (drives this platform's playout pipeline)
-	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
+	"!timewarp": true, "!jump": true, "!skip": true, "!back": true, "!daytime": true,
 	"!find": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,

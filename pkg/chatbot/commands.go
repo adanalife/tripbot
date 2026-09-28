@@ -703,7 +703,13 @@ func (a *App) guessHint(username, guess string, s spot) string {
 	}
 }
 
-func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
+// stateCmd names the current state, or with a state argument ("!state ma")
+// jumps to footage from it.
+func (a *App) stateCmd(ctx context.Context, user *users.User, params []string) {
+	if len(params) > 0 {
+		a.jumpCmd(ctx, user, params)
+		return
+	}
 	slog.InfoContext(ctx, "ran !state", "username", user.Username)
 	s, ok := a.currentSpot(ctx)
 	if !ok {
