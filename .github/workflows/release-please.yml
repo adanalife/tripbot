@@ -114,6 +114,10 @@ jobs:
 
           # Fragments reach main as "+" placeholders; name each after the PR
           # that added it, from its squash commit, before towncrier reads them.
+          # The scripts come from main: this checkout is the release branch,
+          # which release-please doesn't rebase just because main moved, so it
+          # can predate them.
+          git checkout origin/main -- scripts/number-fragment.sh scripts/number-fragments.sh
           scripts/number-fragments.sh
 
           # Collate the towncrier fragments (if any) into CHANGELOG.md + delete
