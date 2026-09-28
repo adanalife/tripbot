@@ -34,18 +34,18 @@ type consoleMirror struct {
 }
 
 func (m consoleMirror) Say(msg string) {
-	m.mirror(msg)
+	m.mirror(msg, nil)
 	m.inner.Say(msg)
 }
 
-// Reply mirrors like Say: the bus line carries no parent, so the console shows
-// a reply as a plain bot line.
+// Reply mirrors like Say, with the parent id on the bus line so the console
+// can show which viewer's message the bot answered.
 func (m consoleMirror) Reply(parentID, msg string) {
-	m.mirror(msg)
+	m.mirror(msg, &eventbus.ChatReply{ParentMessageID: parentID})
 	m.inner.Reply(parentID, msg)
 }
 
-func (m consoleMirror) mirror(msg string) {
+func (m consoleMirror) mirror(msg string, reply *eventbus.ChatReply) {
 	// include the message in the log
 	mylog.ChatMsg(m.botUsername, m.channel, msg)
 	// mirror the bot's own output onto the event bus so it shows in the admin
@@ -56,6 +56,7 @@ func (m consoleMirror) mirror(msg string) {
 		Platform: m.platform,
 		Username: m.botUsername,
 		Text:     msg,
+		Reply:    reply,
 	})
 }
 

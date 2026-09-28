@@ -356,6 +356,18 @@ type InboundChatMessage struct {
 	Broadcaster bool           `json:"broadcaster,omitempty"`
 	Badges      map[string]int `json:"badges,omitempty"`
 	Emotes      []Emote        `json:"emotes,omitempty"`
+	// Reply names the earlier message this one answers, on a platform whose
+	// chat threads (Twitch); nil otherwise.
+	Reply *InboundReply `json:"reply,omitempty"`
+}
+
+// InboundReply is the parent of a threaded reply: the id a reply send takes,
+// plus the parent's author and text for a renderer to show.
+type InboundReply struct {
+	ParentMessageID string `json:"parent_message_id"`
+	ParentAuthor    string `json:"parent_author,omitempty"`
+	ParentAuthorID  string `json:"parent_author_id,omitempty"`
+	ParentText      string `json:"parent_text,omitempty"`
 }
 
 // Emote is one occurrence of a platform emote inside a message's Text — the

@@ -140,7 +140,14 @@ var (
 		{"broadcaster", boolType(), false},
 		{"badges", mapType(intType()), false},
 		{"emotes", arrayType(refType("Emote")), false},
+		{"reply", refType("ChatReply"), false},
 		{"emitted_at", dateType(), true},
+	}
+	chatReplyFields = []field{
+		{"parent_message_id", strType(), true},
+		{"parent_username", strType(), false},
+		{"parent_user_id", strType(), false},
+		{"parent_text", strType(), false},
 	}
 	// Start/End index the message text in code points with an inclusive end —
 	// Twitch's own convention, carried through so the console can slice its
@@ -243,6 +250,7 @@ var envelopeFields = map[string][]field{
 	"AuthStatus":        authStatusFields,
 	"AuthAccount":       authAccountFields,
 	"Emote":             emoteFields,
+	"ChatReply":         chatReplyFields,
 	"OBSStream":         obsStreamFields,
 	"EgressState":       egressStateFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
@@ -322,6 +330,7 @@ func eventbusContract() orderedObject {
 		{"$defs", orderedObject{
 			{"AuthAccount", objectSchema("AuthAccount", authAccountFields)},
 			{"Emote", objectSchema("Emote", emoteFields)},
+			{"ChatReply", objectSchema("ChatReply", chatReplyFields)},
 		}},
 	}
 }

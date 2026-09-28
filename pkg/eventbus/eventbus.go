@@ -123,9 +123,25 @@ type ChatMessage struct {
 	// its version, which is the part a role bool loses: for "subscriber" the
 	// version is the months. Only Twitch reports either, so empty means "this
 	// platform reports none", not "this viewer has none".
-	Badges    map[string]int `json:"badges,omitempty"`
-	Emotes    []Emote        `json:"emotes,omitempty"`
-	EmittedAt string         `json:"emitted_at"`
+	Badges map[string]int `json:"badges,omitempty"`
+	Emotes []Emote        `json:"emotes,omitempty"`
+	// Reply is set when the line answers an earlier one — a viewer's threaded
+	// reply on Twitch, or the bot's own answer to a command (which carries only
+	// the parent id: the bot never saw the parent's text at send time). Nil on
+	// a plain line and on every platform whose chat is flat.
+	Reply     *ChatReply `json:"reply,omitempty"`
+	EmittedAt string     `json:"emitted_at"`
+}
+
+// ChatReply is the parent of a threaded chat line. ParentMessageID is the
+// message_id of the line being answered; the parent's username, user id and
+// text ride along when the platform reported them, so a renderer can show what
+// is being answered without a log of its own.
+type ChatReply struct {
+	ParentMessageID string `json:"parent_message_id"`
+	ParentUsername  string `json:"parent_username,omitempty"`
+	ParentUserID    string `json:"parent_user_id,omitempty"`
+	ParentText      string `json:"parent_text,omitempty"`
 }
 
 // Emote is one occurrence of a platform emote inside a chat message's Text —
