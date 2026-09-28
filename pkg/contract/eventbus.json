@@ -46,6 +46,9 @@
               "$ref": "#/$defs/Emote"
             }
           },
+          "reply": {
+            "$ref": "#/$defs/ChatReply"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
@@ -417,6 +420,27 @@
         "id",
         "start",
         "end"
+      ]
+    },
+    "ChatReply": {
+      "type": "object",
+      "title": "ChatReply",
+      "properties": {
+        "parent_message_id": {
+          "type": "string"
+        },
+        "parent_username": {
+          "type": "string"
+        },
+        "parent_user_id": {
+          "type": "string"
+        },
+        "parent_text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_message_id"
       ]
     }
   }

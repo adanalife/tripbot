@@ -181,6 +181,7 @@ func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMess
 			Broadcaster: m.Broadcaster,
 			Badges:      m.Badges,
 			Emotes:      emotes(m.Emotes),
+			Reply:       reply(m.Reply),
 		})
 	case gateway.KindGift:
 		if m.Gift == nil {
@@ -213,6 +214,19 @@ func emotes(in []gateway.Emote) []eventbus.Emote {
 		out[i] = eventbus.Emote{ID: e.ID, Start: e.Start, End: e.End}
 	}
 	return out
+}
+
+// reply retypes the gateway's parent as the event-bus shape, nil for nil.
+func reply(in *gateway.InboundReply) *eventbus.ChatReply {
+	if in == nil {
+		return nil
+	}
+	return &eventbus.ChatReply{
+		ParentMessageID: in.ParentMessageID,
+		ParentUsername:  in.ParentAuthor,
+		ParentUserID:    in.ParentAuthorID,
+		ParentText:      in.ParentText,
+	}
 }
 
 // sleepCtx waits d or until ctx is done; false means ctx ended first.

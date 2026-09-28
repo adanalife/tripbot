@@ -560,6 +560,8 @@ type IncomingMessage struct {
 	// that don't surface one. Carried onto the event bus so a console
 	// moderation action has something to address.
 	MessageID string
+	// Reply names the message this one answers, when the platform threads.
+	Reply *eventbus.ChatReply
 	// Moderator, Subscriber, and Broadcaster are the sender's role in this
 	// channel as the platform reported it on this message. They ride the event
 	// bus for display; the follower and subscriber checks in checkAccess read
@@ -615,6 +617,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Broadcaster: msg.Broadcaster,
 		Badges:      msg.Badges,
 		Emotes:      msg.Emotes,
+		Reply:       msg.Reply,
 	})
 
 	// resolve the sender, then run any command. The original casing goes
