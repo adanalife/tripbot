@@ -276,32 +276,84 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	// search is consistently fast.
 	a.Chat.Say(fmt.Sprintf("@%s 👀", user.Username))
 
-	hits, err := a.Search.Find(ctx, query)
-	if err != nil {
-		slog.ErrorContext(ctx, "find search failed", "err", err, "query", query)
-		a.Chat.Say("Search isn't available right now, sorry!")
-		return
-	}
-	if len(hits) == 0 || hits[0].Distance > findMaxDistance {
+	hit, err := a.findHit(ctx, query)
+	if errors.Is(err, errFindMiss) {
 		a.Chat.Say(fmt.Sprintf("Couldn't find anything like %q 😔", query))
 		return
 	}
-
-	hit := pickFindHit(hits)
+	if err != nil {
+		a.Chat.Say("Search isn't available right now, sorry!")
+		return
+	}
 
 	// Don't name the state — a viewer can still guess where this is.
 	a.Chat.Say(fmt.Sprintf("Found %q! Jumping there...", query))
 
-	// Cover the jump with the full-screen warp overlay, same as !timewarp/!guess.
-	a.showTimewarpOverlay(ctx, user.Username)
+	if err := a.jumpToHit(ctx, user.Username, hit); err != nil {
+		a.Chat.Say("Found it, but couldn't jump there — sorry!")
+	}
+}
+
+// errFindMiss means the search ran but nothing was close enough to jump to.
+var errFindMiss = errors.New("no close enough match")
+
+// findHit runs the visual search and picks the moment to jump to. It returns
+// errFindMiss when the search ran and nothing cleared findMaxDistance; any
+// other error means the search itself couldn't run.
+func (a *App) findHit(ctx context.Context, query string) (SearchHit, error) {
+	hits, err := a.Search.Find(ctx, query)
+	if err != nil {
+		slog.ErrorContext(ctx, "find search failed", "err", err, "query", query)
+		return SearchHit{}, err
+	}
+	if len(hits) == 0 || hits[0].Distance > findMaxDistance {
+		return SearchHit{}, errFindMiss
+	}
+	return pickFindHit(hits), nil
+}
+
+// jumpToHit covers the jump with the full-screen warp overlay (same as
+// !timewarp/!guess), then lands the playhead just ahead of hit. username is
+// the overlay's credit line; empty shows none.
+func (a *App) jumpToHit(ctx context.Context, username string, hit SearchHit) error {
+	a.showTimewarpOverlay(ctx, username)
 
 	// Land ahead of the matched frame so the moment doesn't slip past on stream.
 	if err := a.Playout.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
-		a.Chat.Say("Found it, but couldn't jump there — sorry!")
-		return
+		return err
 	}
 
 	a.Video.GetCurrentlyPlaying(ctx)
 	lastTimewarpTime = time.Now()
+	return nil
+}
+
+// Find is !find for an operator: the same search and jump with nothing said in
+// chat, answering with a verdict worth reading back instead. Unlike the chat
+// command it skips the rate limit (operators are admins) and names the state,
+// which only viewers playing along need kept from them.
+func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return false, "Find what?"
+	}
+	if runningOnDarwin() {
+		return false, "Find isn't available on this machine."
+	}
+	hit, err := a.findHit(ctx, query)
+	if errors.Is(err, errFindMiss) {
+		return false, fmt.Sprintf("Couldn't find anything like %s.", query)
+	}
+	if err != nil {
+		return false, "Search isn't available right now."
+	}
+	where := ""
+	if hit.State != "" {
+		where = " in " + hit.State
+	}
+	if err := a.jumpToHit(ctx, "", hit); err != nil {
+		return false, fmt.Sprintf("Found %s%s, but couldn't jump there.", query, where)
+	}
+	return true, fmt.Sprintf("Found %s%s. Jumping there.", query, where)
 }
