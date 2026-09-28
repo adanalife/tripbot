@@ -1,0 +1,1 @@
+**The TikTok watchdog reads its live-check off the gateway's egress snapshot.** The snapshot's `live` is the LIVE room itself (platform-gateway 1.35.1), the same lookup `GET /v1/live` makes, so a reaped room reads not-live from either; a fresh configured snapshot answers the check without a gateway round trip, and a missing or stale one falls back to the poll.
