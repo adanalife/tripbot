@@ -21,8 +21,8 @@ require (
 	github.com/kelvins/geocoder v0.0.0-20231112130812-98d82c75e49b
 	github.com/lib/pq v1.12.3
 	github.com/nathan-osman/go-sunrise v1.1.0
-	github.com/nats-io/nats-server/v2 v2.14.6
-	github.com/nats-io/nats.go v1.53.1
+	github.com/nats-io/nats-server/v2 v2.15.0
+	github.com/nats-io/nats.go v1.54.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/samber/slog-sentry/v2 v2.11.0
 	github.com/slok/go-http-metrics v0.13.0
@@ -43,12 +43,12 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.22.0
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
-	gorm.io/driver/postgres v1.6.2
+	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 )
 
 require (
-	github.com/antithesishq/antithesis-sdk-go v0.7.2-default-no-op // indirect
+	github.com/antithesishq/antithesis-sdk-go v0.8.0-default-no-op // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.6.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -70,7 +70,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jonas-p/go-shp v0.1.1 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	github.com/klauspost/compress v1.19.2 // indirect
+	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/profile v0.1.1 // indirect
@@ -91,13 +91,13 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/image v0.41.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
