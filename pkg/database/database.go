@@ -158,13 +158,20 @@ func connectGorm() *gorm.DB {
 	return gdb
 }
 
-// returns a valid postgres:// url
+// connStr returns the postgres:// url the pool dials.
+//
+// connect_timeout (seconds) bounds a dial to a host that never answers, which
+// otherwise waits out the OS's SYN retries. statement_timeout (milliseconds) is
+// a runtime parameter lib/pq passes through to the server, which cancels any
+// query running past it; the slowest query this pool runs takes a few seconds,
+// so a minute only ever stops a runaway. Migrations run in the migrate
+// initContainer on a DSN of their own and are unaffected.
 func connStr() string {
 	pgUser := os.Getenv("DATABASE_USER")
 	pgPassword := os.Getenv("DATABASE_PASS")
 	pgDatabase := os.Getenv("DATABASE_DB")
 	pgHost := os.Getenv("DATABASE_HOST")
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, pgHost, pgDatabase)
-	return connStr
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&connect_timeout=5&statement_timeout=60000",
+		pgUser, pgPassword, pgHost, pgDatabase)
 }
