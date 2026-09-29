@@ -157,7 +157,7 @@ func TestLifetimeStatsHandler_Aggregates(t *testing.T) {
 	// Postgres stores microseconds; truncate so the round trip compares equal.
 	base := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Microsecond)
 
-	// A sentinel-dated row from the old insert bug: counted in the census,
+	// A zero-time (0001-01-01) row: counted in the census,
 	// ignored by since.
 	sentinel := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
 	seedPlainEvent(t, db, "stats_alice", "login", sentinel)

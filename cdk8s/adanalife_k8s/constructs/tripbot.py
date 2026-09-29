@@ -101,8 +101,7 @@ def config_map_name(platform: str) -> str:
     return f"{app_name('tripbot', platform)}-config"
 
 
-# Placeholder DB creds for the laptop `local` overlay (gitignored secret.env in
-# Kustomize). DB-only — everything else comes from ESO even locally.
+# Placeholder DB creds for the laptop `local` env. DB-only — everything else comes from ESO even locally.
 _LOCAL_SECRET = {
     "DATABASE_USER": "tripbot_docker",
     "DATABASE_PASS": "hunter2",

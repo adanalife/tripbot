@@ -1,7 +1,7 @@
 // Package discord runs the tripbot Discord bot session — a small set of
 // slash commands that mirror tripbot's read-only Twitch leaderboard
 // commands. It is intentionally additive: every failure path logs and
-// returns so tripbot's core IRC / EventSub paths are never blocked or
+// returns so tripbot's core chat / EventSub paths are never blocked or
 // crashed by Discord being misconfigured or unreachable.
 package discord
 

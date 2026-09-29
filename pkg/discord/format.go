@@ -9,7 +9,7 @@ import (
 )
 
 // leaderboardEmbed builds a Discord embed for a [username, value] pair
-// list. The shape mirrors the IRC text format used in
+// list. The shape mirrors the chat text format used in
 // pkg/chatbot/commands.go for the three leaderboard commands. Returns
 // nil when entries is empty — caller decides whether to send a fallback
 // message instead.

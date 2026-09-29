@@ -32,7 +32,7 @@ func enablePlayback(t *testing.T) {
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern, restoring it afterwards. Chat output goes to the App's IRC fake
+// concern, restoring it afterwards. Chat output goes to the App's Chat fake
 // (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
@@ -385,7 +385,7 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		t.Errorf("expected no overlay calls, got %v", recOverlay.Calls)
 	}
 
-	// IRC: a "Jumping to California...!" message.
+	// Chat: a "Jumping to California...!" message.
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Jumping to California") {
 		t.Errorf("expected single 'Jumping to California' message, got %v", recIRC.Says)
 	}
@@ -454,7 +454,7 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 		t.Errorf("expected no overlay calls on no-footage path, got %v", recOverlay.Calls)
 	}
 
-	// IRC: the "No footage for X... yet!" message (titlecased).
+	// Chat: the "No footage for X... yet!" message (titlecased).
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
 		t.Errorf("expected single 'No footage for Wyoming' message, got %v", recIRC.Says)
 	}
@@ -648,7 +648,7 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 		t.Errorf("expected no Playout calls on bad input, got %v", recPlayout.Calls)
 	}
 
-	// IRC: usage message.
+	// Chat: usage message.
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Usage: !jump") {
 		t.Errorf("expected usage message via IRC, got %v", recIRC.Says)
 	}

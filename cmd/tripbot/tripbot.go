@@ -207,7 +207,7 @@ func newGatewayClient(cfg *c.TripbotConfig) *gateway.Client {
 }
 
 // NewTripbot constructs a Tripbot with default runtime state. Dependencies
-// that need I/O or ordering (the IRC client, scheduler, Discord session,
+// that need I/O or ordering (the scheduler, Discord session,
 // Postgres-backed flag client) are filled in by the boot-sequence methods.
 func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	t := &Tripbot{
@@ -275,7 +275,7 @@ func (t *Tripbot) platformIsTwitch() bool {
 // Run performs the various steps to get the bot running. The spine —
 // telemetry, HTTP server, player, sessions, cron, feature flags, NATS, the
 // admin hub — is platform-neutral and runs on every instance; only the
-// chat-transport bring-up swaps on STREAM_PLATFORM. Twitch-only steps (IRC
+// chat-transport bring-up swaps on STREAM_PLATFORM. Twitch-only steps (broadcaster
 // token plumbing, EventSub, subscriber polling, the admin chat-send
 // subscriber, Discord) are gated off non-Twitch instances.
 func (t *Tripbot) Run() {
@@ -878,7 +878,7 @@ func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 // startDiscord brings up the bot's Discord slash-command session when
 // the env supplies the required config and the discord.bot_enabled feature
 // flag is on. Every failure path here logs and returns so it can't block
-// (or crash) tripbot startup — Discord is additive to the core IRC /
+// (or crash) tripbot startup — Discord is additive to the core chat /
 // EventSub paths.
 func (t *Tripbot) startDiscord(ctx context.Context) {
 	if ok, reason := discord.ShouldStart(t.cfg); !ok {
@@ -1288,8 +1288,8 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
 		// tracking reads Twitch chatters (YouTube presence is punted in v1),
 		// the leaderboards back excluded commands, the subscriber /
-		// follower polls hit Helix, and the token-refresh job dereferences the
-		// IRC client this instance never constructs.
+		// follower polls hit Helix, and the token reload reads Twitch
+		// oauth_tokens rows this instance never holds.
 		return
 	}
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)

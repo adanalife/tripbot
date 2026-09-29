@@ -54,7 +54,7 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 }
 
 // newTestApp returns an App whose Video reports vid as the currently-playing
-// video, plus no-op Onscreens, Playout, IRC, and Sessions fakes. For commands
+// video, plus no-op Onscreens, Playout, Chat, and Sessions fakes. For commands
 // that don't read Video, pass a zero-value video.Video. To assert on any of
 // those surfaces, replace the corresponding field with a recording fake
 // (recordingOnscreens / recordingPlayout / recordingVideo / recordingChat /

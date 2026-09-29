@@ -4,7 +4,7 @@
 // without standing up the bot process.
 //
 // The senders are injected as plain funcs so this package stays free of the
-// Twitch/IRC machinery: cmd/tripbot passes the bot's Say and the broadcaster
+// chat-transport machinery: cmd/tripbot passes the bot's Say and the broadcaster
 // Helix send; tests pass fakes.
 package chatsend
 
@@ -15,8 +15,8 @@ import (
 	chatEvents "github.com/adanalife/tripbot/pkg/chat-events"
 )
 
-// Dispatch routes a decoded Send to the right sender. botSay is the bot's IRC
-// Say (which mirrors onto the live console); broadcasterSay is the Helix
+// Dispatch routes a decoded Send to the right sender. botSay is the bot's
+// App.Chat.Say (which mirrors onto the live console); broadcasterSay is the Helix
 // "send as broadcaster" call (whose result the bot reads back inbound,
 // surfacing on the console via the normal chat.message path). An empty text or
 // unknown identity is dropped with a warning — a publisher bug, not an intent.

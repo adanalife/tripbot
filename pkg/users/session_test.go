@@ -14,8 +14,8 @@ import (
 
 // TestSessions_ConcurrentAccess hammers the session map and the leaderboard
 // cache from multiple goroutines, mirroring production: the UpdateLeaderboard
-// cron rebuilds the board while command dispatch reads it and the IRC-side
-// calls poke the login map. Under -race this fails if Sessions loses its
+// cron rebuilds the board while command dispatch reads it and the inbound
+// chat handlers poke the login map. Under -race this fails if Sessions loses its
 // locking.
 func TestSessions_ConcurrentAccess(t *testing.T) {
 	const iterations = 50

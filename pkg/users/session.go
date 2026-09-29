@@ -24,7 +24,7 @@ import (
 // one). Its view of who is in chat comes from an injected ChatterSource.
 //
 // Sessions is accessed from multiple goroutines: the UpdateSession /
-// UpdateLeaderboard crons, the inbound IRC handlers, and command dispatch.
+// UpdateLeaderboard crons, the inbound chat handlers, and command dispatch.
 // mu guards loggedIn and lifetimeLeaderboard; it is held only for map/slice
 // access, never across DB or chatter-source calls.
 type Sessions struct {
