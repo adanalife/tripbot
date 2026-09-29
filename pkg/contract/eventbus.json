@@ -310,6 +310,91 @@
         ]
       }
     },
+    "audio_bed": {
+      "subject": "tripbot.{env}.audio.bed.{platform}",
+      "wildcard": "tripbot.{env}.audio.bed.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_AUDIO",
+      "schema": {
+        "type": "object",
+        "title": "AudioBed",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "bed": {
+            "type": "string"
+          },
+          "playing": {
+            "type": "string"
+          },
+          "station": {
+            "type": "string"
+          },
+          "voicing": {
+            "type": "string"
+          },
+          "album": {
+            "type": "string"
+          },
+          "playing_album": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string"
+          },
+          "shuffle": {
+            "type": "boolean"
+          },
+          "pending": {
+            "$ref": "#/$defs/AudioBedSwitch"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "bed",
+          "playing",
+          "station",
+          "voicing",
+          "shuffle",
+          "emitted_at"
+        ]
+      }
+    },
+    "flags_snapshot": {
+      "subject": "tripbot.{env}.flags.snapshot.{platform}",
+      "wildcard": "tripbot.{env}.flags.snapshot.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_FLAGS",
+      "schema": {
+        "type": "object",
+        "title": "FeatureFlags",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FeatureFlag"
+            }
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "flags",
+          "emitted_at"
+        ]
+      }
+    },
     "youtube_broadcast": {
       "subject": "tripbot.{env}.youtube.broadcast",
       "transport": "jetstream",
@@ -441,6 +526,68 @@
       },
       "required": [
         "parent_message_id"
+      ]
+    },
+    "AudioBedSwitch": {
+      "type": "object",
+      "title": "AudioBedSwitch",
+      "properties": {
+        "bed": {
+          "type": "string"
+        },
+        "station": {
+          "type": "string"
+        },
+        "album": {
+          "type": "string"
+        },
+        "voicing": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bed",
+        "at"
+      ]
+    },
+    "FeatureFlag": {
+      "type": "object",
+      "title": "FeatureFlag",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "enabled_for_usernames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enabled_for_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_removal_date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "key",
+        "description",
+        "enabled"
       ]
     }
   }

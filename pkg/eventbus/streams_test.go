@@ -87,6 +87,12 @@ func expectedStreams(env string) map[string]wantStream {
 		egressStreamName: {
 			subjects: []string{EgressStateWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
 		},
+		audioStreamName: {
+			subjects: []string{AudioBedWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
+		flagsStreamName: {
+			subjects: []string{FeatureFlagsWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
 	}
 }
 

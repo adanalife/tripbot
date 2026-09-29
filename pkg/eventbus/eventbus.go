@@ -460,6 +460,98 @@ func LastEgressState(ctx context.Context, js jetstream.JetStream, env, platform 
 	return s, nil
 }
 
+// --- audio.bed --------------------------------------------------------------
+
+// AudioBed is the wire format for tripbot.<env>.audio.bed.<platform> — one
+// platform instance's background-audio bed, as its bed store holds it. Bed is
+// the selection and Playing what is audible; they differ only while the audio
+// watchdog has a fallback standing in for SomaFM. Track is the album track's
+// title and is empty on SomaFM, whose song comes from SomaFM's feed through GET
+// /api/audio rather than from the store.
+//
+// The option lists (stations, voicings, albums) are deliberately absent: they
+// change on a deploy or a new album on the share, not on a click, and GET
+// /api/audio still serves them.
+type AudioBed struct {
+	Platform     string          `json:"platform"`
+	Bed          string          `json:"bed"`
+	Playing      string          `json:"playing"`
+	Station      string          `json:"station"`
+	Voicing      string          `json:"voicing"`
+	Album        string          `json:"album,omitempty"`
+	PlayingAlbum string          `json:"playing_album,omitempty"`
+	Track        string          `json:"track,omitempty"`
+	Shuffle      bool            `json:"shuffle"`
+	Pending      *AudioBedSwitch `json:"pending,omitempty"`
+	EmittedAt    string          `json:"emitted_at"`
+}
+
+// AudioBedSwitch is a bed switch waiting out the store's delay. At is when it
+// lands, as a timestamp rather than GET /api/audio's seconds-left: a retained
+// message is read at an unknown time after it was sent, so only a deadline
+// stays true.
+type AudioBedSwitch struct {
+	Bed     string `json:"bed"`
+	Station string `json:"station,omitempty"`
+	Album   string `json:"album,omitempty"`
+	Voicing string `json:"voicing,omitempty"`
+	At      string `json:"at"`
+}
+
+// AudioBedSubject returns the publish subject for one platform instance's bed.
+// Per-platform because each instance owns its own OBS's bed.
+func AudioBedSubject(env, platform string) string {
+	return subject(env, "audio", "bed") + "." + platform
+}
+
+// AudioBedWildcard returns the subscribe pattern covering every platform's bed.
+func AudioBedWildcard(env string) string { return subject(env, "audio", "bed") + ".*" }
+
+// EmitAudioBed publishes bed, stamped now.
+func EmitAudioBed(ctx context.Context, env string, bed AudioBed) {
+	bed.EmittedAt = emittedAt()
+	emit(ctx, AudioBedSubject(env, bed.Platform), bed)
+}
+
+// --- flags.snapshot ---------------------------------------------------------
+
+// FeatureFlags is the wire format for tripbot.<env>.flags.snapshot.<platform> —
+// every feature flag one platform instance evaluates, as GET /api/flags serves
+// them. Flags are rows per platform, so each instance speaks for its own.
+type FeatureFlags struct {
+	Platform  string        `json:"platform"`
+	Flags     []FeatureFlag `json:"flags"`
+	EmittedAt string        `json:"emitted_at"`
+}
+
+// FeatureFlag is one flag in a FeatureFlags snapshot.
+type FeatureFlag struct {
+	Key                 string   `json:"key"`
+	Description         string   `json:"description"`
+	Enabled             bool     `json:"enabled"`
+	EnabledForUsernames []string `json:"enabled_for_usernames,omitempty"`
+	EnabledForRoles     []string `json:"enabled_for_roles,omitempty"`
+	TargetRemovalDate   string   `json:"target_removal_date,omitempty"`
+}
+
+// FeatureFlagsSubject returns the publish subject for one platform's flags.
+func FeatureFlagsSubject(env, platform string) string {
+	return subject(env, "flags", "snapshot") + "." + platform
+}
+
+// FeatureFlagsWildcard returns the subscribe pattern covering every platform's
+// flags.
+func FeatureFlagsWildcard(env string) string { return subject(env, "flags", "snapshot") + ".*" }
+
+// EmitFeatureFlags publishes one platform's flag snapshot, stamped now.
+func EmitFeatureFlags(ctx context.Context, env, platform string, flags []FeatureFlag) {
+	emit(ctx, FeatureFlagsSubject(env, platform), FeatureFlags{
+		Platform:  platform,
+		Flags:     flags,
+		EmittedAt: emittedAt(),
+	})
+}
+
 // --- chat.deleted -----------------------------------------------------------
 
 // ChatDeleted is the wire format for tripbot.<env>.chat.deleted — a moderation
@@ -550,6 +642,8 @@ const (
 	facebookStreamName = "TRIPBOT_FACEBOOK"
 	obsStreamName      = "TRIPBOT_OBS"
 	egressStreamName   = "TRIPBOT_EGRESS"
+	audioStreamName    = "TRIPBOT_AUDIO"
+	flagsStreamName    = "TRIPBOT_FLAGS"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -627,6 +721,25 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			Retention:   jetstream.LimitsPolicy,
 			Discard:     jetstream.DiscardOld,
 			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:        audioStreamName,
+			Description: "Last-known background-audio bed per platform instance (last-value cache).",
+			Subjects:    []string{AudioBedWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:              flagsStreamName,
+			Description:       "Last-known feature-flag snapshot per platform instance (last-value cache).",
+			Subjects:          []string{FeatureFlagsWildcard(env)},
+			Storage:           jetstream.FileStorage,
+			Retention:         jetstream.LimitsPolicy,
+			Discard:           jetstream.DiscardOld,
 			MaxMsgsPerSubject: 1,
 		},
 		{

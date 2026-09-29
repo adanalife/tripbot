@@ -33,6 +33,10 @@ func TestEventbusSchemaMatchesStructs(t *testing.T) {
 		"ChatReply":         reflect.TypeOf(eventbus.ChatReply{}),
 		"OBSStream":         reflect.TypeOf(eventbus.OBSStream{}),
 		"EgressState":       reflect.TypeOf(eventbus.EgressState{}),
+		"AudioBed":          reflect.TypeOf(eventbus.AudioBed{}),
+		"AudioBedSwitch":    reflect.TypeOf(eventbus.AudioBedSwitch{}),
+		"FeatureFlags":      reflect.TypeOf(eventbus.FeatureFlags{}),
+		"FeatureFlag":       reflect.TypeOf(eventbus.FeatureFlag{}),
 		"YoutubeBroadcast":  reflect.TypeOf(eventbus.YoutubeBroadcast{}),
 		"FacebookBroadcast": reflect.TypeOf(eventbus.FacebookBroadcast{}),
 	}

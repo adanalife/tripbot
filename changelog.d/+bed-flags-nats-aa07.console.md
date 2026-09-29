@@ -1,0 +1,1 @@
+Each instance's background-audio bed and feature flags now go out on NATS (`tripbot.{env}.audio.bed.{platform}`, `tripbot.{env}.flags.snapshot.{platform}`) whenever they change, so the console can hold them instead of polling `/api/audio` and `/api/flags`.
