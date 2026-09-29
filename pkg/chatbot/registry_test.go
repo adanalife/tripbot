@@ -3,8 +3,11 @@ package chatbot
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/adanalife/tripbot"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
@@ -270,3 +273,21 @@ func TestBotlessHelpMessagesAdvertiseNoCommands(t *testing.T) {
 // commandToken matches a chat-command token ("!" followed by a letter, e.g.
 // !location) without matching a bare "!" used as punctuation.
 var commandToken = regexp.MustCompile(`![a-zA-Z]`)
+
+// The platform constants are named so per-command gating reads well, but the
+// set itself is platform-gateway's. A platform synced into platforms.json with
+// no scope here would run with whatever the lookup's zero value grants, and a
+// scope for a platform the fleet dropped is dead config.
+func TestPlatformCommandScopeCoversTheSyncedPlatforms(t *testing.T) {
+	supported := tripbot.Platforms()
+	for _, p := range supported {
+		if _, ok := platformCommandScope[p]; !ok {
+			t.Errorf("platforms.json lists %q but platformCommandScope has no entry for it", p)
+		}
+	}
+	for p := range platformCommandScope {
+		if !slices.Contains(supported, p) {
+			t.Errorf("platformCommandScope has %q, which platforms.json does not list", p)
+		}
+	}
+}

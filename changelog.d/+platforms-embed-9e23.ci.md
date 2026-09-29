@@ -1,0 +1,1 @@
+Go code reads the supported-platform set from the synced `platforms.json` (`tripbot.Platforms()`), and tests fail when platform-gateway adds a platform tripbot has no command scope or gateway descriptor for.
