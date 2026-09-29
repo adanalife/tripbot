@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/adanalife/tripbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
@@ -85,9 +86,22 @@ func TestGatewayPlatformYouTubeInboundGate(t *testing.T) {
 
 	// No other platform gates inbound; a stray skipInbound would leave that
 	// platform's chat unread with no obvious cause.
-	for _, platform := range []string{"facebook", "instagram", "tiktok"} {
+	for _, platform := range tripbot.Platforms() {
+		if platform == "youtube" {
+			continue
+		}
 		if (&Tripbot{cfg: testCfg(platform)}).gatewayPlatform().skipInbound {
 			t.Errorf("%s skipInbound = true, want false", platform)
+		}
+	}
+}
+
+// A platform synced into platforms.json with no case in gatewayPlatform falls
+// through to youtube's descriptor and dials youtube's gateway.
+func TestGatewayPlatformHasACaseForEverySyncedPlatform(t *testing.T) {
+	for _, platform := range tripbot.Platforms() {
+		if got := (&Tripbot{cfg: testCfg(platform)}).gatewayPlatform().name; got != platform {
+			t.Errorf("platform %q resolves to the %q descriptor", platform, got)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/adanalife/tripbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/go-co-op/gocron/v2"
 )
@@ -233,7 +234,10 @@ func TestLeaderboardJobsAreTwitchOnly(t *testing.T) {
 		}
 	}
 
-	for _, platform := range []string{"youtube", "facebook", "instagram", "tiktok"} {
+	for _, platform := range tripbot.Platforms() {
+		if platform == "twitch" {
+			continue
+		}
 		names := scheduledJobNames(t, &c.TripbotConfig{Platform: platform})
 		for _, job := range leaderboardJobs {
 			if slices.Contains(names, job) {
