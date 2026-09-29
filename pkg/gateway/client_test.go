@@ -291,7 +291,7 @@ func TestCachedReads_ErrorOnNon200(t *testing.T) {
 }
 
 // SendChatReply carries the parent as reply_to; a plain SendChat omits the key
-// so an older gateway sees the body it always did.
+// so a gateway without reply support sees a plain send's body.
 func TestSendChatReply(t *testing.T) {
 	var gotBody map[string]string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

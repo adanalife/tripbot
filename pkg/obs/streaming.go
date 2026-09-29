@@ -125,8 +125,8 @@ var lastStreamState streamStateCache
 // poller has no live connection — the same signal a failed dial gives, so an
 // unreachable OBS can't be mistaken for a stopped stream.
 //
-// The context is unused; it is in the signature so this can be injected
-// wherever a dialing read was.
+// The context is unused; it keeps the signature of a dialing read, so either
+// can be injected.
 func LastStreamState(_ context.Context) (StreamState, error) {
 	state, _, known := lastStreamState.get()
 	if !known {

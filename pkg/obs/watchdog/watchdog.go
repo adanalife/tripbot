@@ -64,7 +64,7 @@ func DefaultWatchdogDeps() WatchdogDeps {
 		// Read off the connection the streaming poller already holds rather
 		// than dialing OBS for each answer: the poller learns the same fact
 		// every tick, and it reports OBS unreachable the same way a failed
-		// dial did.
+		// dial does.
 		OBSState: obs.LastStreamState,
 		Restart:  RestartOBSOutput,
 	}

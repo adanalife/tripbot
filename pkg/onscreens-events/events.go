@@ -33,7 +33,7 @@ type MiddleShow struct {
 	Msg string `json:"msg"`
 	// HideAfterSeconds auto-hides the text that many seconds after it lands.
 	// Optional on the wire: omitted (or zero) leaves the text up until
-	// something hides it, which is what every publisher before this field did.
+	// something hides it.
 	HideAfterSeconds int `json:"hide_after_seconds,omitempty"`
 }
 
