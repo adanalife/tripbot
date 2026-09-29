@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.23.0] — 2026-09-29
+
+### Console / API
+
+- Each instance's background-audio bed and feature flags now go out on NATS (`tripbot.{env}.audio.bed.{platform}`, `tripbot.{env}.flags.snapshot.{platform}`) whenever they change, so the console can hold them instead of polling `/api/audio` and `/api/flags`. ([#1602](https://github.com/adanalife/tripbot/pull/1602))
+
+### Fixes
+
+- The database connection gives up on an unreachable host after 5s and cancels any query running past a minute, instead of waiting indefinitely. ([#1606](https://github.com/adanalife/tripbot/pull/1606))
+
+### CI / Tooling
+
+- Go code reads the supported-platform set from the synced `platforms.json` (`tripbot.Platforms()`), and tests fail when platform-gateway adds a platform tripbot has no command scope or gateway descriptor for. ([#1603](https://github.com/adanalife/tripbot/pull/1603))
+
 ## [v5.22.0] — 2026-09-28
 
 ### Chatbot
