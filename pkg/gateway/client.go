@@ -359,6 +359,10 @@ type InboundChatMessage struct {
 	// Reply names the earlier message this one answers, on a platform whose
 	// chat threads (Twitch); nil otherwise.
 	Reply *InboundReply `json:"reply,omitempty"`
+	// MessageType is Twitch's word for a line it singles out — "user_intro"
+	// for a chatter's first message in the channel,
+	// "channel_points_highlighted" — and empty for an ordinary line.
+	MessageType string `json:"message_type,omitempty"`
 }
 
 // InboundReply is the parent of a threaded reply: the id a reply send takes,
