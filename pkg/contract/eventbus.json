@@ -49,6 +49,9 @@
           "reply": {
             "$ref": "#/$defs/ChatReply"
           },
+          "message_type": {
+            "type": "string"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"

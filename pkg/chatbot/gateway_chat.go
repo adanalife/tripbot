@@ -182,6 +182,7 @@ func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMess
 			Badges:      m.Badges,
 			Emotes:      emotes(m.Emotes),
 			Reply:       reply(m.Reply),
+			MessageType: m.MessageType,
 		})
 	case gateway.KindGift:
 		if m.Gift == nil {

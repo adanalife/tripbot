@@ -129,8 +129,14 @@ type ChatMessage struct {
 	// reply on Twitch, or the bot's own answer to a command (which carries only
 	// the parent id: the bot never saw the parent's text at send time). Nil on
 	// a plain line and on every platform whose chat is flat.
-	Reply     *ChatReply `json:"reply,omitempty"`
-	EmittedAt string     `json:"emitted_at"`
+	Reply *ChatReply `json:"reply,omitempty"`
+	// MessageType is Twitch's word for a line it singles out: "user_intro"
+	// for a chatter's first message in the channel,
+	// "channel_points_highlighted" for one paid for with channel points, and
+	// the rest of Twitch's list. Empty for an ordinary line, the bot's own
+	// sends, and every other platform.
+	MessageType string `json:"message_type,omitempty"`
+	EmittedAt   string `json:"emitted_at"`
 }
 
 // ChatReply is the parent of a threaded chat line. ParentMessageID is the

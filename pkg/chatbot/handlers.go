@@ -562,6 +562,9 @@ type IncomingMessage struct {
 	MessageID string
 	// Reply names the message this one answers, when the platform threads.
 	Reply *eventbus.ChatReply
+	// MessageType is the platform's word for a line it singles out (Twitch's
+	// "user_intro" for a first-timer), carried onto the event bus for display.
+	MessageType string
 	// Moderator, Subscriber, and Broadcaster are the sender's role in this
 	// channel as the platform reported it on this message. They ride the event
 	// bus for display; the follower and subscriber checks in checkAccess read
@@ -618,6 +621,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Badges:      msg.Badges,
 		Emotes:      msg.Emotes,
 		Reply:       msg.Reply,
+		MessageType: msg.MessageType,
 	})
 
 	// resolve the sender, then run any command. The original casing goes
