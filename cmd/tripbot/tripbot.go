@@ -1287,7 +1287,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 
 	if !t.platformIsTwitch() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
-		// tracking reads Twitch chatters (YouTube presence is punted in v1),
+		// tracking reads Twitch chatters (YouTube presence is not tracked),
 		// the leaderboards back excluded commands, the subscriber /
 		// follower polls hit Helix, and the token reload reads Twitch
 		// oauth_tokens rows this instance never holds.

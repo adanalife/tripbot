@@ -20,7 +20,7 @@ func (noopOnscreens) ShowTimewarp(_ context.Context, _ string, _ bool) error    
 type recordingOnscreens struct {
 	Calls []string
 	// NoBackground is the last ShowTimewarp call's background choice, kept off
-	// Calls so the existing call-sequence assertions stay readable.
+	// Calls so the call-sequence assertions stay readable.
 	NoBackground bool
 }
 

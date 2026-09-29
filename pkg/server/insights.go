@@ -472,8 +472,8 @@ type regionInsight struct {
 	AvgChatters float64 `json:"avg_chatters"`
 	// Joins and Leaves are non-bot session starts and ends stamped with a
 	// clip in this state, so Net is the audience the state gained while it
-	// held the screen. This is the "best performing" figure the design
-	// settled on: raw viewer count is dominated by time-of-day, raids and
+	// held the screen. Net is the "best performing" figure because raw
+	// viewer count is dominated by time-of-day, raids and
 	// day-of-week, which churn differences out.
 	Joins  int64 `json:"joins"`
 	Leaves int64 `json:"leaves"`

@@ -729,8 +729,8 @@ func TestDaytimeCmd_NoDaytimeAhead_Wrapped(t *testing.T) {
 
 // On a host without playout, every playhead command has to answer chat rather
 // than reach for a player that isn't there. This is the branch a Mac dev box
-// takes; pinning it keeps the apology (and the early return) from rotting now
-// that the rest of the file drives the enabled path.
+// takes; pinning it keeps the apology (and the early return) from rotting
+// while the rest of the file drives the enabled path.
 func TestPlaybackCmds_WithoutPlayoutApologizeAndDoNothing(t *testing.T) {
 	prev := runningOnDarwin
 	runningOnDarwin = func() bool { return true }

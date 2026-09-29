@@ -709,8 +709,7 @@ func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 // An album bed with no play order is the one way the stream goes silent while
 // OBS reports a healthy source: Detect adopts the bed OBS booted on without
 // passing setNow's refuse-an-empty-album guard, so a missing track index leaves
-// Album selected with nothing loaded. Prod sat silent on both platforms this
-// way on 2026-09-08.
+// Album selected with nothing loaded.
 func TestAdvance_EmptyAlbumFallsBackToTheCarHum(t *testing.T) {
 	dir := t.TempDir() // a share with no albums: nothing to build an order from
 	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
