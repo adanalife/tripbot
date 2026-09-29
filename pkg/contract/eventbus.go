@@ -218,6 +218,39 @@ var (
 		{"lifecycle", strType(), false},
 		{"emitted_at", dateType(), true},
 	}
+	audioBedFields = []field{
+		{"platform", strType(), true},
+		{"bed", strType(), true},
+		{"playing", strType(), true},
+		{"station", strType(), true},
+		{"voicing", strType(), true},
+		{"album", strType(), false},
+		{"playing_album", strType(), false},
+		{"track", strType(), false},
+		{"shuffle", boolType(), true},
+		{"pending", refType("AudioBedSwitch"), false},
+		{"emitted_at", dateType(), true},
+	}
+	audioBedSwitchFields = []field{
+		{"bed", strType(), true},
+		{"station", strType(), false},
+		{"album", strType(), false},
+		{"voicing", strType(), false},
+		{"at", dateType(), true},
+	}
+	featureFlagsFields = []field{
+		{"platform", strType(), true},
+		{"flags", arrayType(refType("FeatureFlag")), true},
+		{"emitted_at", dateType(), true},
+	}
+	featureFlagFields = []field{
+		{"key", strType(), true},
+		{"description", strType(), true},
+		{"enabled", boolType(), true},
+		{"enabled_for_usernames", arrayType(strType()), false},
+		{"enabled_for_roles", arrayType(strType()), false},
+		{"target_removal_date", dateType(), false},
+	}
 	youtubeBroadcastFields = []field{
 		{"video_id", strType(), true},
 		{"live", boolType(), true},
@@ -253,6 +286,10 @@ var envelopeFields = map[string][]field{
 	"ChatReply":         chatReplyFields,
 	"OBSStream":         obsStreamFields,
 	"EgressState":       egressStateFields,
+	"AudioBed":          audioBedFields,
+	"AudioBedSwitch":    audioBedSwitchFields,
+	"FeatureFlags":      featureFlagsFields,
+	"FeatureFlag":       featureFlagFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
 	"FacebookBroadcast": facebookBroadcastFields,
 }
@@ -314,6 +351,20 @@ func eventbusContract() orderedObject {
 				{"stream", "TRIPBOT_EGRESS"},
 				{"schema", objectSchema("EgressState", egressStateFields)},
 			}},
+			{"audio_bed", orderedObject{
+				{"subject", "tripbot.{env}.audio.bed.{platform}"},
+				{"wildcard", "tripbot.{env}.audio.bed.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_AUDIO"},
+				{"schema", objectSchema("AudioBed", audioBedFields)},
+			}},
+			{"flags_snapshot", orderedObject{
+				{"subject", "tripbot.{env}.flags.snapshot.{platform}"},
+				{"wildcard", "tripbot.{env}.flags.snapshot.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_FLAGS"},
+				{"schema", objectSchema("FeatureFlags", featureFlagsFields)},
+			}},
 			{"youtube_broadcast", orderedObject{
 				{"subject", "tripbot.{env}.youtube.broadcast"},
 				{"transport", "jetstream"},
@@ -331,6 +382,8 @@ func eventbusContract() orderedObject {
 			{"AuthAccount", objectSchema("AuthAccount", authAccountFields)},
 			{"Emote", objectSchema("Emote", emoteFields)},
 			{"ChatReply", objectSchema("ChatReply", chatReplyFields)},
+			{"AudioBedSwitch", objectSchema("AudioBedSwitch", audioBedSwitchFields)},
+			{"FeatureFlag", objectSchema("FeatureFlag", featureFlagFields)},
 		}},
 	}
 }

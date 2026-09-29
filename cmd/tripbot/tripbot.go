@@ -328,6 +328,7 @@ func (t *Tripbot) Run() {
 	go obs.PollStreamingActive(ctx, t.cfg.Environment, t.cfg.Platform, 30*time.Second)
 	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
 	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
+	go t.publishConsoleState(ctx)       // after startNATS + startBackgroundAudio: bed + flags for the console
 	t.startStreamWatchdog(ctx)          // twitch, tiktok, youtube: recovers a stream the platform stopped showing
 	if t.platformIsTwitch() {
 		// chat.send subjects are per-env, not per-platform — both platform
