@@ -34,7 +34,6 @@ func MilesBetween(lat1, lng1, lat2, lng2 float64) float64 {
 }
 
 // GoogleMapsURL returns a google maps link to the coords provided
-// TODO find query param for zoom level
 func GoogleMapsURL(lat, long float64) string {
 	return fmt.Sprintf("https://maps.google.com/?q=%.5f%%2C%.5f&ll=%.5f%%2C%.5f&z=5", lat, long, lat, long)
 }

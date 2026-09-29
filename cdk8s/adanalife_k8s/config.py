@@ -239,8 +239,7 @@ _STAGE_ROLE = "arn:aws:iam::413585268653:role/ExternalDNSRole"
 _PROD_ROLE = "arn:aws:iam::704461573429:role/ExternalDNSRole"
 
 
-# Per-env table. Mirrors the Kustomize overlays; the source of truth once those
-# overlays are retired. Values cross-checked against k8s/apps/*/overlays/<env>.
+# Per-env table: the source of truth for each environment's config.
 ENVS: dict[str, EnvConfig] = {
     "prod-1": EnvConfig(
         name="prod-1",

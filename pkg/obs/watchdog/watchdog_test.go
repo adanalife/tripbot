@@ -168,7 +168,7 @@ func runFixtureOn(t *testing.T, platform string, script []step, threshold int, c
 }
 
 // The output reports active for several polls before the teardown completes —
-// the span the old fixed pause guessed at and a half-open socket overran.
+// a span no fixed pause bounds, since a half-open socket's teardown runs long.
 func TestAwaitOutputStopped_WaitsOutTheTeardown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		polls := 0

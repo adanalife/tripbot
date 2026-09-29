@@ -13,7 +13,7 @@ import (
 // graceful shutdown of in-memory session state) plus the inbound-side session
 // lifecycle and access-check reads the handlers and dispatch need. Tests
 // inject a fake; production uses the realSessions adapter built by
-// NewSessionsAdapter. Mirrors the Onscreens/Playout/Video/IRC injection pattern.
+// NewSessionsAdapter. Mirrors the Onscreens/Playout/Video/Chat injection pattern.
 type Sessions interface {
 	// Find looks up a user by username. Returns gorm.ErrRecordNotFound for
 	// an unknown user (mirrors pkg/users.Find's contract); any other error
@@ -66,7 +66,7 @@ type Sessions interface {
 // realSessions delegates to its *users.Sessions, plus pkg/users' standalone DB
 // helper (Find, which is not session state). cmd/tripbot builds it around the
 // process-wide *users.Sessions via NewSessionsAdapter so commands read the same
-// session state the IRC handlers mutate. s is nil in New()'s default adapter
+// session state the inbound chat handlers mutate. s is nil in New()'s default adapter
 // until cmd assigns App.Sessions, so the nil guards below cover that brief
 // startup window. Tests inject their own Sessions fake rather than realSessions,
 // so the guards only ever fire pre-install.
