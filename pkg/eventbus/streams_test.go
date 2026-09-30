@@ -93,6 +93,9 @@ func expectedStreams(env string) map[string]wantStream {
 		flagsStreamName: {
 			subjects: []string{FeatureFlagsWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
 		},
+		chatModeStreamName: {
+			subjects: []string{ChatModeWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
 	}
 }
 

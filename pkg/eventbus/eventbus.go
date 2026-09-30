@@ -587,6 +587,39 @@ type ChatDeleted struct {
 // env. The console builds the same string to subscribe.
 func ChatDeletedSubject(env string) string { return subject(env, "chat", "deleted") }
 
+// --- chat.mode --------------------------------------------------------------
+
+// ChatMode is the wire format for tripbot.<env>.chat.mode.<platform> — the
+// restrictions a platform's chat holds, as the gateway last read them. The
+// Twitch gateway reads them from Helix when its chat session connects and follows
+// channel.chat_settings.update after that.
+//
+// SlowSeconds is 0 when slow mode is off. FollowerMinutes is absent when
+// followers-only is off, and 0 when it admits any follower. A consumer counts
+// slow mode down from its own caller's last send: the platform doesn't say when
+// that was.
+//
+// platform-gateway is the only publisher, so there is no Emit helper here.
+type ChatMode struct {
+	Platform        string `json:"platform"`
+	SlowSeconds     int    `json:"slow_seconds"`
+	FollowerMinutes *int   `json:"follower_minutes,omitempty"`
+	SubscribersOnly bool   `json:"subscribers_only"`
+	EmoteOnly       bool   `json:"emote_only"`
+	UniqueOnly      bool   `json:"unique_only"`
+	EmittedAt       string `json:"emitted_at"`
+}
+
+// ChatModeSubject returns the publish subject for one platform's chat mode.
+// Per-platform so TRIPBOT_CHAT_MODE retains a last value per platform.
+func ChatModeSubject(env, platform string) string {
+	return subject(env, "chat", "mode") + "." + platform
+}
+
+// ChatModeWildcard returns the subscribe pattern covering every platform's chat
+// mode in env.
+func ChatModeWildcard(env string) string { return subject(env, "chat", "mode") + ".*" }
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -650,6 +683,7 @@ const (
 	egressStreamName   = "TRIPBOT_EGRESS"
 	audioStreamName    = "TRIPBOT_AUDIO"
 	flagsStreamName    = "TRIPBOT_FLAGS"
+	chatModeStreamName = "TRIPBOT_CHAT_MODE"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -743,6 +777,15 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			Name:              flagsStreamName,
 			Description:       "Last-known feature-flag snapshot per platform instance (last-value cache).",
 			Subjects:          []string{FeatureFlagsWildcard(env)},
+			Storage:           jetstream.FileStorage,
+			Retention:         jetstream.LimitsPolicy,
+			Discard:           jetstream.DiscardOld,
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:              chatModeStreamName,
+			Description:       "Last-known chat mode per platform (last-value cache); published by platform-gateway.",
+			Subjects:          []string{ChatModeWildcard(env)},
 			Storage:           jetstream.FileStorage,
 			Retention:         jetstream.LimitsPolicy,
 			Discard:           jetstream.DiscardOld,
