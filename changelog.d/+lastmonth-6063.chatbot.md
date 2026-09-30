@@ -1,0 +1,1 @@
+`!lastmonth` (`!lastleaderboard`, `!lastlb`) answers with the month just ended as it finished: the podium for miles, correct guesses and the guessr monthly board in one chat line, with the final miles board on the overlay. Until the rollup tick has frozen the month it says so rather than showing the running boards.

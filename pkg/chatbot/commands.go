@@ -18,6 +18,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -452,6 +453,56 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d correct guesses this month: ", len(intLeaderboard)) + rankedList(intLeaderboard, "")
 	a.Reply(ctx, msg)
+}
+
+// podiumRows is how many places each board names in the month-end message.
+// Three boards ride one chat line, so each gets a podium rather than a top ten;
+// the per-board commands still list the full leaderboardSize for the running
+// month.
+const podiumRows = 3
+
+// lastMonthCmd answers !lastmonth with the month just ended as it finished: the
+// miles and correct-guess boards the rollup tick froze at rollover, and the
+// guessing game's monthly board for the same month. The miles board goes on
+// the overlay; chat gets the podium of all three in one line, ties sharing a
+// place as rankedList always does. Until the tick has frozen the month there
+// is nothing final to show, and the reply says so rather than falling back to
+// the running boards — a viewer asking for last month wants a result.
+func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !lastmonth", "username", user.Username)
+
+	month := a.Scoreboards.LastMonth()
+	name := month.Format("January")
+	miles := a.Scoreboards.LastMonthMiles(ctx, leaderboardSize)
+	guesses := a.Scoreboards.LastMonthGuesses(ctx, leaderboardSize)
+	if len(miles) == 0 && len(guesses) == 0 {
+		a.Reply(ctx, "No final boards for "+name+" yet — they're frozen shortly after the month ends.")
+		return
+	}
+
+	var parts []string
+	if len(miles) > 0 {
+		a.Onscreens.ShowLeaderboard(ctx, name+" Miles (final)", overlayRows(miles, onscreenRows))
+		parts = append(parts, "Miles: "+rankedList(overlayRows(miles, podiumRows), "mi"))
+	}
+	if len(guesses) > 0 {
+		parts = append(parts, "Guesses: "+rankedList(overlayRows(guesses, podiumRows), ""))
+	}
+	// The same flag !guessr and the rotation read: off means the game's board
+	// stays off every surface, this one included.
+	if a.Flags.Bool(ctx, guessrBoardFlagKey, feature.EvalContext{
+		Username: user.Username,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
+	}) {
+		_, rows, err := guessrBoardFor(ctx, "monthly", month.Format("2006-01"))
+		if err != nil {
+			slog.ErrorContext(ctx, "could not fetch guessr leaderboard", "err", err, "board", "monthly", "month", month.Format("2006-01"))
+		} else if len(rows) > 0 {
+			parts = append(parts, "Guessr: "+rankedList(overlayRows(rows, podiumRows), ""))
+		}
+	}
+	a.Reply(ctx, name+" final boards — "+strings.Join(parts, "; "))
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
