@@ -23,8 +23,8 @@ func (noopSessions) SetBot(_ context.Context, _ string, _ bool) error           
 func (noopSessions) CurrentMiles(_ context.Context, u users.User) float32        { return u.Miles }
 func (noopSessions) CurrentMonthlyMiles(_ context.Context, _ users.User) float32 { return 0 }
 func (noopSessions) BonusMiles(_ users.User) float32                             { return 0 }
-func (noopSessions) CorrectMiles(_ context.Context, _ string, _ float32) (float32, error) {
-	return 0, nil
+func (noopSessions) CorrectMiles(_ context.Context, _ string, delta float32) (total, applied float32, err error) {
+	return 0, delta, nil
 }
 func (noopSessions) LoginIfNecessary(_ context.Context, username string) users.User {
 	return users.User{Username: strings.ToLower(username)}
@@ -55,6 +55,9 @@ type recordingSessions struct {
 	// CorrectMilesErr is the error CorrectMiles will return for every call,
 	// standing in for a correction that didn't persist.
 	CorrectMilesErr error
+	// Applied stages the delta CorrectMiles reports as applied, standing in
+	// for a clamped clawback; zero means the requested delta landed whole.
+	Applied float32
 	// Miles / MonthlyMiles / Bonus stage what the miles methods return.
 	Miles, MonthlyMiles, Bonus float32
 	// Subscriber stages IsSubscriber; CommandUnavailable flips
@@ -140,10 +143,13 @@ func (r *recordingSessions) BonusMiles(u users.User) float32 {
 	return r.Bonus
 }
 
-func (r *recordingSessions) CorrectMiles(_ context.Context, username string, delta float32) (float32, error) {
+func (r *recordingSessions) CorrectMiles(_ context.Context, username string, delta float32) (total, applied float32, err error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("CorrectMiles(%q, %g)", username, delta))
 	if r.CorrectMilesErr != nil {
-		return 0, r.CorrectMilesErr
+		return 0, 0, r.CorrectMilesErr
 	}
-	return r.Miles, nil
+	if r.Applied != 0 {
+		return r.Miles, r.Applied, nil
+	}
+	return r.Miles, delta, nil
 }
