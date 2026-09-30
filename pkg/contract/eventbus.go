@@ -239,6 +239,15 @@ var (
 		{"voicing", strType(), false},
 		{"at", dateType(), true},
 	}
+	chatModeFields = []field{
+		{"platform", strType(), true},
+		{"slow_seconds", intType(), true},
+		{"follower_minutes", intType(), false},
+		{"subscribers_only", boolType(), true},
+		{"emote_only", boolType(), true},
+		{"unique_only", boolType(), true},
+		{"emitted_at", dateType(), true},
+	}
 	featureFlagsFields = []field{
 		{"platform", strType(), true},
 		{"flags", arrayType(refType("FeatureFlag")), true},
@@ -289,6 +298,7 @@ var envelopeFields = map[string][]field{
 	"EgressState":       egressStateFields,
 	"AudioBed":          audioBedFields,
 	"AudioBedSwitch":    audioBedSwitchFields,
+	"ChatMode":          chatModeFields,
 	"FeatureFlags":      featureFlagsFields,
 	"FeatureFlag":       featureFlagFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
@@ -358,6 +368,13 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_AUDIO"},
 				{"schema", objectSchema("AudioBed", audioBedFields)},
+			}},
+			{"chat_mode", orderedObject{
+				{"subject", "tripbot.{env}.chat.mode.{platform}"},
+				{"wildcard", "tripbot.{env}.chat.mode.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_CHAT_MODE"},
+				{"schema", objectSchema("ChatMode", chatModeFields)},
 			}},
 			{"flags_snapshot", orderedObject{
 				{"subject", "tripbot.{env}.flags.snapshot.{platform}"},

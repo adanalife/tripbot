@@ -368,6 +368,48 @@
         ]
       }
     },
+    "chat_mode": {
+      "subject": "tripbot.{env}.chat.mode.{platform}",
+      "wildcard": "tripbot.{env}.chat.mode.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT_MODE",
+      "schema": {
+        "type": "object",
+        "title": "ChatMode",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "slow_seconds": {
+            "type": "integer"
+          },
+          "follower_minutes": {
+            "type": "integer"
+          },
+          "subscribers_only": {
+            "type": "boolean"
+          },
+          "emote_only": {
+            "type": "boolean"
+          },
+          "unique_only": {
+            "type": "boolean"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "slow_seconds",
+          "subscribers_only",
+          "emote_only",
+          "unique_only",
+          "emitted_at"
+        ]
+      }
+    },
     "flags_snapshot": {
       "subject": "tripbot.{env}.flags.snapshot.{platform}",
       "wildcard": "tripbot.{env}.flags.snapshot.*",
