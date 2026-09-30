@@ -242,7 +242,9 @@ func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, 
 // clipInsight is one clip's in-window footage performance. AvgChatters /
 // MaxChatters aggregate viewer_samples.count — the number of people who've
 // spoken in chat while the clip aired, sampled every ~61s — which is an
-// engagement signal, not a concurrent-viewer count.
+// engagement signal, not a concurrent-viewer count. The pointer fields are
+// the columns that arrived after the table did, and are null when no
+// in-window row carried them, for the same reasons regionInsight gives.
 type clipInsight struct {
 	VideoID     int     `json:"video_id"`
 	Label       string  `json:"label"`
@@ -250,6 +252,21 @@ type clipInsight struct {
 	AvgChatters float64 `json:"avg_chatters"`
 	MaxChatters int64   `json:"max_chatters"`
 	Samples     int64   `json:"samples"`
+	// AvgViewers and MaxViewers aggregate viewer_samples.viewers, the
+	// platform's own concurrent-viewer number, over ticks not positively
+	// reported offline.
+	AvgViewers *float64 `json:"avg_viewers"`
+	MaxViewers *int64   `json:"max_viewers"`
+	// ChatPerMin is chat messages per sampled minute: viewer_samples.
+	// chat_messages is the count for the ~61s tick ending at the row, so
+	// averaging it over the ticks that carried one is a per-minute rate.
+	ChatPerMin *float64 `json:"chat_per_min"`
+	// ClosedPlays is the subset of Plays whose end was observed;
+	// AvgPlayedSeconds is their mean airing, and is null when none closed. A
+	// play with no ended_at is a restart mid-clip, not a clip still airing, so
+	// it stays out of the mean rather than reading as infinitely long.
+	ClosedPlays      int64    `json:"closed_plays"`
+	AvgPlayedSeconds *float64 `json:"avg_played_seconds"`
 }
 
 // footageInsightsResponse is the wire shape of GET /api/insights/footage.
@@ -272,12 +289,20 @@ const footageMinSamples = 3
 // play counts and the clip's place columns for a label. samples is the
 // driving side so a clip whose plays all predate the window (it was already
 // airing when the window opened) still reports.
+//
+// live IS NOT FALSE on the viewer figures, as in regionsSQL: the column
+// postdates the table, and a NULL says nobody reported, not offline. AVG
+// skips NULLs on its own, so chat_per_min and avg_played_seconds come back
+// NULL — not 0 — when no row in the window carried the column.
 const footageSQL = `
 WITH samples AS (
     SELECT video_id,
            AVG(count) AS avg_chatters,
            MAX(count) AS max_chatters,
-           COUNT(*)   AS samples
+           COUNT(*)   AS samples,
+           AVG(viewers) FILTER (WHERE live IS NOT FALSE) AS avg_viewers,
+           MAX(viewers) FILTER (WHERE live IS NOT FALSE) AS max_viewers,
+           AVG(chat_messages) AS chat_per_min
     FROM viewer_samples
     WHERE video_id IS NOT NULL
       AND sampled_at >= now() - make_interval(days => @days)
@@ -285,7 +310,10 @@ WITH samples AS (
     HAVING COUNT(*) >= @min_samples
 ),
 plays AS (
-    SELECT video_id, COUNT(*) AS plays
+    SELECT video_id,
+           COUNT(*)         AS plays,
+           COUNT(ended_at)  AS closed_plays,
+           AVG(EXTRACT(EPOCH FROM (ended_at - started_at))) AS avg_played_seconds
     FROM video_plays
     WHERE video_id IS NOT NULL
       AND started_at >= now() - make_interval(days => @days)
@@ -293,9 +321,14 @@ plays AS (
 )
 SELECT s.video_id,
        COALESCE(p.plays, 0)                       AS plays,
+       COALESCE(p.closed_plays, 0)                AS closed_plays,
+       ROUND(p.avg_played_seconds::numeric, 0)::float8 AS avg_played_seconds,
        ROUND(s.avg_chatters::numeric, 1)::float8  AS avg_chatters,
        s.max_chatters,
        s.samples,
+       ROUND(s.avg_viewers::numeric, 1)::float8   AS avg_viewers,
+       s.max_viewers,
+       ROUND(s.chat_per_min::numeric, 1)::float8  AS chat_per_min,
        COALESCE(v.state, '') AS state,
        COALESCE(v.city, '')  AS city,
        v.city_m
@@ -339,14 +372,19 @@ func clipLabel(state, city string, cityM *float64) string {
 func gatherFootageInsights(ctx context.Context, days int) (footageInsightsResponse, error) {
 	out := footageInsightsResponse{Days: days, Clips: []clipInsight{}, Platforms: []string{}}
 	var rows []struct {
-		VideoID     int
-		Plays       int64
-		AvgChatters float64
-		MaxChatters int64
-		Samples     int64
-		State       string
-		City        string
-		CityM       *float64
+		VideoID          int
+		Plays            int64
+		ClosedPlays      int64
+		AvgPlayedSeconds *float64
+		AvgChatters      float64
+		MaxChatters      int64
+		Samples          int64
+		AvgViewers       *float64
+		MaxViewers       *int64
+		ChatPerMin       *float64
+		State            string
+		City             string
+		CityM            *float64
 	}
 	err := database.GormDB().WithContext(ctx).
 		Raw(footageSQL, sql.Named("days", days), sql.Named("min_samples", footageMinSamples)).
@@ -356,12 +394,17 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 	}
 	for _, r := range rows {
 		out.Clips = append(out.Clips, clipInsight{
-			VideoID:     r.VideoID,
-			Label:       clipLabel(r.State, r.City, r.CityM),
-			Plays:       r.Plays,
-			AvgChatters: r.AvgChatters,
-			MaxChatters: r.MaxChatters,
-			Samples:     r.Samples,
+			VideoID:          r.VideoID,
+			Label:            clipLabel(r.State, r.City, r.CityM),
+			Plays:            r.Plays,
+			AvgChatters:      r.AvgChatters,
+			MaxChatters:      r.MaxChatters,
+			Samples:          r.Samples,
+			AvgViewers:       r.AvgViewers,
+			MaxViewers:       r.MaxViewers,
+			ChatPerMin:       r.ChatPerMin,
+			ClosedPlays:      r.ClosedPlays,
+			AvgPlayedSeconds: r.AvgPlayedSeconds,
 		})
 	}
 	if err := database.GormDB().WithContext(ctx).
@@ -419,7 +462,8 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // footageInsightsHandler serves GET /api/insights/footage: per-clip play
-// counts and chatter-sample aggregates over the ?days window.
+// counts and airing, chatter, viewer and chat-rate aggregates over the ?days
+// window.
 func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, footageInsightsDefaultDays)
 	payload, err := gatherFootageInsights(r.Context(), days)

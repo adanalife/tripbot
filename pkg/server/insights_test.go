@@ -354,9 +354,86 @@ func TestFootageInsightsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("clips = %+v, want %+v", got.Clips, want)
 	}
 	for i := range want {
-		if got.Clips[i] != want[i] {
-			t.Errorf("clips[%d] = %+v, want %+v", i, got.Clips[i], want[i])
+		// The seeds above carry none of the later columns, so every pointer
+		// field must come back null — a 0 there would claim nobody watched.
+		if !sameClip(got.Clips[i], want[i]) {
+			t.Errorf("clips[%d] = %s, want %s", i, clipJSON(t, got.Clips[i]), clipJSON(t, want[i]))
 		}
+	}
+}
+
+// sameClip compares two clips through their JSON, since the pointer fields
+// make == compare addresses.
+func sameClip(a, b clipInsight) bool {
+	aj, _ := json.Marshal(a)
+	bj, _ := json.Marshal(b)
+	return string(aj) == string(bj)
+}
+
+func clipJSON(t *testing.T, c clipInsight) string {
+	t.Helper()
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestFootageInsightsHandler_AudienceColumns covers the columns that arrived
+// after the table: viewers and live (migration 047), chat_messages (051) and
+// ended_at (050). An offline tick's viewers stay out of the average, a tick
+// with no chat counter stays out of the rate, and an open play — a restart
+// mid-clip — stays out of the mean airing rather than reading as endless.
+func TestFootageInsightsHandler_AudienceColumns(t *testing.T) {
+	db := testdb.New(t)
+	in := time.Now().Add(-1 * time.Hour)
+	clip := seedVideo(t, db, "insights_clip_audience", "Utah", "", nil)
+
+	live, offline := true, false
+	ten, twenty, huge := 10, 20, 999
+	seedSampleFull(t, db, clip, 2, &ten, &live, in)
+	seedSampleFull(t, db, clip, 2, &twenty, &live, in.Add(time.Minute))
+	seedSampleFull(t, db, clip, 2, &huge, &offline, in.Add(2*time.Minute))
+	// Two ticks carried a chat counter (3 and 5 messages); the third did not.
+	if err := db.Exec(`UPDATE viewer_samples SET chat_messages = 3 WHERE video_id = ? AND sampled_at = ?`, clip, in).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`UPDATE viewer_samples SET chat_messages = 5 WHERE video_id = ? AND sampled_at = ?`, clip, in.Add(time.Minute)).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Two closed plays of 120s and 180s, and one left open by a restart.
+	e1, e2 := in.Add(120*time.Second), in.Add(10*time.Minute+180*time.Second)
+	seedClosedPlay(t, db, clip, in, &e1)
+	seedClosedPlay(t, db, clip, in.Add(10*time.Minute), &e2)
+	seedClosedPlay(t, db, clip, in.Add(20*time.Minute), nil)
+
+	rec := insightsGET(t, "/api/insights/footage", footageInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got footageInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if len(got.Clips) != 1 {
+		t.Fatalf("clips = %+v, want one", got.Clips)
+	}
+	c := got.Clips[0]
+	if c.AvgViewers == nil || *c.AvgViewers != 15 {
+		t.Errorf("avg_viewers = %v, want 15 — the offline 999 must be excluded", c.AvgViewers)
+	}
+	if c.MaxViewers == nil || *c.MaxViewers != 20 {
+		t.Errorf("max_viewers = %v, want 20", c.MaxViewers)
+	}
+	if c.ChatPerMin == nil || *c.ChatPerMin != 4 {
+		t.Errorf("chat_per_min = %v, want 4 — the tick with no counter must not count", c.ChatPerMin)
+	}
+	if c.Plays != 3 || c.ClosedPlays != 2 {
+		t.Errorf("plays = %d closed = %d, want 3 and 2", c.Plays, c.ClosedPlays)
+	}
+	if c.AvgPlayedSeconds == nil || *c.AvgPlayedSeconds != 150 {
+		t.Errorf("avg_played_seconds = %v, want 150 — the open play must stay out", c.AvgPlayedSeconds)
 	}
 }
 
