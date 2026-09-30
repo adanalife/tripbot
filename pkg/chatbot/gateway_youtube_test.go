@@ -93,7 +93,7 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 				Badges:      map[string]int{"subscriber": 12},
 				Emotes:      []gateway.Emote{{ID: "25", Start: 0, End: 4}},
 				Reply:       &gateway.InboundReply{ParentMessageID: "m0", ParentAuthor: "Z", ParentAuthorID: "9", ParentText: "hi"},
-				MessageType: "user_intro"},
+				MessageType: "user_intro", Color: "#1E90FF"},
 			{Author: "B", AuthorID: "2", Kind: gateway.KindGift,
 				Gift: &gateway.Gift{ID: "5655", Name: "Rose", Count: 3, Diamonds: 1}},
 			{Author: "C", AuthorID: "3", Kind: gateway.KindGift}, // malformed: no payload
@@ -135,7 +135,7 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 		Badges:      map[string]int{"subscriber": 12},
 		Emotes:      []eventbus.Emote{{ID: "25", Start: 0, End: 4}},
 		Reply:       &eventbus.ChatReply{ParentMessageID: "m0", ParentUsername: "Z", ParentUserID: "9", ParentText: "hi"},
-		MessageType: "user_intro",
+		MessageType: "user_intro", Color: "#1E90FF",
 	}
 	if !reflect.DeepEqual(msgs[0], wantMsg) {
 		t.Errorf("chat handled = %+v, want %+v", msgs[0], wantMsg)

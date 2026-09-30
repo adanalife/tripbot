@@ -363,6 +363,9 @@ type InboundChatMessage struct {
 	// for a chatter's first message in the channel,
 	// "channel_points_highlighted" — and empty for an ordinary line.
 	MessageType string `json:"message_type,omitempty"`
+	// Color is the sender's chosen name colour as "#RRGGBB"; empty when they
+	// never picked one, and on every platform but Twitch.
+	Color string `json:"color,omitempty"`
 }
 
 // InboundReply is the parent of a threaded reply: the id a reply send takes,

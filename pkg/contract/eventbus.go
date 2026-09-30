@@ -142,6 +142,7 @@ var (
 		{"emotes", arrayType(refType("Emote")), false},
 		{"reply", refType("ChatReply"), false},
 		{"message_type", strType(), false},
+		{"color", strType(), false},
 		{"emitted_at", dateType(), true},
 	}
 	chatReplyFields = []field{

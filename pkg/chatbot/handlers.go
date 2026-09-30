@@ -565,6 +565,9 @@ type IncomingMessage struct {
 	// MessageType is the platform's word for a line it singles out (Twitch's
 	// "user_intro" for a first-timer), carried onto the event bus for display.
 	MessageType string
+	// Color is the sender's chosen name colour ("#RRGGBB"), carried onto the
+	// event bus for display; empty when the platform reports none.
+	Color string
 	// Moderator, Subscriber, and Broadcaster are the sender's role in this
 	// channel as the platform reported it on this message. They ride the event
 	// bus for display; the follower and subscriber checks in checkAccess read
@@ -622,6 +625,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Emotes:      msg.Emotes,
 		Reply:       msg.Reply,
 		MessageType: msg.MessageType,
+		Color:       msg.Color,
 	})
 
 	// resolve the sender, then run any command. The original casing goes
