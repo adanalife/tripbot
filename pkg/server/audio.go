@@ -63,15 +63,15 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		body["station"] = s.beds.Station()
 		body["voicing"] = s.beds.Voicing()
 		// The album list ships for the same reason the stations do, but it comes
-		// off the share rather than a constant: new music appears there without a
-		// deploy, so a picker built from a compiled-in list would be wrong the
-		// first time Dana drops an album on the NAS.
+		// off the album library rather than a constant: new music appears there
+		// without a deploy, so a picker built from a compiled-in list would be
+		// wrong the first time Dana drops an album on the NAS.
 		body["album"] = s.beds.Album()
 		albums := s.beds.Albums()
 		body["albums"] = albums
 		// Groups are prefixes covering several albums ("streambeats-lofi"). They
 		// travel beside the albums because the picker offers both, and both are
-		// derived from the share rather than declared anywhere — so they come off
+		// derived from the library rather than declared anywhere — so they come off
 		// the list already read rather than a second listing.
 		body["groups"] = beds.GroupsOf(albums)
 		// On a group selection the chosen name isn't what's on air, so the album
