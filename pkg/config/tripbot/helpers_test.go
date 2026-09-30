@@ -3,8 +3,8 @@ package config
 import "testing"
 
 // UserIsAdmin is the only gate on the admin-only chat commands (!shutdown,
-// !secretinfo) and on the rate-limit bypass every playback command shares, so
-// it decides who can stop the bot and who can yank the playhead. Load
+// !givemiles and the rest) and on the rate-limit bypass every playback command
+// shares, so it decides who can stop the bot and who can yank the playhead. Load
 // lowercases ChannelName but a chat username arrives however the viewer's
 // platform spells it — a display name on Twitch is mixed-case — so the
 // comparison has to fold case. Swapping EqualFold for == locks Dana out of his

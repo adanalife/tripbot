@@ -1227,11 +1227,11 @@ func TestMissingIndexFallsBackToTheShare(t *testing.T) {
 	}
 }
 
-// The console polls the album list every few seconds per platform and every
-// chat command resolving an album name reads it again, so the index is read
-// once and served from the cache until its mtime moves. Rewriting the file
-// under a pinned mtime and size proves the repeat read never opened it;
-// moving the mtime proves an album staged while the bot runs still shows up.
+// The console polls the album list per platform and every chat command
+// resolving an album name reads it again, so the index is read once and served
+// from the cache until its mtime moves. Rewriting the file under a pinned mtime
+// and size proves the repeat read never opened it; moving the mtime proves an
+// album staged while the bot runs still shows up.
 func TestAlbumIndexIsCachedUntilItsMtimeMoves(t *testing.T) {
 	index := writeIndex(t, map[string][]string{"aaa": {MusicDir + "/aaa/one.mp3"}})
 	fi, err := os.Stat(index)

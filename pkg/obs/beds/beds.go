@@ -198,8 +198,8 @@ type Store struct {
 }
 
 // albumCache holds the last library read and the index file it came from, so
-// the repeated listings — the console polling every few seconds per platform,
-// a lookup per chat command — cost one stat instead of a read and unmarshal.
+// the repeated listings — the console's per-platform polls, a lookup per chat
+// command — cost one stat instead of a read and unmarshal.
 // Keyed on the file's mtime and size rather than a TTL: new music arrives while
 // the bot runs, and the album has to appear the moment the index does.
 type albumCache struct {
@@ -390,7 +390,7 @@ func (s *Store) SetShuffle(ctx context.Context, on bool) error {
 	return nil
 }
 
-// Albums lists the selectable albums on the share, in display order. The
+// Albums lists the selectable albums in the library, in display order. The
 // underlying library read is cached behind the index file's mtime, not held from
 // startup: new music arrives while the bot is running, and an album has to show
 // up without waiting for a restart.
