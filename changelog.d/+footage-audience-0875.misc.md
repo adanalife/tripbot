@@ -1,1 +1,0 @@
-`/api/insights/footage` reports each clip's true viewers (average and peak), chat messages per minute, and mean airing over its closed plays, beside the chatter figures it already had; each is null when no in-window row carried the column.

@@ -9,6 +9,24 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.24.0] — 2026-10-01
+
+### Chatbot
+
+- **Chat lines on the bus say when Twitch singled them out.** `tripbot.{env}.chat.message` carries an optional `message_type` — `user_intro` for a chatter's first message in the channel, `channel_points_highlighted` for one paid for with channel points — relayed from platform-gateway, so the console and tempomat can highlight a first-timer the way Twitch's own client does. ([#1607](https://github.com/adanalife/tripbot/pull/1607))
+- The bus chat line carries the sender's chosen Twitch name `color`, so the console and tempomat can draw them the colour the guessr app already does. ([#1612](https://github.com/adanalife/tripbot/pull/1612))
+- An incoming raid now gets a chat thank-you naming the raiding channel and its viewer count, counted under `tripbot_announcements_total{kind="raid"}`. ([#1615](https://github.com/adanalife/tripbot/pull/1615))
+- Record `stream_up` / `stream_down` events when the platform reports the channel going live or offline: the channel-live gauge remembers the last value it wrote per platform, and a flip lands as a system event. A pod that boots mid-stream seeds the latch without recording anything. ([#1619](https://github.com/adanalife/tripbot/pull/1619))
+
+### Console / API
+
+- The event bus carries each platform's chat mode — slow, followers-only, subscribers-only, emote-only, unique-chat — as a retained last value, so the console and tempomat can show it. ([#1608](https://github.com/adanalife/tripbot/pull/1608))
+
+### Misc
+
+- EventSub subscription setup, notification dispatch and token-rejection handling are now tested end to end against fake Twitch WebSocket and Helix endpoints. ([#1617](https://github.com/adanalife/tripbot/pull/1617))
+- `/api/insights/footage` reports each clip's true viewers (average and peak), chat messages per minute, and mean airing over its closed plays, beside the chatter figures it already had; each is null when no in-window row carried the column. ([#1618](https://github.com/adanalife/tripbot/pull/1618))
+
 ## [v5.23.0] — 2026-09-29
 
 ### Console / API

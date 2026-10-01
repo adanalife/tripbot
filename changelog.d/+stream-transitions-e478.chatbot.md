@@ -1,1 +1,0 @@
-Record `stream_up` / `stream_down` events when the platform reports the channel going live or offline: the channel-live gauge remembers the last value it wrote per platform, and a flip lands as a system event. A pod that boots mid-stream seeds the latch without recording anything.
