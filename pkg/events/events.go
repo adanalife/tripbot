@@ -574,6 +574,21 @@ func WatchdogRecovered(ctx context.Context, cfg *c.TripbotConfig, watchdog strin
 	return record(ctx, cfg, Event{Event: "watchdog_recovered", Meta: &meta})
 }
 
+// StreamUp records the platform reporting this instance's channel as live
+// after it was offline — a system event, no actor, no meta. Written from the
+// liveness latch on the channel-live gauge, so a pod that boots mid-stream
+// records nothing until the stream actually changes state.
+func StreamUp(ctx context.Context, cfg *c.TripbotConfig) error {
+	return record(ctx, cfg, Event{Event: "stream_up"})
+}
+
+// StreamDown records the platform reporting the channel offline after it was
+// live. Paired with the stream_up before it, the gap is the stream's
+// queryable duration; paired with a watchdog_restart, it dates the outage.
+func StreamDown(ctx context.Context, cfg *c.TripbotConfig) error {
+	return record(ctx, cfg, Event{Event: "stream_down"})
+}
+
 // SessionCount returns how many sessions the user has started — i.e. their
 // count of "login" events. Cheap via the events_username_date index
 // (migration 011). Returns 0 on error. Bots are not special-cased here; callers

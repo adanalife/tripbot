@@ -118,7 +118,15 @@ var TwitchTokenExpiry = twitchTokenExpiryGauge{gauge: twitchTokenExpiry}
 // same series identity and collide onto one, last write winning. Every platform
 // an alert can watch must call this; a platform that never does has no series,
 // which the lost-visibility canary reports rather than reading as offline.
-var ChannelLive = channelLiveGauge{gauge: channelLive}
+//
+// It also remembers the last value written per platform: a Set that flips it
+// is a liveness transition, and OnTransition (when set) is called with the new
+// state, outside the latch's lock. The first write per platform seeds the
+// latch without firing — a process that boots mid-stream observes "live", not
+// a stream going up. The callback is injected by cmd/tripbot (it records the
+// transition as a stream_up / stream_down event); this package stays free of
+// the events/database dependency.
+var ChannelLive = &channelLiveGauge{gauge: channelLive, last: map[string]bool{}}
 
 // OrphanedSessions exposes the ungraceful-exit gauge. Call Set(n, platform)
 // once per boot with events.OrphanedSessions' answer; it is a fact about the
@@ -263,10 +271,27 @@ func (t twitchTokenExpiryGauge) SetExpiresAt(account string, expiresAt time.Time
 	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
 }
 
-type channelLiveGauge struct{ gauge metric.Int64Gauge }
+type channelLiveGauge struct {
+	gauge metric.Int64Gauge
 
-func (c channelLiveGauge) Set(live bool, platform string) {
+	// OnTransition, when set, is called after a Set changes a platform's
+	// remembered live state. Set it once at startup, before any writer runs.
+	OnTransition func(platform string, live bool)
+
+	mu   sync.Mutex
+	last map[string]bool // per platform; absent means never observed
+}
+
+func (c *channelLiveGauge) Set(live bool, platform string) {
 	c.gauge.Record(context.Background(), b2i(live), platformAttr(platform))
+
+	c.mu.Lock()
+	prev, seen := c.last[platform]
+	c.last[platform] = live
+	c.mu.Unlock()
+	if seen && prev != live && c.OnTransition != nil {
+		c.OnTransition(platform, live)
+	}
 }
 
 type orphanedSessionsGauge struct{ gauge metric.Int64Gauge }

@@ -68,6 +68,12 @@ var writers = []struct {
 	{"WatchdogRecovered", "watchdog_recovered", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return WatchdogRecovered(ctx, cfg, "tiktok")
 	}},
+	{"StreamUp", "stream_up", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return StreamUp(ctx, cfg)
+	}},
+	{"StreamDown", "stream_down", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return StreamDown(ctx, cfg)
+	}},
 	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return StateCrossing(ctx, cfg, "Utah", "Colorado", Airing{VideoID: 42}, true)
 	}},
