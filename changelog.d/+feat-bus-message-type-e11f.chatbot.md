@@ -1,1 +1,0 @@
-**Chat lines on the bus say when Twitch singled them out.** `tripbot.{env}.chat.message` carries an optional `message_type` — `user_intro` for a chatter's first message in the channel, `channel_points_highlighted` for one paid for with channel points — relayed from platform-gateway, so the console and tempomat can highlight a first-timer the way Twitch's own client does.
