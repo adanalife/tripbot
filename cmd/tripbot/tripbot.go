@@ -297,6 +297,9 @@ func (t *Tripbot) Run() {
 	go t.reportOrphanedSessions(ctx, time.Now())
 	t.app.Video = chatbot.NewVideoAdapter(t.player)                         // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.cfg.Platform, t.sessions) // command-time queries
+	if url := t.gatewayPlatform().apiURL; url != "" {
+		t.app.Metadata = gateway.New(url) // before startCron: the stream-title job writes through it
+	}
 	t.sessions.InitLeaderboard(context.Background())
 	t.startFeatureFlags(ctx)
 	t.startRotatorEditing()
@@ -1236,6 +1239,12 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(60*time.Second, "video.LocationFeed", func(ctx context.Context) {
 		t.locationFeed.Emit(ctx, t.player.Current())
 	})
+	// The title names where the van is, so it only needs to keep pace with the
+	// road, and the interval is also the most often a viewer sees it change.
+	// Gated by the chatbot.stream_title flag inside the job.
+	// Gated by the chatbot.stream_title flag inside the job, and a no-op on an
+	// instance with no gateway.
+	t.addJob(5*time.Minute, "chatbot.UpdateStreamTitle", t.app.UpdateStreamTitle)
 
 	// YouTube instances (bot-less or full): discover the current broadcast's
 	// videoId on a slow ticker and publish it for the console, which links to and

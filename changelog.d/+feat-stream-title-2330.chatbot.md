@@ -1,0 +1,1 @@
+The stream title can follow the drive: with the `chatbot.stream_title` flag on, each platform's title becomes the place on screen and the light it was filmed in — "Driving through Bishop, California at golden hour" — written through the platform-gateway's metadata store at most every five minutes, and only when it changes. Seeded off on every platform.
