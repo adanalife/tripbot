@@ -119,12 +119,14 @@ func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
 	}
 }
 
-// RecordRaid logs a raid event stamped with the airing clip and playhead, so
-// audience rollups can separate a raid's viewer spike from footage that
-// genuinely draws viewers. No chat shout — Twitch announces the raid in chat
-// natively. Wired from pkg/eventsub on channel.raid events.
+// RecordRaid thanks the raiding channel in chat and logs a raid event stamped
+// with the airing clip and playhead, so audience rollups can separate a raid's
+// viewer spike from footage that genuinely draws viewers. Wired from
+// pkg/eventsub on channel.raid events.
 func (a *App) RecordRaid(from string, viewers int) {
 	ctx := context.Background()
+	a.Chat.Say(fmt.Sprintf("Thank you for the raid, @%s; welcome to all %d raider(s) bleedPurple", from, viewers))
+	instrumentation.Announcements.Inc(a.Platform, "raid")
 	r := events.Raid{From: from, Viewers: viewers}
 	// Current() is the cached notion of what's playing — no I/O, because
 	// recording a raid must not cost a round-trip to playout.
