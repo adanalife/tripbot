@@ -461,26 +461,24 @@ type Metadata struct {
 	Category    string   `json:"category,omitempty"`
 }
 
-// StoredMetadata returns the metadata stored for this platform (GET
-// /v1/metadata). ok is false when nothing has been stored yet, which is the
-// ordinary starting state. A platform without settable metadata answers 404,
-// returned as an error.
-func (c *Client) StoredMetadata(ctx context.Context) (m Metadata, ok bool, err error) {
+// CurrentMetadata returns the gateway's best answer for this platform's
+// metadata (GET /v1/metadata's values): what the platform itself reports where
+// it can be asked, otherwise what the gateway has stored — zero when neither
+// exists yet. A platform without settable metadata answers 404, returned as an
+// error.
+func (c *Client) CurrentMetadata(ctx context.Context) (Metadata, error) {
 	var body struct {
-		Stored *Metadata `json:"stored"`
+		Values Metadata `json:"values"`
 	}
 	if err := c.getJSON(ctx, "/v1/metadata", &body); err != nil {
-		return Metadata{}, false, err
+		return Metadata{}, err
 	}
-	if body.Stored == nil {
-		return Metadata{}, false, nil
-	}
-	return *body.Stored, true, nil
+	return body.Values, nil
 }
 
 // SetMetadata replaces the stored metadata and has the gateway apply it (PUT
 // /v1/metadata). Every field is replaced, so a caller changing one field sends
-// the others as StoredMetadata returned them. A 200 means stored; whether the
+// the others as CurrentMetadata returned them. A 200 means stored; whether the
 // platform took it yet is the gateway's to report, not this call's.
 func (c *Client) SetMetadata(ctx context.Context, m Metadata) error {
 	payload, err := json.Marshal(m)

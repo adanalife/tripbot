@@ -21,7 +21,7 @@ const streamTitleFlagKey = "chatbot.stream_title"
 // the store the one source of truth, so the gateway's drift alert stays quiet.
 // Nil on an instance with no gateway, which leaves the title alone.
 type StreamMetadata interface {
-	StoredMetadata(ctx context.Context) (gateway.Metadata, bool, error)
+	CurrentMetadata(ctx context.Context) (gateway.Metadata, error)
 	SetMetadata(ctx context.Context, m gateway.Metadata) error
 }
 
@@ -30,7 +30,9 @@ type StreamMetadata interface {
 //
 // It runs on a timer and writes only when the title would change, so the
 // timer's interval is the most often a title can change. Only the title is
-// replaced; the stored tags, category and description go back as they were.
+// replaced: the rest goes back as the gateway currently reports it — the
+// platform's own values where it can be asked — so a platform whose store was
+// never filled keeps its live tags and category rather than losing them.
 // While the flag is on the operator's own title is overwritten on the next
 // change, which is the point: the flag is how they take it back.
 func (a *App) UpdateStreamTitle(ctx context.Context) {
@@ -48,9 +50,9 @@ func (a *App) UpdateStreamTitle(ctx context.Context) {
 		return
 	}
 
-	m, _, err := a.Metadata.StoredMetadata(ctx)
+	m, err := a.Metadata.CurrentMetadata(ctx)
 	if err != nil {
-		a.logTitleErr(ctx, "stream title: stored metadata unreadable", err)
+		a.logTitleErr(ctx, "stream title: current metadata unreadable", err)
 		return
 	}
 	if m.Title == title {

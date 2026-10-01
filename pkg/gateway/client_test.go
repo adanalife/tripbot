@@ -523,7 +523,7 @@ func TestMetadata_RoundTrip(t *testing.T) {
 		}
 		switch r.Method {
 		case http.MethodGet:
-			_, _ = w.Write([]byte(`{"fields":[],"values":{"title":"live"},"stored":{"title":"old","tags":["dashcam"],"category":"Travel & Outdoors"}}`))
+			_, _ = w.Write([]byte(`{"fields":[],"values":{"title":"live","tags":["dashcam"],"category":"Travel & Outdoors"},"stored":{"title":"old"}}`))
 		case http.MethodPut:
 			if err := json.NewDecoder(r.Body).Decode(&put); err != nil {
 				t.Errorf("decode PUT body: %v", err)
@@ -534,12 +534,12 @@ func TestMetadata_RoundTrip(t *testing.T) {
 	defer srv.Close()
 	c := New(srv.URL)
 
-	m, ok, err := c.StoredMetadata(context.Background())
-	if err != nil || !ok {
-		t.Fatalf("StoredMetadata = ok %v, err %v", ok, err)
+	m, err := c.CurrentMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("CurrentMetadata: %v", err)
 	}
-	if m.Title != "old" || m.Category != "Travel & Outdoors" || len(m.Tags) != 1 {
-		t.Errorf("StoredMetadata read the live values, not the stored ones: %+v", m)
+	if m.Title != "live" || m.Category != "Travel & Outdoors" || len(m.Tags) != 1 {
+		t.Errorf("CurrentMetadata should read values, got %+v", m)
 	}
 
 	m.Title = "new"
@@ -551,15 +551,14 @@ func TestMetadata_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestStoredMetadata_NothingStored(t *testing.T) {
+func TestCurrentMetadata_NoMetadataRoute(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"fields":[],"values":{"title":""}}`))
+		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
-	_, ok, err := New(srv.URL).StoredMetadata(context.Background())
-	if err != nil || ok {
-		t.Errorf("no stored row should be ok=false, nil error; got ok %v, err %v", ok, err)
+	if _, err := New(srv.URL).CurrentMetadata(context.Background()); err == nil {
+		t.Error("a platform with no metadata route should be an error")
 	}
 }
 

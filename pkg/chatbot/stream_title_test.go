@@ -15,8 +15,8 @@ type fakeMetadata struct {
 	writes int
 }
 
-func (f *fakeMetadata) StoredMetadata(context.Context) (gateway.Metadata, bool, error) {
-	return f.stored, f.stored.Title != "", nil
+func (f *fakeMetadata) CurrentMetadata(context.Context) (gateway.Metadata, error) {
+	return f.stored, nil
 }
 
 func (f *fakeMetadata) SetMetadata(_ context.Context, m gateway.Metadata) error {
