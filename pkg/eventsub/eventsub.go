@@ -79,6 +79,12 @@ type Config struct {
 	ClientID          string
 	BroadcasterToken  string
 	BroadcasterUserID string
+
+	// wsURL and subscribeURL override the Twitch WebSocket and Helix
+	// subscription endpoints; empty means Twitch's. Tests point them at
+	// httptest servers.
+	wsURL        string
+	subscribeURL string
 }
 
 // Run dials the EventSub WebSocket, subscribes to the events for which
@@ -91,6 +97,9 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	}
 
 	client := twitch.NewClient()
+	if cfg.wsURL != "" {
+		client = twitch.NewClientWithUrl(cfg.wsURL)
+	}
 
 	client.OnError(func(err error) {
 		slog.ErrorContext(ctx, "eventsub client error", "err", err)
@@ -240,13 +249,19 @@ func tokenRejected(attempted, denied int32) bool {
 // Reports whether the failure was an expired or unscoped token, which is
 // permanent until someone re-consents.
 func subscribe(ctx context.Context, cfg Config, sessionID string, ev twitch.EventSubscription, cond map[string]string) (unauthorized bool) {
-	_, err := twitch.SubscribeEventWithContext(ctx, twitch.SubscribeRequest{
+	req := twitch.SubscribeRequest{
 		SessionID:   sessionID,
 		ClientID:    cfg.ClientID,
 		AccessToken: cfg.BroadcasterToken,
 		Event:       ev,
 		Condition:   cond,
-	})
+	}
+	var err error
+	if cfg.subscribeURL != "" {
+		_, err = twitch.SubscribeEventUrlWithContext(ctx, req, cfg.subscribeURL)
+	} else {
+		_, err = twitch.SubscribeEventWithContext(ctx, req)
+	}
 	if err != nil {
 		slog.ErrorContext(ctx, "eventsub subscribe failed", "err", fmt.Errorf("event %s: %w", ev, err))
 		return isUnauthorized(err)

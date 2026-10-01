@@ -8,6 +8,7 @@ require (
 	github.com/andreykaipov/goobs v1.10.0
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/coder/websocket v1.8.12
 	github.com/getsentry/sentry-go v0.49.0
 	github.com/getsentry/sentry-go/negroni v0.49.0
 	github.com/getsentry/sentry-go/otel v0.49.0
@@ -53,7 +54,6 @@ require (
 	github.com/buger/jsonparser v1.6.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/coder/websocket v1.8.12 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
