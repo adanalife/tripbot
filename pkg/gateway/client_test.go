@@ -484,6 +484,27 @@ func TestViewers(t *testing.T) {
 	if got.Count != 137 || !got.Live || !got.Reported {
 		t.Errorf("audience = %+v, want {137 true true}", got)
 	}
+	// A gateway that sends no started_at leaves it zero, which the broadcast-cap
+	// watchdog reads as "unknown" and leaves alone.
+	if !got.StartedAt.IsZero() {
+		t.Errorf("StartedAt = %v, want zero when the gateway sends none", got.StartedAt)
+	}
+}
+
+// The broadcast's start rides along when the platform reports one.
+func TestViewersStartedAt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"count":3,"live":true,"started_at":"2026-09-29T18:04:05Z"}`))
+	}))
+	defer srv.Close()
+
+	got, err := New(srv.URL).Viewers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 9, 29, 18, 4, 5, 0, time.UTC); !got.StartedAt.Equal(want) {
+		t.Errorf("StartedAt = %v, want %v", got.StartedAt, want)
+	}
 }
 
 // A 404 is the gateway saying this platform publishes no viewer number — an
