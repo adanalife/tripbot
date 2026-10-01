@@ -293,6 +293,7 @@ func (t *Tripbot) Run() {
 	t.findInitialVideo()
 	// after findInitialVideo: its DB round-trip proves the DB is reachable
 	t.recordDeploy(ctx)
+	instrumentation.ChannelLive.OnTransition = t.streamTransitionHook() // before any liveness poll starts below
 	go t.reportOrphanedSessions(ctx, time.Now())
 	t.app.Video = chatbot.NewVideoAdapter(t.player)                         // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.cfg.Platform, t.sessions) // command-time queries

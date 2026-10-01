@@ -59,6 +59,26 @@ func (t *Tripbot) watchdogRecoveredHook(name string) func(context.Context) {
 	}
 }
 
+// streamTransitionHook adapts events.StreamUp / StreamDown to the channel-live
+// gauge's OnTransition callback: each flip of the platform's reported liveness
+// lands as a stream_up or stream_down event. The gauge is written from poll
+// goroutines that carry no request context, so the write runs under its own.
+func (t *Tripbot) streamTransitionHook() func(platform string, live bool) {
+	return func(platform string, live bool) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		write, name := events.StreamDown, "stream_down"
+		if live {
+			write, name = events.StreamUp, "stream_up"
+		}
+		if err := write(ctx, t.cfg); err != nil && !errors.Is(err, terrors.ErrReadOnly) {
+			slog.ErrorContext(ctx, "error recording stream transition event", "event", name, "platform", platform, "err", err)
+			return
+		}
+		slog.InfoContext(ctx, "recorded stream transition event", "event", name, "platform", platform)
+	}
+}
+
 // orphanCheckDelay is how long after startup the orphaned-session count is
 // taken. A rolling update starts this pod while the outgoing one is still
 // draining, and the outgoing pod's graceful shutdown writes its logouts during
