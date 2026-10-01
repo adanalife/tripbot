@@ -522,6 +522,17 @@ func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 	)
 }
 
+// OnlineUsers returns a copy of every user currently in chat, in no order.
+func (s *Sessions) OnlineUsers() []User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]User, 0, len(s.loggedIn))
+	for _, u := range s.loggedIn {
+		out = append(out, *u)
+	}
+	return out
+}
+
 // LoggedInCount returns the number of users currently in chat.
 func (s *Sessions) LoggedInCount() int {
 	s.mu.Lock()

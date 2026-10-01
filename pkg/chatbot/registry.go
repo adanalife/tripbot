@@ -308,6 +308,13 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!onlineleaderboard",
+			Help:           "This month's top 10 by miles among viewers in chat right now",
+			Aliases:        []string{"!olb", "!onlinelb"},
+			Handler:        a.onlineMilesLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!totalleaderboard",
 			Help:           "The all-time top 10 by miles",
 			Aliases:        []string{"!lifetimeleaderboard", "!tlb", "!llb"},
