@@ -136,7 +136,12 @@ type ChatMessage struct {
 	// the rest of Twitch's list. Empty for an ordinary line, the bot's own
 	// sends, and every other platform.
 	MessageType string `json:"message_type,omitempty"`
-	EmittedAt   string `json:"emitted_at"`
+	// Color is the name colour the sender picked on their platform, as
+	// "#RRGGBB". Empty for a chatter who never picked one, the bot's own
+	// sends, and every platform that has no such setting — a renderer then
+	// falls back to its own palette.
+	Color     string `json:"color,omitempty"`
+	EmittedAt string `json:"emitted_at"`
 }
 
 // ChatReply is the parent of a threaded chat line. ParentMessageID is the

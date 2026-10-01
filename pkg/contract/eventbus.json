@@ -52,6 +52,9 @@
           "message_type": {
             "type": "string"
           },
+          "color": {
+            "type": "string"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
