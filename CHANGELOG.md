@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.25.0] — 2026-10-01
+
+### Platform gateway
+
+- The Twitch instance restarts its stream an hour before Twitch's 48-hour broadcast limit. It stops OBS, waits until Twitch reports the channel offline, then starts a fresh broadcast, so the stream takes a gap of a few minutes instead of being cut. ([#1623](https://github.com/adanalife/tripbot/pull/1623))
+
+### Chatbot
+
+- `video_plays` rows now carry a `cause`: `natural` when playout advanced in corpus order, `resume` for the clip already up when tripbot started, `external` for a jump tripbot did not send, or the chat command behind it (`timewarp`, `jump`, `find`, `skip`, `seek`). ([#1620](https://github.com/adanalife/tripbot/pull/1620))
+
 ## [v5.24.0] — 2026-10-01
 
 ### Chatbot
