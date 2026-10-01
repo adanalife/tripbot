@@ -1,1 +1,0 @@
-The Twitch instance restarts its stream an hour before Twitch's 48-hour broadcast limit. It stops OBS, waits until Twitch reports the channel offline, then starts a fresh broadcast, so the stream takes a gap of a few minutes instead of being cut.
