@@ -451,6 +451,60 @@ func (c *Client) ActiveBroadcast(ctx context.Context) (Broadcast, error) {
 	return b, nil
 }
 
+// Metadata is the broadcast metadata the gateway stores per platform and
+// applies to it — the operator's intent, which the gateway re-applies at every
+// go-live. It mirrors the gateway's provider.BroadcastMetadata; keep in sync.
+type Metadata struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Category    string   `json:"category,omitempty"`
+}
+
+// StoredMetadata returns the metadata stored for this platform (GET
+// /v1/metadata). ok is false when nothing has been stored yet, which is the
+// ordinary starting state. A platform without settable metadata answers 404,
+// returned as an error.
+func (c *Client) StoredMetadata(ctx context.Context) (m Metadata, ok bool, err error) {
+	var body struct {
+		Stored *Metadata `json:"stored"`
+	}
+	if err := c.getJSON(ctx, "/v1/metadata", &body); err != nil {
+		return Metadata{}, false, err
+	}
+	if body.Stored == nil {
+		return Metadata{}, false, nil
+	}
+	return *body.Stored, true, nil
+}
+
+// SetMetadata replaces the stored metadata and has the gateway apply it (PUT
+// /v1/metadata). Every field is replaced, so a caller changing one field sends
+// the others as StoredMetadata returned them. A 200 means stored; whether the
+// platform took it yet is the gateway's to report, not this call's.
+func (c *Client) SetMetadata(ctx context.Context, m Metadata) error {
+	payload, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("gateway metadata encode: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/v1/metadata", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("gateway metadata request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		instrumentation.GatewayConnection.Set(false)
+		return fmt.Errorf("gateway metadata: %w", err)
+	}
+	instrumentation.GatewayConnection.Set(true)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return statusErr("metadata", resp.StatusCode)
+	}
+	return nil
+}
+
 // StopEgress ends the platform's outbound broadcast (POST /v1/egress/stop).
 // Only a gateway whose adapter manages the broadcast lifecycle (TikTok via
 // Streamlabs) mounts the egress routes; anywhere else this 404s.

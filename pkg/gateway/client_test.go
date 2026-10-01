@@ -514,3 +514,62 @@ func TestViewersErrorsOnUnexpectedStatus(t *testing.T) {
 		t.Error("expected an error on a 500")
 	}
 }
+
+func TestMetadata_RoundTrip(t *testing.T) {
+	var put Metadata
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/metadata" {
+			t.Errorf("path = %q, want /v1/metadata", r.URL.Path)
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"fields":[],"values":{"title":"live"},"stored":{"title":"old","tags":["dashcam"],"category":"Travel & Outdoors"}}`))
+		case http.MethodPut:
+			if err := json.NewDecoder(r.Body).Decode(&put); err != nil {
+				t.Errorf("decode PUT body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"fields":[],"values":{}}`))
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL)
+
+	m, ok, err := c.StoredMetadata(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("StoredMetadata = ok %v, err %v", ok, err)
+	}
+	if m.Title != "old" || m.Category != "Travel & Outdoors" || len(m.Tags) != 1 {
+		t.Errorf("StoredMetadata read the live values, not the stored ones: %+v", m)
+	}
+
+	m.Title = "new"
+	if err := c.SetMetadata(context.Background(), m); err != nil {
+		t.Fatalf("SetMetadata: %v", err)
+	}
+	if put.Title != "new" || put.Category != "Travel & Outdoors" || len(put.Tags) != 1 {
+		t.Errorf("PUT body dropped a field: %+v", put)
+	}
+}
+
+func TestStoredMetadata_NothingStored(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"fields":[],"values":{"title":""}}`))
+	}))
+	defer srv.Close()
+
+	_, ok, err := New(srv.URL).StoredMetadata(context.Background())
+	if err != nil || ok {
+		t.Errorf("no stored row should be ok=false, nil error; got ok %v, err %v", ok, err)
+	}
+}
+
+func TestSetMetadata_StoreFailureIsUnavailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL).SetMetadata(context.Background(), Metadata{Title: "x"}); !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("503 should wrap ErrUpstreamUnavailable, got %v", err)
+	}
+}
