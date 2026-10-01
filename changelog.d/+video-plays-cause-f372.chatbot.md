@@ -1,0 +1,1 @@
+`video_plays` rows now carry a `cause`: `natural` when playout advanced in corpus order, `resume` for the clip already up when tripbot started, `external` for a jump tripbot did not send, or the chat command behind it (`timewarp`, `jump`, `find`, `skip`, `seek`).
