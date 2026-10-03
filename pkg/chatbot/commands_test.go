@@ -1495,6 +1495,34 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 	})
 }
 
+// A clawback larger than the balance is clamped, so the event records what was
+// removed (keeping the rollup in step with users.miles) and the issuer hears
+// that less came off than asked.
+func TestGiveMilesCmd_ClampedClawback_RecordsAppliedDelta(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.Sessions = &recordingSessions{
+		FindResult: users.User{ID: 7, Username: "target"},
+		Miles:      0,
+		Applied:    -30,
+	}
+	rec := &recordingEvents{}
+	app.Events = rec
+	out, says := captureSay(t, app)
+
+	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "-50"})
+
+	if msg := out(); msg != "@target only had 30.00mi to remove, now has 0.00mi" {
+		t.Errorf("expected the clamp in the reply, got %q", msg)
+	}
+	want := []recordedCorrection{{Username: "target", Delta: -30}}
+	if !slices.Equal(rec.Corrections, want) {
+		t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
 func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingSessions{}

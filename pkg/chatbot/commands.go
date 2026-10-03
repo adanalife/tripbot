@@ -861,7 +861,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		}
 		return
 	}
-	newTotal, err := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	newTotal, applied, err := a.Sessions.CorrectMiles(ctx, target, float32(delta))
 	if err != nil {
 		slog.ErrorContext(ctx, "error correcting miles", "err", err, "username", target)
 		a.Reply(ctx, "Couldn't apply that right now, try again in a bit")
@@ -869,9 +869,18 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 	}
 	// The event only goes in once the correction has persisted: events is
 	// append-only, so a correction event with no matching users row is a
-	// permanent divergence in the rollups derived from it.
+	// permanent divergence in the rollups derived from it. It carries the
+	// delta that landed, so a clamped clawback records what was removed.
+	clamped := applied != float32(delta)
+	if clamped {
+		delta = float64(applied)
+	}
 	if err := a.Events.Correction(ctx, target, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
+	}
+	if clamped {
+		a.Reply(ctx, fmt.Sprintf("@%s only had %.2fmi to remove, now has %.2fmi", target, -applied, newTotal))
+		return
 	}
 	a.Reply(ctx, fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
 }
