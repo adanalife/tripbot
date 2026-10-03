@@ -19,12 +19,14 @@ import (
 // with no other symptom than a feature quietly running where it can't work.
 
 // neutralJobs run on every instance regardless of platform: each one plays
-// video, posts the periodic chatter, and republishes the rotators' clip feed.
+// video, posts the periodic chatter, republishes the rotators' clip feed, and
+// keeps its own platform's stream title on the place on screen.
 var neutralJobs = []string{
 	"video.GetCurrentlyPlaying",
 	"video.TrackState",
 	"chatbot.Chatter",
 	"video.LocationFeed",
+	"chatbot.UpdateStreamTitle",
 }
 
 // twitchOnlyJobs each need something only Twitch has. Session and presence

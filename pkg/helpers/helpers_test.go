@@ -85,6 +85,27 @@ func TestIsDaytime(t *testing.T) {
 	}
 }
 
+func TestDayPart(t *testing.T) {
+	lat, lon := 40.7128, -74.0060 // New York, July 4: sunrise ~05:29, sunset ~20:31 EDT
+
+	tests := []struct {
+		utc  time.Time
+		want string
+	}{
+		{time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), "at night"},              // 22:00 EDT
+		{time.Date(2024, 7, 4, 8, 0, 0, 0, time.UTC), "at night"},              // 04:00 EDT, before sunrise
+		{time.Date(2024, 7, 4, 10, 0, 0, 0, time.UTC), "early in the morning"}, // 06:00 EDT
+		{time.Date(2024, 7, 4, 13, 0, 0, 0, time.UTC), "in the morning"},       // 09:00 EDT
+		{time.Date(2024, 7, 4, 20, 0, 0, 0, time.UTC), "in the afternoon"},     // 16:00 EDT
+		{time.Date(2024, 7, 4, 23, 59, 0, 0, time.UTC), "at golden hour"},      // 19:59 EDT
+	}
+	for _, tc := range tests {
+		if got := DayPart(tc.utc, lat, lon); got != tc.want {
+			t.Errorf("DayPart(%v) = %q, want %q", tc.utc, got, tc.want)
+		}
+	}
+}
+
 func TestLocalDate(t *testing.T) {
 	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
 

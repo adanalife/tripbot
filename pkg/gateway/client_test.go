@@ -535,3 +535,61 @@ func TestViewersErrorsOnUnexpectedStatus(t *testing.T) {
 		t.Error("expected an error on a 500")
 	}
 }
+
+func TestMetadata_RoundTrip(t *testing.T) {
+	var put Metadata
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/metadata" {
+			t.Errorf("path = %q, want /v1/metadata", r.URL.Path)
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"fields":[],"values":{"title":"live","tags":["dashcam"],"category":"Travel & Outdoors"},"stored":{"title":"old"}}`))
+		case http.MethodPut:
+			if err := json.NewDecoder(r.Body).Decode(&put); err != nil {
+				t.Errorf("decode PUT body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"fields":[],"values":{}}`))
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL)
+
+	m, err := c.CurrentMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("CurrentMetadata: %v", err)
+	}
+	if m.Title != "live" || m.Category != "Travel & Outdoors" || len(m.Tags) != 1 {
+		t.Errorf("CurrentMetadata should read values, got %+v", m)
+	}
+
+	m.Title = "new"
+	if err := c.SetMetadata(context.Background(), m); err != nil {
+		t.Fatalf("SetMetadata: %v", err)
+	}
+	if put.Title != "new" || put.Category != "Travel & Outdoors" || len(put.Tags) != 1 {
+		t.Errorf("PUT body dropped a field: %+v", put)
+	}
+}
+
+func TestCurrentMetadata_NoMetadataRoute(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).CurrentMetadata(context.Background()); err == nil {
+		t.Error("a platform with no metadata route should be an error")
+	}
+}
+
+func TestSetMetadata_StoreFailureIsUnavailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL).SetMetadata(context.Background(), Metadata{Title: "x"}); !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("503 should wrap ErrUpstreamUnavailable, got %v", err)
+	}
+}

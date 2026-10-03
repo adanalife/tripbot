@@ -115,6 +115,31 @@ func IsDaytime(utcDate time.Time, lat, long float64) bool {
 	return realDate.After(rise) && realDate.Before(set)
 }
 
+// goldenHour is how long before sunset the light reads as golden hour, and how
+// long after sunrise it still reads as early morning.
+const goldenHour = time.Hour
+
+// DayPart names the light the footage was filmed in, phrased to follow a place:
+// "at night", "early in the morning", "in the morning", "in the afternoon", or
+// "at golden hour". Morning and afternoon split at solar noon, the midpoint of
+// that day's sunrise and sunset, rather than at a clock hour, so the answer
+// follows the sun across timezones and seasons.
+func DayPart(utcDate time.Time, lat, long float64) string {
+	realDate := ActualDate(utcDate, lat, long)
+	rise, set := sunriseSunset(realDate, lat, long)
+	switch {
+	case !realDate.After(rise) || !realDate.Before(set):
+		return "at night"
+	case realDate.Before(rise.Add(goldenHour)):
+		return "early in the morning"
+	case !realDate.Before(set.Add(-goldenHour)):
+		return "at golden hour"
+	case realDate.Before(rise.Add(set.Sub(rise) / 2)):
+		return "in the morning"
+	}
+	return "in the afternoon"
+}
+
 // LocalDate returns utcDate localized to lat/long and truncated to midnight —
 // the calendar day the footage belongs to at its filming location. !daytime
 // uses it to tell "the following day" from the current clip's day.

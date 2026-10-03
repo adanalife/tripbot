@@ -99,6 +99,10 @@ type App struct {
 	// a fake; cmd/tripbot assigns the same *beds.Store the console's /api/audio
 	// drives. Nil until then, which !audio reports as unavailable.
 	Beds Beds
+	// Metadata is this instance's gateway metadata store, which
+	// UpdateStreamTitle writes the title through. Tests inject a fake;
+	// cmd/tripbot assigns the gateway client. Nil leaves the title alone.
+	Metadata StreamMetadata
 	// Scoreboards reads the miles / correct-guess leaderboards and credits a
 	// correct guess. Tests inject a recordingScoreboards to stage rows and
 	// assert credits; production uses realScoreboards.
