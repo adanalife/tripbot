@@ -1,0 +1,1 @@
+A new account that twitchinsights' public bot list names is created as a bot, so view-bots stop counting as humans without anyone running `!makebot`. Only a first visit is classified, so an operator's `!unbot` stands.
