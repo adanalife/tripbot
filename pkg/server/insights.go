@@ -425,6 +425,19 @@ func writeInsights(w http.ResponseWriter, r *http.Request, payload any) {
 	}
 }
 
+// logQueryFailure logs a failed read query. It logs at error level, or at warn
+// when the request's context is already done: a caller that hangs up cancels
+// the query mid-flight (lib/pq reports it as 57014, "canceling statement due
+// to user request"), and that is the caller's timeout, not a fault here. Warn
+// still reaches the logs but stays out of Sentry's event stream.
+func logQueryFailure(ctx context.Context, msg string, err error, args ...any) {
+	level := slog.LevelError
+	if ctx.Err() != nil {
+		level = slog.LevelWarn
+	}
+	slog.Log(ctx, level, msg, append([]any{"err", err}, args...)...)
+}
+
 // insightsError reports a failed insights query as a JSON 500. The message
 // stays generic — the detail goes to the log, not to the wire.
 func insightsError(w http.ResponseWriter, msg string) {
@@ -440,7 +453,7 @@ func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, commandInsightsDefaultDays)
 	payload, err := gatherCommandInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "command insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "command insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather command insights")
 		return
 	}
@@ -454,7 +467,7 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, guessInsightsDefaultDays)
 	payload, err := gatherGuessInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "guess insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather guess insights")
 		return
 	}
@@ -468,7 +481,7 @@ func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, footageInsightsDefaultDays)
 	payload, err := gatherFootageInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "footage insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "footage insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather footage insights")
 		return
 	}
@@ -650,7 +663,7 @@ func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, regionInsightsDefaultDays)
 	payload, err := gatherRegionInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "region insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "region insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather region insights")
 		return
 	}
@@ -751,7 +764,7 @@ func viewerSeriesHandler(w http.ResponseWriter, r *http.Request) {
 	hours := queryInt(r, "hours", viewerSeriesDefaultHours, viewerSeriesMinHours, viewerSeriesMaxHours)
 	payload, err := gatherViewerSeries(r.Context(), hours)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "viewer series query failed", "err", err, "hours", hours)
+		logQueryFailure(r.Context(), "viewer series query failed", err, "hours", hours)
 		insightsError(w, "couldn't gather the viewer series")
 		return
 	}
@@ -836,7 +849,7 @@ func sessionInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, sessionInsightsDefaultDays)
 	payload, err := gatherSessionInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "session insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "session insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather session insights")
 		return
 	}

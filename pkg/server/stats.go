@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -371,7 +370,7 @@ func gatherCommunityStats(ctx context.Context, days int) (communityStatsResponse
 func lifetimeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	payload, err := cachedLifetimeStats(r.Context())
 	if err != nil {
-		slog.ErrorContext(r.Context(), "lifetime stats query failed", "err", err)
+		logQueryFailure(r.Context(), "lifetime stats query failed", err)
 		insightsError(w, "couldn't gather lifetime stats")
 		return
 	}
@@ -384,7 +383,7 @@ func playbackStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, playbackStatsDefaultDays)
 	payload, err := gatherPlaybackStats(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "playback stats query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "playback stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather playback stats")
 		return
 	}
@@ -398,7 +397,7 @@ func communityStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, communityStatsDefaultDays)
 	payload, err := gatherCommunityStats(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "community stats query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "community stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather community stats")
 		return
 	}
@@ -449,7 +448,7 @@ func songStatsHandler(w http.ResponseWriter, r *http.Request) {
 		Raw(songStatsSQL, sql.Named("days", days), sql.Named("limit", songStatsLimit)).
 		Scan(&out.Songs).Error
 	if err != nil {
-		slog.ErrorContext(r.Context(), "song stats query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "song stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather song stats")
 		return
 	}

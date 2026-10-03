@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"regexp"
 	"time"
@@ -74,7 +73,7 @@ func (s *Server) leaderboardsHandler(w http.ResponseWriter, r *http.Request) {
 
 	months, err := snapshotMonths(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "leaderboard months query failed", "err", err)
+		logQueryFailure(ctx, "leaderboard months query failed", err)
 		insightsError(w, "couldn't list leaderboard months")
 		return
 	}
