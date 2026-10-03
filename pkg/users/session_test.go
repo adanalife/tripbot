@@ -389,6 +389,51 @@ func TestCheckpointMiles(t *testing.T) {
 	}
 }
 
+// A session accrues miles for its first 24h only, and passing that cap writes
+// one session_over_24h event however many checkpoints and the logout see it.
+// A known bot passes the cap silently.
+func TestSessionCap(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "farmer")
+	s.LoginIfNecessary(ctx, "knownbot")
+	s.mu.Lock()
+	s.loggedIn["farmer"].LoggedIn = time.Now().Add(-30 * time.Hour)
+	s.loggedIn["knownbot"].LoggedIn = time.Now().Add(-30 * time.Hour)
+	s.loggedIn["knownbot"].IsBot = true
+	s.mu.Unlock()
+
+	s.CheckpointMiles(ctx)
+	s.CheckpointMiles(ctx)
+	s.LogoutIfNecessary(ctx, "farmer")
+	s.LogoutIfNecessary(ctx, "knownbot")
+
+	stored, err := Find(ctx, testConf.Platform, "farmer")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	// 24h at 0.1mi/3min is 48 miles; thirty uncapped hours would be 60.
+	if stored.Miles < 47.9 || stored.Miles > 48.1 {
+		t.Errorf("expected 48 capped miles, got %v", stored.Miles)
+	}
+
+	count := func(username string) int64 {
+		var n int64
+		if err := db.Model(&events.Event{}).Where("username = ? AND event = ?", username, "session_over_24h").Count(&n).Error; err != nil {
+			t.Fatalf("counting events: %v", err)
+		}
+		return n
+	}
+	if n := count("farmer"); n != 1 {
+		t.Errorf("expected 1 session_over_24h event, got %d", n)
+	}
+	if n := count("knownbot"); n != 0 {
+		t.Errorf("expected no session_over_24h event for a known bot, got %d", n)
+	}
+}
+
 // UpdateSession only logs in the chatters missing from the session, so a
 // reconcile tick's work scales with arrivals rather than audience size. An
 // already-logged-in chatter must not be logged in a second time: that would
