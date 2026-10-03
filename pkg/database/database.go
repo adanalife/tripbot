@@ -55,6 +55,12 @@ func connectToDB() *sql.DB {
 		slog.Error("DB connection failed", "err", err)
 		return nil
 	}
+	// Keep enough idle connections to serve a console poll's parallel
+	// insights queries warm. Go's default of 2 makes each poll open fresh
+	// connections, and a slow connect then surfaces as a statement-timeout
+	// cancel. The idle timeout hands them back once polling stops.
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 	if _, err := otelsql.RegisterDBStatsMetrics(db,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 	); err != nil {

@@ -1,0 +1,1 @@
+Keep up to 10 idle Postgres connections per process (released after 5 idle minutes), so a console poll's parallel insights queries reuse warm connections instead of opening fresh ones that a slow connect turns into statement-timeout cancels.
