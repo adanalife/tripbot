@@ -36,6 +36,7 @@ func (noopSessions) IsSubscriber(_ users.User) bool                            {
 func (noopSessions) HasCommandAvailable(_ context.Context, _ *users.User) bool { return true }
 func (noopSessions) GiveEveryoneMiles(_ float32)                               {}
 func (noopSessions) LoggedInCount() int                                        { return 0 }
+func (noopSessions) OnlineUsers() []users.User                                 { return nil }
 
 // recordingSessions captures every call made to it so tests can assert
 // the chatbot queried the expected user / leaderboard surfaces.
@@ -64,6 +65,10 @@ type recordingSessions struct {
 	// LoggedIn stages LoggedInCount; Gifts records every GiveEveryoneMiles.
 	LoggedIn int
 	Gifts    []float32
+	// Online stages OnlineUsers; MonthlyByUser, when set, overrides
+	// MonthlyMiles per username so a board can rank them.
+	Online        []users.User
+	MonthlyByUser map[string]float32
 }
 
 func (r *recordingSessions) LoginIfNecessary(_ context.Context, username string) users.User {
@@ -132,7 +137,15 @@ func (r *recordingSessions) CurrentMiles(_ context.Context, u users.User) float3
 
 func (r *recordingSessions) CurrentMonthlyMiles(_ context.Context, u users.User) float32 {
 	r.Calls = append(r.Calls, fmt.Sprintf("CurrentMonthlyMiles(%q)", u.Username))
+	if m, ok := r.MonthlyByUser[u.Username]; ok {
+		return m
+	}
 	return r.MonthlyMiles
+}
+
+func (r *recordingSessions) OnlineUsers() []users.User {
+	r.Calls = append(r.Calls, "OnlineUsers")
+	return r.Online
 }
 
 func (r *recordingSessions) BonusMiles(u users.User) float32 {

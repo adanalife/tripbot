@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -413,6 +415,47 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard)) + rankedList(leaderboard, "mi")
 	a.Reply(ctx, msg)
+}
+
+// onlineMilesLeaderboardCmd ranks the viewers in chat right now by this
+// month's miles, live session included — the board where a newcomer can see
+// who they are racing rather than who drove most in a week they missed.
+func (a *App) onlineMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !onlineleaderboard", "username", user.Username)
+
+	// ponytail: one score read per viewer in chat; fine at chat sizes, a
+	// single scoreboard query filtered to the logins if the room ever grows.
+	type entry struct {
+		name  string
+		miles float32
+	}
+	var entries []entry
+	for _, u := range a.Sessions.OnlineUsers() {
+		if u.IsBot || u.ExcludeFromLeaderboard {
+			continue
+		}
+		if m := a.Sessions.CurrentMonthlyMiles(ctx, u); m > 0 {
+			entries = append(entries, entry{u.Username, m})
+		}
+	}
+	if len(entries) == 0 {
+		a.Reply(ctx, "No one in chat has miles this month yet!")
+		return
+	}
+	slices.SortFunc(entries, func(x, y entry) int {
+		if c := cmp.Compare(y.miles, x.miles); c != 0 {
+			return c
+		}
+		return strings.Compare(x.name, y.name)
+	})
+
+	leaderboard := make([][]string, 0, min(len(entries), leaderboardSize))
+	for _, e := range entries[:min(len(entries), leaderboardSize)] {
+		leaderboard = append(leaderboard, []string{e.name, fmt.Sprintf("%.1f", e.miles)})
+	}
+
+	a.Onscreens.ShowLeaderboard(ctx, "Online Now", overlayRows(leaderboard, onscreenRows))
+	a.Reply(ctx, fmt.Sprintf("Top %d in chat this month: ", len(leaderboard))+rankedList(leaderboard, "mi"))
 }
 
 func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
