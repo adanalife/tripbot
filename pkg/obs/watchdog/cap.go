@@ -132,7 +132,8 @@ func RestartBroadcast(ctx context.Context, live func(context.Context) (bool, err
 	return retryStart(startCtx, startOBSOutput, startAttempts, startRetry)
 }
 
-func stopOBSOutput(ctx context.Context) error {
+// stopOBSOutput and startOBSOutput are vars so a test can stand in for OBS.
+var stopOBSOutput = func(ctx context.Context) error {
 	client, err := obs.Dial(ctx)
 	if err != nil {
 		return err
@@ -149,7 +150,7 @@ func stopOBSOutput(ctx context.Context) error {
 	return awaitOutputStopped(ctx, active)
 }
 
-func startOBSOutput(ctx context.Context) error {
+var startOBSOutput = func(ctx context.Context) error {
 	client, err := obs.Dial(ctx)
 	if err != nil {
 		return err
