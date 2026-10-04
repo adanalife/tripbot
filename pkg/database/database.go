@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"log/slog"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -164,7 +164,8 @@ func connectGorm() *gorm.DB {
 	return gdb
 }
 
-// connStr returns the postgres:// url the pool dials.
+// connStr returns the postgres:// url the pool dials. The credentials are
+// percent-encoded, so a password holding `@`, `/`, `#` or `%` parses intact.
 //
 // connect_timeout (seconds) bounds a dial to a host that never answers, which
 // otherwise waits out the OS's SYN retries. statement_timeout (milliseconds) is
@@ -178,6 +179,12 @@ func connStr() string {
 	pgDatabase := os.Getenv("DATABASE_DB")
 	pgHost := os.Getenv("DATABASE_HOST")
 
-	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&connect_timeout=5&statement_timeout=60000",
-		pgUser, pgPassword, pgHost, pgDatabase)
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(pgUser, pgPassword),
+		Host:     pgHost,
+		Path:     pgDatabase,
+		RawQuery: "sslmode=disable&connect_timeout=5&statement_timeout=60000",
+	}
+	return u.String()
 }
