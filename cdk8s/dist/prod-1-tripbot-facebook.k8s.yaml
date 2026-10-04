@@ -10,7 +10,7 @@ data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
   COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
-  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local.
   ENV: production
   FACEBOOK_API_URL: http://gateway-facebook.prod-1.svc.cluster.local:8080
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
@@ -45,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 2e02e86c35
+        adanalife.dev/config-hash: ff7b68d596
       labels:
         app: tripbot-facebook
     spec:
@@ -69,7 +69,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.25.0
+          image: adanalife/tripbot:5.25.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -117,7 +117,7 @@ spec:
                 name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.25.0
+          image: adanalife/tripbot:5.25.1
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -167,7 +167,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.25.0
+            - adanalife/tripbot:5.25.1
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
