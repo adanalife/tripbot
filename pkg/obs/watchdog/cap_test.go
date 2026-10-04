@@ -21,6 +21,8 @@ type capFixture struct {
 	started  time.Time
 	restarts int
 	outcomes []error
+	// restartErr is what Restart returns.
+	restartErr error
 }
 
 func (f *capFixture) set(state obs.StreamState, started time.Time) {
@@ -52,7 +54,7 @@ func (f *capFixture) deps() BroadcastCapDeps {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			f.restarts++
-			return nil
+			return f.restartErr
 		},
 		OnRestart: func(_ context.Context, err error) {
 			f.mu.Lock()
@@ -111,6 +113,28 @@ func TestBroadcastCapRestartsOncePerBroadcast(t *testing.T) {
 		}
 		if len(f.outcomes) != 1 || f.outcomes[0] != nil {
 			t.Fatalf("OnRestart calls = %v, want one nil", f.outcomes)
+		}
+	})
+}
+
+// A failed restart is reported to OnRestart with its error, and still counts
+// as this broadcast's one restart: the loop does not retry it every tick.
+func TestBroadcastCapReportsAFailedRestartOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		restartErr := errors.New("obs: connection refused")
+		f := &capFixture{restartErr: restartErr}
+		f.set(obs.StreamSteady, time.Now().Add(-capMaxAge-time.Minute))
+		stop := startCap(t, f)
+		defer stop()
+
+		tick(5)
+		if got := f.restartCount(); got != 1 {
+			t.Fatalf("restarts after a failed restart = %d, want 1", got)
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if len(f.outcomes) != 1 || !errors.Is(f.outcomes[0], restartErr) {
+			t.Fatalf("OnRestart calls = %v, want one carrying %v", f.outcomes, restartErr)
 		}
 	})
 }
