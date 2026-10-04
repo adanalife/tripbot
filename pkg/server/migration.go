@@ -44,7 +44,7 @@ var readSchemaMigration = func(ctx context.Context) (version int64, dirty bool, 
 func gatherMigrationVersion(ctx context.Context) migrationVersion {
 	version, dirty, err := readSchemaMigration(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "couldn't read schema migration version", "err", err)
+		logQueryFailure(ctx, "couldn't read schema migration version", err)
 		return migrationVersion{OK: false}
 	}
 	return migrationVersion{OK: true, Version: version, Dirty: dirty}
