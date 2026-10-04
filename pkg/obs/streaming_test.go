@@ -189,3 +189,28 @@ func TestPollAnnouncesAnUnreachableOBS(t *testing.T) {
 		t.Errorf("payload = %s; want reachable:false and no state (an unreachable OBS has none to report)", got.payload)
 	}
 }
+
+// OBS's two output flags map onto three states, and each state's String is
+// the value the obs.stream eventbus subject carries. A reconnecting output
+// still reports active, so it must not read as steady: the broadcast-cap
+// watchdog restarts a steady output, and the silent-disconnect watchdog treats
+// reconnecting as its own case.
+func TestStreamStateFrom(t *testing.T) {
+	cases := []struct {
+		active, reconnecting bool
+		want                 StreamState
+		wire                 string
+	}{
+		{false, false, StreamInactive, "inactive"},
+		{false, true, StreamInactive, "inactive"},
+		{true, true, StreamReconnecting, "reconnecting"},
+		{true, false, StreamSteady, "steady"},
+	}
+	for _, tc := range cases {
+		got := streamStateFrom(tc.active, tc.reconnecting)
+		if got != tc.want || got.String() != tc.wire {
+			t.Errorf("streamStateFrom(active=%v, reconnecting=%v) = %v (%q), want %v (%q)",
+				tc.active, tc.reconnecting, int(got), got.String(), int(tc.want), tc.wire)
+		}
+	}
+}
