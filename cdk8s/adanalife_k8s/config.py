@@ -226,9 +226,12 @@ class EnvConfig:
     @property
     def postgres_host(self) -> str:
         """DATABASE_HOST apps connect to: the bare Service name when co-located
-        (parity), the cross-namespace FQDN when the DB is isolated."""
+        (parity), the cross-namespace FQDN when the DB is isolated. The FQDN is
+        absolute (trailing dot): with 4 dots under the pod's ndots:5 it would
+        otherwise walk every search suffix, the node's upstream one included,
+        before resolving as written — on every new connection."""
         return (
-            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local"
+            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local."
             if self.data_isolated
             else self.postgres_service
         )
