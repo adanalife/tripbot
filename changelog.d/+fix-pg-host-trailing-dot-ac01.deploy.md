@@ -1,1 +1,0 @@
-The cross-namespace `DATABASE_HOST` is an absolute name (`pg-rw.<env>-data.svc.cluster.local.`), so each new Postgres connection resolves it directly instead of walking every `ndots:5` search suffix first.

@@ -9,6 +9,25 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.25.1] — 2026-10-04
+
+### Fixes
+
+- A read API query cancelled because its caller hung up (the console gives up after 2s) logs a warning rather than an error, so it no longer opens Sentry events. ([#1627](https://github.com/adanalife/tripbot/pull/1627))
+- Keep up to 10 idle Postgres connections per process (released after 5 idle minutes), so a console poll's parallel insights queries reuse warm connections instead of opening fresh ones that a slow connect turns into statement-timeout cancels. ([#1629](https://github.com/adanalife/tripbot/pull/1629))
+- The Postgres connection URL percent-encodes the database user and password, so a password containing `@`, `/`, `#`, `?` or `%` no longer breaks the DSN. ([#1632](https://github.com/adanalife/tripbot/pull/1632))
+- A console read that gives up before the schema-migration or user-profile query finishes logs a warning instead of an error, so it no longer opens a Sentry event. ([#1633](https://github.com/adanalife/tripbot/pull/1633))
+
+### Deploy / Infra
+
+- The cross-namespace `DATABASE_HOST` is an absolute name (`pg-rw.<env>-data.svc.cluster.local.`), so each new Postgres connection resolves it directly instead of walking every `ndots:5` search suffix first. ([#1630](https://github.com/adanalife/tripbot/pull/1630))
+
+### CI / Tooling
+
+- Test how OBS's output flags map onto the three stream states and the names the `obs.stream` subject carries. ([#1631](https://github.com/adanalife/tripbot/pull/1631))
+- Test the broadcast restart: the output comes back after the platform reports offline, after the offline wait times out, and after the caller cancels, and a failed stop skips the start. ([#1631](https://github.com/adanalife/tripbot/pull/1631))
+- Test that a failed broadcast-cap restart reaches `OnRestart` with its error and is not retried on the same broadcast. ([#1631](https://github.com/adanalife/tripbot/pull/1631))
+
 ## [v5.25.0] — 2026-10-01
 
 ### Platform gateway
