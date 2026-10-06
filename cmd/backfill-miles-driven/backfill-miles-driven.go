@@ -41,7 +41,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -132,15 +134,17 @@ func main() {
 	}
 }
 
+// openDB builds a URL DSN so a password holding a space or quote survives,
+// which a key=value DSN does not.
 func openDB() (*sql.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("DATABASE_HOST"),
-		os.Getenv("DATABASE_USER"),
-		os.Getenv("DATABASE_PASS"),
-		os.Getenv("DATABASE_DB"),
-	)
-	return sql.Open("postgres", dsn)
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(os.Getenv("DATABASE_USER"), os.Getenv("DATABASE_PASS")),
+		Host:     os.Getenv("DATABASE_HOST"),
+		Path:     os.Getenv("DATABASE_DB"),
+		RawQuery: "sslmode=disable",
+	}
+	return sql.Open("postgres", u.String())
 }
 
 func loadClips(db *sql.DB) ([]clip, error) {
@@ -240,23 +244,11 @@ func writeSQL(w *os.File, decisions []decision) {
 			continue
 		}
 		if d.newMiles.Valid {
-			fmt.Fprintf(w, "UPDATE videos SET miles_driven=%.3f WHERE slug='%s';\n", d.newMiles.Float64, sqlQuote(d.slug))
+			fmt.Fprintf(w, "UPDATE videos SET miles_driven=%.3f WHERE slug='%s';\n", d.newMiles.Float64, strings.ReplaceAll(d.slug, "'", "''"))
 		} else {
-			fmt.Fprintf(w, "UPDATE videos SET miles_driven=NULL WHERE slug='%s';\n", sqlQuote(d.slug))
+			fmt.Fprintf(w, "UPDATE videos SET miles_driven=NULL WHERE slug='%s';\n", strings.ReplaceAll(d.slug, "'", "''"))
 		}
 	}
-}
-
-// sqlQuote escapes single quotes for inlined SQL string literals.
-func sqlQuote(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r == '\'' {
-			out = append(out, '\'')
-		}
-		out = append(out, r)
-	}
-	return string(out)
 }
 
 func writeReport(w *os.File, decisions []decision) {
