@@ -1,0 +1,1 @@
+Dropped six duplicated or unreachable bits: a redundant month regex, two copies of existing helpers, an unused find-request envelope, an uncalled chat-mode subject helper, and an unreachable zero guard.
