@@ -74,6 +74,9 @@ var writers = []struct {
 	{"StreamDown", "stream_down", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return StreamDown(ctx, cfg)
 	}},
+	{"TrackChange", "track_change", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return TrackChange(ctx, cfg, TrackChangeMeta{From: "carhum", To: "somafm", Cause: "switch", Station: "groovesalad"})
+	}},
 	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return StateCrossing(ctx, cfg, "Utah", "Colorado", Airing{VideoID: 42}, true)
 	}},

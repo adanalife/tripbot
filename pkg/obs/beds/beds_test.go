@@ -1343,3 +1343,44 @@ func TestDetect_ReadsTheVoicingOffTheDroneFile(t *testing.T) {
 		})
 	}
 }
+
+func TestOnTransition_NamesEachChangeOnAir(t *testing.T) {
+	ctx := context.Background()
+	o := &fakeOBS{}
+	var got []Transition
+	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch").
+		OnTransition(func(_ context.Context, tr Transition) { got = append(got, tr) })
+
+	steps := []func() error{
+		func() error { return s.Set(ctx, Album) },
+		func() error { return s.Set(ctx, Album) }, // already on air: no transition
+		func() error { return s.Set(ctx, SomaFM) },
+		func() error { return s.SwapToFallback(ctx) },
+		func() error { return s.SwapToSomaFM(ctx) },
+	}
+	for i, step := range steps {
+		if err := step(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+
+	want := []Transition{
+		{From: SomaFM, To: Album, Cause: CauseSwitch},
+		{From: Album, To: SomaFM, Cause: CauseSwitch, Station: DefaultStation},
+		// A fallback carries no selection: it plays the whole share, whatever
+		// album was last picked.
+		{From: SomaFM, To: Album, Cause: CauseFallback},
+		{From: Album, To: SomaFM, Cause: CauseRecovered, Station: DefaultStation},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("transitions:\n got %+v\nwant %+v", got, want)
+	}
+
+	// The bed OBS boots on is the starting point, not a change.
+	got = nil
+	o.settings = map[string]any{"is_local_file": true, "local_file": FallbackFile}
+	s.Detect(ctx)
+	if len(got) != 0 {
+		t.Errorf("Detect reported %+v", got)
+	}
+}

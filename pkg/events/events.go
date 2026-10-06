@@ -589,6 +589,32 @@ func StreamDown(ctx context.Context, cfg *c.TripbotConfig) error {
 	return record(ctx, cfg, Event{Event: "stream_down"})
 }
 
+// TrackChangeMeta is a track_change event's meta payload: the audio bed on
+// air before and after, why it changed, and the selection within the new bed
+// (only the field that bed uses is set).
+type TrackChangeMeta struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Cause   string `json:"cause"`
+	Station string `json:"station,omitempty"`
+	Album   string `json:"album,omitempty"`
+	Voicing string `json:"voicing,omitempty"`
+}
+
+// TrackChange records the background audio on air changing — an operator's
+// switch or the audio watchdog's fallback and recovery. A system event with no
+// actor and no airing context: the audio belongs to the stream, not the clip.
+// Transitions only, never per-track samples, so the row count stays the
+// number of times what viewers hear changed character.
+func TrackChange(ctx context.Context, cfg *c.TripbotConfig, m TrackChangeMeta) error {
+	payload, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Event: "track_change", Meta: &meta})
+}
+
 // SessionCount returns how many sessions the user has started — i.e. their
 // count of "login" events. Cheap via the events_username_date index
 // (migration 011). Returns 0 on error. Bots are not special-cased here; callers

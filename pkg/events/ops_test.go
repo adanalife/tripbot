@@ -201,3 +201,30 @@ func TestOrphanedSessionsCountsUnpairedLogins(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// A track_change row names both beds and the cause, and only the selection the
+// new bed uses — Grafana and the rollups address it as meta->>'to' etc.
+func TestTrackChangeRow(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"",               // username: system event, no actor
+			"twitch",         // platform
+			"track_change",   // event
+			sqlmock.AnyArg(), // session_id
+			sqlmock.AnyArg(), // date_created
+			nil,              // extra_miles_earned
+			nil,              // video_id: the audio belongs to the stream
+			nil,              // video_ts_sec
+			`{"from":"somafm","to":"album","cause":"fallback"}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	m := TrackChangeMeta{From: "somafm", To: "album", Cause: "fallback"}
+	if err := TrackChange(context.Background(), &c.TripbotConfig{Platform: "twitch"}, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
