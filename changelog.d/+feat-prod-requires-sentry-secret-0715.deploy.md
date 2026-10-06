@@ -1,1 +1,0 @@
-In prod, tripbot and onscreens-server now require their Sentry Secret, so a pod whose Sentry ExternalSecret never synced fails to start instead of running with error reporting silently off. Stage and dev still boot without it.

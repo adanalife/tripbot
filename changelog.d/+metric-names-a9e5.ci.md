@@ -1,1 +1,0 @@
-tripbot publishes `pkg/contract/metrics.json`, every Prometheus series name it emits, generated from the instrumentation registry so infra can fail an alert rule that names a metric tripbot no longer emits.

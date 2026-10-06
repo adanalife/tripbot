@@ -1,1 +1,0 @@
-**mathgaming stays off the leaderboards.** The channel owner's personal account is flagged `exclude_from_leaderboard`, like `adanalife_` and `tripbot4000`, so it no longer ranks against viewers on the onscreen and chat boards.
