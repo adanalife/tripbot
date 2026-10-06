@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -75,16 +77,35 @@ func tokenReason(t oauthtokens.Token) string {
 	return ""
 }
 
+// SetBroadcasterMissingScopes records the scopes the broadcaster grant lacks,
+// as found by the last EventSub subscribe round; empty clears the record.
+func (cl *API) SetBroadcasterMissingScopes(scopes []string) {
+	cl.tokenMu.Lock()
+	defer cl.tokenMu.Unlock()
+	cl.broadcasterMissingScopes = slices.Clone(scopes)
+}
+
+// scopeReason is "missing_scope: <scope> <scope>…" for a grant lacking
+// scopes, else "". A refresh keeps the original grant's scopes, so this
+// reason clears only after a re-consent.
+func scopeReason(missing []string) string {
+	if len(missing) == 0 {
+		return ""
+	}
+	return "missing_scope: " + strings.Join(missing, " ")
+}
+
 // AccountTokenStatus is the live token state for one identity, surfaced to
 // tripbot-console's auth card. ExpiresAt drives an "expires in N" countdown;
-// Reason is "" when healthy, else "missing"/"expired". The re-auth link itself
+// Reason is "" when healthy, else "missing"/"expired"/"missing_scope: …". The
+// re-auth link itself
 // lives console-side (it points at the platform-gateway consent flow), so this
 // carries no URL.
 type AccountTokenStatus struct {
 	Account   string    // "bot" | "broadcaster"
 	LoginAs   string    // the exact Twitch username
 	ExpiresAt time.Time // zero when the expiry is unknown (e.g. a missing token)
-	Reason    string    // "" healthy, else "missing" | "expired"
+	Reason    string    // "" healthy, else "missing" | "expired" | "missing_scope: <scopes>"
 }
 
 // TokenStatuses returns the live token state for each configured identity: the
@@ -95,6 +116,7 @@ func (cl *API) TokenStatuses(botUser, broadcasterUser string) []AccountTokenStat
 	cl.tokenMu.RLock()
 	bot := cl.currentUserToken
 	bcast := cl.currentBroadcasterToken
+	missing := cl.broadcasterMissingScopes
 	cl.tokenMu.RUnlock()
 
 	out := []AccountTokenStatus{{
@@ -104,11 +126,17 @@ func (cl *API) TokenStatuses(botUser, broadcasterUser string) []AccountTokenStat
 		Reason:    tokenReason(bot),
 	}}
 	if broadcasterUser != "" && broadcasterUser != botUser {
+		// A missing or expired token outranks a scope shortfall: it is the
+		// first thing a re-consent fixes, and its scopes are moot until then.
+		reason := tokenReason(bcast)
+		if reason == "" {
+			reason = scopeReason(missing)
+		}
 		out = append(out, AccountTokenStatus{
 			Account:   "broadcaster",
 			LoginAs:   broadcasterUser,
 			ExpiresAt: bcast.ExpiresAt,
-			Reason:    tokenReason(bcast),
+			Reason:    reason,
 		})
 	}
 	return out

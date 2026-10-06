@@ -366,3 +366,65 @@ func TestRun_ReturnsNilOnCancel(t *testing.T) {
 	}
 	f.waitRound(t)
 }
+
+// A 403 names the scope the grant lacks: each refused event type's scope is
+// reported once, and a round with no refusal reports none, so a re-consent
+// clears the report on the next dial.
+func TestRun_ReportsMissingScopes(t *testing.T) {
+	cases := []struct {
+		name    string
+		respond func(string) (int, string)
+		want    []string
+	}{
+		{
+			name: "follow and the subscription family refused",
+			respond: func(ev string) (int, string) {
+				if ev == "channel.raid" {
+					return accepted(ev)
+				}
+				return http.StatusForbidden, `{"error":"Forbidden","status":403}`
+			},
+			want: []string{"channel:read:subscriptions", "moderator:read:followers"},
+		},
+		{
+			name: "a 401 is a refused token, not a missing scope",
+			respond: func(ev string) (int, string) {
+				if ev == "channel.follow" {
+					return http.StatusUnauthorized, `{"status":401}`
+				}
+				return accepted(ev)
+			},
+			want: []string{},
+		},
+		{name: "everything accepted", respond: accepted, want: []string{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeTwitch{respond: tc.respond, closeCode: websocket.StatusNormalClosure}
+			cfg := f.start(t)
+			// The library runs the callback on its own goroutine.
+			reports := make(chan []string, 1)
+			h := Handlers{
+				OnFollow:        func(string) {},
+				OnSubscribe:     func(string, bool, string) {},
+				OnUnsubscribe:   func(string, bool, string) {},
+				OnGift:          func(string, int, string, bool) {},
+				OnResub:         func(string, int, int, string, string) {},
+				OnRaid:          func(string, int) {},
+				OnMissingScopes: func(s []string) { reports <- slices.Clone(s) },
+			}
+			if err := run(t, cfg, h); err != nil {
+				t.Fatalf("Run = %v, want nil", err)
+			}
+			var got []string
+			select {
+			case got = <-reports:
+			case <-time.After(10 * time.Second):
+				t.Fatal("OnMissingScopes never called")
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("missing scopes = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

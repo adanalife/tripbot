@@ -22,6 +22,10 @@ type API struct {
 	tokenMu                 sync.RWMutex
 	currentUserToken        oauthtokens.Token
 	currentBroadcasterToken oauthtokens.Token
+	// broadcasterMissingScopes is what the last EventSub subscribe round found
+	// the broadcaster grant lacking. The token row's own scope list can't say:
+	// it is written only at consent time, so an older grant's is wrong.
+	broadcasterMissingScopes []string
 
 	// channelID is the twitch-internal user ID for the channel.
 	channelID string

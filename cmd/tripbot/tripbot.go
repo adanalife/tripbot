@@ -984,6 +984,9 @@ func (t *Tripbot) eventSubAttempt(ctx context.Context, token string) error {
 		OnGift:        t.app.AnnounceGiftSub,
 		OnResub:       t.app.AnnounceResub,
 		OnRaid:        t.app.RecordRaid,
+		// The console's auth card reads this through the auth status
+		// snapshot, so a short grant shows as needing a re-consent.
+		OnMissingScopes: mytwitch.SetBroadcasterMissingScopes,
 	})
 }
 
