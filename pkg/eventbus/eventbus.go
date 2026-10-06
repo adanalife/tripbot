@@ -268,7 +268,7 @@ type AuthAccount struct {
 	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
 	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339Nano UTC; empty when unknown (missing token, or auto-refreshed)
-	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired"
+	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired" | "missing_scope: <scopes>"
 }
 
 // AuthStatus is the wire format for tripbot.<env>.auth.status.<platform> — a
