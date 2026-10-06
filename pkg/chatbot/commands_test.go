@@ -1622,3 +1622,50 @@ func TestGuessStatsCmd(t *testing.T) {
 		})
 	}
 }
+
+func TestOnlineMilesLeaderboardCmd_RanksOnlyHumansInChat(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Sessions = &recordingSessions{
+		Online: []users.User{
+			{Username: "carol"},
+			{Username: "alice"},
+			{Username: "bob"},
+			{Username: "somebot", IsBot: true},
+			{Username: "dana", ExcludeFromLeaderboard: true},
+			{Username: "lurker"},
+		},
+		MonthlyByUser: map[string]float32{
+			"carol": 3, "alice": 12, "bob": 12, "somebot": 99, "dana": 50, "lurker": 0,
+		},
+	}
+
+	out, _ := captureSay(t, app)
+	app.onlineMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	want := "Top 3 in chat this month: 1. alice (12.0mi), 1. bob (12.0mi), 3. carol (3.0mi)"
+	if got := out(); got != want {
+		t.Errorf("reply = %q, want %q", got, want)
+	}
+	if len(rec.Calls) != 1 || rec.Calls[0] != `ShowLeaderboard("Online Now", 3 rows)` {
+		t.Errorf("overlay calls = %v", rec.Calls)
+	}
+}
+
+func TestOnlineMilesLeaderboardCmd_NobodyWithMiles(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Sessions = &recordingSessions{Online: []users.User{{Username: "lurker"}}}
+
+	out, _ := captureSay(t, app)
+	app.onlineMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	if got := out(); got != "No one in chat has miles this month yet!" {
+		t.Errorf("reply = %q", got)
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("an empty board went on screen: %v", rec.Calls)
+	}
+}

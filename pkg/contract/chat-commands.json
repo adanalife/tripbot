@@ -321,6 +321,17 @@
       ]
     },
     {
+      "trigger": "!onlineleaderboard",
+      "aliases": [
+        "!olb",
+        "!onlinelb"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!refreshoverlays",
       "aliases": [
         "!refreshoverlay"
