@@ -43,6 +43,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -243,23 +244,11 @@ func writeSQL(w *os.File, decisions []decision) {
 			continue
 		}
 		if d.newMiles.Valid {
-			fmt.Fprintf(w, "UPDATE videos SET miles_driven=%.3f WHERE slug='%s';\n", d.newMiles.Float64, sqlQuote(d.slug))
+			fmt.Fprintf(w, "UPDATE videos SET miles_driven=%.3f WHERE slug='%s';\n", d.newMiles.Float64, strings.ReplaceAll(d.slug, "'", "''"))
 		} else {
-			fmt.Fprintf(w, "UPDATE videos SET miles_driven=NULL WHERE slug='%s';\n", sqlQuote(d.slug))
+			fmt.Fprintf(w, "UPDATE videos SET miles_driven=NULL WHERE slug='%s';\n", strings.ReplaceAll(d.slug, "'", "''"))
 		}
 	}
-}
-
-// sqlQuote escapes single quotes for inlined SQL string literals.
-func sqlQuote(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r == '\'' {
-			out = append(out, '\'')
-		}
-		out = append(out, r)
-	}
-	return string(out)
 }
 
 func writeReport(w *os.File, decisions []decision) {
