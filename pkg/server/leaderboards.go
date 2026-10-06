@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
+	"slices"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -26,11 +26,6 @@ import (
 // 50; a console pane shows a screenful, and the console can't ask for more
 // because nothing has wanted to.
 const leaderboardSize = 25
-
-// monthParam is the ?month= shape, matching the YYYY-MM the payload hands out
-// rather than the YYYY_MM the board names embed — the underscore is an
-// internal spelling and the API shouldn't leak it.
-var monthParam = regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`)
 
 // leaderboardBoard is one board for one month. Rows are ordered best-first and
 // Ranks[i] is Rows[i]'s place, sharing the place across a tie.
@@ -108,13 +103,8 @@ func (s *Server) leaderboardsHandler(w http.ResponseWriter, r *http.Request) {
 // checks against, so an unknown value means a stale client rather than a
 // request worth failing.
 func selectMonth(asked string, months []string, current string) string {
-	if !monthParam.MatchString(asked) {
-		return current
-	}
-	for _, m := range months {
-		if m == asked {
-			return asked
-		}
+	if slices.Contains(months, asked) {
+		return asked
 	}
 	return current
 }
@@ -167,10 +157,8 @@ func snapshotMonths(ctx context.Context) ([]string, error) {
 // first of a month, before the previous month's freeze has run, it is the only
 // month there is.
 func withCurrentMonth(months []string, current string) []string {
-	for _, m := range months {
-		if m == current {
-			return months
-		}
+	if slices.Contains(months, current) {
+		return months
 	}
 	return append([]string{current}, months...)
 }
