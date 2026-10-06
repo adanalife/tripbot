@@ -12,6 +12,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	"github.com/adanalife/tripbot/pkg/contract"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 func main() {
@@ -80,4 +81,18 @@ func main() {
 		log.Fatalf("write %s: %v", chatOut, err)
 	}
 	log.Printf("wrote %s", chatOut)
+
+	// The metric-name list (every Prometheus series tripbot emits) comes from
+	// pkg/instrumentation's must* registry the same way chat-commands.json
+	// comes from pkg/chatbot. infra syncs it to check that each alert rule
+	// names a series that still exists.
+	metricsData, err := instrumentation.MarshalMetricNames()
+	if err != nil {
+		log.Fatalf("marshal metric names: %v", err)
+	}
+	metricsOut := filepath.Join(filepath.Dir(self), "..", "..", "metrics.json")
+	if err := os.WriteFile(metricsOut, metricsData, 0o644); err != nil {
+		log.Fatalf("write %s: %v", metricsOut, err)
+	}
+	log.Printf("wrote %s", metricsOut)
 }

@@ -425,6 +425,7 @@ func b2i(b bool) int64 {
 }
 
 func mustCounter(name, desc string) metric.Int64Counter {
+	register(name, "counter")
 	c, err := meter.Int64Counter(name, metric.WithDescription(desc))
 	if err != nil {
 		panic(err)
@@ -433,6 +434,7 @@ func mustCounter(name, desc string) metric.Int64Counter {
 }
 
 func mustGauge(name, desc string) metric.Int64Gauge {
+	register(name, "gauge")
 	g, err := meter.Int64Gauge(name, metric.WithDescription(desc))
 	if err != nil {
 		panic(err)
@@ -441,6 +443,7 @@ func mustGauge(name, desc string) metric.Int64Gauge {
 }
 
 func mustHistogram(name, desc string, buckets ...float64) metric.Float64Histogram {
+	register(name, "histogram")
 	opts := []metric.Float64HistogramOption{metric.WithDescription(desc)}
 	if len(buckets) > 0 {
 		opts = append(opts, metric.WithExplicitBucketBoundaries(buckets...))
@@ -453,6 +456,7 @@ func mustHistogram(name, desc string, buckets ...float64) metric.Float64Histogra
 }
 
 func mustFloat64Gauge(name, desc string) metric.Float64Gauge {
+	register(name, "gauge")
 	g, err := meter.Float64Gauge(name, metric.WithDescription(desc))
 	if err != nil {
 		panic(err)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strconv"
 	"strings"
@@ -1495,6 +1497,34 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 	})
 }
 
+// A clawback larger than the balance is clamped, so the event records what was
+// removed (keeping the rollup in step with users.miles) and the issuer hears
+// that less came off than asked.
+func TestGiveMilesCmd_ClampedClawback_RecordsAppliedDelta(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.Sessions = &recordingSessions{
+		FindResult: users.User{ID: 7, Username: "target"},
+		Miles:      0,
+		Applied:    -30,
+	}
+	rec := &recordingEvents{}
+	app.Events = rec
+	out, says := captureSay(t, app)
+
+	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "-50"})
+
+	if msg := out(); msg != "@target only had 30.00mi to remove, now has 0.00mi" {
+		t.Errorf("expected the clamp in the reply, got %q", msg)
+	}
+	want := []recordedCorrection{{Username: "target", Delta: -30}}
+	if !slices.Equal(rec.Corrections, want) {
+		t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
 func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingSessions{}
@@ -1620,5 +1650,98 @@ func TestGuessStatsCmd(t *testing.T) {
 				t.Errorf("expected exactly one Say() call, got %d", says())
 			}
 		})
+	}
+}
+
+// --- lastMonthCmd ---
+//
+// The frozen boards come from App.Scoreboards and the game's board from the
+// guessr endpoint, so these stage both and assert on the one line chat gets.
+
+// All three boards, each cut to the podium: the miles board is staged four
+// deep to prove the chat line stops at three while the overlay keeps more.
+func TestLastMonthCmd_PodiumOfThreeBoards(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("board"); got != "monthly" {
+			t.Errorf("expected the monthly board, got %q", got)
+		}
+		if got := r.URL.Query().Get("month"); got != "2026-08" {
+			t.Errorf("expected month=2026-08, got %q", got)
+		}
+		fmt.Fprint(w, `{"board":"monthly","period":"2026-08","rows":[["Endless Roadside",17163],["Cedar Glacier",900]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	app.Scoreboards = &recordingScoreboards{
+		LastMiles:   [][]string{{"a", "12.0"}, {"b", "11.0"}, {"c", "9.5"}, {"d", "1.0"}},
+		LastGuesses: [][]string{{"x", "5"}, {"y", "4"}},
+	}
+	out, says := captureSay(t, app)
+
+	app.lastMonthCmd(context.Background(), newTestUser("caller"), nil)
+
+	want := "August final boards — Miles: 1. a (12.0mi), 2. b (11.0mi), 3. c (9.5mi); Guesses: 1. x (5), 2. y (4); Guessr: 1. Endless Roadside (17163), 2. Cedar Glacier (900)"
+	if got := out(); got != want {
+		t.Errorf("chat said\n%q\nwant\n%q", got, want)
+	}
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August Miles (final)", 4 rows)`) {
+		t.Errorf("expected one final-miles overlay call with 4 rows, got %v", rec.Calls)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
+// Before the rollup tick has frozen the month there is no final result, and
+// the command says so instead of showing the running boards — or asking the
+// game, which is why the server fails the test if it is reached.
+func TestLastMonthCmd_NoSnapshotYet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fetched the guessr board with no frozen boards to show")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	app.Scoreboards = &recordingScoreboards{}
+	out, _ := captureSay(t, app)
+
+	app.lastMonthCmd(context.Background(), newTestUser("caller"), nil)
+
+	if want := "No final boards for August yet — they're frozen shortly after the month ends."; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call, got %v", rec.Calls)
+	}
+}
+
+// With the guessr flag off the game is never asked and the line carries only
+// tripbot's own boards.
+func TestLastMonthCmd_FlagOff_SkipsGuessr(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fetched the guessr board with the flag off")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	app.Onscreens = &recordingOnscreens{}
+	app.Flags = &recordingFlags{} // every key false
+	app.Scoreboards = &recordingScoreboards{LastMiles: [][]string{{"a", "12.0"}}}
+	out, _ := captureSay(t, app)
+
+	app.lastMonthCmd(context.Background(), newTestUser("caller"), nil)
+
+	if want := "August final boards — Miles: 1. a (12.0mi)"; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
 	}
 }

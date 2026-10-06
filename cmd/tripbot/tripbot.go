@@ -674,7 +674,31 @@ func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 	deps.OnRestart = t.watchdogRestartHook("twitch")
 	deps.OnRecovered = t.watchdogRecoveredHook("twitch")
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
+
+	// Twitch ends a broadcast at 48 hours. Restarting an hour early trades
+	// Twitch's abrupt cut for a gap of a few minutes at a time of our choosing.
+	// The start time is Twitch's own, read off the viewers payload; a gateway
+	// that doesn't send it answers zero, and the loop leaves a zero alone.
+	go watchdog.WatchBroadcastCap(ctx, watchdog.BroadcastCapDeps{
+		Platform: "twitch",
+		OBSState: obs.LastStreamState,
+		StartedAt: func(ctx context.Context) (time.Time, error) {
+			if t.gateway == nil {
+				return time.Time{}, errors.New("broadcast-cap watchdog: no gateway configured")
+			}
+			a, err := t.gateway.Viewers(ctx)
+			return a.StartedAt, err
+		},
+		Restart: func(ctx context.Context) error {
+			return watchdog.RestartBroadcast(ctx, deps.ChannelLive)
+		},
+		OnRestart: t.watchdogRestartHook("twitch_cap"),
+	}, time.Minute, twitchBroadcastCap)
 }
+
+// twitchBroadcastCap is how old a Twitch broadcast gets before the watchdog
+// restarts it: an hour inside Twitch's 48-hour limit.
+const twitchBroadcastCap = 47 * time.Hour
 
 // startTikTokWatchdog recovers a reaped LIVE room. TikTok's failure is one
 // layer above Twitch's: the Streamlabs-minted room is gone once a push gap
@@ -1226,13 +1250,15 @@ func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
-	// platform-neutral jobs: every instance plays video and posts the
-	// periodic help message.
+	// platform-neutral jobs: every instance plays video, and every one but
+	// YouTube posts the periodic help message.
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	// Faster than the clip poll above because it is about a moment, not a clip:
 	// the tick is the precision a mid-clip state crossing is recorded to.
 	t.addJob(10*time.Second, "video.TrackState", t.player.TrackState)
-	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
+	if t.cfg.Platform != "youtube" {
+		t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
+	}
 	// Refresh the rotators' clip-data feed every minute. Re-publishing (not just
 	// on video change) also recovers a restarted onscreens-server within a tick;
 	// the geocode and weather lookups are throttled inside Emit.

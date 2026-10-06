@@ -376,7 +376,9 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 // persists it immediately, to both places a viewer sees their miles: the
 // lifetime total and the current monthly scoreboard. If they're logged in, the
 // live session copy is adjusted so logout doesn't clobber the correction.
-// Returns the new lifetime total. The delta is deliberately NOT added to
+// Returns the new lifetime total and the delta actually applied to it: a
+// clawback larger than the lifetime balance removes exactly the balance, so
+// the total never goes below zero. The delta is deliberately NOT added to
 // sessionExtraMiles — the caller logs a separate correction event carrying it,
 // and doing both would double-count.
 //
@@ -389,11 +391,12 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 // meaningless, so callers must neither report it nor record a correction event
 // for it. events is append-only, so an event without the matching users write
 // is a permanent divergence in the rollups.
-func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) (float32, error) {
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) (total, applied float32, err error) {
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
 	var updated User
 	if ok {
+		delta = clampClawback(live.Miles, delta)
 		live.Miles += delta
 		updated = *live
 	}
@@ -404,18 +407,30 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 		// it if this write hits a transient failure.
 		updated.save(ctx)
 		s.correctMonthly(ctx, updated, delta)
-		return updated.Miles, nil
+		return updated.Miles, delta, nil
 	}
 	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
 	if err != nil {
 		// save() refuses an ID-less user, so there is no total to report: the
 		// correction is dropped rather than half-applied.
-		return 0, err
+		return 0, 0, err
 	}
+	delta = clampClawback(u.Miles, delta)
 	u.Miles += delta
 	u.save(ctx)
 	s.correctMonthly(ctx, u, delta)
-	return u.Miles, nil
+	return u.Miles, delta, nil
+}
+
+// clampClawback limits a negative delta to the balance it comes out of, so a
+// clawback can empty a balance but never take it below zero. A balance already
+// at or below zero gives nothing back: clamping against it would turn the
+// clawback into a credit.
+func clampClawback(balance, delta float32) float32 {
+	if delta >= 0 {
+		return delta
+	}
+	return max(delta, -max(balance, 0))
 }
 
 // correctMonthly applies a correction's delta to the current monthly

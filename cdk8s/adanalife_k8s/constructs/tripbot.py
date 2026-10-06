@@ -239,16 +239,18 @@ class Tripbot(Construct):
 
         # --- envFrom: config, DB creds, shared Sentry, then app Secrets ---
         # Order is load-bearing: later entries win on key collision.
-        # The discord and Sentry Secrets are optional so the bot boots without
-        # them — observability gates itself off when the env vars are absent,
-        # and the pod isn't hostage to ExternalSecret sync order.
-        # Boot-required Secrets (DB creds, and twitch on a twitch instance)
-        # stay required: a missing one fails loud.
+        # The discord Secrets are optional so the bot boots without them, and so
+        # is Sentry outside prod (env.sentry_required) — observability gates
+        # itself off when the env vars are absent, and the pod isn't hostage to
+        # ExternalSecret sync order. Boot-required Secrets (DB creds, and twitch
+        # on a twitch instance) stay required: a missing one fails loud.
         env_from = [
             k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
             k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
             k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(name="sentry-tripbot", optional=True)
+                secret_ref=k8s.SecretEnvSource(
+                    name="sentry-tripbot", optional=not env.sentry_required
+                )
             ),
         ]
 
