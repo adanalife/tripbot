@@ -41,6 +41,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/url"
 	"os"
 	"time"
 
@@ -132,15 +133,17 @@ func main() {
 	}
 }
 
+// openDB builds a URL DSN so a password holding a space or quote survives,
+// which a key=value DSN does not.
 func openDB() (*sql.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("DATABASE_HOST"),
-		os.Getenv("DATABASE_USER"),
-		os.Getenv("DATABASE_PASS"),
-		os.Getenv("DATABASE_DB"),
-	)
-	return sql.Open("postgres", dsn)
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(os.Getenv("DATABASE_USER"), os.Getenv("DATABASE_PASS")),
+		Host:     os.Getenv("DATABASE_HOST"),
+		Path:     os.Getenv("DATABASE_DB"),
+		RawQuery: "sslmode=disable",
+	}
+	return sql.Open("postgres", u.String())
 }
 
 func loadClips(db *sql.DB) ([]clip, error) {
