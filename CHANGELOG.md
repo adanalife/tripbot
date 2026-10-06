@@ -9,6 +9,35 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.26.0] — 2026-10-06
+
+### Chatbot
+
+- **mathgaming stays off the leaderboards.** The channel owner's personal account is flagged `exclude_from_leaderboard`, like `adanalife_` and `tripbot4000`, so it no longer ranks against viewers on the onscreen and chat boards. ([#1611](https://github.com/adanalife/tripbot/pull/1611))
+- `!lastmonth` (`!lastleaderboard`, `!lastlb`) answers with the month just ended as it finished: the podium for miles, correct guesses and the guessr monthly board in one chat line, with the final miles board on the overlay. Until the rollup tick has frozen the month it says so rather than showing the running boards. ([#1613](https://github.com/adanalife/tripbot/pull/1613))
+- `!givemiles` clamps a clawback at the viewer's lifetime balance, so the lifetime miles total can no longer go below zero, and says so in chat when less came off than asked. ([#1616](https://github.com/adanalife/tripbot/pull/1616))
+- The YouTube stream no longer posts the timed help message in chat. ([#1640](https://github.com/adanalife/tripbot/pull/1640))
+
+### Onscreens
+
+- The rotator `$date` variable reads `September 26, 2018` without the day of the week, so the YouTube overlay's `📅` date line fits the right corner. ([#1614](https://github.com/adanalife/tripbot/pull/1614))
+
+### Fixes
+
+- `backfill-miles-driven` connects with a password that holds a space or quote. ([#1643](https://github.com/adanalife/tripbot/pull/1643))
+
+### Deploy / Infra
+
+- In prod, tripbot and onscreens-server now require their Sentry Secret, so a pod whose Sentry ExternalSecret never synced fails to start instead of running with error reporting silently off. Stage and dev still boot without it. ([#1635](https://github.com/adanalife/tripbot/pull/1635))
+
+### CI / Tooling
+
+- tripbot publishes `pkg/contract/metrics.json`, every Prometheus series name it emits, generated from the instrumentation registry so infra can fail an alert rule that names a metric tripbot no longer emits. ([#1639](https://github.com/adanalife/tripbot/pull/1639))
+
+### Cleanup
+
+- Dropped six duplicated or unreachable bits: a redundant month regex, two copies of existing helpers, an unused find-request envelope, an uncalled chat-mode subject helper, and an unreachable zero guard. ([#1644](https://github.com/adanalife/tripbot/pull/1644))
+
 ## [v5.25.1] — 2026-10-04
 
 ### Fixes
