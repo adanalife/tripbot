@@ -1247,13 +1247,15 @@ func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
-	// platform-neutral jobs: every instance plays video and posts the
-	// periodic help message.
+	// platform-neutral jobs: every instance plays video, and every one but
+	// YouTube posts the periodic help message.
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	// Faster than the clip poll above because it is about a moment, not a clip:
 	// the tick is the precision a mid-clip state crossing is recorded to.
 	t.addJob(10*time.Second, "video.TrackState", t.player.TrackState)
-	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
+	if t.cfg.Platform != "youtube" {
+		t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
+	}
 	// Refresh the rotators' clip-data feed every minute. Re-publishing (not just
 	// on video change) also recovers a restarted onscreens-server within a tick;
 	// the geocode and weather lookups are throttled inside Emit.
