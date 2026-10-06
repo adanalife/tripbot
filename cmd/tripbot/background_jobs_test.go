@@ -19,12 +19,14 @@ import (
 // with no other symptom than a feature quietly running where it can't work.
 
 // neutralJobs run on every instance regardless of platform: each one plays
-// video, posts the periodic chatter, and republishes the rotators' clip feed.
+// video, posts the periodic chatter, republishes the rotators' clip feed, and
+// records its own onscreens-server's deploys.
 var neutralJobs = []string{
 	"video.GetCurrentlyPlaying",
 	"video.TrackState",
 	"chatbot.Chatter",
 	"video.LocationFeed",
+	"events.OnscreensDeploy",
 }
 
 // youtubeJobs is the neutral set minus the periodic chatter: the YouTube
