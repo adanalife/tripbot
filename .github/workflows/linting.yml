@@ -125,15 +125,21 @@ jobs:
           # branch's max, or golang-migrate skips it once base is deployed.
           if [ -n "${BASE_REF:-}" ]; then
             git fetch -q --depth=1 origin "$BASE_REF"
-            base=$(git ls-tree -r --name-only FETCH_HEAD -- db/migrate | sed -nE 's|db/migrate/([0-9]+)_.*\.up\.sql|\1|p' | sort -u)
-            base_max=$(echo "$base" | tail -1)
+            # Compared by file name, not number: this branch's 055_foo against the
+            # base's 055_bar is the collision to catch, and a number-only diff
+            # reads it as already on the base. It matters on a re-run (see
+            # recheck-open-prs), which keeps the original merge ref, so the
+            # base's newer file never reaches the duplicate check above.
+            base=$(git ls-tree -r --name-only FETCH_HEAD -- db/migrate | sed -nE 's|db/migrate/(.*\.up\.sql)$|\1|p' | sort)
+            base_max=$(echo "$base" | sed -nE 's|^([0-9]+)_.*|\1|p' | sort | tail -1)
             base_max=${base_max:-000}
-            added=$(comm -23 <(echo "$ups" | sort -u) <(echo "$base"))
+            added=$(comm -23 <(printf '%s\n' db/migrate/*.up.sql | sed 's|db/migrate/||' | sort) <(echo "$base"))
             bad=0
-            while IFS= read -r m; do
-              [ -n "$m" ] || continue
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              m=${f%%_*}
               if [ "$((10#$m))" -le "$((10#$base_max))" ]; then
-                echo "::error::migration $m is not above $BASE_REF's current max ($base_max) — rebase and renumber it above $base_max, or migrate will skip it"
+                echo "::error::migration $f is not above $BASE_REF's current max ($base_max) — rebase and renumber it above $base_max, or migrate will skip it"
                 bad=1
               fi
             done <<< "$added"
@@ -142,3 +148,40 @@ jobs:
           else
             echo "OK (push): no duplicate migration numbers; up/down paired"
           fi
+
+  # GitHub never re-runs a PR's checks when its base moves, so a migration-order
+  # pass from before another PR took the same number stays green until merge.
+  # When a push to main adds migrations, re-run that check on every open PR
+  # that carries one; the re-run reads main fresh and turns a collision red.
+  recheck-open-prs:
+    name: recheck-open-prs
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Re-run migration-order on open PRs with migrations
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/commits/$GITHUB_SHA" --jq '.files[].filename' \
+            | grep -q '^db/migrate/' || { echo "this push adds no migrations"; exit 0; }
+
+          gh pr list --state open -L 200 --json number,headRefOid,files \
+            --jq '.[] | select(any(.files[]; .path | startswith("db/migrate/"))) | "\(.number) \(.headRefOid)"' \
+          | while read -r pr sha; do
+              run=$(gh run list --workflow linting.yml --event pull_request --commit "$sha" -L 1 \
+                --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId')
+              if [ -z "$run" ]; then
+                echo "#$pr: no completed linting run on $sha (an in-flight run reads main fresh)"
+                continue
+              fi
+              job=$(gh run view "$run" --json jobs --jq '.jobs[] | select(.name == "migration-order") | .databaseId')
+              echo "#$pr: re-running migration-order (run $run, job $job)"
+              gh run rerun --job "$job" || echo "::warning::#$pr: could not re-run job $job"
+            done
