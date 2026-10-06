@@ -1,0 +1,1 @@
+A change in the background audio on air now writes a `track_change` event: an operator switching bed, station, album or voicing; the audio watchdog standing the album or the drone in for an unreachable SomaFM and handing back; or the drone rescuing an album with no tracks. Each row names the bed before and after, the cause, and the selection within the new bed.
