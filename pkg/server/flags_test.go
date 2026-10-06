@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/gorilla/mux"
 )
@@ -62,8 +63,8 @@ func TestFlagsHandler_Snapshot(t *testing.T) {
 		t.Errorf("content-type = %q, want application/json", ct)
 	}
 	var got struct {
-		OK    bool      `json:"ok"`
-		Flags []flagDTO `json:"flags"`
+		OK    bool                   `json:"ok"`
+		Flags []eventbus.FeatureFlag `json:"flags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
@@ -85,8 +86,8 @@ func TestFlagsHandler_NoClientReportsNotOK(t *testing.T) {
 	flagsRouter(s).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/flags", nil))
 
 	var got struct {
-		OK    bool      `json:"ok"`
-		Flags []flagDTO `json:"flags"`
+		OK    bool                   `json:"ok"`
+		Flags []eventbus.FeatureFlag `json:"flags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v", err)
