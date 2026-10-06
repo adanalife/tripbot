@@ -150,18 +150,7 @@ var stopOBSOutput = func(ctx context.Context) error {
 	return awaitOutputStopped(ctx, active)
 }
 
-var startOBSOutput = func(ctx context.Context) error {
-	client, err := obs.Dial(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
-	return obs.StartStreamOn(client)
-}
+var startOBSOutput = obs.StartStream
 
 // awaitOffline polls live until it answers false or timeout passes. A failed
 // read counts as not-yet-offline rather than ending the wait.

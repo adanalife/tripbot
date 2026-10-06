@@ -615,12 +615,6 @@ type ChatMode struct {
 	EmittedAt       string `json:"emitted_at"`
 }
 
-// ChatModeSubject returns the publish subject for one platform's chat mode.
-// Per-platform so TRIPBOT_CHAT_MODE retains a last value per platform.
-func ChatModeSubject(env, platform string) string {
-	return subject(env, "chat", "mode") + "." + platform
-}
-
 // ChatModeWildcard returns the subscribe pattern covering every platform's chat
 // mode in env.
 func ChatModeWildcard(env string) string { return subject(env, "chat", "mode") + ".*" }

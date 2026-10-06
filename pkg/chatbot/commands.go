@@ -696,9 +696,6 @@ func (a *App) guessStatsCmd(ctx context.Context, user *users.User, _ []string) {
 // no leading zero (".392"), and "1.000" for a perfect record, which is the
 // one case that keeps its leading digit.
 func battingAverage(correct, total int64) string {
-	if total == 0 {
-		return ".000"
-	}
 	avg := fmt.Sprintf("%.3f", float64(correct)/float64(total))
 	return strings.TrimPrefix(avg, "0")
 }
