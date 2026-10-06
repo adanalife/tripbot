@@ -9,6 +9,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 )
 
 // This file wires the ops-transition event writers (event-taxonomy ADR: the
@@ -76,6 +77,24 @@ func (t *Tripbot) streamTransitionHook() func(platform string, live bool) {
 			return
 		}
 		slog.InfoContext(ctx, "recorded stream transition event", "event", name, "platform", platform)
+	}
+}
+
+// trackChangeHook adapts events.TrackChange to the bed store's OnTransition
+// callback: each change of the audio on air lands as a track_change event. A
+// switch can land from a timer with no request behind it, so the write runs
+// under its own context.
+func (t *Tripbot) trackChangeHook() func(context.Context, beds.Transition) {
+	return func(_ context.Context, tr beds.Transition) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err := events.TrackChange(ctx, t.cfg, events.TrackChangeMeta{
+			From: string(tr.From), To: string(tr.To), Cause: tr.Cause,
+			Station: tr.Station, Album: tr.Album, Voicing: tr.Voicing,
+		})
+		if err != nil && !errors.Is(err, terrors.ErrReadOnly) {
+			slog.ErrorContext(ctx, "error recording track change event", "from", tr.From, "to", tr.To, "err", err)
+		}
 	}
 }
 
