@@ -195,7 +195,36 @@ type Store struct {
 	// albums caches the library read, guarded by its own lock: the listings are
 	// taken while s.mu is already held (see loadAlbumLocked).
 	albums albumCache
+
+	// onTransition hears each change of the bed on air; aired is the last one
+	// it was told about (or the one Detect booted on), which is what lets a
+	// re-applied identical switch stay quiet.
+	onTransition func(context.Context, Transition)
+	aired        Transition
 }
+
+// Transition is a change in the bed on air: an operator's switch, the audio
+// watchdog standing a fallback in for SomaFM or handing back to it, or the
+// drone rescuing an album with nothing to play.
+//
+// Station, Album and Voicing are the selection within To, and only the one To
+// uses is set. A fallback plays a fixed bed with no selection of its own, so a
+// transition onto one carries none.
+type Transition struct {
+	From, To Bed
+	Cause    string
+	Station  string
+	Album    string
+	Voicing  string
+}
+
+// The causes a Transition names.
+const (
+	CauseSwitch    = "switch"    // the operator picked a bed, station, album or voicing
+	CauseFallback  = "fallback"  // the watchdog stood a bed in for an unreachable SomaFM
+	CauseRecovered = "recovered" // SomaFM came back and the watchdog handed back to it
+	CauseRescue    = "rescue"    // an album with no tracks fell back to the drone
+)
 
 // albumCache holds the last library read and the index file it came from, so
 // the repeated listings — the console's per-platform polls, a lookup per chat
@@ -249,7 +278,7 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 	if !Valid(bed) {
 		bed = CarHum
 	}
-	return &Store{
+	s := &Store{
 		obs:      o,
 		bed:      bed,
 		musicDir: musicDir,
@@ -259,6 +288,8 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
 	}
+	s.aired = s.airedLocked()
+	return s
 }
 
 // WithIndex lists the albums from a track index file instead of walking the
@@ -269,6 +300,47 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 func (s *Store) WithIndex(path string) *Store {
 	s.indexFile = path
 	return s
+}
+
+// OnTransition has fn called after each change of the bed on air, outside the
+// store's lock. The bed Detect boots on is the starting point rather than a
+// transition, and a switch that lands on what is already playing calls nothing.
+func (s *Store) OnTransition(fn func(context.Context, Transition)) *Store {
+	s.onTransition = fn
+	return s
+}
+
+// airedLocked is what is on air now, as a Transition's To half. Caller holds
+// s.mu.
+func (s *Store) airedLocked() Transition {
+	t := Transition{To: s.playingLocked()}
+	if s.fallback != "" {
+		return t
+	}
+	switch t.To {
+	case SomaFM:
+		t.Station = s.station
+	case Album:
+		t.Album = s.album
+	case CarHum:
+		t.Voicing = s.voicing
+	}
+	return t
+}
+
+// notify tells onTransition what changed on air, if anything did.
+func (s *Store) notify(ctx context.Context, cause string) {
+	s.mu.Lock()
+	now := s.airedLocked()
+	t := now
+	t.From, t.Cause = s.aired.To, cause
+	changed := now != s.aired
+	s.aired = now
+	fn := s.onTransition
+	s.mu.Unlock()
+	if changed && fn != nil {
+		fn(ctx, t)
+	}
 }
 
 // Current reports the selected bed and, on the album, the track file playing.
@@ -506,6 +578,8 @@ func (s *Store) Detect(ctx context.Context) {
 		loadErr = s.loadAlbumLocked(file)
 	}
 	station := s.station
+	// What OBS booted on is where transitions start from, not one of them.
+	s.aired = s.airedLocked()
 	s.mu.Unlock()
 	s.record()
 	if loadErr != nil {
@@ -612,6 +686,7 @@ func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	// Counted here rather than at the callers so a console switch and a chat
 	// switch land on the same counter — they are the same switch.
 	instrumentation.BackgroundAudioSelections.Inc(s.platform, string(bed))
+	s.notify(ctx, CauseSwitch)
 	slog.InfoContext(ctx, "background audio: bed switched", "bed", bed, "track", target)
 	return nil
 }
@@ -806,6 +881,7 @@ func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
 	s.lastStart = time.Now()
 	s.mu.Unlock()
 	s.record()
+	s.notify(ctx, CauseRescue)
 	slog.ErrorContext(ctx, "background audio: album bed has no tracks, falling back to the car hum",
 		"album", s.Album())
 	return nil
@@ -855,6 +931,7 @@ func (s *Store) SwapToFallback(ctx context.Context) error {
 	s.lastStart = time.Now()
 	s.mu.Unlock()
 	s.record()
+	s.notify(ctx, CauseFallback)
 	slog.InfoContext(ctx, "background audio: swapped to the fallback bed", "file", file)
 	return nil
 }
@@ -870,6 +947,7 @@ func (s *Store) SwapToSomaFM(ctx context.Context) error {
 	s.mu.Lock()
 	s.fallback = ""
 	s.mu.Unlock()
+	s.notify(ctx, CauseRecovered)
 	return nil
 }
 
