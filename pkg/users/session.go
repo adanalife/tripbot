@@ -38,7 +38,10 @@ type Sessions struct {
 	// events. nil means those events record no airing context. Set once at
 	// wiring time, before the crons start, so it needs no lock.
 	video VideoSource
-	mu    sync.Mutex
+	// registry is the optional outside list a new account is checked against.
+	// Set once at wiring time, before the crons start, so it needs no lock.
+	registry BotRegistry
+	mu       sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
 	loggedIn map[string]*User
 	// lifetimeLeaderboard is the cached [username, miles] leaderboard,
@@ -69,6 +72,26 @@ func (s *Sessions) chatMessages() *int {
 	}
 	n := s.chat.Drain()
 	return &n
+}
+
+// SetBotRegistry installs the list a first login is checked against. Called
+// once during wiring, before the session crons start; leaving it unset creates
+// every new account as a person.
+func (s *Sessions) SetBotRegistry(r BotRegistry) { s.registry = r }
+
+// flagKnownBot marks a brand-new account the registry lists as a bot. Only a
+// first visit: from then on is_bot belongs to !makebot and !unbot, and a login
+// that re-applied the list would undo an operator's !unbot every time. The
+// channel and the bot's own account are never flagged, whatever a list says.
+func (s *Sessions) flagKnownBot(ctx context.Context, u *User) {
+	if s.registry == nil || u.NumVisits != 0 || u.IsBot ||
+		strings.EqualFold(u.Username, s.cfg.ChannelName) ||
+		strings.EqualFold(u.Username, s.cfg.BotUsername) ||
+		!s.registry.IsKnownBot(u.Username) {
+		return
+	}
+	u.IsBot = true
+	slog.InfoContext(ctx, "new account is on the known-bots list, created as a bot", "username", u.Username)
 }
 
 // SetVideoSource installs the airing-footage source for login/logout events.
@@ -218,6 +241,8 @@ func (s *Sessions) login(ctx context.Context, username string) User {
 		slog.WarnContext(ctx, "could not find or create user, skipping login", "username", username)
 		return user
 	}
+	// before the visit count moves, since a zero is what marks a first login
+	s.flagKnownBot(ctx, &user)
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
 	// set the login time
