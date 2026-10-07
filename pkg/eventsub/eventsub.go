@@ -31,7 +31,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	twitch "github.com/joeyak/go-twitch-eventsub/v3"
@@ -175,33 +175,42 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 		})
 	}
 
-	// Written from the OnWelcome callback, which the library runs on its own read
-	// goroutine, and read after ConnectWithContext returns — hence atomic.
-	var attempted, denied, unauthorized atomic.Int32
+	// The library runs OnWelcome on a goroutine of its own, so the socket can
+	// close — or ctx be cancelled — while a subscribe round is still running.
+	// round serializes the two: the callback holds it for the whole round, and
+	// Run takes it after ConnectWithContext returns, so the counts it reads are
+	// a finished round's and a round still pending skips itself (ended) rather
+	// than publishing a gauge for a session that is already gone.
+	var (
+		round                           sync.Mutex
+		ended                           bool
+		attempted, denied, unauthorized int32
+	)
 
 	client.OnWelcome(func(msg twitch.WelcomeMessage) {
-		// The library reconnects transparently on a session_reconnect frame, so
-		// OnWelcome can fire more than once per Run and each firing is a fresh
-		// subscribe round. Counting across rounds would let one good round mask a
-		// later wholly-refused one, and would report a subscription count that
-		// only grows.
-		attempted.Store(0)
-		denied.Store(0)
-		unauthorized.Store(0)
-		// Appended only from this callback's goroutine, so it needs no lock.
+		round.Lock()
+		defer round.Unlock()
+		if ended {
+			return
+		}
+		// OnWelcome fires once per Run: on a session_reconnect frame the library
+		// takes the new session's welcome itself and the subscriptions carry
+		// over. The counts still start from zero here, so a round only ever
+		// reports itself.
+		attempted, denied, unauthorized = 0, 0, 0
 		var missing []string
 
 		sid := msg.Payload.Session.ID
 		slog.InfoContext(ctx, "eventsub welcome received; subscribing", "session_id", sid)
 
 		sub := func(ev twitch.EventSubscription, cond map[string]string) {
-			attempted.Add(1)
+			attempted++
 			switch subscribe(ctx, cfg, sid, ev, cond) {
 			case refusedToken:
-				denied.Add(1)
-				unauthorized.Add(1)
+				denied++
+				unauthorized++
 			case refusedScope:
-				denied.Add(1)
+				denied++
 				if scope := requiredScope[ev]; scope != "" && !slices.Contains(missing, scope) {
 					missing = append(missing, scope)
 				}
@@ -247,9 +256,9 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			})
 		}
 
-		held := attempted.Load() - denied.Load()
-		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied.Load())
-		instrumentation.EventSubSubscriptions.Set(int(held), int(denied.Load()))
+		held := attempted - denied
+		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied)
+		instrumentation.EventSubSubscriptions.Set(int(held), int(denied))
 		if h.OnMissingScopes != nil {
 			slices.Sort(missing)
 			h.OnMissingScopes(missing)
@@ -257,13 +266,21 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	})
 
 	err := client.ConnectWithContext(ctx)
+	round.Lock()
+	defer round.Unlock()
+	ended = true
 	// The session is gone whatever ended it, so nothing is arriving until the
 	// caller redials. denied stays as the round recorded it — see the gauge's doc.
-	instrumentation.EventSubSubscriptions.Set(0, int(denied.Load()))
+	instrumentation.EventSubSubscriptions.Set(0, int(denied))
+	// A cancelled ctx is shutdown, whichever of the library's goroutines noticed
+	// it first — one reports nil, another "use of closed network connection".
+	if ctx.Err() != nil {
+		return nil
+	}
 	// A wholly rejected token outranks whatever closed the socket: Twitch hangs
 	// up on a subscription-less session (close code 4003), so the connection
 	// error here is a symptom and redialing would just repeat it.
-	if tokenRejected(attempted.Load(), unauthorized.Load()) {
+	if tokenRejected(attempted, unauthorized) {
 		return fmt.Errorf("%w (connection ended: %v)", ErrUnauthorized, err)
 	}
 	return err

@@ -346,10 +346,11 @@ func TestRun_TokenRejection(t *testing.T) {
 	}
 }
 
-// Cancelling the context is the shutdown path: Run must return promptly rather
-// than hold the socket open. The value is not asserted — the library returns nil
-// or "use of closed network connection" depending on which of its goroutines
-// notices the cancellation first, and the caller checks ctx before redialing.
+// Cancelling the context is the shutdown path: Run must return promptly, and
+// with nil, rather than hold the socket open. The library itself returns nil or
+// "use of closed network connection" depending on which of its goroutines
+// notices the cancellation first. The cancel lands mid-round, so this also
+// covers a subscribe round that outlives the socket.
 func TestRun_ReturnsNilOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -360,7 +361,9 @@ func TestRun_ReturnsNilOnCancel(t *testing.T) {
 	go func() { done <- Run(ctx, cfg, Handlers{OnFollow: func(string) {}}) }()
 	select {
 	case err := <-done:
-		t.Logf("Run after cancel returned %v", err)
+		if err != nil {
+			t.Fatalf("Run after cancel returned %v, want nil", err)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("Run did not return after its context was cancelled")
 	}
