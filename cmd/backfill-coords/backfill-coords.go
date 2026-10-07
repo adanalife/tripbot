@@ -56,6 +56,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/helpers"
 	_ "github.com/lib/pq"
 )
 
@@ -247,9 +248,9 @@ func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxI
 			out[i].inboundSpeed = speedMph(clips[prev].filmed, clips[i].filmed, curLat[prev], curLng[prev], curLat[i], curLng[i])
 			out[i].outboundSpeed = speedMph(clips[i].filmed, clips[next].filmed, curLat[i], curLng[i], curLat[next], curLng[next])
 
-			excursion := haversineMiles(curLat[prev], curLng[prev], curLat[i], curLng[i])
-			direct := haversineMiles(curLat[prev], curLng[prev], curLat[next], curLng[next])
-			detour := excursion + haversineMiles(curLat[i], curLng[i], curLat[next], curLng[next])
+			excursion := helpers.MilesBetween(curLat[prev], curLng[prev], curLat[i], curLng[i])
+			direct := helpers.MilesBetween(curLat[prev], curLng[prev], curLat[next], curLng[next])
+			detour := excursion + helpers.MilesBetween(curLat[i], curLng[i], curLat[next], curLng[next])
 			if excursion > minSpikeMiles && detour > direct*detourRatio && out[i].inboundSpeed > maxSpeedMph {
 				fix[i] = false
 				wasOutlier[i] = true
@@ -334,7 +335,7 @@ func nextTrue(b []bool, i int) int {
 // impossible).
 func speedMph(ta, tb time.Time, latA, lngA, latB, lngB float64) float64 {
 	hours := math.Abs(tb.Sub(ta).Hours())
-	miles := haversineMiles(latA, lngA, latB, lngB)
+	miles := helpers.MilesBetween(latA, lngA, latB, lngB)
 	if hours == 0 {
 		if miles == 0 {
 			return 0
@@ -353,17 +354,6 @@ func interpAt(ta, tb time.Time, latA, lngA, latB, lngB float64, t time.Time) (la
 	}
 	f := t.Sub(ta).Seconds() / span
 	return latA + f*(latB-latA), lngA + f*(lngB-lngA)
-}
-
-// haversineMiles returns the great-circle distance between two lat/lng points.
-func haversineMiles(lat1, lng1, lat2, lng2 float64) float64 {
-	const earthRadiusMiles = 3958.7613
-	rad := math.Pi / 180
-	dLat := (lat2 - lat1) * rad
-	dLng := (lng2 - lng1) * rad
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
-	return earthRadiusMiles * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
 func applyDecisions(db *sql.DB, decisions []decision) error {

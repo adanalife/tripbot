@@ -46,6 +46,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/helpers"
 	_ "github.com/lib/pq"
 )
 
@@ -194,7 +195,7 @@ func analyze(clips []clip, maxGap time.Duration, maxSpeedMph float64) []decision
 			out[i].reason = "gap"
 			continue
 		}
-		miles := haversineMiles(c.lat, c.lng, clips[next].lat, clips[next].lng)
+		miles := helpers.MilesBetween(c.lat, c.lng, clips[next].lat, clips[next].lng)
 		if miles/gap.Hours() > maxSpeedMph {
 			out[i].reason = "speed"
 			continue
@@ -202,17 +203,6 @@ func analyze(clips []clip, maxGap time.Duration, maxSpeedMph float64) []decision
 		out[i].newMiles = sql.NullFloat64{Float64: round3(miles), Valid: true}
 	}
 	return out
-}
-
-// haversineMiles returns the great-circle distance between two lat/lng points.
-func haversineMiles(lat1, lng1, lat2, lng2 float64) float64 {
-	const earthRadiusMiles = 3958.7613
-	rad := math.Pi / 180
-	dLat := (lat2 - lat1) * rad
-	dLng := (lng2 - lng1) * rad
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
-	return earthRadiusMiles * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
 func applyDecisions(db *sql.DB, decisions []decision) error {

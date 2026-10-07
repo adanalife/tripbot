@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/obs/beds"
+	"github.com/adanalife/tripbot/pkg/server"
 )
 
 // consoleStateTick is how often the bed and flag state are re-read for a change.
@@ -38,7 +38,7 @@ func (t *Tripbot) publishConsoleState(ctx context.Context) {
 			}
 		}
 		if t.flagClient != nil {
-			if flags := featureFlags(t.flagClient.Snapshot(ctx)); flagGate.due(flags, now) {
+			if flags := server.FeatureFlags(t.flagClient.Snapshot(ctx)); flagGate.due(flags, now) {
 				eventbus.EmitFeatureFlags(ctx, t.cfg.Environment, t.cfg.Platform, flags)
 			}
 		}
@@ -91,26 +91,6 @@ func audioBed(platform string, s *beds.Store) eventbus.AudioBed {
 			Voicing: sw.Voicing,
 			At:      sw.At.UTC().Format(time.RFC3339Nano),
 		}
-	}
-	return out
-}
-
-// featureFlags converts the flag client's snapshot to the wire shape, the same
-// fields GET /api/flags serves.
-func featureFlags(snap []feature.Flag) []eventbus.FeatureFlag {
-	out := make([]eventbus.FeatureFlag, 0, len(snap))
-	for _, f := range snap {
-		ff := eventbus.FeatureFlag{
-			Key:                 f.Key,
-			Description:         f.Description,
-			Enabled:             f.Enabled,
-			EnabledForUsernames: f.EnabledForUsernames,
-			EnabledForRoles:     f.EnabledForRoles,
-		}
-		if !f.TargetRemovalDate.IsZero() {
-			ff.TargetRemovalDate = f.TargetRemovalDate.UTC().Format(time.RFC3339)
-		}
-		out = append(out, ff)
 	}
 	return out
 }
