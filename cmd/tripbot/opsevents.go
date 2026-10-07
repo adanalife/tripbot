@@ -2,13 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // This file wires the ops-transition event writers (event-taxonomy ADR: the
@@ -31,6 +35,65 @@ func (t *Tripbot) recordDeploy(ctx context.Context) {
 	case recorded:
 		slog.InfoContext(ctx, "recorded deploy event", "component", "tripbot", "version", t.version)
 	}
+}
+
+// onscreensDeployInterval paces the read of onscreens-server's version: the
+// most an onscreens rollout's deploy row lags the rollout itself.
+const onscreensDeployInterval = 5 * time.Minute
+
+// onscreensVersionClient reads onscreens-server's /version. The timeout bounds a
+// single read so a hung server can't stall the job past its next tick.
+var onscreensVersionClient = &http.Client{
+	Transport: otelhttp.NewTransport(http.DefaultTransport),
+	Timeout:   5 * time.Second,
+}
+
+// recordOnscreensDeploy lands this platform's onscreens-server deploy event.
+// onscreens-server has no database, so this instance reads its /version and
+// records it; events.Deploy's version dedup makes the repeated read one row
+// per rollout. Best-effort like recordDeploy: an unreachable server or a
+// failed write logs and waits for the next tick.
+func (t *Tripbot) recordOnscreensDeploy(ctx context.Context) {
+	version, err := onscreensVersion(ctx, t.cfg.OnscreensServerHost)
+	if err != nil {
+		slog.WarnContext(ctx, "couldn't read onscreens-server version", "err", err)
+		return
+	}
+	recorded, err := events.Deploy(ctx, t.cfg, "onscreens-server", version)
+	switch {
+	case errors.Is(err, terrors.ErrReadOnly):
+	case err != nil:
+		slog.ErrorContext(ctx, "error recording deploy event", "err", err, "component", "onscreens-server")
+	case recorded:
+		slog.InfoContext(ctx, "recorded deploy event", "component", "onscreens-server", "version", version)
+	}
+}
+
+// onscreensVersion returns the build tag onscreens-server at host reports on
+// /version.
+func onscreensVersion(ctx context.Context, host string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+host+"/version", nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := onscreensVersionClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("onscreens-server /version: %s", resp.Status)
+	}
+	var v struct {
+		Tag string `json:"tag"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		return "", fmt.Errorf("onscreens-server /version: %w", err)
+	}
+	if v.Tag == "" {
+		return "", errors.New("onscreens-server /version: empty tag")
+	}
+	return v.Tag, nil
 }
 
 // watchdogRestartHook adapts events.WatchdogRestart to the watchdog's

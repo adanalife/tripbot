@@ -1,0 +1,1 @@
+**onscreens-server deploys land in the events table.** It has no database, so its rollouts were never recorded; each tripbot instance now reads its own onscreens-server's `/version` every five minutes and records a `deploy` event (component `onscreens-server`) when the version changes.

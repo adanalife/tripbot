@@ -1265,6 +1265,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(60*time.Second, "video.LocationFeed", func(ctx context.Context) {
 		t.locationFeed.Emit(ctx, t.player.Current())
 	})
+	// Every instance has its own onscreens-server, which can't record its own
+	// deploys (no database). Start immediately so a rollout of both lands the
+	// onscreens row beside tripbot's own.
+	t.addJob(onscreensDeployInterval, "events.OnscreensDeploy", t.recordOnscreensDeploy, gocron.WithStartAt(gocron.WithStartImmediately()))
 
 	// YouTube instances (bot-less or full): discover the current broadcast's
 	// videoId on a slow ticker and publish it for the console, which links to and
