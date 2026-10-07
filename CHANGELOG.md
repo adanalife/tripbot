@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.27.0] — 2026-10-07
+
+### Onscreens
+
+- **onscreens-server deploys land in the events table.** It has no database, so its rollouts were never recorded; each tripbot instance now reads its own onscreens-server's `/version` every five minutes and records a `deploy` event (component `onscreens-server`) when the version changes. ([#1647](https://github.com/adanalife/tripbot/pull/1647))
+
+### Fixes
+
+- **A broadcaster grant missing a scope now shows.** A subscription Twitch refused with 403 counted as held, so `tripbot_eventsub_subscriptions{result="denied"}` stayed at 0 on a short grant and the partial-grant alert could not fire, while the console auth card read healthy. A 403 now counts as denied, and the broadcaster's auth reason becomes `missing_scope: <scopes>` until a re-consent and a clean subscribe round clear it. ([#1645](https://github.com/adanalife/tripbot/pull/1645))
+- EventSub shutdown no longer logs a spurious `use of closed network connection` warning, and a subscribe round still running when the socket closes finishes before its counts are read. ([#1649](https://github.com/adanalife/tripbot/pull/1649))
+
+### Cleanup
+
+- Folded two more duplicates: the backfill commands share helpers.MilesBetween instead of their own haversine copies, and GET /api/flags and the flags eventbus snapshot share one flag type and converter. ([#1648](https://github.com/adanalife/tripbot/pull/1648))
+
 ## [v5.26.0] — 2026-10-06
 
 ### Chatbot
