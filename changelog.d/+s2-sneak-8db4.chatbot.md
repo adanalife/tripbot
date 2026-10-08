@@ -1,0 +1,1 @@
+A `chatbot.timewarp_s2_sneak` flag (seeded off on every platform) sends 5% of viewer `!timewarp`s into the season-2 footage: playout plays that block to its end, then returns to the usual rotation. `!guess` wins and gift warps never sneak.
