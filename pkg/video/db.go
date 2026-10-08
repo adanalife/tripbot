@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -15,10 +14,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"gorm.io/gorm"
 )
-
-// validDashStr matches the 20-character underscore-and-digit timestamp that
-// opens every dashcam clip filename.
-var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
 
 // LoadOrCreate() will look up the video in the DB,
 // or add it to the DB if it's not there yet
@@ -94,6 +89,9 @@ func (v *Video) save(ctx context.Context) error {
 		v.State = state
 	}
 
+	if v.Corpus == "" {
+		v.Corpus = slugCorpus(v.Slug)
+	}
 	v.DateFilmed = v.toDate()
 	return database.GormDB().WithContext(ctx).Create(v).Error
 }
@@ -156,14 +154,12 @@ func (v Video) SetNextVid(ctx context.Context, nextVid Video) error {
 	return database.GormDB().WithContext(ctx).Model(&v).Update("next_vid", nextVid.ID).Error
 }
 
-func validate(dashStr string) error {
-	if len(dashStr) < 20 {
-		return errors.New("dash string too short")
-	}
-	shortened := dashStr[:20]
-
-	if !validDashStr.MatchString(shortened) {
-		return errors.New("dash string did not match regex")
+// validate accepts a slug in one season's filename shape. A season-2
+// original (no _s offset) is not a clip and is refused along with everything
+// else, so the runtime fallback can never mint a row for one.
+func validate(slug string) error {
+	if slugCorpus(slug) == "" {
+		return fmt.Errorf("slug %q is in no season's filename shape", slug)
 	}
 	return nil
 }
@@ -174,11 +170,26 @@ func validate(dashStr string) error {
 // share one statement, so no clip can be added or removed between them.
 const randomByStateQuery = `
 	SELECT * FROM videos
-	WHERE state = @state
-	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state))
+	WHERE state = @state AND corpus = @corpus
+	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state AND corpus = @corpus))
 	LIMIT 1`
 
-func FindRandomByState(ctx context.Context, state string) (Video, error) {
+// airingCorpus is the corpus a pick stays inside: the one on screen. A clip is
+// on playout's playlist exactly when its corpus is live, so staying in the
+// current clip's corpus is what keeps a pick off a parked clip that playout
+// would refuse. Nothing on screen yet reads as the ambient corpus.
+// ponytail: a set of live corpora would let a pick cross from s2 back to s1;
+// playout owns that set, and tripbot doesn't read it yet.
+func airingCorpus(current Video) string {
+	if current.Corpus == "" {
+		return CorpusS1
+	}
+	return current.Corpus
+}
+
+// FindRandomByState returns a random clip filmed in `state`, from the corpus
+// `current` is in.
+func FindRandomByState(ctx context.Context, state string, current Video) (Video, error) {
 	var vid Video
 
 	// convert to long form
@@ -191,7 +202,9 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	// title-case the state (it's stored in the DB like that)
 	state = helpers.TitlecaseState(state)
 
-	result := database.GormDB().WithContext(ctx).Raw(randomByStateQuery, sql.Named("state", state)).Scan(&vid)
+	result := database.GormDB().WithContext(ctx).
+		Raw(randomByStateQuery, sql.Named("state", state), sql.Named("corpus", airingCorpus(current))).
+		Scan(&vid)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
@@ -213,8 +226,9 @@ const nextDaytimeScanLimit = 5000
 // !daytime. The dashcam corpus is daytime driving footage, so from a dusk or
 // night clip the next daylight is the following day's first daylight clip; this
 // walks clips in film order and returns it. Clips without a GPS fix are skipped
-// (daytime needs coords to resolve sunrise/sunset). Returns a
-// terrors.ErrNoDaytimeFound when no later daytime clip exists in the scanned window.
+// (daytime needs coords to resolve sunrise/sunset), and so are clips from any
+// corpus but `after`'s. Returns a terrors.ErrNoDaytimeFound when no later
+// daytime clip exists in the scanned window.
 func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 	// Baseline calendar day: the current clip's local day when it has a fix,
 	// else its raw filmed day (a flagged clip has no coords to localize).
@@ -225,7 +239,7 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 
 	var clips []Video
 	err := database.GormDB().WithContext(ctx).
-		Where("date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", after.DateFilmed).
+		Where("corpus = ? AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", airingCorpus(after), after.DateFilmed).
 		Order("date_filmed").
 		Limit(nextDaytimeScanLimit).
 		Find(&clips).Error

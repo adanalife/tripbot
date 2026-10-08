@@ -30,8 +30,9 @@ type Video interface {
 	// caller says so instead of naming a direction; ok is false when the clip
 	// has no track to measure along.
 	PlayheadVelocity(ctx context.Context) (v video.Velocity, ok bool)
-	// FindRandomByState returns a random video filmed in the given US state.
-	// Returns terrors.ErrNoFootageForState when no rows match.
+	// FindRandomByState returns a random video filmed in the given US state,
+	// from the corpus on screen. Returns terrors.ErrNoFootageForState when no
+	// rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
 	// FindNextDaytime returns the next daytime clip filmed on a later day than
 	// `after` — the "skip to the next morning" target behind !daytime. Returns
@@ -93,7 +94,7 @@ func (r realVideo) PlayheadVelocity(ctx context.Context) (video.Velocity, bool) 
 }
 
 func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
-	return video.FindRandomByState(ctx, state)
+	return video.FindRandomByState(ctx, state, r.player.Current())
 }
 
 func (r realVideo) FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error) {

@@ -59,7 +59,9 @@ type Velocity struct {
 // baseline as the speed. Moving is false when the two samples are closer
 // together than stoppedMetres, which is the caller's signal to say the van is
 // stopped rather than to name a direction. ok is false when the clip has no
-// track covering both moments, exactly as CoordAt reports it.
+// track covering both moments, exactly as CoordAt reports it. The baseline is
+// clip time; the speed is over the driving time it stands for, so a 6x clip
+// reads a sixth of the speed its frames suggest.
 //
 // ponytail: the speed is a chord over ten seconds, which under-reads a tight
 // bend by a few percent; a track integral if that ever matters.
@@ -87,7 +89,7 @@ func VelocityAt(ctx context.Context, vid Video, at time.Duration) (v Velocity, o
 	}
 	return Velocity{
 		Bearing:  bearingDeg(start, end),
-		SpeedMPS: dist / (to - from).Seconds(),
+		SpeedMPS: dist / vid.realElapsed(to-from).Seconds(),
 		Moving:   true,
 	}, true
 }
