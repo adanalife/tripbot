@@ -42,6 +42,47 @@ func runAsAdmin(t *testing.T, fn func()) {
 	fn()
 }
 
+// --- the season-2 sneak ---
+
+// Only a viewer's !timewarp, with the flag on and the roll under the chance,
+// sneaks into s2; every other combination keeps the warp in the rotation.
+func TestTimewarp_S2SneakNeedsCommandFlagAndRoll(t *testing.T) {
+	prevDelay := timewarpCoverDelay
+	timewarpCoverDelay = 0
+	t.Cleanup(func() { timewarpCoverDelay = prevDelay })
+
+	cases := []struct {
+		name   string
+		source string
+		flag   bool
+		roll   float64
+		want   string
+	}{
+		{"command, armed, lucky roll", events.WarpSourceCommand, true, 0.01, `PlayRandom("s2")`},
+		{"roll at the chance is not under it", events.WarpSourceCommand, true, s2SneakChance, "PlayRandom()"},
+		{"command, armed, ordinary roll", events.WarpSourceCommand, true, 0.5, "PlayRandom()"},
+		{"flag off", events.WarpSourceCommand, false, 0.01, "PlayRandom()"},
+		{"guess win never sneaks", events.WarpSourceGuess, true, 0.01, "PlayRandom()"},
+		{"gift never sneaks", events.WarpSourceGift, true, 0.01, "PlayRandom()"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			rec := &recordingPlayout{}
+			app.Playout = rec
+			app.Onscreens = &recordingOnscreens{}
+			app.Video = &recordingVideo{}
+			app.Flags = &recordingFlags{Set: map[string]bool{timewarpS2SneakFlagKey: tc.flag}}
+
+			app.timewarpRolled(context.Background(), "viewer", tc.source, tc.roll)
+
+			if len(rec.Calls) != 1 || rec.Calls[0] != tc.want {
+				t.Errorf("playout calls = %v, want [%s]", rec.Calls, tc.want)
+			}
+		})
+	}
+}
+
 // --- timewarpCmd ---
 
 func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
