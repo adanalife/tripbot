@@ -217,13 +217,17 @@ func (s *Server) RestoreFromJetStream(ctx context.Context) {
 	s.RestoreRotatorCopy(ctx)
 }
 
-// Shutdown gracefully stops the HTTP listener, allowing in-flight
+// Shutdown ends every overlay's background loops (the expiry sweepers and the
+// two rotators), then gracefully stops the HTTP listener, allowing in-flight
 // requests up to ctx's deadline to complete before closing connections.
 // Returns the error from http.Server.Shutdown so callers can log or act
-// on a timeout. Safe to call once Start has returned (or concurrently
-// while Start is blocked on ctx.Done()); calling on a zero-value Server
-// (Start never ran) is a no-op.
+// on a timeout. Safe to call more than once, once Start has returned (or
+// concurrently while Start is blocked on ctx.Done()); on a Server whose Start
+// never ran, only the loops are stopped.
 func (s *Server) Shutdown(ctx context.Context) error {
+	for _, osc := range s.all() {
+		osc.stop()
+	}
 	if s.http == nil {
 		return nil
 	}

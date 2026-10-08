@@ -64,9 +64,9 @@ func newOnscreen(sleepInterval time.Duration) *Onscreen {
 	return osc
 }
 
-// stop ends the background loop. An overlay lives as long as the process does,
-// so this is a lifecycle seam rather than something the server calls: it lets a
-// test wind the loop down once it has asserted on what the sweep did.
+// stop ends the background loop, and the rotator loop of a corner overlay.
+// Server.Shutdown calls it on every overlay; a test calls it directly to wind
+// the loop down once it has asserted on what the sweep did. Idempotent.
 func (osc *Onscreen) stop() {
 	osc.stopOnce.Do(func() { close(osc.done) })
 }
