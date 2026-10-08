@@ -10,7 +10,7 @@ import (
 // — it just swallows every call.
 type noopPlayout struct{}
 
-func (noopPlayout) PlayRandom(_ context.Context) error                               { return nil }
+func (noopPlayout) PlayRandom(_ context.Context, _ string) error                     { return nil }
 func (noopPlayout) PlayFileInPlaylist(_ context.Context, _ string) error             { return nil }
 func (noopPlayout) PlayFileAtTimestamp(_ context.Context, _ string, _ float64) error { return nil }
 func (noopPlayout) Skip(_ context.Context, _ int) error                              { return nil }
@@ -24,8 +24,12 @@ type recordingPlayout struct {
 	Calls []string
 }
 
-func (r *recordingPlayout) PlayRandom(_ context.Context) error {
-	r.Calls = append(r.Calls, "PlayRandom()")
+func (r *recordingPlayout) PlayRandom(_ context.Context, corpus string) error {
+	if corpus == "" {
+		r.Calls = append(r.Calls, "PlayRandom()")
+	} else {
+		r.Calls = append(r.Calls, fmt.Sprintf("PlayRandom(%q)", corpus))
+	}
 	return nil
 }
 func (r *recordingPlayout) PlayFileInPlaylist(_ context.Context, filename string) error {
