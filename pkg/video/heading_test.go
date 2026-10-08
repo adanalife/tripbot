@@ -35,6 +35,16 @@ func TestCompass(t *testing.T) {
 	}
 }
 
+func TestCompassAbbrev(t *testing.T) {
+	for bearing, want := range map[float64]string{
+		0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW", 337.6: "N",
+	} {
+		if got := CompassAbbrev(bearing); got != want {
+			t.Errorf("CompassAbbrev(%v) = %q, want %q", bearing, got, want)
+		}
+	}
+}
+
 // Compass must name a point for every bearing a track can produce — an
 // off-by-one in the wrap-around arithmetic would panic on the index rather
 // than return a wrong word, so this asserts total coverage of the circle.
@@ -46,7 +56,7 @@ func TestCompassCoversTheCircle(t *testing.T) {
 	}
 }
 
-func TestBearingDeg(t *testing.T) {
+func TestBearing(t *testing.T) {
 	// From a point on the equator, one degree along each axis is very nearly
 	// a cardinal bearing.
 	origin := Moment{Lat: 0, Lng: 0}
@@ -61,9 +71,9 @@ func TestBearingDeg(t *testing.T) {
 		{"due west", Moment{Lat: 0, Lng: -1}, 270},
 	}
 	for _, tc := range tests {
-		got := bearingDeg(origin, tc.to)
+		got := Bearing(origin, tc.to)
 		if math.Abs(got-tc.want) > 0.5 {
-			t.Errorf("%s: bearingDeg = %v, want ~%v", tc.name, got, tc.want)
+			t.Errorf("%s: Bearing = %v, want ~%v", tc.name, got, tc.want)
 		}
 	}
 }
@@ -71,10 +81,10 @@ func TestBearingDeg(t *testing.T) {
 // A northeast leg must not read as north: the whole point of the bearing is
 // that it distinguishes the diagonals, which a sign-only implementation would
 // not.
-func TestBearingDegDiagonal(t *testing.T) {
-	got := bearingDeg(Moment{Lat: 40, Lng: -100}, Moment{Lat: 40.01, Lng: -99.99})
+func TestBearingDiagonal(t *testing.T) {
+	got := Bearing(Moment{Lat: 40, Lng: -100}, Moment{Lat: 40.01, Lng: -99.99})
 	if Compass(got) != "northeast" {
-		t.Errorf("bearingDeg = %v (%s), want northeast", got, Compass(got))
+		t.Errorf("Bearing = %v (%s), want northeast", got, Compass(got))
 	}
 }
 
