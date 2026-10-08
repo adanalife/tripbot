@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -144,6 +145,31 @@ func TestLoadOrCreate_CreatesThenLoadsSameRow(t *testing.T) {
 	}
 }
 
+// A season-2 piece created at runtime lands in the s2 corpus at real time,
+// dated at its offset into the original — never at the 2031 date that
+// slicing its name at season-1 offsets produced.
+func TestLoadOrCreate_SeasonTwoPiece(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	got, err := LoadOrCreate(ctx, "/path/to/20260605144519_000001_s0180.MP4")
+	if err != nil {
+		t.Fatalf("LoadOrCreate: %v", err)
+	}
+	if got.Corpus != CorpusS2 || got.Speed != 1 {
+		t.Errorf("corpus/speed = %q/%d, want %q/1", got.Corpus, got.Speed, CorpusS2)
+	}
+	if want := time.Date(2026, 6, 5, 14, 48, 19, 0, time.UTC); !got.DateFilmed.Equal(want) {
+		t.Errorf("date_filmed = %v, want %v", got.DateFilmed, want)
+	}
+	if !got.Flagged {
+		t.Error("a runtime-created clip has no fix and must be flagged")
+	}
+	if again := reload(t, got.ID); again.Corpus != CorpusS2 || again.Speed != 1 {
+		t.Errorf("reloaded corpus/speed = %q/%d, want %q/1", again.Corpus, again.Speed, CorpusS2)
+	}
+}
+
 func TestFindRandomByState(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
@@ -153,7 +179,7 @@ func TestFindRandomByState(t *testing.T) {
 
 	// Abbrev and long form both resolve to the stored title-cased state.
 	for _, state := range []string{"OR", "oregon"} {
-		got, err := FindRandomByState(ctx, state)
+		got, err := FindRandomByState(ctx, state, Video{})
 		if err != nil {
 			t.Fatalf("FindRandomByState(%q): %v", state, err)
 		}
@@ -176,7 +202,7 @@ func TestFindRandomByState_SpreadsAcrossTheStatesClips(t *testing.T) {
 	// more than one of them unless the pick is stuck on a fixed row.
 	got := map[int]bool{}
 	for range 20 {
-		vid, err := FindRandomByState(ctx, "WY")
+		vid, err := FindRandomByState(ctx, "WY", Video{})
 		if err != nil {
 			t.Fatalf("FindRandomByState(\"WY\"): %v", err)
 		}
@@ -195,9 +221,31 @@ func TestFindRandomByState_NoClipsForState(t *testing.T) {
 
 	insertVideo(t, db, Video{Slug: "2018_0514_224801_060", State: "Wyoming"})
 
-	_, err := FindRandomByState(context.Background(), "Alaska")
+	_, err := FindRandomByState(context.Background(), "Alaska", Video{})
 	if !errors.Is(err, terrors.ErrNoFootageForState) {
 		t.Errorf("FindRandomByState(\"Alaska\") error = %v, want %v", err, terrors.ErrNoFootageForState)
+	}
+}
+
+// A pick stays in the corpus of the clip on screen: a season-2 clip in the
+// same state is invisible from a season-1 clip (its file is parked, playout
+// would refuse it) and vice versa, and nothing on screen reads as season 1.
+func TestFindRandomByState_StaysInTheAiringCorpus(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s1 := insertVideo(t, db, Video{Slug: "2018_0514_224801_070", State: "Utah"})
+	s2 := insertVideo(t, db, Video{Slug: "20260605144519_000001_s0180", State: "Utah", Corpus: CorpusS2})
+
+	for range 10 {
+		got, err := FindRandomByState(ctx, "UT", Video{})
+		if err != nil || got.ID != s1.ID {
+			t.Fatalf("from nothing: FindRandomByState = id %d, %v; want the s1 clip %d", got.ID, err, s1.ID)
+		}
+		got, err = FindRandomByState(ctx, "UT", s2)
+		if err != nil || got.ID != s2.ID {
+			t.Fatalf("from s2: FindRandomByState = id %d, %v; want the s2 clip %d", got.ID, err, s2.ID)
+		}
 	}
 }
 
@@ -221,9 +269,12 @@ func TestFindNextDaytime(t *testing.T) {
 	nextNight := insertVideo(t, db, Video{Slug: "2099_0515_030000_002", Lat: lat, Lng: lng})
 	lateDay := insertVideo(t, db, Video{Slug: "2099_0515_150000_004", Lat: lat, Lng: lng})
 	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
+	// An earlier daytime clip from another corpus: parked, so not an answer.
+	other := insertVideo(t, db, Video{Slug: "20990515160000_000001_s0000", Lat: lat, Lng: lng, Corpus: CorpusS2})
 
 	backdate(current, "2099-05-15T04:00:00Z")   // 22:00 MDT May 14 — night, day May 14
 	backdate(nextNight, "2099-05-15T09:00:00Z") // 03:00 MDT May 15 — night, day May 15
+	backdate(other, "2099-05-15T16:00:00Z")     // 10:00 MDT May 15 — daytime, but s2
 	backdate(morning, "2099-05-15T18:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
 	backdate(lateDay, "2099-05-15T21:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
 
@@ -311,8 +362,9 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	}
 }
 
-// TestValidate pins the dash-string rules the package-level regex enforces:
-// the first 20 characters must be digits and underscores only.
+// TestValidate pins the slug shapes a runtime-created row may have: a
+// season-1 camera name (whatever follows the sequence is not checked) or a
+// season-2 piece; a season-2 original is not a clip.
 func TestValidate(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -325,6 +377,9 @@ func TestValidate(t *testing.T) {
 		{"letters in timestamp", "2018_0514_2248a1_001", true},
 		{"dash separators", "2018-0514-224801-001", true},
 		{"hidden file", ".018_0514_224801_001", true},
+		{"season-2 piece", "20260605144519_000001_s0180", false},
+		{"season-2 original", "20260605144519_000001", true},
+		{"season-2 piece with a suffix", "20260605144519_000001_s0180_opt", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
