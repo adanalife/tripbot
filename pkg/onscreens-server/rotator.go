@@ -161,9 +161,14 @@ func (r *rotator) start() {
 	go r.loop()
 }
 
+// loop swaps the visible line every freq until the overlay's stop() ends it.
 func (r *rotator) loop() {
-	for { // forever
-		time.Sleep(r.freq)
+	for {
+		select {
+		case <-r.osc.done:
+			return
+		case <-time.After(r.freq):
+		}
 		r.osc.Show(r.content())
 	}
 }
