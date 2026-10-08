@@ -1,5 +1,5 @@
 // Package httpmw holds HTTP middleware shared across tripbot's web servers
-// (tripbot, vlc-server, onscreens-server).
+// (tripbot, onscreens-server).
 package httpmw
 
 import (
@@ -10,13 +10,18 @@ import (
 	"github.com/urfave/negroni/v3"
 )
 
-// healthPaths are logged at Debug instead of Info so kubelet's liveness
-// and readiness probes don't dominate the default log stream. Other
+// debugPaths are logged at Debug instead of Info because they're polled
+// often enough to dominate the default log stream. Kubelet's liveness and
+// readiness probes hit /health/{live,ready} every few seconds and the console
+// polls /health/deps on its status refresh; OBS's CEF
+// browser sources poll /onscreens/state.json at ~14 req/sec idle. Other
 // frequent paths (e.g. /metrics) stay at Info — add them here if they
 // become noisy.
-var healthPaths = map[string]bool{
-	"/health/live":  true,
-	"/health/ready": true,
+var debugPaths = map[string]bool{
+	"/health/deps":          true,
+	"/health/live":          true,
+	"/health/ready":         true,
+	"/onscreens/state.json": true,
 }
 
 // SlogLogger is a negroni-compatible middleware that emits one slog
@@ -41,7 +46,7 @@ func (l *SlogLogger) ServeHTTP(rw http.ResponseWriter, r *http.Request, next htt
 	}
 
 	level := slog.LevelInfo
-	if healthPaths[r.URL.Path] {
+	if debugPaths[r.URL.Path] {
 		level = slog.LevelDebug
 	}
 	slog.LogAttrs(r.Context(), level, "http request",

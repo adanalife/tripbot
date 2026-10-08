@@ -2,155 +2,204 @@ package chatbot
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
-	"math/rand"
+	"sync"
 	"time"
 
-	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	"github.com/gempir/go-twitch-irc/v4"
-	"github.com/kelvins/geocoder"
-	"gorm.io/gorm"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 )
 
-var googleMapsAPIKey string
-var client *twitch.Client
 var Uptime time.Time
 
-// App holds injectable dependencies for the chatbot.
-// Tests instantiate it directly with fakes; production uses defaultApp.
+// App holds injectable dependencies for the chatbot. cmd/tripbot constructs the
+// live one with New(); tests instantiate it directly with fakes.
 type App struct {
-	// DB is the GORM handle used by commands that need to read or write the
-	// database. nil in tests that don't exercise the DB; otherwise either the
-	// real database.GormDB() or a sqlmock-backed gorm.DB.
-	DB *gorm.DB
+	// Cfg is this App's view of the tripbot config. New() stores the cfg it
+	// was handed; tests set a literal with just the fields their commands
+	// read (ChannelName for admin checks, Environment for event emits, …).
+	Cfg *c.TripbotConfig
+	// Platform names the streaming platform this App serves ("twitch" /
+	// "youtube" / "tiktok"). It gates which commands are indexed for dispatch
+	// (indexCommands): Twitch runs the full registry, YouTube and TikTok run
+	// the v1 allowlist. Empty is treated as Twitch. Set from cfg.Platform
+	// in New().
+	Platform string
+	// Version is the build-time version stamp (-X main.version), passed
+	// through New() by cmd/tripbot for !version to report. Empty on a
+	// directly-constructed App, which !version reports as "dev".
+	Version string
+	// botless, when true, makes the rotating Chatter / !help lines advertise
+	// promo copy (follow on Twitch, interactivity coming soon) instead of
+	// command ads — for a YouTube instance running with inbound chat disabled,
+	// where no command can respond. Set in New() from
+	// cfg.Platform == "youtube" && !cfg.YouTubeInboundEnabled. The
+	// zero value (false) keeps the normal per-platform command-filtered help,
+	// so directly-constructed test Apps are unaffected unless they opt in.
+	botless bool
 	// Onscreens drives the OBS browser-source overlays for chat-triggered
 	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
 	Onscreens Onscreens
-	// VLC drives playback operations (timewarp, jump, skip, back). Tests
-	// inject a no-op fake; production uses the realVLC adapter.
-	VLC VLC
+	// Playout drives playback operations (timewarp, jump, skip, back). Tests
+	// inject a no-op fake; production uses the realPlayout adapter.
+	Playout Playout
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
 	Video Video
-	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
-	// to assert on chat messages; production uses the realIRC adapter
-	// which delegates to the package-level twitch client.
-	IRC IRC
-	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
-	// surface of pkg/users for command-time queries. Tests inject a
-	// recordingSessions to assert lookups and stage results; production
-	// uses the realSessions adapter.
+	// Chat sends chat output to the streaming platform. Tests inject a
+	// recordingChat to assert on messages; production uses the gateway-backed
+	// adapter (wrapped in the console mirror) that the platform's Connect*
+	// installs. The provider-neutral seam: every platform's ChatClient drops in
+	// here without touching command code.
+	Chat ChatClient
+	// Sessions is the pkg/users surface: command-time queries plus the
+	// inbound login lifecycle and the follower/subscriber access reads. Tests
+	// inject a recordingSessions to assert lookups and stage results;
+	// production uses the realSessions adapter built by NewSessionsAdapter.
 	Sessions Sessions
-	// NowPlaying reports the currently-playing track on the stream's
-	// background audio source. Tests inject a fake; production uses
-	// realNowPlaying which polls SomaFM.
-	NowPlaying NowPlaying
+	// Flags evaluates feature flag values for command-time gating. Tests
+	// inject noopFlags{} (every key false); New() defaults it to an empty
+	// in-memory client (same fail-closed contract) for the startup window
+	// before cmd/tripbot assigns the Postgres-backed client once the DB
+	// connection is up.
+	Flags feature.FlagClient
+	// NATS is the fire-and-forget pubsub surface. Tests inject a
+	// recordingNATS to assert on publishes; production uses realNATS
+	// which delegates to the pkg/natsclient singleton (no-op when
+	// NATS_URL is empty).
+	NATS NATS
+	// Cron stops the background scheduler during !shutdown. Defaults to
+	// noopCron{} (set in New(), also what tests use); cmd/tripbot assigns the
+	// constructed gocron.Scheduler — which satisfies Cron directly — once
+	// cron has started.
+	Cron Cron
+	// Geocoder turns GPS coords into a place name for !location. Tests inject
+	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
+	// delegates to the pkg/geo default installed by connectViaGateway.
+	Geocoder Geocoder
+	// Weather returns historical conditions at a point for !weather. Tests
+	// inject noopWeather; production uses pkg/weather's keyless Open-Meteo
+	// archive client.
+	Weather Weather
+	// Twitch is the command-time Twitch Helix surface (follow lookups today).
+	// Tests inject a recordingTwitch; production uses the gatewayTwitch adapter,
+	// which reaches the platform-gateway (the out-of-process Helix service).
+	Twitch Twitch
+	// OBS drives live OBS WebSocket tweaks for chat commands — currently just
+	// !refreshoverlays respawning the browser sources. Tests inject a fake;
+	// production uses realOBS (which dials per call via pkg/obs).
+	OBS OBS
+	// Search runs visual search over the dashcam corpus for !find — it requests
+	// a query embedding from the video-pipeline responder over NATS and runs the
+	// pgvector cosine search. Tests inject a fake; production uses realSearch.
+	Search Search
+	// Beds reads and switches the background-audio bed for !audio. Tests inject
+	// a fake; cmd/tripbot assigns the same *beds.Store the console's /api/audio
+	// drives. Nil until then, which !audio reports as unavailable.
+	Beds Beds
+	// Scoreboards reads the miles / correct-guess leaderboards and credits a
+	// correct guess. Tests inject a recordingScoreboards to stage rows and
+	// assert credits; production uses realScoreboards.
+	Scoreboards Scoreboards
+	// Events records viewer-lifecycle events (subscribe, unsubscribe, miles
+	// correction) to the append-only events table. Tests inject a noopEvents;
+	// production uses realEvents.
+	Events Events
+	// ChatCounter tallies inbound chat messages for the chat-rate half of the
+	// viewer-sample tick. cmd/tripbot wires the viewstats.MessageCounter it
+	// shares with the session cron; nil (tests, an instance with no sampling)
+	// leaves messages uncounted.
+	ChatCounter ChatCounter
+
+	// commands is this App's command registry (built by buildRegistry);
+	// singleWordLookup / multiWordLookup index it by trigger + alias for
+	// dispatch. Built by indexCommands(), called from New() at construction.
+	// Replaces the former package-level globals so the registry travels with
+	// the App.
+	commands         []Command
+	singleWordLookup map[string]*Command
+	multiWordLookup  map[string]*Command
+
+	// helpMessages is the platform-filtered subset of c.HelpMessages — the
+	// rotating !help / Chatter lines, minus any whose command isn't enabled on
+	// this App's platform (so a YouTube instance doesn't advertise !miles etc.).
+	// helpIndex walks it; randomized at indexCommands() so each restart starts
+	// on a different line.
+	helpMessages []string
+	helpIndex    int
+
+	// guessMisses remembers each chatter's most recent wrong !guess this round,
+	// so the next miss can hint warmer or colder. Entries stamped before
+	// lastTimewarpTime belong to a previous round and are ignored rather than
+	// cleaned up — a timewarp resets every hint trail for free.
+	guessMissesMu sync.Mutex
+	guessMisses   map[string]guessMiss
 }
 
-// db returns the DB handle the App should use. Prefers an explicit a.DB
-// (which tests set to a sqlmock-backed gorm.DB), otherwise falls back to the
-// process-wide singleton. Lazy so package init never touches the DB.
-func (a *App) db() *gorm.DB {
-	if a.DB != nil {
-		return a.DB
+// New constructs an App wired with the production (realX) dependency adapters,
+// with its command registry built and indexed. version is the build-time stamp
+// !version reports. cmd/tripbot builds the live App
+// with this and owns it; nothing in the package holds a singleton. Construction
+// touches no network or DB — the realX adapters are lazy.
+func New(version string, cfg *c.TripbotConfig) *App {
+	a := &App{
+		Cfg:         cfg,
+		Platform:    cfg.Platform,
+		Version:     version,
+		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
+		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform), platform: cfg.Platform},
+		Video:       realVideo{},
+		Chat:        disconnectedChat{},
+		Sessions:    realSessions{},
+		Flags:       feature.NewInMemoryClient(nil),
+		NATS:        realNATS{},
+		Cron:        noopCron{},
+		Geocoder:    realGeocoder{},
+		Weather:     realWeather,
+		OBS:         realOBS{},
+		Search:      realSearch{env: cfg.Environment},
+		Scoreboards: realScoreboards{cfg: cfg},
+		Events:      realEvents{cfg: cfg},
 	}
-	return database.GormDB()
+	// Wired after the literal because the adapter selector takes the App itself.
+	a.Twitch = newTwitch(a)
+	a.indexCommands()
+	return a
 }
-
-var defaultApp = &App{
-	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
-	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
-	Video:      realVideo{},
-	IRC:        realIRC{},
-	Sessions:   realSessions{},
-	NowPlaying: newRealNowPlaying(),
-}
-
-// used to determine which help message to display
-// randomized so it starts with a new one every restart
-var helpIndex = rand.Intn(len(c.HelpMessages))
 
 const followerMsg = "Right now only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
-// Initialize returns a Twitch client struct with all of the various configuration in place.
-func Initialize() *twitch.Client {
-	var err error
-	Uptime = time.Now()
+// wrongPlatformMsg answers a command that exists but isn't dispatchable here.
+// The %s is the trigger as the viewer typed it.
+const wrongPlatformMsg = "Sorry, %s doesn't work on this platform :("
 
-	// set up geocoder (for translating coords to places)
-	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
-
-	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
-	// at boot, log and continue so the process stays up (readiness reports
-	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
-	// cache on failure, so callers retry once Twitch is back.
-	if _, err = mytwitch.Client(); err != nil {
-		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
-	}
-
-	// The IRC token comes from the DB-backed oauth_tokens row populated by
-	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
-	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
-
-	// attach handlers
-	client.OnUserJoinMessage(UserJoin)
-	client.OnUserPartMessage(UserPart)
-	// client.OnUserNoticeMessage(chatbot.UserNotice)
-	client.OnWhisperMessage(GetWhisper)
-	client.OnPrivateMessage(PrivateMessage)
-
-	return client
-}
-
-// Say will make a post in chat
-func Say(msg string) {
-	// include the message in the log
-	mylog.ChatMsg(c.Conf.BotUsername, msg)
-	// figure out what channel to speak to
-	speakTo := c.Conf.ChannelName
-	if c.Conf.OutputChannel != "" {
-		speakTo = c.Conf.OutputChannel
-	}
-	// say the message to chat
-	client.Say(speakTo, msg)
-}
-
-// sayFn is the internal send implementation; tests override it to capture output.
-var sayFn func(string) = Say
-
-// Whisper will whisper a message to a user
-// Note: go-twitch-irc v4 removed the Whisper() send method; we replicate the
-// v2 behavior by sending the raw IRC /w command via PRIVMSG on the bot's own channel.
-func Whisper(username, msg string) {
-	//TODO: include whispers in log
-	// include the message in the log
-	// mylog.ChatMsg(c.Conf.BotUsername, msg)
-	slog.Info("sending whisper", "to", username, "text", msg)
-	// say the message to chat
-	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
-}
+// followerGatingEnabled toggles the RequiresFollow access check in
+// checkAccess. Disabled for launch so first-time viewers aren't told to
+// follow before they can try commands. Flip back to true to re-enable.
+var followerGatingEnabled = false
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-// ctx is forward-compat plumbing — sayFn (the package-level chat-send
-// indirection) doesn't take ctx yet, so it's not propagated into the IRC
-// write.
-func Chatter(_ context.Context) {
-	// use twitch emote feature to add some color
-	sayFn("/me " + help())
+// ctx is forward-compat plumbing — a.Chat.Say doesn't take ctx yet, so it's
+// not propagated into the chat write.
+func (a *App) Chatter(_ context.Context) {
+	// the "/me " twitch emote prefix adds some color on Twitch; gatewayYouTubeChat.Say
+	// strips it (it would render as literal text on YouTube).
+	a.Chat.Say("/me " + a.help())
 }
 
-func help() string {
-	text := c.HelpMessages[helpIndex]
-	// bump the index
-	helpIndex = (helpIndex + 1) % len(c.HelpMessages)
+// help returns the next rotating help message for this App's platform and
+// advances the index. Empty when no help messages are enabled (guards against
+// a divide-by-zero on the modulo).
+func (a *App) help() string {
+	if len(a.helpMessages) == 0 {
+		return ""
+	}
+	text := a.helpMessages[a.helpIndex]
+	a.helpIndex = (a.helpIndex + 1) % len(a.helpMessages)
 	return text
 }

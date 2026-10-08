@@ -13,22 +13,22 @@ package log
 import (
 	"context"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	logglobal "go.opentelemetry.io/otel/log/global"
 )
 
 const scopeName = "twitch-chat"
 
-func ChatMsg(username, msg string) {
+func ChatMsg(username, channel, msg string) {
 	logger := logglobal.GetLoggerProvider().Logger(scopeName)
 
 	var rec otellog.Record
-	rec.SetBody(otellog.StringValue(msg))
+	rec.SetBody(attribute.StringValue(msg))
 	rec.SetSeverity(otellog.SeverityInfo)
 	rec.AddAttributes(
-		otellog.String("twitch.user", username),
-		otellog.String("twitch.channel", c.Conf.ChannelName),
+		attribute.String("twitch.user", username),
+		attribute.String("twitch.channel", channel),
 	)
 	logger.Emit(context.Background(), rec)
 }

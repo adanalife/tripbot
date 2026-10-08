@@ -9,8 +9,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
@@ -26,7 +25,26 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var server *http.Server
+// Server holds the web server's runtime state: its config, the build version
+// tag the /version endpoint reports, the feature-flag client the console's
+// /api/flags endpoints read/toggle, and the store + publisher behind
+// /api/rotators. cmd/tripbot constructs one via New and installs them
+// (SetVersion, SetFlags, SetRotators) before Start runs.
+type Server struct {
+	cfg        *c.TripbotConfig
+	versionTag string
+	flags      feature.FlagClient
+	beds       BedStore
+	rotators   RotatorStore
+	rotatorPub RotatorPublisher
+	userFlags  UserFlagger
+}
+
+// New constructs a Server with the default "dev" version tag (overridden by
+// SetVersion at startup).
+func New(cfg *c.TripbotConfig) *Server {
+	return &Server{cfg: cfg, versionTag: "dev"}
+}
 
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
 // finish before forcing connections closed. 15s is the typical sweet spot:
@@ -34,31 +52,34 @@ var server *http.Server
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
-// Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
-// via signal.NotifyContext) the server stops accepting new connections and
-// waits up to shutdownTimeout for in-flight requests to complete before
-// returning.
-func Start(ctx context.Context) {
-	slog.InfoContext(ctx, "starting web server", "port", c.Conf.TripbotServerPort)
+// Start starts the web server, returning the listener error if it fails to
+// come up. When ctx is canceled (e.g. SIGINT/SIGTERM via
+// signal.NotifyContext) the server stops accepting new connections, waits up
+// to shutdownTimeout for in-flight requests to complete, and returns nil.
+// Whether a listener failure should end the process is the binary's call, not
+// this package's — cmd/onscreens-server makes the same choice with its own
+// server.
+func (s *Server) Start(ctx context.Context) error {
+	slog.InfoContext(ctx, "starting web server", "port", s.cfg.TripbotServerPort)
 
 	r := mux.NewRouter()
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
-	// /ready runs no checks: tripbot's HTTP surface (admin panel, /auth/init,
-	// /auth/callback, /metrics) doesn't depend on the Twitch connection, so the
-	// pod must stay routable even when the bot is offline. Chat-connection is
-	// surfaced via the admin panel + the tripbot_twitch_connected gauge.
+	// /ready runs no checks: tripbot's HTTP surface (the console-facing /api/*
+	// endpoints, /metrics, /version) doesn't depend on the Twitch connection, so
+	// the pod must stay routable even when the bot is offline. Chat-connection is
+	// surfaced via the tripbot_twitch_connected gauge.
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
+	// /deps reports the same verdict readiness deliberately doesn't gate on:
+	// whether Postgres and NATS are actually usable right now. Non-gating, so
+	// a wedged dep shows up in the console's status table instead of removing
+	// the pod that would let anyone look at it.
+	hp.Handle("/deps", tagged("/health/deps", httpmw.ReadinessHandler(s.depChecks()...)))
 
 	// version endpoint — returns build metadata as JSON
-	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
-
-	// auth endpoints
-	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
-	auth.Handle("/init", tagged("/auth/init", authInitHandler))
-	auth.Handle("/callback", tagged("/auth/callback", authCallbackHandler))
+	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
 	// static assets
 	r.Handle("/favicon.ico", tagged("/favicon.ico", faviconHandler)).Methods("GET")
@@ -66,42 +87,92 @@ func Start(ctx context.Context) {
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
-	// admin panel (status overview + links) on the root path
-	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
+	// console-facing read-only endpoints. The standalone tripbot-console holds
+	// no DB/Twitch access of its own and proxies these over the in-namespace
+	// Service.
+	//
+	// read-only JSON profile for the console's user popover.
+	r.Handle("/api/user/{username}", tagged("/api/user/{username}", s.userProfileAPIHandler)).Methods("GET")
+	// the write behind the presence report: flag an account as a bot or keep
+	// it off the leaderboard.
+	r.Handle("/api/user/{username}/flags", tagged("/api/user/{username}/flags", s.userFlagsHandler)).Methods("POST")
+	// read-only JSON list of the logins currently in chat, for the console's
+	// currently-active-chatters panel.
+	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
+	// read-only JSON of the current golang-migrate schema version, so the console
+	// can surface which migration the env's DB is on.
+	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
+	// the full dashcam route as JSON, for the console's map overlay.
+	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
+	// the recent breadcrumbs of each platform, so a fresh console seeds its map
+	// trail from the database rather than from what the video stream can replay.
+	r.Handle("/admin/map/recent", tagged("/admin/map/recent", mapRecentHandler)).Methods("GET")
+	// read-only JSON of the feature-flag snapshot, and a write to flip a flag's
+	// global default — the console's feature-flag panel. Internal-only like the
+	// rest of /api (no Ingress; reached over the in-namespace Service).
+	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
+	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
+	// audit trail for the standalone console: it reports each successful admin
+	// mutation here, and the report lands in the permanent events log as a
+	// console_action event.
+	r.Handle("/api/events/console-action", tagged("/api/events/console-action", s.consoleActionHandler)).Methods("POST")
 
-	// admin actions — tailnet-only by virtue of where the Ingress is
-	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
-	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
-	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
-	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
-	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
+	// read-only JSON aggregates over the append-only analytics tables (events,
+	// video_plays, viewer_samples), for the console's insights panels.
+	r.Handle("/api/insights/commands", tagged("/api/insights/commands", commandInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/guesses", tagged("/api/insights/guesses", guessInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/footage", tagged("/api/insights/footage", footageInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/regions", tagged("/api/insights/regions", regionInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/viewers", tagged("/api/insights/viewers", viewerSeriesHandler)).Methods("GET")
+	r.Handle("/api/insights/sessions", tagged("/api/insights/sessions", sessionInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/presence", tagged("/api/insights/presence", presenceInsightsHandler)).Methods("GET")
+	// read-only JSON stats for the console's stats page: lifetime totals over
+	// the whole log, a recent playback window, and community numbers.
+	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/songs", tagged("/api/stats/songs", songStatsHandler)).Methods("GET")
+
+	// The monthly miles and guess boards for one month, plus the months that
+	// have data — the console's leaderboard pane builds its selector from the
+	// same call that fills it.
+	r.Handle("/api/leaderboards", tagged("/api/leaderboards", s.leaderboardsHandler)).Methods("GET")
+
+	// Background audio: which bed this platform's OBS is playing, and the
+	// switch between them.
+	r.Handle("/api/audio", tagged("/api/audio", s.audioHandler)).Methods("GET")
+	r.Handle("/api/audio", tagged("/api/audio", s.audioSetHandler)).Methods("POST")
+
+	// Corner-rotator copy for the console's editor: read one platform's copy,
+	// save it (which pushes it live over NATS), or reset it to the defaults
+	// compiled into onscreens-server.
+	rotatorRoute := "/api/rotators/{platform}"
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsGetHandler)).Methods("GET")
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsPutHandler)).Methods("PUT")
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsResetHandler)).Methods("DELETE")
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
-
-	if c.Conf.Verbose {
-		helpers.PrintAllRoutes(r)
-	}
 
 	// negroni.New + explicit middleware so we can swap negroni's stdlib
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
 	app := negroni.New(
-		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
 		httpmw.NewSlogLogger(),
 	)
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  c.Conf.ServerType,
+		Service:  s.cfg.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: c.Conf.IsDevelopment(),
+		IsDevelopment: s.cfg.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -112,13 +183,16 @@ func Start(ctx context.Context) {
 	app.UseHandler(r)
 
 	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
-		// Good practice to set timeouts to avoid Slowloris attacks.
-		WriteTimeout:   time.Second * 15,
-		ReadTimeout:    time.Second * 15,
-		IdleTimeout:    time.Second * 60,
-		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
+		Addr: fmt.Sprintf("0.0.0.0:%s", s.cfg.TripbotServerPort),
+		// Every response here is short (small JSON for the console, the metrics
+		// scrape), so a normal write deadline is safe. A long-lived stream on
+		// this server — an SSE endpoint, say — would need WriteTimeout=0.
+		ReadTimeout:       time.Second * 15,
+		ReadHeaderTimeout: time.Second * 15,
+		WriteTimeout:      time.Second * 15,
+		IdleTimeout:       time.Second * 60,
+		MaxHeaderBytes:    1 << 20, // 1 MB
+		Handler:           otelhttp.NewHandler(app, s.cfg.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and
@@ -134,9 +208,7 @@ func Start(ctx context.Context) {
 
 	select {
 	case err := <-serverErr:
-		if err != nil {
-			terrors.FatalContext(ctx, err, "couldn't start server")
-		}
+		return err
 	case <-ctx.Done():
 		slog.InfoContext(ctx, "shutting down web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -144,6 +216,7 @@ func Start(ctx context.Context) {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			slog.ErrorContext(shutdownCtx, "error during web server shutdown", "err", err)
 		}
+		return nil
 	}
 }
 

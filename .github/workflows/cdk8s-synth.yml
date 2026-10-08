@@ -1,0 +1,94 @@
+name: cdk8s-synth
+
+# Post-merge sweep: lints the Python cdk8s authoring layer (cdk8s/) and verifies
+# the committed dist/ deploy units are in sync with the source: re-synth and
+# fail on any diff. Verify-only — synth is fast enough to run locally via `task
+# cdk8s:synth`, so (unlike infra's cdk8s.yml) there's no push-back commit.
+# dist/ is the GitOps source Argo reads, so a stale dist/ on main would silently
+# mis-deploy.
+#
+# The PR-time check is a step of the `gates` job in pr-gates.yml, guarded on the
+# PR's changed paths. This workflow is the main-branch backstop, catching a
+# desync that lands some way other than a PR.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cdk8s/**'
+      - 'pkg/contract/contract.json'
+      - '.github/workflows/cdk8s-synth.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  synth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Toolchain via mise (cdk8s/.mise.toml pins python / node).
+      - uses: jdx/mise-action@v4
+        with:
+          working_directory: cdk8s
+
+      # uv handles project-local Python deps on top of mise's interpreter.
+      - uses: astral-sh/setup-uv@v10.0.1 # no floating major tag published
+
+      - name: Install Python deps
+        working-directory: cdk8s
+        run: uv sync
+
+      - name: Install the cdk8s CLI
+        working-directory: cdk8s
+        run: mise exec -- npm ci
+
+      - name: Generate typed k8s constructs (cdk8s import)
+        working-directory: cdk8s
+        run: mise exec -- uv run npx cdk8s import
+
+      - name: Run synth-time checks
+        working-directory: cdk8s
+        run: mise exec -- uv run pytest -q
+
+      - name: Synth
+        working-directory: cdk8s
+        run: mise exec -- uv run npx cdk8s synth
+
+      - name: Freeze version-pinned prod-1 manifests
+        working-directory: cdk8s
+        # prod-1 app manifests are pinned to their release version and regenerated
+        # only on release-please's release PR, so a chart change on main doesn't
+        # reach prod's committed dist until the next release (that's what couples
+        # the config delta to the version bump). Discard this HEAD re-synth of the
+        # pinned app files before the sync check; identity + one-shot jobs stay
+        # live. Mirrors the freeze in `task cdk8s:synth`.
+        run: |
+          git ls-files -- 'dist/prod-1-*.k8s.yaml' \
+            | grep -vE 'prod-1-(tripbot-identity|job-)' \
+            | xargs -r git checkout --
+
+      # Schema-validate the freshly synthed dist/*.k8s.yaml (what Argo applies)
+      # against the cluster's k8s API version — catches API-version drift after
+      # a k8s bump. dist/apps/*.json is the ApplicationSet discovery index, not
+      # a manifest, so the glob excludes it. CRD kinds resolve via the datree
+      # CRDs-catalog. Mirrors `task cdk8s:validate`; keep the two commands in
+      # lockstep.
+      - name: Validate manifests (kubeconform)
+        working-directory: cdk8s
+        run: >-
+          mise exec -- kubeconform -strict -summary
+          -kubernetes-version 1.36.0
+          -schema-location default
+          -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          -ignore-missing-schemas
+          dist/*.k8s.yaml
+
+      - name: Verify dist/ is committed in sync
+        run: git diff --exit-code -- cdk8s/dist/

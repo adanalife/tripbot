@@ -1,0 +1,216 @@
+package obs
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/andreykaipov/goobs/api/events"
+)
+
+// levelRecorder captures the highest slog level emitted.
+type levelRecorder struct {
+	slog.Handler
+	max slog.Level
+}
+
+func (l *levelRecorder) Enabled(context.Context, slog.Level) bool { return true }
+
+func (l *levelRecorder) Handle(_ context.Context, r slog.Record) error {
+	if r.Level > l.max {
+		l.max = r.Level
+	}
+	return nil
+}
+
+// A platform whose OBS deployment is scaled to zero fails to connect on every
+// retry, forever. Logging that at error level bridges each attempt into Sentry
+// and drains the monthly quota, so an unreachable OBS must stay at warn.
+func TestPollConnectFailureStaysBelowError(t *testing.T) {
+	rec := &levelRecorder{Handler: slog.Default().Handler(), max: slog.LevelDebug}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(rec))
+	defer slog.SetDefault(prev)
+
+	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
+	if poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
+		t.Fatal("poll reported a connection to a refused port")
+	}
+
+	if rec.max >= slog.LevelError {
+		t.Fatalf("connect failure logged at %v; must stay below ERROR to keep it out of Sentry", rec.max)
+	}
+	if rec.max < slog.LevelWarn {
+		t.Fatalf("connect failure logged at %v; expected a WARN so the failure is still visible", rec.max)
+	}
+}
+
+// The Outputs subscription carries more than stream state, so the poller has
+// to pick its event out of the stream and leave the gauge alone for the rest.
+func TestStreamStateFromEvent(t *testing.T) {
+	cases := []struct {
+		name          string
+		ev            any
+		wantActive    bool
+		wantIsChanged bool
+	}{
+		{"started", &events.StreamStateChanged{OutputActive: true, OutputState: "OBS_WEBSOCKET_OUTPUT_STARTED"}, true, true},
+		{"stopped", &events.StreamStateChanged{OutputActive: false, OutputState: "OBS_WEBSOCKET_OUTPUT_STOPPED"}, false, true},
+		// OBS knows it dropped and is retrying; the output is still active, so
+		// the gauge must not flap. Catching the silent half-open is the
+		// watchdog's job, not this gauge's.
+		{"reconnecting", &events.StreamStateChanged{OutputActive: true, OutputState: "OBS_WEBSOCKET_OUTPUT_RECONNECTING"}, true, true},
+		{"other event", &events.RecordStateChanged{OutputActive: true}, false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			active, isChanged := streamStateFromEvent(tc.ev)
+			if isChanged != tc.wantIsChanged {
+				t.Fatalf("isStreamState = %v, want %v", isChanged, tc.wantIsChanged)
+			}
+			if active != tc.wantActive {
+				t.Fatalf("active = %v, want %v", active, tc.wantActive)
+			}
+		})
+	}
+}
+
+// The dial backoff is what keeps a parked platform's OBS off the error feed: it
+// retried every 10s forever and each attempt logged. A dropped connection still
+// reconnects at the base wait, so a genuine blip is not penalised.
+func TestReconnectWait(t *testing.T) {
+	for _, tc := range []struct {
+		failures int
+		want     time.Duration
+	}{
+		{0, 10 * time.Second},
+		{1, 20 * time.Second},
+		{2, 40 * time.Second},
+		{4, 160 * time.Second},
+		{5, maxReconnectWait},
+		{99, maxReconnectWait},
+	} {
+		if got := reconnectWait(tc.failures); got != tc.want {
+			t.Errorf("reconnectWait(%d) = %v, want %v", tc.failures, got, tc.want)
+		}
+	}
+}
+
+// Repeat failures within one outage drop to DEBUG — the first is the one worth
+// seeing, and a scaled-to-zero OBS otherwise emits an identical WARN forever.
+func TestPollRepeatConnectFailureIsQuiet(t *testing.T) {
+	rec := &levelRecorder{Handler: slog.Default().Handler(), max: slog.LevelDebug}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(rec))
+	defer slog.SetDefault(prev)
+
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
+
+	if rec.max >= slog.LevelWarn {
+		t.Fatalf("repeat connect failure logged at %v; expected below WARN", rec.max)
+	}
+}
+
+// The watchdog stands down when OBS's state is unknown and acts on a stopped
+// output, so an unknown cache must error rather than answer StreamInactive.
+func TestLastStreamStateUnknownUntilRead(t *testing.T) {
+	var cache streamStateCache
+	if _, _, known := cache.get(); known {
+		t.Fatal("a fresh cache reported a known state")
+	}
+
+	cache.set(StreamReconnecting)
+	state, updated, known := cache.get()
+	if !known || state != StreamReconnecting {
+		t.Fatalf("after set: got %v known=%v, want reconnecting known=true", state, known)
+	}
+	if updated.IsZero() {
+		t.Fatal("set left no timestamp")
+	}
+
+	cache.forget()
+	if _, _, known := cache.get(); known {
+		t.Fatal("a forgotten cache still reported a known state")
+	}
+
+	// The package-level cache is what LastStreamState reads; nothing has
+	// connected in this test binary, so it must report OBS unreachable.
+	if _, err := LastStreamState(context.Background()); !errors.Is(err, ErrUnreachable) {
+		t.Fatalf("LastStreamState with no connection: got %v, want ErrUnreachable", err)
+	}
+
+	lastStreamState.set(StreamSteady)
+	defer lastStreamState.forget()
+	state, err := LastStreamState(context.Background())
+	if err != nil || state != StreamSteady {
+		t.Fatalf("LastStreamState after a read: got %v, %v; want steady, nil", state, err)
+	}
+}
+
+// recordingPublisher captures eventbus publishes so a test can read what the
+// poller announced.
+type recordingPublisher struct {
+	mu        sync.Mutex
+	publishes []struct{ subject, payload string }
+}
+
+func (r *recordingPublisher) Publish(_ context.Context, subject string, payload []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.publishes = append(r.publishes, struct{ subject, payload string }{subject, string(payload)})
+}
+
+// An OBS that can't be reached must say so on the bus. Publishing nothing would
+// leave the last retained snapshot standing, which is how a subscriber comes to
+// believe a dead instance is still streaming.
+func TestPollAnnouncesAnUnreachableOBS(t *testing.T) {
+	rec := &recordingPublisher{}
+	prev := eventbus.Default
+	eventbus.SetPublisher(rec)
+	defer eventbus.SetPublisher(prev)
+
+	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0)
+
+	if len(rec.publishes) != 1 {
+		t.Fatalf("published %d messages, want 1", len(rec.publishes))
+	}
+	got := rec.publishes[0]
+	if want := "tripbot.test.obs.stream.twitch"; got.subject != want {
+		t.Errorf("subject = %q, want %q", got.subject, want)
+	}
+	if !strings.Contains(got.payload, `"reachable":false`) || strings.Contains(got.payload, `"state"`) {
+		t.Errorf("payload = %s; want reachable:false and no state (an unreachable OBS has none to report)", got.payload)
+	}
+}
+
+// OBS's two output flags map onto three states, and each state's String is
+// the value the obs.stream eventbus subject carries. A reconnecting output
+// still reports active, so it must not read as steady: the broadcast-cap
+// watchdog restarts a steady output, and the silent-disconnect watchdog treats
+// reconnecting as its own case.
+func TestStreamStateFrom(t *testing.T) {
+	cases := []struct {
+		active, reconnecting bool
+		want                 StreamState
+		wire                 string
+	}{
+		{false, false, StreamInactive, "inactive"},
+		{false, true, StreamInactive, "inactive"},
+		{true, true, StreamReconnecting, "reconnecting"},
+		{true, false, StreamSteady, "steady"},
+	}
+	for _, tc := range cases {
+		got := streamStateFrom(tc.active, tc.reconnecting)
+		if got != tc.want || got.String() != tc.wire {
+			t.Errorf("streamStateFrom(active=%v, reconnecting=%v) = %v (%q), want %v (%q)",
+				tc.active, tc.reconnecting, int(got), got.String(), int(tc.want), tc.wire)
+		}
+	}
+}

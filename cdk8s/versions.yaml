@@ -1,0 +1,33 @@
+# Per-component image pins, keyed by env then image name.
+#
+# Envs listed here deploy pinned release versions (rollback = git revert the
+# bump commit); envs absent here float on EnvConfig.image_tag (main/latest).
+# Tags are the un-suffixed multi-arch manifest tags from the tripbot release
+# workflow — no `v` prefix (3.1.0, not v3.1.0).
+#
+# A pinned env's app manifests are FROZEN to their release version: `task
+# cdk8s:synth` (and the CI gate) discard the HEAD re-synth of prod's app files,
+# so a chart/config change on main does NOT reach prod's committed dist until
+# that component's pin moves. The bump is where the pinned manifests
+# regenerate, so a bump's dist diff shows the image tag AND every config
+# change (env var, mount, arg) since the last bump, as one deploy. (Identity
+# Secrets + one-shot Jobs are not frozen — they re-synth live.)
+#
+# How each pin moves:
+#   - tripbot / onscreens-server: bumped by release-please on its standing
+#     release PR (the `x-release-please-version` marker anchors the replace)
+#     — merging the release PR deploys both. tripbot restarts only the chat
+#     bot; onscreens restarts only blip the overlays.
+#
+# Hand-edits (e.g. a rollback): change the pin, then `task cdk8s:prod:bump
+# COMPONENT=<name>` regenerates just that component's prod dist — plain
+# `task cdk8s:synth` won't, since it freezes prod.
+#
+# The comment line between pins is load-bearing: git can't auto-merge edits on
+# adjacent lines, so without a separator concurrent pin-edit PRs conflict each
+# other.
+prod-1:
+  # restarts the chat bot only; no stream impact
+  tripbot: "5.27.0" # x-release-please-version
+  # overlays blip; the stream itself stays up
+  onscreens-server: "5.27.0" # x-release-please-version

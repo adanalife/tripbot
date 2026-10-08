@@ -1,0 +1,392 @@
+package video
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/adanalife/tripbot/pkg/database/testdb"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+)
+
+// link writes from.next_vid = to.ID through the production helper, so the
+// chains these tests walk are built the same way the corpus importer builds
+// the real one.
+func link(t *testing.T, from, to Video) {
+	t.Helper()
+	if err := from.SetNextVid(context.Background(), to); err != nil {
+		t.Fatalf("SetNextVid(%d -> %d): %v", from.ID, to.ID, err)
+	}
+}
+
+// reload re-reads a video by ID. SetNextVid updates the row, not the caller's
+// struct, so a walk must start from the persisted state.
+func reload(t *testing.T, id int) Video {
+	t.Helper()
+	vid, err := load(context.Background(), int64(id))
+	if err != nil {
+		t.Fatalf("load(%d): %v", id, err)
+	}
+	return vid
+}
+
+func TestVideoNextUnflagged_ReturnsFirstUnflagged(t *testing.T) {
+	db := testdb.New(t)
+
+	start := insertVideo(t, db, Video{Slug: "2018_0514_224801_001"})
+	flagged := insertVideo(t, db, Video{Slug: "2018_0514_224801_002", Flagged: true})
+	want := insertVideo(t, db, Video{Slug: "2018_0514_224801_003", State: "Oregon", Lat: 45.5, Lng: -122.6})
+
+	// start -> flagged (skipped) -> want (returned)
+	link(t, start, flagged)
+	link(t, flagged, want)
+
+	got, err := reload(t, start.ID).NextUnflagged(context.Background())
+	if err != nil {
+		t.Fatalf("NextUnflagged() error = %v, want nil", err)
+	}
+	if got.ID != want.ID {
+		t.Errorf("NextUnflagged() = id %d (slug %q), want id %d (slug %q)", got.ID, got.Slug, want.ID, want.Slug)
+	}
+	if got.Flagged {
+		t.Error("NextUnflagged() returned a flagged video")
+	}
+	// The whole row round-trips, so a drifted column tag fails here.
+	if got.Slug != want.Slug || got.State != "Oregon" || got.Lat != 45.5 || got.Lng != -122.6 {
+		t.Errorf("NextUnflagged() row = %+v, want the persisted %+v", got, want)
+	}
+}
+
+func TestVideoNextUnflagged_BrokenChainReturnsError(t *testing.T) {
+	db := testdb.New(t)
+
+	start := insertVideo(t, db, Video{Slug: "2018_0514_224801_010"})
+	// Dangle next_vid off the end of the table: videos.next_vid carries no FK,
+	// so a real corpus can (and does) hold links to rows that aren't there.
+	missingID := start.ID + 10_000
+	if err := db.Exec(`UPDATE videos SET next_vid = ? WHERE id = ?`, missingID, start.ID).Error; err != nil {
+		t.Fatalf("dangle next_vid: %v", err)
+	}
+
+	_, err := reload(t, start.ID).NextUnflagged(context.Background())
+	if err == nil {
+		t.Fatal("NextUnflagged() over a dangling next_vid returned nil error, want error")
+	}
+	// The id the walk couldn't follow is the whole value of the message.
+	if want := fmt.Sprintf("broken next_vid chain at id %d", missingID); !strings.Contains(err.Error(), want) {
+		t.Errorf("NextUnflagged() error = %q, want it to contain %q", err, want)
+	}
+}
+
+func TestVideoNextUnflagged_AllFlaggedCycleReturnsError(t *testing.T) {
+	db := testdb.New(t)
+
+	// Two flagged videos pointing at each other: a walk that isn't bounded by
+	// the playlist length spins here forever.
+	a := insertVideo(t, db, Video{Slug: "2018_0514_224801_020", Flagged: true})
+	b := insertVideo(t, db, Video{Slug: "2018_0514_224801_021", Flagged: true})
+	link(t, a, b)
+	link(t, b, a)
+
+	_, err := reload(t, a.ID).NextUnflagged(context.Background())
+	if err == nil {
+		t.Fatal("NextUnflagged() over an all-flagged cycle returned nil error, want error")
+	}
+	// A closed loop is exhausted, not broken — the two report differently.
+	if !strings.Contains(err.Error(), "no unflagged video found") {
+		t.Errorf("NextUnflagged() over a cycle: error = %q, want the exhausted-chain message", err)
+	}
+}
+
+func TestLoadOrCreate_CreatesThenLoadsSameRow(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	created, err := LoadOrCreate(ctx, "/footage/2018_0514_224801_030.MP4")
+	if err != nil {
+		t.Fatalf("LoadOrCreate (create path): %v", err)
+	}
+	if created.ID == 0 {
+		t.Fatal("LoadOrCreate returned an unsaved video (ID 0)")
+	}
+	if created.Slug != "2018_0514_224801_030" {
+		t.Errorf("Slug = %q, want %q", created.Slug, "2018_0514_224801_030")
+	}
+	// A runtime-created clip has no GPS fix, so save() flags it and records the
+	// coords as missing (see db.go save()).
+	if !created.Flagged || created.CoordSource != CoordSourceMissing {
+		t.Errorf("created video = flagged %v coord_source %q, want flagged true / %q",
+			created.Flagged, created.CoordSource, CoordSourceMissing)
+	}
+	if created.DateCreated.IsZero() {
+		t.Error("expected date_created stamped on insert")
+	}
+	if !created.DateFilmed.Equal(created.toDate()) {
+		t.Errorf("date_filmed = %v, want the slug's timestamp %v", created.DateFilmed, created.toDate())
+	}
+
+	// Second call hits the load path — same row, no duplicate insert.
+	loaded, err := LoadOrCreate(ctx, "/footage/2018_0514_224801_030.MP4")
+	if err != nil {
+		t.Fatalf("LoadOrCreate (load path): %v", err)
+	}
+	if loaded.ID != created.ID {
+		t.Errorf("second LoadOrCreate made a new row %d, want the existing %d", loaded.ID, created.ID)
+	}
+	// The create path returns the struct it inserted rather than re-reading it,
+	// so compare it against the row the load path reads back.
+	if loaded.Slug != created.Slug || loaded.Flagged != created.Flagged ||
+		loaded.CoordSource != created.CoordSource || loaded.State != created.State ||
+		!loaded.DateFilmed.Equal(created.DateFilmed) {
+		t.Errorf("created video = %+v, want the persisted %+v", created, loaded)
+	}
+}
+
+// A season-2 piece created at runtime lands in the s2 corpus at real time,
+// dated at its offset into the original — never at the 2031 date that
+// slicing its name at season-1 offsets produced.
+func TestLoadOrCreate_SeasonTwoPiece(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	got, err := LoadOrCreate(ctx, "/path/to/20260605144519_000001_s0180.MP4")
+	if err != nil {
+		t.Fatalf("LoadOrCreate: %v", err)
+	}
+	if got.Corpus != CorpusS2 || got.Speed != 1 {
+		t.Errorf("corpus/speed = %q/%d, want %q/1", got.Corpus, got.Speed, CorpusS2)
+	}
+	if want := time.Date(2026, 6, 5, 14, 48, 19, 0, time.UTC); !got.DateFilmed.Equal(want) {
+		t.Errorf("date_filmed = %v, want %v", got.DateFilmed, want)
+	}
+	if !got.Flagged {
+		t.Error("a runtime-created clip has no fix and must be flagged")
+	}
+	if again := reload(t, got.ID); again.Corpus != CorpusS2 || again.Speed != 1 {
+		t.Errorf("reloaded corpus/speed = %q/%d, want %q/1", again.Corpus, again.Speed, CorpusS2)
+	}
+}
+
+func TestFindRandomByState(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	want := insertVideo(t, db, Video{Slug: "2018_0514_224801_040", State: "Oregon", Lat: 45.5, Lng: -122.6})
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_041", State: "Nevada"})
+
+	// Abbrev and long form both resolve to the stored title-cased state.
+	for _, state := range []string{"OR", "oregon"} {
+		got, err := FindRandomByState(ctx, state, Video{})
+		if err != nil {
+			t.Fatalf("FindRandomByState(%q): %v", state, err)
+		}
+		if got.ID != want.ID {
+			t.Errorf("FindRandomByState(%q) = id %d (state %q), want id %d", state, got.ID, got.State, want.ID)
+		}
+	}
+}
+
+func TestFindRandomByState_SpreadsAcrossTheStatesClips(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	want := map[int]bool{}
+	for _, slug := range []string{"2018_0514_224801_050", "2018_0514_224801_051", "2018_0514_224801_052"} {
+		want[insertVideo(t, db, Video{Slug: slug, State: "Wyoming"}).ID] = true
+	}
+
+	// Every draw is one of the state's clips, and 20 draws over 3 clips land on
+	// more than one of them unless the pick is stuck on a fixed row.
+	got := map[int]bool{}
+	for range 20 {
+		vid, err := FindRandomByState(ctx, "WY", Video{})
+		if err != nil {
+			t.Fatalf("FindRandomByState(\"WY\"): %v", err)
+		}
+		if !want[vid.ID] {
+			t.Fatalf("FindRandomByState(\"WY\") = id %d (state %q), want one of %v", vid.ID, vid.State, want)
+		}
+		got[vid.ID] = true
+	}
+	if len(got) < 2 {
+		t.Errorf("20 draws returned only %d distinct clip(s) %v, want a spread over %v", len(got), got, want)
+	}
+}
+
+func TestFindRandomByState_NoClipsForState(t *testing.T) {
+	db := testdb.New(t)
+
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_060", State: "Wyoming"})
+
+	_, err := FindRandomByState(context.Background(), "Alaska", Video{})
+	if !errors.Is(err, terrors.ErrNoFootageForState) {
+		t.Errorf("FindRandomByState(\"Alaska\") error = %v, want %v", err, terrors.ErrNoFootageForState)
+	}
+}
+
+// A pick stays in the corpus of the clip on screen: a season-2 clip in the
+// same state is invisible from a season-1 clip (its file is parked, playout
+// would refuse it) and vice versa, and nothing on screen reads as season 1.
+func TestFindRandomByState_StaysInTheAiringCorpus(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s1 := insertVideo(t, db, Video{Slug: "2018_0514_224801_070", State: "Utah"})
+	s2 := insertVideo(t, db, Video{Slug: "20260605144519_000001_s0180", State: "Utah", Corpus: CorpusS2})
+
+	for range 10 {
+		got, err := FindRandomByState(ctx, "UT", Video{})
+		if err != nil || got.ID != s1.ID {
+			t.Fatalf("from nothing: FindRandomByState = id %d, %v; want the s1 clip %d", got.ID, err, s1.ID)
+		}
+		got, err = FindRandomByState(ctx, "UT", s2)
+		if err != nil || got.ID != s2.ID {
+			t.Fatalf("from s2: FindRandomByState = id %d, %v; want the s2 clip %d", got.ID, err, s2.ID)
+		}
+	}
+}
+
+func TestFindNextDaytime(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	// Denver (UTC-6 in May); date_filmed drives the walk. Use far-future dates
+	// so no seed/2018 rows fall after the current clip and skew the query.
+	// backdate sets an exact UTC instant per clip.
+	lat, lng := 39.7392, -104.9903
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+
+	// current: 22:00 MDT May 14 (night). next-day night, then the first daytime
+	// clip of the following morning (noon), then a later daytime clip.
+	current := insertVideo(t, db, Video{Slug: "2099_0514_220000_001", Lat: lat, Lng: lng})
+	nextNight := insertVideo(t, db, Video{Slug: "2099_0515_030000_002", Lat: lat, Lng: lng})
+	lateDay := insertVideo(t, db, Video{Slug: "2099_0515_150000_004", Lat: lat, Lng: lng})
+	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
+	// An earlier daytime clip from another corpus: parked, so not an answer.
+	other := insertVideo(t, db, Video{Slug: "20990515160000_000001_s0000", Lat: lat, Lng: lng, Corpus: CorpusS2})
+
+	backdate(current, "2099-05-15T04:00:00Z")   // 22:00 MDT May 14 — night, day May 14
+	backdate(nextNight, "2099-05-15T09:00:00Z") // 03:00 MDT May 15 — night, day May 15
+	backdate(other, "2099-05-15T16:00:00Z")     // 10:00 MDT May 15 — daytime, but s2
+	backdate(morning, "2099-05-15T18:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
+	backdate(lateDay, "2099-05-15T21:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
+
+	got, err := FindNextDaytime(ctx, reload(t, current.ID))
+	if err != nil {
+		t.Fatalf("FindNextDaytime: %v", err)
+	}
+	// Skips the current day and the next day's pre-dawn night clip, landing on
+	// the following morning's first daytime clip — not the later afternoon one.
+	if got.ID != morning.ID {
+		t.Errorf("FindNextDaytime = id %d (slug %q), want the next morning id %d (slug %q)",
+			got.ID, got.Slug, morning.ID, morning.Slug)
+	}
+}
+
+func TestFindNextDaytime_NoDaytimeAhead(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	lat, lng := 39.7392, -104.9903
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+
+	current := insertVideo(t, db, Video{Slug: "2099_0614_220000_001", Lat: lat, Lng: lng})
+	onlyNight := insertVideo(t, db, Video{Slug: "2099_0615_030000_002", Lat: lat, Lng: lng})
+	backdate(current, "2099-06-15T04:00:00Z")   // 22:00 MDT June 14 — night
+	backdate(onlyNight, "2099-06-15T09:00:00Z") // 03:00 MDT June 15 — night
+
+	_, err := FindNextDaytime(ctx, reload(t, current.ID))
+	if !errors.Is(err, terrors.ErrNoDaytimeFound) {
+		t.Fatalf("FindNextDaytime err = %v, want terrors.ErrNoDaytimeFound", err)
+	}
+}
+
+func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	// CorpusRoute reads the whole table, so give this test's rows coordinates
+	// nothing else would produce and assert only on those.
+	var (
+		earlyCoord = [2]float64{41.11, -71.11}
+		lateCoord  = [2]float64{42.22, -72.22}
+		flagCoord  = [2]float64{43.33, -73.33}
+	)
+	later := insertVideo(t, db, Video{Slug: "2018_0514_224801_051", Lat: lateCoord[0], Lng: lateCoord[1]})
+	earlier := insertVideo(t, db, Video{Slug: "2018_0514_224801_050", Lat: earlyCoord[0], Lng: earlyCoord[1]})
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_052", Lat: flagCoord[0], Lng: flagCoord[1], Flagged: true})
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_053"}) // 0/0: excluded
+
+	// date_filmed drives the ordering; insert order deliberately doesn't match.
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+	backdate(earlier, "2018-05-14T00:00:00Z")
+	backdate(later, "2018-05-15T00:00:00Z")
+
+	indexOf := func(route []RoutePoint, want [2]float64) int {
+		for i, c := range route {
+			if [2]float64{c.Lat, c.Lng} == want {
+				return i
+			}
+		}
+		return -1
+	}
+
+	route := CorpusRoute(ctx)
+	early, late := indexOf(route, earlyCoord), indexOf(route, lateCoord)
+	if early < 0 || late < 0 {
+		t.Fatalf("CorpusRoute() omitted an unflagged clip: early=%d late=%d in %v", early, late, route)
+	}
+	if early > late {
+		t.Errorf("CorpusRoute() not ordered by date_filmed: earlier clip at %d, later at %d", early, late)
+	}
+	if i := indexOf(route, flagCoord); i >= 0 {
+		t.Errorf("CorpusRoute() included a flagged clip at %d", i)
+	}
+	if i := indexOf(route, [2]float64{0, 0}); i >= 0 {
+		t.Errorf("CorpusRoute() included a 0/0 clip at %d", i)
+	}
+}
+
+// TestValidate pins the slug shapes a runtime-created row may have: a
+// season-1 camera name (whatever follows the sequence is not checked) or a
+// season-2 piece; a season-2 original is not a clip.
+func TestValidate(t *testing.T) {
+	cases := []struct {
+		name    string
+		dashStr string
+		wantErr bool
+	}{
+		{"canonical slug", "2018_0514_224801_001", false},
+		{"trailing extension ignored", "2018_0514_224801_001.mp4", false},
+		{"too short", "2018_0514_2248", true},
+		{"letters in timestamp", "2018_0514_2248a1_001", true},
+		{"dash separators", "2018-0514-224801-001", true},
+		{"hidden file", ".018_0514_224801_001", true},
+		{"season-2 piece", "20260605144519_000001_s0180", false},
+		{"season-2 original", "20260605144519_000001", true},
+		{"season-2 piece with a suffix", "20260605144519_000001_s0180_opt", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validate(tc.dashStr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validate(%q) = %v, wantErr %v", tc.dashStr, err, tc.wantErr)
+			}
+		})
+	}
+}

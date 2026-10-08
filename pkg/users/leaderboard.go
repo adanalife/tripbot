@@ -4,122 +4,97 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
-	"strings"
+	"sort"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/logrusorgru/aurora/v3"
 )
 
-var LifetimeMilesLeaderboard [][]string
 var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
-// InitLeaderboard creates the initial leaderboard
-func InitLeaderboard(ctx context.Context) {
+// fetchLeaderboard reads the top users by stored lifetime miles, scoped to
+// this instance's platform, excluding bots, opted-out accounts, and the
+// channel owner.
+func (s *Sessions) fetchLeaderboard(ctx context.Context, limit int) ([]User, error) {
 	var users []User
-
-	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 	result := database.GormDB().WithContext(ctx).
-		Where("miles != 0 AND is_bot = false AND username NOT IN ?", ignoredUsers).
-		Order("miles DESC").
-		Limit(initLeaderboardSize).
+		Where("platform = ? AND miles != 0 AND is_bot = false AND exclude_from_leaderboard = false AND username != ?", s.cfg.Platform, s.cfg.ChannelName).
+		// username breaks the tie, so equal mileages hold a fixed order across
+		// rebuilds instead of shuffling on screen. UpdateLeaderboard's re-sort
+		// below is stable, so it carries this through.
+		Order("miles DESC, username ASC").
+		Limit(limit).
 		Find(&users)
-	if result.Error != nil {
-		slog.ErrorContext(ctx, "error fetching leaderboard", "err", result.Error)
-	}
-
-	for _, user := range users {
-		miles := fmt.Sprintf("%.1f", user.Miles)
-		pair := []string{user.Username, miles}
-		LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard, pair)
-	}
+	return users, result.Error
 }
 
-// UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the
-// LoggedIn map. The work is in-memory (no DB hits), so ctx only carries
-// the cron-tick span for log correlation.
-func UpdateLeaderboard(ctx context.Context) {
-	for _, user := range LoggedIn {
-		// skip adding this user if they're a bot or ignored
-		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {
+// InitLeaderboard creates the initial leaderboard
+func (s *Sessions) InitLeaderboard(ctx context.Context) {
+	users, err := s.fetchLeaderboard(ctx, initLeaderboardSize)
+	if err != nil {
+		slog.ErrorContext(ctx, "error fetching leaderboard", "err", err)
+	}
+	pairs := s.toPairs(users)
+	s.mu.Lock()
+	s.lifetimeLeaderboard = pairs
+	s.mu.Unlock()
+}
+
+// UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the users
+// table, overlaying in-progress session miles for anyone currently logged in
+// so lurkers' numbers keep ticking between logouts. Replaces the cached slice
+// wholesale, so the cache tracks the users table rather than drifting from it
+// as the process stays up.
+func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
+	users, err := s.fetchLeaderboard(ctx, maxLeaderboardSize)
+	if err != nil {
+		slog.ErrorContext(ctx, "error fetching leaderboard", "err", err)
+		return
+	}
+	for i, user := range users {
+		// copy the live user under the lock; CurrentMiles locks internally,
+		// so it must run after the release
+		s.mu.Lock()
+		live, ok := s.loggedIn[user.Username]
+		var liveCopy User
+		if ok {
+			liveCopy = *live
+		}
+		s.mu.Unlock()
+		if ok {
+			users[i].Miles = s.CurrentMiles(ctx, liveCopy)
+		}
+	}
+	// ponytail: a logged-in user whose stored miles sit just below the top-50
+	// cutoff won't appear until logout — same class of miss as the old
+	// in-memory rebuild.
+	sort.SliceStable(users, func(i, j int) bool { return users[i].Miles > users[j].Miles })
+	pairs := s.toPairs(users)
+	s.mu.Lock()
+	s.lifetimeLeaderboard = pairs
+	s.mu.Unlock()
+}
+
+// toPairs formats users as the [username, miles] string pairs the leaderboard
+// consumers render, skipping admin accounts (the DB query already excludes
+// bots, opted-out accounts, and the channel owner).
+func (s *Sessions) toPairs(users []User) [][]string {
+	pairs := make([][]string, 0, len(users))
+	for _, user := range users {
+		if s.cfg.UserIsAdmin(user.Username) {
 			continue
 		}
-		insertIntoLeaderboard(ctx, *user)
+		pairs = append(pairs, []string{user.Username, fmt.Sprintf("%.1f", user.Miles)})
 	}
-	// truncate LifetimeMilesLeaderboard if it gets too big
-	if len(LifetimeMilesLeaderboard) > maxLeaderboardSize {
-		LifetimeMilesLeaderboard = LifetimeMilesLeaderboard[:maxLeaderboardSize]
-	}
+	return pairs
 }
 
-// convert the string to a float32
-func strToFloat32(ctx context.Context, str string) float32 {
-	value, err := strconv.ParseFloat(str, 32)
-	if err != nil {
-		slog.ErrorContext(ctx, "error parsing float", "err", err)
-		return 0.0
-	}
-	return float32(value)
-}
-
-func insertIntoLeaderboard(ctx context.Context, user User) {
-	// first we remove this user from the board
-	removeFromLeaderboard(user.Username)
-
-	// get the current miles as a float
-	miles := user.CurrentMiles(ctx)
-
-	for i, pair := range LifetimeMilesLeaderboard {
-		val := strToFloat32(ctx, pair[1])
-		// see if our miles are higher
-		if miles >= val {
-			milesStr := fmt.Sprintf("%.1f", miles)
-			newPair := []string{user.Username, milesStr}
-
-			// insert into LifetimeMilesLeaderboard
-			// https://github.com/golang/go/wiki/SliceTricks#insert
-			LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard[:i], append([][]string{newPair}, LifetimeMilesLeaderboard[i:]...)...)
-			return
-		}
-	}
-}
-
-// removeFromLeaderboard searches the LifetimeMilesLeaderboard for
-// a username and removes it
-func removeFromLeaderboard(username string) {
-	for i, pair := range LifetimeMilesLeaderboard {
-		if pair[0] == username {
-			// delete from LifetimeMilesLeaderboard
-			// https://github.com/golang/go/wiki/SliceTricks#delete
-			LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard[:i], LifetimeMilesLeaderboard[i+1:]...)
-			return
-		}
-	}
-}
-
-// this was used for development
-func printLeaderboard() {
-	for i, pair := range LifetimeMilesLeaderboard {
-		fmt.Printf("%d: %s - %s\n", i+1, pair[1], aurora.Magenta(pair[0]))
-	}
-}
-
-// LeaderboardContent creates the content for the leaderboard onscreen
-func LeaderboardContent(title string, leaderboard [][]string) string {
-	var output string
-	output = strings.Title(title) + "\n"
-
-	size := 5
-	if len(leaderboard) < size {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%s (%s)\n", score[1], score[0])
-	}
-
-	return output
+// LifetimeLeaderboard returns the cached lifetime-miles leaderboard (a slice of
+// [username, miles] pairs), hydrated by InitLeaderboard and rebuilt by
+// UpdateLeaderboard. The rebuilds swap the slice wholesale, so the returned
+// snapshot is safe to read without further locking.
+func (s *Sessions) LifetimeLeaderboard() [][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lifetimeLeaderboard
 }

@@ -1,101 +1,74 @@
 package video
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/adanalife/tripbot/pkg/database"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	"gorm.io/driver/postgres"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	"gorm.io/gorm"
 )
 
-// installMockDB stands up a sqlmock-backed *gorm.DB and installs it as the
-// process-wide singleton via database.SetGormDB. db.go's load/create/save
-// helpers (which read from database.GormDB() directly) will route to the mock
-// instead of attempting a real postgres connection.
-//
-// SkipDefaultTransaction stops GORM from wrapping every write in BEGIN/COMMIT,
-// which would otherwise force every test to mock those bookends.
-//
-// Mirrors the pattern from pkg/chatbot/mockdb_test.go.
-func installMockDB(t *testing.T) sqlmock.Sqlmock {
+// insertVideo writes a videos row and returns it with the SERIAL-assigned ID
+// populated, so callers can link chains by real ID.
+func insertVideo(t *testing.T, db *gorm.DB, vid Video) Video {
 	t.Helper()
-	sqlDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
+	if err := db.Create(&vid).Error; err != nil {
+		t.Fatalf("insert video %q: %v", vid.Slug, err)
 	}
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		SkipDefaultTransaction: true,
-	})
-	if err != nil {
-		t.Fatalf("gorm.Open: %v", err)
-	}
-	database.SetGormDB(gdb)
-	t.Cleanup(func() {
-		database.SetGormDB(nil)
-		_ = sqlDB.Close()
-	})
-	return mock
+	return vid
 }
 
-// recordedCalls captures URL paths hit on a fake server.
-type recordedCalls struct {
-	paths []string
+// playCount returns how many video_plays rows point at the given video, so
+// tests can assert on the play the Player actually persisted rather than on a
+// scripted INSERT. Scoped by video_id — the table is shared.
+func playCount(t *testing.T, db *gorm.DB, videoID int) int64 {
+	t.Helper()
+	var n int64
+	if err := db.Raw(`SELECT count(*) FROM video_plays WHERE video_id = ?`, videoID).Scan(&n).Error; err != nil {
+		t.Fatalf("count video_plays for video %d: %v", videoID, err)
+	}
+	return n
 }
 
-func (r *recordedCalls) add(p string) { r.paths = append(r.paths, p) }
+// recordingOnscreens is an interface fake satisfying the Player's onscreens
+// dependency, capturing each GPS overlay call by method name.
+type recordingOnscreens struct {
+	calls []string
+}
 
-// fakeVLCServer stands up an httptest.Server that responds to /vlc/current
+func (r *recordingOnscreens) ShowGPSImage(_ context.Context, _ time.Duration) error {
+	r.calls = append(r.calls, "ShowGPSImage")
+	return nil
+}
+
+func (r *recordingOnscreens) HideGPSImage(_ context.Context) error {
+	r.calls = append(r.calls, "HideGPSImage")
+	return nil
+}
+
+// fakePlayoutServer stands up an httptest.Server that responds to /playout/current
+// — the route playout actually serves, and the one playout-client asks for —
 // with the value pointed to by current. Tests mutate *current to change what
-// the next Player.GetCurrentlyPlaying call observes.
+// the next Player.GetCurrentlyPlaying call observes. A path that doesn't match
+// answers 404, whose body would otherwise read as a clip slug.
 //
-// Returns a *vlc-client.Client configured to talk to the fake.
-func fakeVLCServer(t *testing.T, current *string) *vlcClient.Client {
+// Returns a *playout-client.Client configured to talk to the fake.
+func fakePlayoutServer(t *testing.T, current *string) *playoutClient.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/vlc/current" {
+		if r.URL.Path == "/playout/current" {
 			_, _ = w.Write([]byte(*current))
 			return
 		}
 		http.NotFound(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	// vlcClient.New(host) builds the URL as "http://" + host, so strip the
-	// scheme from the httptest URL before handing it over.
-	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"))
-}
-
-// fakeOnscreensServer stands up an httptest.Server that records calls to the
-// GPS show/hide endpoints. Tests assert on rec.paths to verify which overlay
-// transitions fired.
-//
-// Returns a *onscreens-client.Client configured to talk to the fake and a
-// pointer to the recorded-calls struct.
-func fakeOnscreensServer(t *testing.T) (*onscreensClient.Client, *recordedCalls) {
-	t.Helper()
-	rec := &recordedCalls{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/onscreens/gps/show", "/onscreens/gps/hide":
-			rec.add(r.URL.Path)
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-	return onscreensClient.New(strings.TrimPrefix(srv.URL, "http://")), rec
-}
-
-// expectLoadHit queues a sqlmock expectation for a successful load() — i.e.
-// db.go's `SELECT ... WHERE slug = ?` returning one row with the given
-// id/slug/flagged. State and other columns are left zero.
-func expectLoadHit(mock sqlmock.Sqlmock, id int, slug string, flagged bool) {
-	mock.ExpectQuery(`SELECT \* FROM "videos" WHERE slug = `).
-		WithArgs(slug, 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "slug", "flagged"}).
-			AddRow(id, slug, flagged))
+	// playoutClient.New builds the URL as "http://" + host, so strip the scheme
+	// from the httptest URL before handing it over. nil publisher disables the
+	// NATS mirror — this rig exercises the HTTP path only.
+	return playoutClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test", "twitch")
 }

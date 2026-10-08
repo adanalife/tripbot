@@ -4,48 +4,126 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/scoreboards"
-
-	"github.com/adanalife/tripbot/pkg/background"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
+	"gorm.io/gorm"
 )
+
+// leaderboardSize is how many rows the leaderboard commands list in chat.
+const leaderboardSize = 10
+
+// onscreenRows is how many of those rows go on the overlay. Chat and the
+// overlay are read differently — a chat message scrolls past and can be
+// scanned, while the overlay sits on the broadcast — so the onscreen copy is
+// the short one.
+const onscreenRows = 5
+
+// guessrMonthlyRows is the one board that keeps a full ten onscreen: it is a
+// month's running total, so the names below fifth place are still worth
+// reading. Bounded by maxLeaderboardRows in pkg/onscreens-server, which is what
+// actually fits on the overlay.
+const guessrMonthlyRows = 10
+
+// overlayRows trims a board to what goes onscreen, leaving the caller's slice
+// intact for the chat message it also builds.
+func overlayRows(rows [][]string, size int) [][]string {
+	return rows[:min(len(rows), size)]
+}
+
+// rankedList renders a board as the numbered run of names a leaderboard
+// command says in chat: "1. alice (12.0mi), 1. bob (12.0mi), 3. carol (9.0mi)".
+// Tied rows share the better place, so two viewers level on miles are both
+// first and nobody is arbitrarily ahead. unit is appended to each score.
+func rankedList(rows [][]string, unit string) string {
+	ranks := scoreboards.Ranks(rows)
+	parts := make([]string, 0, len(rows))
+	for i, row := range rows {
+		parts = append(parts, fmt.Sprintf("%d. %s (%s%s)", ranks[i], row[0], row[1], unit))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// targetUsername turns a chat-mention param ("@DanaMerrick") into the canonical
+// username used everywhere else: @-less and lowercase. Params reach handlers
+// with their original casing, and usernames are stored lowercase, so every
+// command that looks up another viewer routes its param through here.
+func targetUsername(param string) string {
+	return strings.ToLower(helpers.StripAtSign(param))
+}
 
 // lastHelloTime is used to rate-limit the hello command
 var lastHelloTime time.Time = time.Now()
 
-var currentVersion string
+// commandsCmd lists a curated set of featured commands — filtered to the ones
+// actually dispatchable on this App's platform, so a YouTube instance doesn't
+// suggest commands that would silently no-op. With an argument ("!help
+// timewarp") it answers with that one command's Help line instead.
+func (a *App) commandsCmd(ctx context.Context, user *users.User, params []string) {
+	if len(params) > 0 {
+		a.Reply(ctx, a.helpFor(user, params[0]))
+		return
+	}
+	featured := []string{
+		"!location", "!guess", "!date", "!state",
+		"!sunset", "!timewarp", "!miles", "!leaderboard", "!guessr", "!song",
+	}
+	avail := make([]string, 0, len(featured))
+	for _, t := range featured {
+		if _, ok := a.singleWordLookup[t]; ok {
+			avail = append(avail, t)
+		}
+	}
+	a.Reply(ctx, "You can try: "+strings.Join(avail, ", ")+", and many other hidden commands!")
+}
 
-// versionFilePath is the build-time-baked version file path. Released
-// container images write the tag here (see infra/docker/*/Dockerfile);
-// outside a container the file won't exist and versionCmd falls back to
-// "dev". Overridable in tests.
-var versionFilePath = "/etc/tripbot/version"
-
-// this is the scoreboard name used for counting correct guesses
-const guessScoreboard = "guess_state_total"
-
-//TODO: incorrect guess scoreboard?
-
-func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
-	a.IRC.Say(msg)
+// helpFor renders one command's Help line for "!help <name>". The name may
+// arrive with or without its bang. The lookup goes through singleWordLookup, so
+// a command disabled on this platform reads as unknown, and an admin command
+// stays unadvertised to anyone who couldn't run it — the same silence it keeps
+// when invoked.
+func (a *App) helpFor(user *users.User, name string) string {
+	trigger := "!" + strings.TrimPrefix(strings.ToLower(name), "!")
+	cmd, ok := a.singleWordLookup[trigger]
+	isAdmin := user != nil && a.Cfg != nil && a.Cfg.UserIsAdmin(user.Username)
+	if !ok || cmd.Help == "" || (cmd.RequiresAdmin && !isAdmin) {
+		return "I don't know " + trigger + " — try !commands"
+	}
+	msg := cmd.Trigger + ": " + cmd.Help
+	switch {
+	case cmd.RequiresSubscriber && platformHasSubscribers[a.platform()]:
+		msg += " (subscribers)"
+	case cmd.RequiresFollow && followerGatingEnabled:
+		msg += " (followers)"
+	}
+	var aliases []string
+	for _, al := range cmd.Aliases {
+		if strings.HasPrefix(al, "!") && !strings.Contains(al, " ") {
+			aliases = append(aliases, al)
+		}
+	}
+	if len(aliases) > 0 {
+		msg += " · also " + strings.Join(aliases, ", ")
+	}
+	return msg
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
@@ -57,7 +135,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// check if we said hi too recently
-	if time.Now().Sub(lastHelloTime) < 20*time.Second {
+	if time.Since(lastHelloTime) < 20*time.Second {
 		return
 	}
 
@@ -68,54 +146,34 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	msg += punctuation[rand.Intn(len(punctuation))]
 
 	// give a little help message if the user is new
-	if user.CurrentMiles(ctx) < 2.0 {
+	if a.Sessions.CurrentMiles(ctx, *user) < 2.0 {
 		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
 	}
 
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 	// update our record of last time it ran
 	lastHelloTime = time.Now()
-}
-
-func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
 }
 
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
-	// Cache the lookup — the file is baked at image build time, so its
-	// contents don't change for the lifetime of the process.
-	if currentVersion == "" {
-		currentVersion = readBuildVersion(ctx)
-	}
-
-	a.IRC.Say("Current version is " + currentVersion)
-}
-
-// readBuildVersion reads the build-time-baked tag from versionFilePath
-// (written by the release Dockerfiles). When the file is missing or
-// empty — i.e. local `go run` outside a container — returns "dev" to
-// match the ldflag default used by the /version HTTP handler.
-func readBuildVersion(ctx context.Context) string {
-	raw, err := os.ReadFile(versionFilePath)
-	if err != nil {
-		slog.DebugContext(ctx, "version file not present, falling back to dev", "err", err, "file", versionFilePath)
-		return "dev"
-	}
-	v := strings.TrimSpace(string(raw))
+	// Directly-constructed Apps (tests, and the window before cmd/tripbot
+	// hands New() the ldflag) leave Version empty; "dev" matches the ldflag
+	// default the /version HTTP handler reports.
+	v := a.Version
 	if v == "" {
-		return "dev"
+		v = "dev"
 	}
-	return v
+
+	a.Reply(ctx, "Current version is "+v)
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !uptime", "username", user.Username)
-	dur := time.Now().Sub(Uptime)
+	dur := time.Since(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 }
 
 func (a *App) followageCmd(ctx context.Context, user *users.User, params []string) {
@@ -125,25 +183,46 @@ func (a *App) followageCmd(ctx context.Context, user *users.User, params []strin
 	username := user.Username
 	other := len(params) > 0
 	if other {
-		username = helpers.StripAtSign(params[0])
+		username = targetUsername(params[0])
 	}
 
-	followedAt, ok := mytwitch.FollowedAt(username)
+	followedAt, ok := a.Twitch.FollowedAt(username)
 	if !ok {
 		if other {
-			a.IRC.Say(fmt.Sprintf("@%s isn't following the channel.", username))
+			a.Reply(ctx, fmt.Sprintf("@%s isn't following the channel.", username))
 		} else {
-			a.IRC.Say("You're not following yet — hit that follow button!")
+			a.Reply(ctx, "You're not following yet — hit that follow button!")
 		}
 		return
 	}
 
 	dur := durafmt.Parse(time.Since(followedAt)).LimitFirstN(2)
 	if other {
-		a.IRC.Say(fmt.Sprintf("@%s has been following for %s.", username, dur))
+		a.Reply(ctx, fmt.Sprintf("@%s has been following for %s.", username, dur))
 	} else {
-		a.IRC.Say(fmt.Sprintf("@%s, you've been following for %s. Thanks!", username, dur))
+		a.Reply(ctx, fmt.Sprintf("@%s, you've been following for %s. Thanks!", username, dur))
 	}
+}
+
+// formatLifetimeMiles renders the lifetime total for a !miles reply. Whole
+// miles read best, so the total is rounded — except when the rounded total
+// would be smaller than the two-decimal monthly figure sitting next to it in
+// the same sentence, which looks like a bug to viewers. In that case the total
+// keeps two decimals to match the month, and never renders below it.
+func formatLifetimeMiles(lifetimeMiles, displayMonthly float32) string {
+	rounded := math.Round(float64(lifetimeMiles))
+
+	// what the monthly figure actually renders as, at two decimals
+	monthlyShown := math.Round(float64(displayMonthly)*100) / 100
+	if rounded >= monthlyShown {
+		return fmt.Sprintf("%v", rounded)
+	}
+
+	total := float64(lifetimeMiles)
+	if total < monthlyShown {
+		total = monthlyShown
+	}
+	return fmt.Sprintf("%.2f", total)
 }
 
 func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
@@ -154,29 +233,42 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	// check to see if an arg was provided
 	if len(params) == 0 {
 		username = user.Username
-		lifetimeMiles = user.CurrentMiles(ctx)
-		monthlyMiles = user.CurrentMonthlyMiles(ctx)
+		lifetimeMiles = a.Sessions.CurrentMiles(ctx, *user)
+		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
-		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		username = targetUsername(params[0])
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
-			a.IRC.Say("I don't know them, sorry!")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Reply(ctx, "I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Reply(ctx, "Couldn't look them up right now, try again in a bit")
 			return
 		}
 
-		lifetimeMiles = u.CurrentMiles(ctx)
-		monthlyMiles = u.CurrentMonthlyMiles(ctx)
+		lifetimeMiles = a.Sessions.CurrentMiles(ctx, u)
+		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, u)
+	}
+
+	// Floor the *displayed* monthly miles at 0.01 so a brand-new viewer never
+	// sees "0.00mi", which reads as broken. This is display-only — the real
+	// monthlyMiles value still drives the newcomer-hint logic below.
+	displayMonthly := monthlyMiles
+	if displayMonthly < 0.01 {
+		displayMonthly = 0.01
 	}
 
 	msg := "@%s has %.2fmi this month"
-	msg = fmt.Sprintf(msg, username, monthlyMiles)
+	msg = fmt.Sprintf(msg, username, displayMonthly)
 
 	// add total miles if they have been around for more than one month
 	if lifetimeMiles > monthlyMiles {
-		msg += " (%vmi total)."
-		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeMiles)))
+		msg += " (%smi total)."
+		msg = fmt.Sprintf(msg, formatLifetimeMiles(lifetimeMiles, displayMonthly))
 	} else {
 		msg += "."
 
@@ -191,82 +283,144 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		}
 	}
 
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 }
 
-func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
+func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
-	km := user.CurrentMiles(ctx) * 1.609344
+
+	var username string
+	var miles float32
+
+	// check to see if an arg was provided (mirror milesCmd's other-user lookup)
+	if len(params) == 0 {
+		username = user.Username
+		miles = a.Sessions.CurrentMiles(ctx, *user)
+	} else {
+		username = targetUsername(params[0])
+		u, err := a.Sessions.Find(ctx, username)
+
+		// check to see if they are in our DB
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Reply(ctx, "I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Reply(ctx, "Couldn't look them up right now, try again in a bit")
+			return
+		}
+
+		miles = a.Sessions.CurrentMiles(ctx, u)
+	}
+
+	km := miles * 1.609344
 	msg := "@%s has %.2f kilometres."
-	msg = fmt.Sprintf(msg, user.Username, km)
-	a.IRC.Say(msg)
+	msg = fmt.Sprintf(msg, username, km)
+	a.Reply(ctx, msg)
 }
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !sunset", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
-	lat, lng, _ := vid.Location()
-	a.IRC.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
+	a.Reply(ctx, helpers.SunsetStr(s.vid.DateFilmed, s.at.Lat, s.at.Lng))
+}
+
+func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !weather", "username", user.Username)
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
+	}
+	desc, err := a.Weather.Historical(ctx, s.vid.DateFilmed, s.at.Lat, s.at.Lng)
+	if err != nil {
+		slog.ErrorContext(ctx, "weather lookup failed", "err", err)
+		a.Reply(ctx, "I couldn't fetch the weather for this spot, sorry!")
+		return
+	}
+	a.Reply(ctx, desc)
+}
+
+func (a *App) directionCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !direction", "username", user.Username)
+
+	v, ok := a.Video.PlayheadVelocity(ctx)
+	if !ok {
+		a.Reply(ctx, "I can't tell which way we're pointed right now, sorry!")
+		return
+	}
+	if !v.Moving {
+		a.Reply(ctx, "We're not going anywhere at the moment.")
+		return
+	}
+	a.Reply(ctx, fmt.Sprintf("We're heading %s.", video.Compass(v.Bearing)))
+}
+
+// speedCmd answers with the van's ground speed and heading. Mod-gated while
+// the derived speed is being checked against the corpus: a bad fix reads as
+// an absurd number, and an interpolated span reads eerily flat.
+func (a *App) speedCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !speed", "username", user.Username)
+
+	v, ok := a.Video.PlayheadVelocity(ctx)
+	if !ok {
+		a.Reply(ctx, "I can't tell how fast we're going right now, sorry!")
+		return
+	}
+	if !v.Moving {
+		a.Reply(ctx, "We're stopped right now.")
+		return
+	}
+	a.Reply(ctx, fmt.Sprintf("We're doing about %.0f mph (%.0f km/h), heading %s.",
+		v.MPH(), v.KPH(), video.Compass(v.Bearing)))
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		//TODO: write something like vid.FindClosest() that
-		// chooses whether or not to use Next() vs Prev()
-		vid = vid.Next(ctx)
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
-	// extract the coordinates
-	lat, lng, err := vid.Location()
-	// geocode the location
-	address, _ := helpers.CityFromCoords(lat, lng)
-	if err != nil {
-		slog.ErrorContext(ctx, "geocoding error", "err", err)
+	address := a.place(ctx, s)
+	// generate a google maps url — but only when we actually have coords.
+	// A 0,0 fallback (the fallback video also had no usable GPS) would
+	// otherwise emit a bogus maps.google.com/?q=0.00000,0.00000 link to chat.
+	var msg string
+	switch {
+	case s.at.Lat != 0 || s.at.Lng != 0:
+		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(s.at.Lat, s.at.Lng))
+	case address != "":
+		msg = address
+	default:
+		msg = "I couldn't pin down the exact spot, sorry!"
 	}
-	// generate a google maps url
-	url := helpers.GoogleMapsURL(lat, lng)
-	msg := fmt.Sprintf("%s %s", address, url)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 }
 
 func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentMilesScoreboard(), size)
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
+	leaderboard := a.Scoreboards.TopMiles(ctx, leaderboardSize)
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, "Monthly Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, a.Scoreboards.MilesMonth()+" Miles", overlayRows(leaderboard, onscreenRows))
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d miles this month: ", size)
-	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(leaderboard) {
-			msg += ", "
-		}
-	}
-	a.IRC.Say(msg)
+	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard)) + rankedList(leaderboard, "mi")
+	a.Reply(ctx, msg)
 }
 
 func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !totalleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	size := 10
+	size := leaderboardSize
 	lifetime := a.Sessions.LifetimeLeaderboard()
 	if size > len(lifetime) {
 		size = len(lifetime)
@@ -274,57 +428,81 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 	leaderboard := lifetime[:size]
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, "Total Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Total Miles", overlayRows(leaderboard, onscreenRows))
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
-	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(leaderboard) {
-			msg += ", "
-		}
-	}
-	a.IRC.Say(msg)
+	msg := fmt.Sprintf("Top %d lifetime miles: ", size) + rankedList(leaderboard, "mi")
+	a.Reply(ctx, msg)
 }
 
 func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
-	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
+	// select users to show in leaderboard (zero-scorers already filtered)
+	intLeaderboard := a.Scoreboards.TopGuesses(ctx, leaderboardSize)
 
-	// special message if the leaderboard is empty
-	if len(leaderboard) == 0 {
-		a.IRC.Say("No one is on that leaderboard yet!")
+	// special message if no one has any correct guesses yet
+	if len(intLeaderboard) == 0 {
+		a.Reply(ctx, "No one is on that leaderboard yet!")
 		return
 	}
 
-	// truncate the leaderboard if necessary
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	var intLeaderboard [][]string
-	for _, leaderPair := range leaderboard {
-		// guesses are ints not floats, so remove the decimal place
-		intVersion := strings.Split(leaderPair[1], ".")[0]
-		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
-	}
-
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", overlayRows(intLeaderboard, onscreenRows))
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
-	for i, leaderPair := range intLeaderboard {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(intLeaderboard) {
-			msg += ", "
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", len(intLeaderboard)) + rankedList(intLeaderboard, "")
+	a.Reply(ctx, msg)
+}
+
+// podiumRows is how many places each board names in the month-end message.
+// Three boards ride one chat line, so each gets a podium rather than a top ten;
+// the per-board commands still list the full leaderboardSize for the running
+// month.
+const podiumRows = 3
+
+// lastMonthCmd answers !lastmonth with the month just ended as it finished: the
+// miles and correct-guess boards the rollup tick froze at rollover, and the
+// guessing game's monthly board for the same month. The miles board goes on
+// the overlay; chat gets the podium of all three in one line, ties sharing a
+// place as rankedList always does. Until the tick has frozen the month there
+// is nothing final to show, and the reply says so rather than falling back to
+// the running boards — a viewer asking for last month wants a result.
+func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !lastmonth", "username", user.Username)
+
+	month := a.Scoreboards.LastMonth()
+	name := month.Format("January")
+	miles := a.Scoreboards.LastMonthMiles(ctx, leaderboardSize)
+	guesses := a.Scoreboards.LastMonthGuesses(ctx, leaderboardSize)
+	if len(miles) == 0 && len(guesses) == 0 {
+		a.Reply(ctx, "No final boards for "+name+" yet — they're frozen shortly after the month ends.")
+		return
+	}
+
+	var parts []string
+	if len(miles) > 0 {
+		a.Onscreens.ShowLeaderboard(ctx, name+" Miles (final)", overlayRows(miles, onscreenRows))
+		parts = append(parts, "Miles: "+rankedList(overlayRows(miles, podiumRows), "mi"))
+	}
+	if len(guesses) > 0 {
+		parts = append(parts, "Guesses: "+rankedList(overlayRows(guesses, podiumRows), ""))
+	}
+	// The same flag !guessr and the rotation read: off means the game's board
+	// stays off every surface, this one included.
+	if a.Flags.Bool(ctx, guessrBoardFlagKey, feature.EvalContext{
+		Username: user.Username,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
+	}) {
+		_, rows, err := guessrBoardFor(ctx, "monthly", month.Format("2006-01"))
+		if err != nil {
+			slog.ErrorContext(ctx, "could not fetch guessr leaderboard", "err", err, "board", "monthly", "month", month.Format("2006-01"))
+		} else if len(rows) > 0 {
+			parts = append(parts, "Guessr: "+rankedList(overlayRows(rows, podiumRows), ""))
 		}
 	}
-	a.IRC.Say(msg)
+	a.Reply(ctx, name+" final boards — "+strings.Join(parts, "; "))
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
@@ -333,16 +511,24 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.NextUnflagged(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
 	if err != nil {
-		a.IRC.Say("I couldn't figure out current GPS coords, sorry!")
+		a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		a.IRC.Say(fmt.Sprintf("This moment was %s", fmtTime))
+		msg := fmt.Sprintf("This moment was %s", fmtTime)
+		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+			msg += fmt.Sprintf(" (%s)", ago)
+		}
+		a.Reply(ctx, msg)
 	}
 }
 
@@ -352,27 +538,34 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.NextUnflagged(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
 	if err != nil {
-		a.IRC.Say("I couldn't figure out current GPS coords, sorry!")
+		a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		a.IRC.Say(fmt.Sprintf("This moment was %s", fmtDate))
+		msg := fmt.Sprintf("This moment was %s", fmtDate)
+		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+			msg += fmt.Sprintf(" (%s)", ago)
+		}
+		a.Reply(ctx, msg)
 	}
 }
 
-//TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
 
 	if len(params) == 0 {
 		msg = "Try and guess what state we're in! For example: !guess CA"
-		a.IRC.Say(msg)
+		a.Reply(ctx, msg)
 		return
 	}
 
@@ -381,70 +574,260 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
-		a.IRC.Say(msg)
+		a.Reply(ctx, msg)
+		// The cooldown is per-command state rather than a dispatcher gate, so
+		// this refusal has to be recorded from inside the handler. It's the one
+		// refusal a rollup can compare against a *successful* guess by the same
+		// viewer, which is what makes the guess history readable.
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  "!guess",
+			Args:     strings.Join(params, " "),
+			Reason:   events.RefusedCooldown,
+		})
 		return
 	}
 
 	// get the arg from the command
 	guess := strings.Join(params, " ")
 
-	// convert to short form if they used the full name
-	// e.g. "Massachusetts" instead of "MA"
+	// expand a two-letter abbreviation to the full name the DB stores
+	// ("MA" -> "Massachusetts"). A pair that isn't a state code is left as
+	// typed; blanking it would compare "" against the video's state.
 	if len(guess) == 2 {
-		guess = helpers.StateAbbrevToState(guess)
+		if full := helpers.StateAbbrevToState(guess); full != "" {
+			guess = full
+		}
 	}
 
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+	// forgive close misspellings ("florisa" -> Florida); exact state names
+	// are never touched and ambiguous typos stay as typed
+	if corrected := fuzzyStateName(guess); corrected != "" {
+		slog.InfoContext(ctx, "fuzzy-corrected state guess", "text", guess, "state", corrected)
+		guess = corrected
 	}
 
-	if strings.ToLower(guess) == strings.ToLower(vid.State) {
-		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
-		// show the flag for the state
-		a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
+	}
+	state := a.state(ctx, s)
+
+	// A video whose geocode came back empty (no Maps key, or ZERO_RESULTS)
+	// isn't flagged, so it reaches here with no state to guess at. There's no
+	// right answer to credit, and matching against "" would credit anyone
+	// whose guess normalized to empty.
+	if state == "" {
+		a.Reply(ctx, "I don't know what state this is, sorry!")
+		return
+	}
+
+	correct := strings.EqualFold(guess, state)
+
+	// Record the guess before a correct one warps the playhead, so the airing
+	// context is the footage the guess was about, not wherever the warp lands.
+	a.recordGuess(ctx, events.GuessSubmission{
+		Username: user.Username,
+		Guessed:  guess,
+		Actual:   state,
+		Correct:  correct,
+	})
+
+	if correct {
+		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, state)
 		// increase their guess score
-		user.AddToScore(ctx, guessScoreboard, 1.0)
-		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
-		// do a timewarp
-		a.timewarp(ctx)
+		a.Scoreboards.CreditGuess(ctx, user)
+		// do a timewarp, crediting the guesser on the overlay
+		a.timewarp(ctx, user.Username, events.WarpSourceGuess)
 	} else {
-		msg = "Try again! EarthDay"
+		msg = "Try again! " + a.guessHint(user.Username, guess, s)
 	}
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 }
 
-func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !state", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+// recordGuess writes a guess_submitted event, stamping the clip being guessed
+// at. Best-effort: the guesser gets their answer in chat either way, so a
+// failed insert is logged and dropped rather than surfaced.
+//
+// The caller supplies the guess and the answer; the airing context is filled
+// in here so no emit site can forget it.
+func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
+	if a.Events == nil {
+		return
 	}
-	msg := fmt.Sprintf("We're in %s", vid.State)
-	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a guess must not cost a round-trip to playout.
+	if a.Video != nil {
+		g.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		g.TsSec = &secs
+	}
+	if err := a.Events.GuessSubmitted(ctx, g); err != nil {
+		slog.ErrorContext(ctx, "error recording guess", "err", err,
+			"username", g.Username)
+	}
+}
+
+// guessStatsCmd answers a viewer's own state-guess record: how many they got
+// right, out of how many they answered, as a batting average. The ratio is the
+// point — the correct-guess leaderboard already rewards volume, and someone
+// who guesses twice a night and is right half the time has nothing to show
+// there.
+//
+// Only the caller's own record, deliberately: a hit rate is a nicer thing to
+// share than to look up about someone else.
+func (a *App) guessStatsCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !guessstats", "username", user.Username)
+	if a.Events == nil {
+		return
+	}
+
+	total, correct := a.Events.GuessRecord(ctx, a.Platform, user.Username)
+	if total == 0 {
+		a.Reply(ctx, fmt.Sprintf("@%s hasn't guessed a state yet — try !guess Utah", user.Username))
+		return
+	}
+
+	a.Reply(ctx, fmt.Sprintf("@%s is batting %s on state guesses: %d right out of %d.",
+		user.Username, battingAverage(correct, total), correct, total))
+}
+
+// battingAverage renders a hit rate the way baseball does — three decimals,
+// no leading zero (".392"), and "1.000" for a perfect record, which is the
+// one case that keeps its leading digit.
+func battingAverage(correct, total int64) string {
+	avg := fmt.Sprintf("%.3f", float64(correct)/float64(total))
+	return strings.TrimPrefix(avg, "0")
+}
+
+// guessMiss is one chatter's last wrong !guess: how far its state's centroid
+// was from the van, and when it happened (see App.guessMisses).
+type guessMiss struct {
+	miles float64
+	at    time.Time
+}
+
+// guessHint picks the emote that closes a wrong-guess reply. A chatter's first
+// miss of a round gets the usual EarthDay; each later miss compares this
+// guess's centroid-to-van distance against their previous one and answers 🔥
+// (warmer) or ❄️ (colder) instead — a hint subtle enough that only someone
+// watching their own replies notices it. Restricting hints to the second miss
+// on, and to one bit each, is what keeps !guess from turning into binary
+// search over the state list.
+//
+// A guess with no centroid (a territory, a typo the fuzzy pass let through) or
+// a spot with no usable coordinate can't be measured, so it neither hints nor
+// disturbs the trail.
+func (a *App) guessHint(username, guess string, s spot) string {
+	const noHint = "EarthDay"
+	if s.at.Lat == 0 && s.at.Lng == 0 {
+		return noHint
+	}
+	lat, lng, ok := helpers.StateCentroid(guess)
+	if !ok {
+		return noHint
+	}
+	miles := helpers.MilesBetween(lat, lng, s.at.Lat, s.at.Lng)
+
+	a.guessMissesMu.Lock()
+	prev, hadPrev := a.guessMisses[username]
+	if a.guessMisses == nil {
+		a.guessMisses = make(map[string]guessMiss)
+	}
+	a.guessMisses[username] = guessMiss{miles: miles, at: time.Now()}
+	a.guessMissesMu.Unlock()
+
+	if !hadPrev || !prev.at.After(lastTimewarpTime) {
+		return noHint
+	}
+	switch {
+	case miles < prev.miles:
+		return "🔥"
+	case miles > prev.miles:
+		return "❄️"
+	default:
+		// Same state twice — same distance, nothing to compare.
+		return noHint
+	}
+}
+
+// stateCmd names the current state, or with a state argument ("!state ma")
+// jumps to footage from it.
+func (a *App) stateCmd(ctx context.Context, user *users.User, params []string) {
+	if len(params) > 0 {
+		a.jumpCmd(ctx, user, params)
+		return
+	}
+	slog.InfoContext(ctx, "ran !state", "username", user.Username)
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
+	}
+	msg := fmt.Sprintf("We're in %s", a.state(ctx, s))
 	// record that they know the location now
 	user.SetLastLocationTime()
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 }
 
-//TODO: maybe there could be a !cancel command or something
-//TODO: use fancy golang ... syntax?
+// anonymizedReportPlatforms maps a platform to the anonymized label used for
+// its viewers in a !report's durable/external sinks (the Sentry error event and
+// the Discord alert). Membership is the capability the reporter label keys off,
+// not a hardcoded name check. Only YouTube anonymizes for now — its privacy
+// policy was strict about not recording a viewer's identity in such sinks. A
+// platform absent from the map — Twitch, the other platforms, and any
+// unrecognized one — keeps the real username: name-by-default is the intended
+// behavior, and anonymization is the per-platform exception a privacy policy
+// imposes (add a platform here if its policy comes to require it).
+var anonymizedReportPlatforms = map[string]string{
+	platformYouTube: "a youtube viewer",
+}
+
+// reportReporter is the label a !report is attributed to in its downstream
+// sinks. It defaults to the viewer's real username; a platform whose privacy
+// policy forbids recording viewer identities (see anonymizedReportPlatforms)
+// gets an anonymized label instead. Note the transient 14-day Loki chat line
+// still carries the name for every message; this only governs the report's
+// longer-lived sinks.
+func reportReporter(platform, username string) string {
+	if label, ok := anonymizedReportPlatforms[platform]; ok {
+		return label
+	}
+	return username
+}
+
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
-	slog.InfoContext(ctx, "ran !report", "username", user.Username)
+	reporter := reportReporter(a.platform(), user.Username)
+	slog.InfoContext(ctx, "ran !report", "username", reporter)
 	message := strings.Join(params, " ")
 	// Always log to slog (→ stderr + Sentry via the slog→Sentry handler)
 	// as the durable audit trail.
-	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", user.Username, message))
+	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", reporter, message))
 	// Fire-and-forget to Discord for real-time notification. Skipped
 	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
 	// the slog/Sentry path still fires so nothing is lost.
-	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
-		go postReportToDiscord(webhook, user.Username, message)
+	if webhook := a.Cfg.DiscordAlertsWebhook; webhook != "" {
+		if isDiscordWebhookURL(webhook) {
+			go postReportToDiscord(webhook, reporter, message)
+		} else {
+			// A misconfigured secret (e.g. the SM placeholder string) would
+			// otherwise log a "unsupported protocol scheme" ERROR on every
+			// !report. Warn once per process and fall through to slog/Sentry.
+			reportWebhookWarnOnce.Do(func() {
+				slog.WarnContext(ctx, "DISCORD_ALERTS_WEBHOOK is not a Discord webhook URL; skipping Discord report")
+			})
+		}
 	}
-	a.IRC.Say("Thank you, I will look into this ASAP!")
+	a.Reply(ctx, "Thank you, I will look into this ASAP!")
+}
+
+// reportWebhookWarnOnce bounds the misconfigured-webhook warning to one line
+// per process instead of one per !report invocation.
+var reportWebhookWarnOnce sync.Once
+
+// isDiscordWebhookURL reports whether s looks like a Discord webhook endpoint,
+// guarding postReportToDiscord against placeholder/garbage secret values.
+func isDiscordWebhookURL(s string) bool {
+	return strings.HasPrefix(s, "https://discord.com/api/webhooks/")
 }
 
 // postReportToDiscord POSTs a viewer report to a Discord webhook.
@@ -481,18 +864,15 @@ func postReportToDiscord(webhookURL, username, message string) {
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !bonusmiles", "username", user.Username)
-	bonus := user.BonusMiles()
+	bonus := a.Sessions.BonusMiles(*user)
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
 }
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !secretinfo", "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
-		return
-	}
 	vid := a.Video.Current()
-	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
+	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, a.Video.CurrentProgress())
 	lat, lng, err := vid.Location()
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)
@@ -500,20 +880,83 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
 	slog.InfoContext(ctx, "secretinfo output", "text", msg)
-	a.IRC.Say(msg)
+	a.Reply(ctx, msg)
+}
+
+// giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
+// manual miles correction (amount may be negative) to both the lifetime total
+// and the current monthly scoreboard, and logs a correction event so the rollup
+// folds it into user_rollups.extra_miles. Admin-only for now (broadcaster);
+// widen the gate to mods once a mod-status source exists.
+func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
+	if len(params) < 2 {
+		a.Reply(ctx, "usage: !givemiles <user> <amount>")
+		return
+	}
+	target := targetUsername(params[0])
+	delta, err := strconv.ParseFloat(params[1], 32)
+	if err != nil {
+		a.Reply(ctx, "that amount isn't a number I understand")
+		return
+	}
+	if _, err := a.Sessions.Find(ctx, target); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Reply(ctx, "I don't know them, sorry!")
+		} else {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", target)
+			a.Reply(ctx, "Couldn't look them up right now, try again in a bit")
+		}
+		return
+	}
+	newTotal, applied, err := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	if err != nil {
+		slog.ErrorContext(ctx, "error correcting miles", "err", err, "username", target)
+		a.Reply(ctx, "Couldn't apply that right now, try again in a bit")
+		return
+	}
+	// The event only goes in once the correction has persisted: events is
+	// append-only, so a correction event with no matching users row is a
+	// permanent divergence in the rollups derived from it. It carries the
+	// delta that landed, so a clamped clawback records what was removed.
+	clamped := applied != float32(delta)
+	if clamped {
+		delta = float64(applied)
+	}
+	if err := a.Events.Correction(ctx, target, delta); err != nil {
+		slog.ErrorContext(ctx, "error creating correction event", "err", err)
+	}
+	if clamped {
+		a.Reply(ctx, fmt.Sprintf("@%s only had %.2fmi to remove, now has %.2fmi", target, -applied, newTotal))
+		return
+	}
+	a.Reply(ctx, fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
+}
+
+// refreshOverlaysCmd hard-reloads every OBS browser source (the onscreen
+// corners, the next-frame cover, etc.) by respawning each source's CEF render
+// process. Admin-only. This is the manual recovery for a crashed/frozen overlay
+// — the hourly soft refresh can't revive a crashed CEF webpage.
+func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
+	n, err := a.OBS.RefreshBrowserSources(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "overlay refresh failed", "err", err)
+		a.Reply(ctx, "Couldn't refresh the overlays right now, try again in a bit")
+		return
+	}
+	a.Reply(ctx, fmt.Sprintf("Refreshed %d overlay(s).", n))
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
-		a.IRC.Say("Nice try bucko")
-		return
-	}
-	a.IRC.Say("Shutting down...")
+	a.Reply(ctx, "Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
-	background.StopCron()
+	if err := a.Cron.Shutdown(); err != nil {
+		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
+	}
 	a.Sessions.Shutdown(ctx)
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.ErrorContext(ctx, "DB close failed during shutdown", "err", err)
 	}
@@ -521,24 +964,18 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	os.Exit(0)
 }
 
-//TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)
-	// don't let strangers run this
-	if !c.UserIsAdmin(user.Username) {
-		return
-	}
-
 	// don't do anything if empty
 	if len(params) == 0 {
-		a.IRC.Say("What do you want to say?")
+		a.Reply(ctx, "What do you want to say?")
 		return
 	}
 
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
-		a.IRC.Say("Got it! Hiding the message.")
+		a.Reply(ctx, "Got it! Hiding the message.")
 		a.Onscreens.HideMiddleText(ctx)
 		return
 	}
@@ -549,4 +986,32 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 	slog.InfoContext(ctx, "setting middle text", "text", text)
 
 	a.Onscreens.ShowMiddleText(ctx, text)
+}
+
+func (a *App) makeBotCmd(ctx context.Context, user *users.User, params []string) {
+	a.setBotFlag(ctx, user, params, true, "!makebot")
+}
+
+func (a *App) unBotCmd(ctx context.Context, user *users.User, params []string) {
+	a.setBotFlag(ctx, user, params, false, "!unbot")
+}
+
+// setBotFlag is the shared body of !makebot and !unbot. Admin-only, silent
+// in chat, logs the outcome for ops visibility.
+func (a *App) setBotFlag(ctx context.Context, user *users.User, params []string, isBot bool, trigger string) {
+	slog.InfoContext(ctx, "ran "+trigger, "username", user.Username)
+	if len(params) == 0 {
+		slog.WarnContext(ctx, trigger+" called with no target", "username", user.Username)
+		return
+	}
+	target := targetUsername(params[0])
+	if err := a.Sessions.SetBot(ctx, target, isBot); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.WarnContext(ctx, trigger+": target user not found", "target", target)
+			return
+		}
+		slog.ErrorContext(ctx, trigger+" failed", "target", target, "err", err)
+		return
+	}
+	slog.InfoContext(ctx, trigger+": flipped is_bot", "target", target, "is_bot", isBot)
 }

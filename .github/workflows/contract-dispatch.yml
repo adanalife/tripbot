@@ -1,0 +1,42 @@
+name: contract-dispatch
+
+# Tells the consumers that a contract this repo owns changed on main, so each
+# one's contract workflow re-syncs its copy and opens (or updates) a sync PR
+# within minutes rather than at its next daily sweep. Consumers that don't
+# listen for `contract-changed` still catch the change on that sweep.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pkg/contract/*.json'
+
+# The dispatch goes through the app token below; GITHUB_TOKEN can't reach
+# another repo.
+permissions: {}
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: tripbot-console
+          permission-contents: write
+
+      # curl rather than `gh api`: not every runner image ships the gh CLI.
+      - name: Send contract-changed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY_OWNER}/tripbot-console/dispatches" \
+            -d '{"event_type":"contract-changed","client_payload":{"source":"'"${GITHUB_REPOSITORY}"'","sha":"'"${GITHUB_SHA}"'"}}'

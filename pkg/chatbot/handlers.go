@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/gempir/go-twitch-irc/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -27,9 +30,19 @@ func incChatCommandCounter(command string) {
 // `¡` (U+00A1, two bytes in UTF-8: 0xC2 0xA1) to a regular `!` so that
 // Spanish-keyboard users (who type `¡` where US keyboards type `!`) can run
 // commands without switching layouts. e.g. `¡miles` -> `!miles`.
+//
+// A leading `1` (the unshifted `!` on US keyboards) is rewritten the same
+// way, but only when a letter follows — messages that genuinely start with a
+// number ("100 miles", "10/10") must not turn into command lookups.
+// e.g. `1location` -> `!location`.
 func normalizeCommandPrefix(msg string) string {
 	if strings.HasPrefix(msg, "¡") {
 		return "!" + strings.TrimPrefix(msg, "¡")
+	}
+	if rest := strings.TrimPrefix(msg, "1"); rest != msg && rest != "" {
+		if r := []rune(rest)[0]; unicode.IsLetter(r) {
+			return "!" + rest
+		}
 	}
 	return msg
 }
@@ -38,25 +51,85 @@ func normalizeCommandPrefix(msg string) string {
 type chatUser interface {
 	HasCommandAvailable(ctx context.Context) bool
 	IsSubscriber() bool
+	IsAdmin() bool
+	IsMod() bool
 }
 
-// checkAccess returns true when the user is allowed to run cmd.
-// It calls sayFn with the appropriate denial message when access is denied.
-func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
-	if cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
-		sayFn(followerMsg)
-		return false
+// checkAccess returns true when the user is allowed to run cmd on platform.
+// It calls say with the appropriate denial message when access is denied.
+//
+// On a denial it also returns the events refusal reason that names the gate, so
+// dispatch can log the refusal without re-deriving which check failed. refused
+// is empty when access is granted.
+//
+// The subscriber gate only applies where the platform has subscribers to check
+// (platformHasSubscribers). Elsewhere it would reject every viewer forever, so
+// a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
+// instead.
+//
+// The admin and mod gates are silent unless the command sets AdminDeniedMsg,
+// where the follower and subscriber gates always explain themselves.
+func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) (ok bool, refused string) {
+	if cmd.RequiresAdmin && !user.IsAdmin() {
+		if cmd.AdminDeniedMsg != "" {
+			say(cmd.AdminDeniedMsg)
+		}
+		return false, events.RefusedAdminGate
 	}
-	if cmd.RequiresSubscriber && !user.IsSubscriber() {
-		sayFn(subscriberMsg)
-		return false
+	if cmd.RequiresMod && !user.IsMod() {
+		if cmd.AdminDeniedMsg != "" {
+			say(cmd.AdminDeniedMsg)
+		}
+		return false, events.RefusedModGate
 	}
-	return true
+	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
+		say(followerMsg)
+		return false, events.RefusedFollowGate
+	}
+	if cmd.RequiresSubscriber && platformHasSubscribers[platform] && !user.IsSubscriber() {
+		say(subscriberMsg)
+		return false, events.RefusedSubGate
+	}
+	return true, ""
 }
 
-func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
+// sessionUser adapts a *users.User plus the installed *Sessions to the
+// chatUser access-check seam — the follower/subscriber + command-availability
+// checks now live on Sessions (per-provider state), not on User.
+type sessionUser struct {
+	cfg *c.TripbotConfig
+	s   Sessions
+	u   *users.User
+}
+
+func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
+	return su.s.HasCommandAvailable(ctx, su.u)
+}
+func (su sessionUser) IsSubscriber() bool {
+	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
+}
+func (su sessionUser) IsAdmin() bool {
+	return su.cfg.UserIsAdmin(su.u.Username)
+}
+
+// IsMod is the broadcaster or anyone the platform flagged as a moderator on
+// the message being handled — the admin gate's superset.
+func (su sessionUser) IsMod() bool {
+	return su.IsAdmin() || su.u.Moderator
+}
+
+// dispatch runs cmd for user. typed is the token that matched the command —
+// the alias, state shortcut, or misspelling as the viewer wrote it — which the
+// command_run event keeps when it differs from the canonical trigger.
+func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, user, sayFn) {
+	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, func(m string) { a.Reply(ctx, m) }); !ok {
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  cmd.Trigger,
+			Args:     strings.Join(params, " "),
+			Reason:   refused,
+		})
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -64,21 +137,167 @@ func dispatch(ctx context.Context, cmd *Command, user *users.User, params []stri
 	// otelhttp) nest under chat.command in Tempo, so a single !miles
 	// shows up as one trace with all 4 GetScore-chain SQL spans nested.
 	ctx, span := tracer.Start(ctx, "chat.command",
-		trace.WithAttributes(attribute.String("command", cmd.Trigger)))
+		trace.WithAttributes(attribute.String("chat.command", cmd.Trigger)))
 	defer span.End()
+
+	// A handler can still refuse from inside its own body (the !guess
+	// cooldown); the mark lets dispatch see that and skip the command_run row,
+	// so each attempt lands in exactly one event kind — a run or a refusal.
+	ctx, refused := withRefusalMark(ctx)
+	ctx, detail := withRunDetail(ctx)
 
 	start := time.Now()
 	cmd.Handler(ctx, user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
+
+	if *refused {
+		return
+	}
+	if typed == cmd.Trigger {
+		typed = ""
+	}
+	a.recordRun(ctx, events.CommandRun{
+		Username: user.Username,
+		Command:  cmd.Trigger,
+		Typed:    typed,
+		Args:     strings.Join(params, " "),
+		Detail:   *detail,
+	})
 }
 
-// findCommand parses message and returns the matching Command and params.
-// Returns nil if no command matches.
-func findCommand(message string) (*Command, []string) {
+// runDetailKey carries the per-dispatch slot setRunDetail fills with what a
+// handler answered, for the command_run row.
+type runDetailKey struct{}
+
+// withRunDetail returns ctx carrying an empty run-detail slot, and the slot.
+func withRunDetail(ctx context.Context) (context.Context, *map[string]string) {
+	detail := new(map[string]string)
+	return context.WithValue(ctx, runDetailKey{}, detail), detail
+}
+
+// setRunDetail records what the running command answered, so its command_run
+// row can be queried by answer rather than only by trigger. A no-op outside a
+// dispatch (tests calling a handler directly).
+func setRunDetail(ctx context.Context, detail map[string]string) {
+	if slot, ok := ctx.Value(runDetailKey{}).(*map[string]string); ok {
+		*slot = detail
+	}
+}
+
+// replyParentKey carries the MessageID of the inbound line a dispatch is
+// answering, so App.Reply can thread the answer under it.
+type replyParentKey struct{}
+
+// withReplyParent returns ctx carrying the message id to reply to; an empty id
+// leaves ctx unchanged, which is every platform that surfaces none.
+func withReplyParent(ctx context.Context, messageID string) context.Context {
+	if messageID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, replyParentKey{}, messageID)
+}
+
+// Reply posts msg as a reply to the message ctx is answering — the inbound
+// line HandleMessage stashed — or as a plain Say when ctx carries none: a timed
+// job, a test, or a platform whose inbound has no message ids. Handlers reach
+// chat through this so a viewer can tell which answer is theirs.
+func (a *App) Reply(ctx context.Context, msg string) {
+	if parent, ok := ctx.Value(replyParentKey{}).(string); ok {
+		a.Chat.Reply(parent, msg)
+		return
+	}
+	a.Chat.Say(msg)
+}
+
+// refusalMarkKey carries the per-dispatch flag recordRefusal flips when a
+// refusal happens during a handler's own run.
+type refusalMarkKey struct{}
+
+// withRefusalMark returns ctx carrying a fresh refusal flag, and the flag.
+func withRefusalMark(ctx context.Context) (context.Context, *bool) {
+	refused := new(bool)
+	return context.WithValue(ctx, refusalMarkKey{}, refused), refused
+}
+
+// recordRefusal writes a command_refused event, stamping whatever clip is
+// airing so a refusal can be read back against what was on screen. Best-effort:
+// the viewer already got their answer in chat, so a failed insert is logged and
+// dropped rather than surfaced.
+//
+// The caller supplies the identifying fields; the airing context is filled in
+// here so no emit site can forget it.
+func (a *App) recordRefusal(ctx context.Context, r events.CommandRefusal) {
+	// Flip the dispatch's refusal mark (when one is present) even if the row
+	// can't be written: the attempt was refused either way, and a command_run
+	// row for it would misreport the outcome.
+	if refused, ok := ctx.Value(refusalMarkKey{}).(*bool); ok {
+		*refused = true
+	}
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because a
+	// refusal must not cost a round-trip to playout.
+	if a.Video != nil {
+		r.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		r.TsSec = &secs
+	}
+	if err := a.Events.CommandRefused(ctx, r); err != nil {
+		slog.ErrorContext(ctx, "error recording command refusal", "err", err,
+			"command", r.Command, "reason", r.Reason)
+	}
+}
+
+// recordRun writes a command_run event, stamping whatever clip is airing so a
+// run can be read back against what was on screen. Best-effort: the command
+// already did its work, so a failed insert is logged and dropped rather than
+// surfaced.
+//
+// The caller supplies the identifying fields; the airing context is filled in
+// here so no emit site can forget it.
+func (a *App) recordRun(ctx context.Context, r events.CommandRun) {
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a run must not cost a round-trip to playout.
+	if a.Video != nil {
+		r.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		r.TsSec = &secs
+	}
+	if err := a.Events.CommandRan(ctx, r); err != nil {
+		slog.ErrorContext(ctx, "error recording command run", "err", err,
+			"command", r.Command)
+	}
+}
+
+// The words a viewer types bare after reading an instruction that spelled them
+// with a bang. Deliberately two: every entry is a word that stops being
+// ordinary chat the moment it opens a message, so widening this turns
+// conversation into command dispatch. Close misspellings are not covered here
+// — fuzzy matching stays behind the bang on purpose.
+var bareCommandWords = map[string]struct{}{
+	"commands": {},
+	"help":     {},
+}
+
+// findCommand parses message and returns the matching Command, the typed
+// token that matched it, and the params. Returns a nil Command if no command
+// matches. typed is the case-folded form the viewer reached for — the alias,
+// state shortcut ("!florida"), or misspelling — which may differ from the
+// command's canonical trigger.
+//
+// Triggers match case-insensitively ("!MILES" runs !miles) while params reach
+// the handler with their original casing, so free-text commands like
+// "!middle Hello World" can carry capital letters. Handlers that need a
+// normalized param (a username, an enum-ish keyword) fold the case themselves.
+func (a *App) findCommand(message string) (*Command, string, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
-	command := split[0]
+	command := strings.ToLower(split[0])
 	var params []string
 
 	if len(split) > 1 {
@@ -93,102 +312,345 @@ func findCommand(message string) (*Command, []string) {
 
 	// handle case where people add a space (like "! location")
 	if command == "!" && len(params) > 0 {
-		command = command + params[0]
+		command = command + strings.ToLower(params[0])
 		params = params[1:]
 	}
 
-	// multi-word alias lookup (e.g. "no audio", "no sound")
-	for alias, cmd := range multiWordLookup {
-		if msg == alias || strings.HasPrefix(msg, alias+" ") {
-			remainder := strings.TrimSpace(strings.TrimPrefix(msg, alias))
-			var mwParams []string
-			if remainder != "" {
-				mwParams = strings.Split(remainder, " ")
-			}
-			return cmd, mwParams
+	// multi-word alias lookup (e.g. "no audio", "no sound"). Compares whole
+	// words rather than trimming a byte prefix off msg, so the params after the
+	// alias survive case-folding untouched.
+	for alias, cmd := range a.multiWordLookup {
+		aliasWords := strings.Count(alias, " ") + 1
+		if len(split) < aliasWords || !strings.EqualFold(strings.Join(split[:aliasWords], " "), alias) {
+			continue
 		}
+		var mwParams []string
+		if len(split) > aliasWords {
+			mwParams = split[aliasWords:]
+		}
+		return cmd, alias, mwParams
 	}
 
 	// single-word lookup
-	if cmd, ok := singleWordLookup[command]; ok {
-		return cmd, params
+	if cmd, ok := a.singleWordLookup[command]; ok {
+		return cmd, command, params
 	}
-	return nil, nil
+
+	// A newcomer reads "type !commands" and types the word. Accepted only as
+	// the entire message: "help" on its own is someone addressing the bot,
+	// while "help me find the map" is someone talking to chat, and dispatching
+	// on the latter would answer a question nobody asked the bot.
+	if len(params) == 0 {
+		if _, bare := bareCommandWords[command]; bare {
+			if cmd, ok := a.singleWordLookup["!"+command]; ok {
+				return cmd, "!" + command, nil
+			}
+		}
+	}
+
+	if strings.HasPrefix(command, "!") {
+		// state-name shortcut: "!florida" (or "!new york") runs !guess with
+		// the state as the guess. Only when !guess is enabled on this
+		// platform — on others the lookup misses and the token falls through.
+		if guess, ok := a.singleWordLookup["!guess"]; ok {
+			if stateParams := stateGuessParams(command, params); stateParams != nil {
+				// stateParams is the state name's words, so rejoining them
+				// reconstructs the shortcut as typed ("!new york"), which the
+				// bare command token truncates to its first word ("!new").
+				return guess, "!" + strings.ToLower(strings.Join(stateParams, " ")), stateParams
+			}
+		}
+
+		// fuzzy fallback: route close misspellings of !-prefixed commands to
+		// their nearest registered trigger (e.g. "!locaiton" -> !location)
+		if cmd := a.fuzzyLookup(command); cmd != nil {
+			slog.Info("fuzzy-routed misspelled command", "text", command, "command", cmd.Trigger)
+			return cmd, command, params
+		}
+
+		// spaceless variant: "!gotowyoming" is a registered trigger with its
+		// first param glued on. Runs after the fuzzy pass so a close
+		// misspelling ("!gotoo") stays a typo of !goto rather than becoming
+		// "!goto o".
+		if cmd, rest := a.splitSpaceless(command); cmd != nil {
+			slog.Info("split spaceless command", "text", command, "command", cmd.Trigger)
+			return cmd, command, append([]string{rest}, params...)
+		}
+	}
+	return nil, "", nil
 }
 
-func runCommand(ctx context.Context, user *users.User, message string) {
+// splitSpaceless finds the longest registered !-trigger that command starts
+// with and returns it with the glued-on remainder: "!gotowyoming" yields
+// !goto and "wyoming". Longest wins so "!guessrx" is !guessr + "x", not !guess
+// + "rx". Returns nil when no trigger is a proper prefix, so an unknown command
+// stays unknown — genuine typos are meant to stay visible in the logs, they
+// seed new commands. Bare-word triggers ("hello") are never split.
+func (a *App) splitSpaceless(command string) (*Command, string) {
+	var best *Command
+	bestLen := 0
+	for trigger, cmd := range a.singleWordLookup {
+		if !strings.HasPrefix(trigger, "!") || len(trigger) <= bestLen || len(command) <= len(trigger) {
+			continue
+		}
+		if strings.HasPrefix(command, trigger) {
+			best, bestLen = cmd, len(trigger)
+		}
+	}
+	if best == nil {
+		return nil, ""
+	}
+	return best, command[bestLen:]
+}
+
+// stateGuessParams returns the params to pass to !guess when command (a
+// !-prefixed token, with params possibly continuing a multi-word state name)
+// spells out a US state or territory: "!florida" yields ["florida"],
+// "!new york" yields ["new", "york"]. Returns nil when the token isn't a
+// state name. Two-letter abbreviations ("!fl") deliberately don't match —
+// only full names are checked, so tokens like "!hi" / "!ok" / "!me" can't
+// fire accidental guesses.
+func stateGuessParams(command string, params []string) []string {
+	name := strings.TrimPrefix(command, "!")
+	if name == "" {
+		return nil
+	}
+	// try the full phrase first so "!new york" matches New York rather than
+	// stopping at the bare "new"
+	if len(params) > 0 {
+		phrase := name + " " + strings.Join(params, " ")
+		if helpers.StateToStateAbbrev(phrase) != "" {
+			return strings.Split(phrase, " ")
+		}
+	}
+	if helpers.StateToStateAbbrev(name) != "" {
+		return []string{name}
+	}
+	return nil
+}
+
+// fuzzyStateName returns the canonical state/territory name closest to guess
+// by edit distance, or "" when guess is already an exact state name, too far
+// from every state, or ambiguous between two states. The namespace here is
+// only the ~60 state names (no command triggers), so unlike fuzzyLookup the
+// correction can't collide with the command surface.
+func fuzzyStateName(guess string) string {
+	if helpers.StateToStateAbbrev(guess) != "" {
+		return "" // already exact — never touch it
+	}
+	maxDist := fuzzyMaxDistance(len([]rune(guess)))
+	if maxDist == 0 {
+		return ""
+	}
+
+	lowered := strings.ToLower(guess)
+	best := ""
+	bestDist := maxDist + 1
+	ambiguous := false
+	names := helpers.StateNames()
+	for i, lowerName := range helpers.LowercaseStateNames() {
+		dist := levenshtein(lowered, lowerName)
+		if dist > maxDist {
+			continue
+		}
+		name := names[i]
+		switch {
+		case dist < bestDist:
+			best, bestDist, ambiguous = name, dist, false
+		case dist == bestDist && name != best:
+			ambiguous = true
+		}
+	}
+	if ambiguous {
+		return ""
+	}
+	return best
+}
+
+func (a *App) runCommand(ctx context.Context, user *users.User, message string) {
 	// parse for otel span attribute (only set for !-prefixed commands)
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
-	command := split[0]
+	command := strings.ToLower(split[0])
 	if command == "!" && len(split) > 1 {
-		command = "!" + split[1]
+		command = "!" + strings.ToLower(split[1])
 	}
 	// Tag the active span with the parsed command. Bare-word triggers
 	// (e.g. "hello") aren't included to keep the attribute's cardinality
 	// bounded to the bot's actual command surface (and typos thereof).
+	//
+	// The key is chat.command.typed, not chat.command: this is the raw text,
+	// which differs from the canonical trigger the dispatch span records under
+	// chat.command, and it is set even when nothing resolves — which is how a
+	// trace shows a typo'd command going nowhere.
 	if strings.HasPrefix(command, "!") {
-		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
+		trace.SpanFromContext(ctx).SetAttributes(attribute.String("chat.command.typed", command))
 	}
 
-	cmd, params := findCommand(message)
+	cmd, typed, params := a.findCommand(message)
 	if cmd != nil {
-		dispatch(ctx, cmd, user, params)
+		a.dispatch(ctx, cmd, typed, user, params)
 		return
 	}
 
 	if strings.HasPrefix(command, "!") {
-		err := fmt.Errorf("command %s not found", command)
-		slog.ErrorContext(ctx, "error running command", "err", err)
+		// A viewer reaching for a command this bot doesn't have is chat traffic,
+		// not an application fault: a typo, or a trigger they know from another
+		// channel's bot (!watchtime showed up in prod this way). At Error level
+		// every distinct token becomes its own Sentry issue and draws down the
+		// free-tier budget; the command_refused event below is the durable
+		// record of what people try, so Info is enough here.
+		reason := events.RefusedUnknown
+		if a.unindexedCommand(command) != nil {
+			// The command exists, it just isn't dispatchable here — a deliberate
+			// commandEnabled outcome, and a different question from a typo. Worth
+			// separating: a viewer repeatedly reaching for a command their
+			// platform can't run is an argument for enabling it there.
+			reason = events.RefusedWrongPlatform
+			// Say so rather than swallowing it: the viewer typed a real
+			// trigger, and silence reads as a broken bot.
+			a.Reply(ctx, fmt.Sprintf(wrongPlatformMsg, command))
+		}
+		slog.InfoContext(ctx, "unknown chat command", "command", command, "reason", reason)
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  command,
+			Args:     strings.Join(split[1:], " "),
+			Reason:   reason,
+		})
 	}
 }
 
-// handles all chat messages
-func PrivateMessage(msg twitch.PrivateMessage) {
-	username := msg.User.Name
+// unindexedCommand returns the registered Command that token names but which
+// isn't dispatchable on this platform, or nil when the token names no command at
+// all. indexCommands only indexes commands commandEnabled accepts, so a
+// platform-gated command misses the lookup exactly like a typo does — this is
+// what tells those two apart.
+func (a *App) unindexedCommand(token string) *Command {
+	for i := range a.commands {
+		cmd := &a.commands[i]
+		if a.commandEnabled(cmd) {
+			continue // indexed; findCommand would have matched it
+		}
+		if strings.EqualFold(cmd.Trigger, token) {
+			return cmd
+		}
+		for _, alias := range cmd.Aliases {
+			if strings.EqualFold(alias, token) {
+				return cmd
+			}
+		}
+	}
+	return nil
+}
 
-	ctx, span := tracer.Start(context.Background(), "chatbot.handle_message",
-		trace.WithAttributes(attribute.String("twitch.user", username)))
+// IncomingMessage is a platform-neutral inbound chat message. Platform
+// adapters (Twitch today; YouTube and others later) translate their native
+// event types into this shape before handing it to the App's Handle* methods,
+// so the command path stays platform-agnostic.
+type IncomingMessage struct {
+	User string // sender's platform username (Twitch sends display-case)
+	// UserID is the sender's platform-native stable user ID (Twitch user ID,
+	// YouTube channel ID, …). User can be a mutable display name on some
+	// platforms, so this is the identity key for any future viewer
+	// persistence or cross-platform linking. Carried, not yet consumed.
+	UserID string
+	Text   string // the message body, original case
+	// MessageID is the platform's own id for this message, empty on platforms
+	// that don't surface one. Carried onto the event bus so a console
+	// moderation action has something to address.
+	MessageID string
+	// Reply names the message this one answers, when the platform threads.
+	Reply *eventbus.ChatReply
+	// MessageType is the platform's word for a line it singles out (Twitch's
+	// "user_intro" for a first-timer), carried onto the event bus for display.
+	MessageType string
+	// Color is the sender's chosen name colour ("#RRGGBB"), carried onto the
+	// event bus for display; empty when the platform reports none.
+	Color string
+	// Moderator, Subscriber, and Broadcaster are the sender's role in this
+	// channel as the platform reported it on this message. They ride the event
+	// bus for display; the follower and subscriber checks in checkAccess read
+	// the persisted session, which is the answer that survives a platform that
+	// reports no roles at all. Moderator alone also gates commands: there is
+	// no persisted mod list, so the platform's word on the message is the one
+	// source.
+	Moderator   bool
+	Subscriber  bool
+	Broadcaster bool
+	// Badges and Emotes are the sender's chat decorations, carried straight
+	// onto the event bus for the console to render — the command path never
+	// reads them. Badges maps a badge name to its version (for "subscriber",
+	// the months a bool can't carry); Emotes locates each emote occurrence in
+	// Text. Only Twitch reports either.
+	Badges map[string]int
+	Emotes []eventbus.Emote
+}
+
+// HandleMessage processes one inbound chat message: records it (Loki + the
+// admin-console event bus), resolves the sender, and runs any command it
+// carries. Every platform arrives here — inbound is one gateway poll — so the
+// only thing that varies is whether the sender has a persisted identity.
+func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
+	ctx, span := tracer.Start(ctx, "chatbot.handle_message",
+		trace.WithAttributes(attribute.String("chat.user", msg.User)))
 	defer span.End()
 
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
 
-	//TODO: we lose capitalization here, is that okay?
-	message := strings.ToLower(msg.Message)
+	// Tally for the chat-rate sample. Every inbound message counts — commands
+	// and bots' messages included, since the per-tick total is an aggregate
+	// readers can't attribute to senders.
+	if a.ChatCounter != nil {
+		a.ChatCounter.Add()
+	}
 
 	// emit chat line to Loki via OTel
-	mylog.ChatMsg(username, msg.Message)
+	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)
 
-	// check to see if the message is a command
-	//TODO: also include ones prefixed with whitespace?
-	// log in the user
-	user := users.LoginIfNecessary(ctx, username)
+	// mirror the chat line onto the event bus so live consumers (the admin
+	// panel's chat pane) see it. Original-case username + text, matching the
+	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
+	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, eventbus.ChatMessage{
+		Platform:    a.Platform,
+		Username:    msg.User,
+		UserID:      msg.UserID,
+		Text:        msg.Text,
+		MessageID:   msg.MessageID,
+		Moderator:   msg.Moderator,
+		Subscriber:  msg.Subscriber,
+		Broadcaster: msg.Broadcaster,
+		Badges:      msg.Badges,
+		Emotes:      msg.Emotes,
+		Reply:       msg.Reply,
+		MessageType: msg.MessageType,
+		Color:       msg.Color,
+	})
 
-	runCommand(ctx, user, message)
+	// resolve the sender, then run any command. The original casing goes
+	// through: runCommand folds only the trigger token for matching.
+	user := a.chatUser(ctx, msg.User, msg.UserID)
+	user.Moderator = msg.Moderator
+	a.runCommand(withReplyParent(ctx, msg.MessageID), user, msg.Text)
 }
 
-// this event fires when a user joins the channel
-func UserJoin(joinMessage twitch.UserJoinMessage) {
-	users.LoginIfNecessary(context.Background(), joinMessage.User)
-}
-
-// this event fires when a user leaves the channel
-func UserPart(partMessage twitch.UserPartMessage) {
-	users.LogoutIfNecessary(context.Background(), partMessage.User)
-}
-
-// send message to chat if someone subs
-// func UserNotice(message twitch.UserNoticeMessage) {
-// 	// update the internal subscriber list
-// 	mytwitch.GetSubscribers()
-// }
-
-// if the message comes from me, then post the message to chat.
-// An admin whisper that triggers Say() is logged again as a chat line.
-func GetWhisper(message twitch.WhisperMessage) {
-	slog.Info("whisper received", "from", message.User.Name, "text", message.Message)
-	if c.UserIsAdmin(message.User.Name) {
-		Say(message.Message)
+// chatUser resolves a sender to the user the command path runs as.
+//
+// On a platform that persists identity this is the login step — it creates or
+// refreshes the users row and the session, so presence, miles, and the
+// follower/subscriber access checks all have something to read. Everywhere else
+// it is a transient user carrying just the display name, which is all the v1
+// allowlist needs.
+//
+// platformUserID is stamped onto the row when the platform reported one. This is
+// the only path that has it — the session tick logs chatters in from a name list
+// with no ids — so the column fills in as people talk rather than all at once.
+func (a *App) chatUser(ctx context.Context, username, platformUserID string) *users.User {
+	if platformPersistsUsers[a.platform()] {
+		user := a.Sessions.RecordPlatformUserID(
+			ctx, a.Sessions.LoginIfNecessary(ctx, username), platformUserID)
+		return &user
 	}
+	return &users.User{Username: strings.ToLower(username)}
 }

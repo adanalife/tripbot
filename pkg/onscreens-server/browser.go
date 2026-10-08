@@ -6,37 +6,28 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/helpers"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/gorilla/mux"
 )
-
-// flagPlaceholderPNG is a 1×1 transparent PNG served by the flag asset
-// endpoint while the state-driven flag swap is disabled (see flag.go's
-// TODO). The browser source's <img> tag fetches this URL even when the
-// onscreen is hidden, so we serve a valid PNG to keep the request quiet
-// rather than 404.
-var flagPlaceholderPNG = []byte{
-	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-	0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-	0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41,
-	0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-	0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-	0x42, 0x60, 0x82,
-}
 
 //go:embed templates/onscreen.html.tmpl
 var onscreenTemplates embed.FS
 
 var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/onscreen.html.tmpl"))
 
+// gpsPNG is the GPS map overlay, embedded so the binary is self-contained and
+// has no runtime dependency on the source tree — a source-relative path resolves
+// to a compile-time location that doesn't exist in the slim runtime image. Kept
+// in sync with the canonical assets/GPS.png at the repo root.
+//
+//go:embed assets/GPS.png
+var gpsPNG []byte
+
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
-// and image_source entries in infra/docker/obs/config/Tripbot.json.tmpl used.
+// and image_source entries in the OBS scene config (config/Tripbot.json.tmpl in
+// the adanalife/obs repo) used.
 //
 // For text onscreens whose browser-source viewport overhangs a smaller on-canvas
 // overlay box (the bottom-strip rotators sit on a 640px third but their grey-box
@@ -56,22 +47,49 @@ type onscreenStyle struct {
 	DropShadow    bool         // text-shadow on/off
 	AnchorXPx     int          // center-x within the browser-source viewport (0 = use flex-center fallback)
 	FitWidthPx    int          // single-line width budget for shrink-to-fit (0 = no fit pass)
+	RenderAsHTML  bool         // inject content via innerHTML instead of textContent (server emits HTML for this onscreen)
+	Markdown      bool         // run the onscreen's Content through renderInlineMarkdown before serving state.json (implies RenderAsHTML)
+}
+
+// ContentMarginLeftPx is the left margin (in px) that positions a
+// FitWidthPx-wide, text-centered content box so its center sits at AnchorXPx
+// within the browser-source viewport. It backs the anchored rotator layout's
+// normal-flow centering (see templates/onscreen.html.tmpl) — the layout
+// deliberately avoids position:absolute + transform, which promote the content
+// to a separate compositing layer that OBS's offscreen renderer fails to
+// repaint on update.
+func (s onscreenStyle) ContentMarginLeftPx() int {
+	return s.AnchorXPx - s.FitWidthPx/2
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
 	SlugMiddleText: {
+		// Content supports inline markdown (see renderInlineMarkdown) so
+		// !command references render in monospace; RenderAsHTML opts the
+		// browser source into innerHTML.
 		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+		RenderAsHTML: true, Markdown: true,
 	},
 	SlugLeaderboard: {
+		// Server emits an HTML grid (see renderLeaderboard) so the
+		// score column aligns via CSS rather than space-padding — any font
+		// works.
 		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+		RenderAsHTML: true,
 	},
+	// Both corner rotators take their font and width budget from rot.BudgetFor
+	// (applied in styleFor), which the admin console also reads to warn when a
+	// line won't fit — a duplicate constant here would let the warning drift off
+	// the real layout. AnchorXPx stays local: it positions the box within the
+	// browser-source viewport, which is layout, not a copy-length budget.
 	SlugLeftMessage: {
-		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
-		AnchorXPx: 282, FitWidthPx: 564,
+		// Rotator lines advertise !commands, so they render markdown too.
+		Name: SlugLeftMessage, ColorCSS: "#ffffff", AnchorXPx: 282,
+		RenderAsHTML: true, Markdown: true,
 	},
 	SlugRightMessage: {
-		Name: SlugRightMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
-		AnchorXPx: 456, FitWidthPx: 369,
+		Name: SlugRightMessage, ColorCSS: "#ffffff", AnchorXPx: 456,
+		RenderAsHTML: true, Markdown: true,
 	},
 	SlugTimewarp: {
 		Name: SlugTimewarp, FontCSS: `sans-serif`, FontSizePx: 72, ColorCSS: "#ffffff", DropShadow: true,
@@ -79,17 +97,58 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
-	SlugFlag: {
-		Name: SlugFlag, IsImage: true,
-	},
+}
+
+// rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
+// pull each one's font and width budget from pkg/rotator.
+var rotatorSides = map[string]rot.Side{
+	SlugLeftMessage:  rot.SideLeft,
+	SlugRightMessage: rot.SideRight,
+}
+
+// styleFor returns the render style registered for slug. For the corner rotators
+// it fills in the font and shrink-to-fit budget from pkg/rotator — the same
+// values the console measures candidate copy against.
+func styleFor(slug string) (onscreenStyle, bool) {
+	style, ok := onscreenRegistry[slug]
+	if !ok {
+		return onscreenStyle{}, false
+	}
+	if side, isRotator := rotatorSides[slug]; isRotator {
+		b := rot.BudgetFor(side)
+		style.FontCSS = template.CSS(b.FontFamilyCSS)
+		style.FontSizePx = b.FontSizePx
+		style.MinFontSizePx = b.MinFontSizePx
+		style.FitWidthPx = b.FitWidthPx
+	}
+	return style, true
 }
 
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
 // state. The OBS browser-source HTML pages poll this endpoint and re-render.
+//
+// Markdown-flagged onscreens are served as HTML, rendered from their stored
+// Content by renderedContent — which memoizes, so the render cost tracks content
+// changes rather than the poll rate. The stored Content (and the
+// JetStream-persisted middle-text state) stays the raw markdown source and only
+// the served copy is HTML. The browser injects it via innerHTML because those
+// onscreens are also RenderAsHTML.
 func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(s.Snapshot()); err != nil {
+	snap := s.Snapshot()
+	out := make(map[string]onscreenView, len(snap))
+	for slug, osc := range snap {
+		view := osc.view()
+		if onscreenRegistry[slug].Markdown {
+			view.Content = osc.renderedContent()
+		}
+		if slug == SlugTimewarp {
+			view.NoBackground = s.timewarpNoBackground.Load()
+		}
+		out[slug] = view
+	}
+	if err := json.NewEncoder(w).Encode(out); err != nil {
 		slog.ErrorContext(r.Context(), "encoding onscreens state", "err", err)
 	}
 }
@@ -99,7 +158,7 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 // updates its DOM in place.
 func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	style, ok := onscreenRegistry[name]
+	style, ok := styleFor(name)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -112,17 +171,14 @@ func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
-// `gps` resolves to the checked-in GPS overlay; `flag` returns a 1×1
-// transparent placeholder while the state-driven flag swap is offline.
+// `gps` resolves to the embedded GPS overlay.
 func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case SlugGPS:
-		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))
-	case SlugFlag:
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
-		if _, err := w.Write(flagPlaceholderPNG); err != nil {
-			slog.ErrorContext(r.Context(), "writing flag placeholder", "err", err)
+		if _, err := w.Write(gpsPNG); err != nil {
+			slog.ErrorContext(r.Context(), "writing gps image", "err", err)
 		}
 	default:
 		http.NotFound(w, r)

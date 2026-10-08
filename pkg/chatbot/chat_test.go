@@ -1,0 +1,93 @@
+package chatbot
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/adanalife/tripbot/pkg/eventbus"
+)
+
+// noopChat satisfies ChatClient for tests that don't care about chat output —
+// it swallows everything. Tests that assert on output inject a recordingChat
+// instead.
+type noopChat struct{}
+
+func (noopChat) Say(_ string)      {}
+func (noopChat) Reply(_, _ string) {}
+
+// recordingChat captures every Say call so tests can assert on chat output.
+// Messages are appended in order.
+type recordingChat struct {
+	Says    []string // ordered list of Say() and Reply() messages
+	Parents []string // the parent of each Reply(), in order
+}
+
+func (r *recordingChat) Say(msg string) {
+	r.Says = append(r.Says, msg)
+}
+
+func (r *recordingChat) Reply(parentID, msg string) {
+	r.Parents = append(r.Parents, parentID)
+	r.Says = append(r.Says, msg)
+}
+
+// Output returns all Say() messages joined by newline, mirroring the
+// shape of captureSay()'s output() helper for easy migration.
+func (r *recordingChat) Output() string {
+	return strings.Join(r.Says, "\n")
+}
+
+// TestConsoleMirror_PublishesBotOutputToEventbus asserts the bot's own chat
+// output is mirrored onto the event bus (so it shows in the admin live console
+// — the platform doesn't echo our sent messages back). recordingNATS
+// (nats_test.go) satisfies eventbus.Publisher. The inner ChatClient is a no-op
+// so the test stays focused on the mirror.
+func TestConsoleMirror_PublishesBotOutputToEventbus(t *testing.T) {
+	rec := &recordingNATS{}
+	saved := eventbus.Default
+	eventbus.SetPublisher(rec)
+	t.Cleanup(func() { eventbus.Default = saved })
+
+	cm := consoleMirror{
+		inner:       disconnectedChat{},
+		env:         testConf.Environment,
+		channel:     testConf.ChannelName,
+		botUsername: testConf.BotUsername,
+	}
+	cm.Say("hello chat")
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	p := rec.Publishes[0]
+	if want := "tripbot." + testConf.Environment + ".chat.message"; p.Subject != want {
+		t.Errorf("subject = %q, want %q", p.Subject, want)
+	}
+	var ev eventbus.ChatMessage
+	if err := json.Unmarshal(p.Payload, &ev); err != nil {
+		t.Fatalf("bad payload: %v", err)
+	}
+	if ev.Username != testConf.BotUsername {
+		t.Errorf("username = %q, want bot %q", ev.Username, testConf.BotUsername)
+	}
+	if ev.Text != "hello chat" {
+		t.Errorf("text = %q, want hello chat", ev.Text)
+	}
+	if ev.Reply != nil {
+		t.Errorf("reply = %+v on a plain Say, want none", ev.Reply)
+	}
+
+	// A threaded reply carries the parent id, and only that: the bot never
+	// saw the parent's text at send time.
+	cm.Reply("m1", "you asked")
+	if len(rec.Publishes) != 2 {
+		t.Fatalf("expected 2 publishes, got %d", len(rec.Publishes))
+	}
+	if err := json.Unmarshal(rec.Publishes[1].Payload, &ev); err != nil {
+		t.Fatalf("bad payload: %v", err)
+	}
+	if ev.Reply == nil || ev.Reply.ParentMessageID != "m1" || ev.Reply.ParentText != "" {
+		t.Errorf("reply = %+v, want parent m1 and nothing else", ev.Reply)
+	}
+}

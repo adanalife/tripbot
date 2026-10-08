@@ -2,34 +2,101 @@ package chatbot
 
 import (
 	"context"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
 // Video is the subset of the pkg/video surface that chatbot commands depend
-// on. Tests inject a fake; production uses the package-backed realVideo
-// adapter wired in defaultApp. Mirrors the Onscreens/VLC injection pattern.
+// on. Tests inject a fake; production uses the realVideo adapter, which
+// cmd/tripbot builds around the process-wide *video.Player via NewVideoAdapter.
+// Mirrors the Onscreens/Playout injection pattern.
 type Video interface {
 	// Current returns the video the system believes is currently playing,
-	// without making any I/O calls. Reads pkg/video's package-level state.
+	// without making any I/O calls.
 	Current() video.Video
-	// GetCurrentlyPlaying refreshes pkg/video's notion of what's currently
-	// playing (an HTTP call to vlc-server in production), updates the
-	// package-level state, and returns the resulting Video.
+	// GetCurrentlyPlaying refreshes the Player's notion of what's currently
+	// playing (an HTTP call to playout in production) and returns it.
 	GetCurrentlyPlaying(ctx context.Context) video.Video
-	// FindRandomByState returns a random video filmed in the given US state.
-	// Returns *terrors.NoFootageForStateError when no rows match.
+	// CurrentProgress reports how long the current clip has been playing.
+	CurrentProgress() time.Duration
+	// PlayheadLocation returns the clip on screen and the moment showing —
+	// where the van was, and the place the pipeline resolved for it. ok is
+	// false when that clip has no per-moment track worth believing, and the
+	// caller falls back to the clip's single fix.
+	PlayheadLocation(ctx context.Context) (vid video.Video, at video.Moment, ok bool)
+	// PlayheadVelocity reports which way and how fast the van is travelling at
+	// the playhead. v.Moving is false when the van is sitting still, so the
+	// caller says so instead of naming a direction; ok is false when the clip
+	// has no track to measure along.
+	PlayheadVelocity(ctx context.Context) (v video.Velocity, ok bool)
+	// FindRandomByState returns a random video filmed in the given US state,
+	// from the corpus on screen. Returns terrors.ErrNoFootageForState when no
+	// rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
+	// FindNextDaytime returns the next daytime clip filmed on a later day than
+	// `after` — the "skip to the next morning" target behind !daytime. Returns
+	// terrors.ErrNoDaytimeFound when there's no later daytime clip ahead.
+	FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error)
 }
 
-// realVideo delegates to pkg/video.
-type realVideo struct{}
+// realVideo delegates to its *video.Player (Current / GetCurrentlyPlaying /
+// CurrentProgress) and to pkg/video's standalone DB helper (FindRandomByState,
+// which is not Player state). cmd/tripbot installs the process-wide Player via
+// NewVideoAdapter so commands read the same playback state the cron tick
+// refreshes. player is nil in New()'s default adapter until cmd assigns
+// App.Video, so the nil guards below cover that brief startup window. Tests
+// inject their own Video fake rather than realVideo, so the guards only ever
+// fire pre-install.
+type realVideo struct{ player *video.Player }
 
-func (realVideo) Current() video.Video { return video.CurrentlyPlaying() }
-func (realVideo) GetCurrentlyPlaying(ctx context.Context) video.Video {
-	video.GetCurrentlyPlaying(ctx)
-	return video.CurrentlyPlaying()
+// NewVideoAdapter builds the production Video adapter around p. cmd/tripbot
+// assigns the result onto App.Video once the Player is constructed.
+func NewVideoAdapter(p *video.Player) Video { return realVideo{player: p} }
+
+func (r realVideo) Current() video.Video {
+	if r.player == nil {
+		return video.Video{}
+	}
+	return r.player.Current()
 }
-func (realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
-	return video.FindRandomByState(ctx, state)
+
+func (r realVideo) GetCurrentlyPlaying(ctx context.Context) video.Video {
+	if r.player == nil {
+		return video.Video{}
+	}
+	r.player.GetCurrentlyPlaying(ctx)
+	return r.player.Current()
+}
+
+func (r realVideo) CurrentProgress() time.Duration {
+	if r.player == nil {
+		return 0
+	}
+	return r.player.CurrentProgress()
+}
+
+func (r realVideo) PlayheadLocation(ctx context.Context) (video.Video, video.Moment, bool) {
+	if r.player == nil {
+		return video.Video{}, video.Moment{}, false
+	}
+	vid, elapsed := r.player.Playhead(ctx)
+	at, ok := video.CoordAt(ctx, vid, elapsed)
+	return vid, at, ok
+}
+
+func (r realVideo) PlayheadVelocity(ctx context.Context) (video.Velocity, bool) {
+	if r.player == nil {
+		return video.Velocity{}, false
+	}
+	vid, elapsed := r.player.Playhead(ctx)
+	return video.VelocityAt(ctx, vid, elapsed)
+}
+
+func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
+	return video.FindRandomByState(ctx, state, r.player.Current())
+}
+
+func (r realVideo) FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error) {
+	return video.FindNextDaytime(ctx, after)
 }

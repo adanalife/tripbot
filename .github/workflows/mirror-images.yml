@@ -1,0 +1,84 @@
+# Refreshes the GHCR mirrors of the third-party Docker Hub base images our
+# Dockerfiles build FROM. The mirrors exist so CI never pulls from Docker Hub
+# at build time — Hub's pull rate limit repeatedly broke builds (manifest
+# resolution counts against the quota even on full layer-cache hits, so GHA
+# caching can't prevent it). The Dockerfiles reference
+# ghcr.io/adanalife/mirror/<image>:<tag>; this weekly copy keeps those mutable
+# tags tracking upstream (security patches, point releases).
+#
+# Adding a new base image: push the first copy (the crane command below, from
+# any authed machine), make the package public in the org packages UI, grant
+# this repo write access under the package's "Manage Actions access", and add
+# the pair to the list here + use the mirror ref in the Dockerfile.
+name: mirror-images
+
+on:
+  schedule:
+    - cron: "17 9 * * 1" # weekly, Monday morning UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # crane copies the full multi-arch manifest list registry-to-registry
+      # (the release workflow's arm64 legs pull these mirrors too). crane
+      # rather than `docker buildx imagetools create`: the latter 400s on
+      # ghcr blob uploads for large layers (hit on golang:1.26-bookworm).
+      # The weekly Hub pulls here are a handful of requests — far under any
+      # limit. crane reads the docker-config auth the login step wrote.
+      # The action downloads the release binary rather than compiling crane
+      # from source on every run.
+      - uses: imjasonh/setup-crane@v0.7
+        with:
+          version: v0.21.7
+      - name: Copy images Hub -> GHCR
+        run: |
+          set -euo pipefail
+          while read -r src dst; do
+            echo "::group::${src} -> ${dst}"
+            crane copy "${src}" "${dst}"
+            echo "::endgroup::"
+          done <<'EOF'
+          docker.io/golang:1.26-bookworm ghcr.io/adanalife/mirror/golang:1.26-bookworm
+          docker.io/ubuntu:24.04 ghcr.io/adanalife/mirror/ubuntu:24.04
+          docker.io/migrate/migrate:4 ghcr.io/adanalife/mirror/migrate:4
+          docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
+          docker.io/python:3.13-slim-bookworm ghcr.io/adanalife/mirror/python:3.13-slim-bookworm
+          EOF
+
+  # A weekly cron nobody watches: this refresh failed silently for eleven
+  # straight weeks on one image, so every build FROM it kept an unpatched base.
+  # The mirrors exist to keep base images current, which is only true if a
+  # failure to refresh them is visible.
+  #
+  # Best-effort, like the release announcement -- a failure to report a
+  # failure should not become a second failure.
+  alert:
+    needs: [mirror]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Alert Discord on failure
+        continue-on-error: true
+        uses: Ilshidur/action-discord@0.4.0
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_ALERTS }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          # Points at the log rather than naming the image: the failing copy
+          # varies, and a package that lost its write grant reads the same as
+          # an upstream tag that moved.
+          args: 'Base-image mirror refresh failed for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [run log]({{ RUN_URL }})'

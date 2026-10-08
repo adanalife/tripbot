@@ -1,7 +1,7 @@
 // Package telemetry initializes OpenTelemetry providers (traces, metrics,
-// logs) for tripbot's binaries. Backend is OTLP/HTTP — typically Grafana
-// Cloud. Configuration comes from standard OTEL_* env vars; see
-// vault/decisions for the surrounding design.
+// logs) for tripbot's binaries. Backend is OTLP/HTTP — in-cluster, an Alloy
+// collector that fans out to VictoriaMetrics and Grafana Cloud.
+// Configuration comes from standard OTEL_* env vars.
 //
 // Setting OTEL_SDK_DISABLED=true (or leaving OTEL_EXPORTER_OTLP_ENDPOINT
 // unset) makes Init skip the OTLP exporters and only wire up a Prometheus
@@ -84,11 +84,13 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	if err != nil {
 		return noopShutdown, fmt.Errorf("prometheus exporter: %w", err)
 	}
-	mp := sdkmetric.NewMeterProvider(
+	mpOpts := []sdkmetric.Option{
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp)),
 		sdkmetric.WithReader(promExp),
 		sdkmetric.WithResource(res),
-	)
+	}
+	mpOpts = append(mpOpts, dropBodySizeHistograms()...)
+	mp := sdkmetric.NewMeterProvider(mpOpts...)
 	otel.SetMeterProvider(mp)
 
 	if err := otelruntime.Start(otelruntime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
@@ -142,6 +144,26 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	}, nil
 }
 
+// dropBodySizeHistograms returns MeterProvider options that drop the
+// http_server_{request,response}_body_size_bytes histograms via OTel SDK
+// views. These auto-instrumented histograms account for ~700 active series
+// with no panels reading them, and dropping them in the SDK is cheaper than
+// relabeling downstream. The
+// http_server_request_duration_seconds histogram is deliberately left
+// untouched — its buckets back the p50/p95/p99 latency panels.
+func dropBodySizeHistograms() []sdkmetric.Option {
+	drop := func(name string) sdkmetric.Option {
+		return sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: name},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		))
+	}
+	return []sdkmetric.Option{
+		drop("http.server.request.body.size"),
+		drop("http.server.response.body.size"),
+	}
+}
+
 func disabled() bool {
 	switch strings.ToLower(os.Getenv("OTEL_SDK_DISABLED")) {
 	case "true", "1", "yes":
@@ -153,14 +175,52 @@ func disabled() bool {
 func newResource(ctx context.Context, name, version string) (*resource.Resource, error) {
 	return resource.New(ctx,
 		resource.WithFromEnv(),
-		resource.WithProcess(),
+		// Granular process detectors instead of resource.WithProcess(): the
+		// bundled WithProcessOwner detector calls os/user.Current(), which
+		// fails with "user: Current requires cgo or $USER set in environment"
+		// in our static CGO_ENABLED=0 binaries running as a uid with no
+		// /etc/passwd entry — that error silently disables the whole SDK.
+		// Enumerate every process detector WithProcess() bundles *except*
+		// the owner one, so process.* attributes are still emitted without
+		// requiring a $USER workaround.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessExecutablePath(),
+		resource.WithProcessCommandArgs(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+		resource.WithProcessRuntimeDescription(),
 		resource.WithHost(),
 		resource.WithTelemetrySDK(),
 		resource.WithAttributes(
 			semconv.ServiceName(name),
 			semconv.ServiceVersion(version),
+			// service.instance.id becomes the `instance` label on every pushed
+			// series, which is what keeps the per-platform instances apart. A
+			// metric recorded without a platform attribute is otherwise
+			// byte-identical across all of them — every instance writes one
+			// shared series, and its value is whichever pod pushed last.
+			// tripbot_gateway_up shows the shape: one series in the backend
+			// taking five pods' samples, so "the gateway is unreachable" can't
+			// be traced to which instance saw that. platformAttr fixes it one
+			// metric at a time (see pkg/instrumentation); this fixes the
+			// identity itself, including for metrics nobody remembered to label.
+			semconv.ServiceInstanceID(instanceID()),
 		),
 	)
+}
+
+// instanceID identifies the process behind a series. HOSTNAME is the pod name
+// under Kubernetes; the os.Hostname fallback covers a local run.
+func instanceID() string {
+	if h := os.Getenv("HOSTNAME"); h != "" {
+		return h
+	}
+	h, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return h
 }
 
 func initPromOnlyMeter(ctx context.Context, name, version string) error {

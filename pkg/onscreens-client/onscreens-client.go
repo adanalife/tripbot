@@ -2,152 +2,140 @@ package onscreensClient
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
+	"encoding/json"
 	"log/slog"
-	"net/http"
-	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/adanalife/tripbot/pkg/users"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"github.com/adanalife/tripbot/pkg/natsclient"
+	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Client talks to the onscreens-server HTTP API. Construct via New(host).
+// Client publishes onscreens overlay commands onto NATS. Construct via
+// New(nats, env, platform).
+//
+// NATS is the sole command transport: onscreens-server subscribes to these
+// subjects and drives the overlays. The HTTP command path (the mirror that
+// preceded the peel) is gone. nats may still be nil in tests that don't
+// exercise pubsub — publishes no-op then.
+//
+// platform is the streaming platform this tripbot instance serves ("twitch" /
+// "youtube"); it's the trailing leaf on every subject so only the matching
+// onscreens-<platform> server receives these overlays — a Twitch-triggered
+// leaderboard never renders on the YouTube stream.
 type Client struct {
-	serverURL  string
-	httpClient *http.Client
+	nats     natsclient.Publisher
+	env      string
+	platform string
 }
 
-// New returns a Client pointed at the given onscreens-server host. The HTTP
-// transport is OTel-instrumented so outbound calls produce spans and
-// propagate W3C tracecontext headers.
-func New(host string) *Client {
-	return &Client{
-		serverURL:  "http://" + host,
-		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+// New returns a Client that publishes commands for the given environment and
+// streaming platform. Pass natsclient.DefaultPublisher() in production, or a
+// nil publisher to disable publishing (tests).
+func New(nats natsclient.Publisher, env, platform string) *Client {
+	return &Client{nats: nats, env: env, platform: platform}
+}
+
+// publish marshals ev and fires it on subject. Fire-and-forget: marshal
+// errors are logged, and a nil publisher (or a nil underlying conn) no-ops.
+func (c *Client) publish(ctx context.Context, subject string, ev any) {
+	if c.nats == nil {
+		return
 	}
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		slog.ErrorContext(ctx, "marshal onscreens event", "err", err, "subject", subject)
+		return
+	}
+	c.nats.Publish(ctx, subject, payload)
 }
 
 func (c *Client) HideMiddleText(ctx context.Context) error {
-	_, err := c.get(ctx, c.serverURL+"/onscreens/middle/hide")
-	if err != nil {
-		slog.ErrorContext(ctx, "error hiding middle onscreen", "err", err)
-		return err
-	}
+	c.publish(ctx, oe.MiddleHideSubject(c.env, c.platform), oe.Command{Envelope: oe.NewEnvelope()})
 	return nil
 }
 
 func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
-	url := c.serverURL + "/onscreens/middle/show"
-	url = fmt.Sprintf("%s?msg=%s", url, helpers.Base64Encode(msg))
-	_, err := c.get(ctx, url)
-	if err != nil {
-		slog.ErrorContext(ctx, "error showing middle onscreen", "err", err)
-		return err
-	}
-	return err
+	c.publish(ctx, oe.MiddleShowSubject(c.env, c.platform), oe.MiddleShow{
+		Envelope: oe.NewEnvelope(),
+		Msg:      msg,
+	})
+	return nil
 }
 
 func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
-	content := users.LeaderboardContent(title, leaderboard)
-
-	url := c.serverURL + "/onscreens/leaderboard/show"
-	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
-
-	_, err := c.get(ctx, url)
-	if err != nil {
-		slog.ErrorContext(ctx, "error showing leaderboard onscreen", "err", err)
-		return err
-	}
+	// onscreens-server renders the HTML from the structured {title, rows}
+	// payload it receives on this subject.
+	c.publish(ctx, oe.LeaderboardShowSubject(c.env, c.platform), oe.LeaderboardShow{
+		Envelope: oe.NewEnvelope(),
+		Title:    title,
+		Rows:     leaderboard,
+	})
 	return nil
 }
 
-//TODO: this is taken right from the !guessleaderboard command, DRY it?
-func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
-	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	var intLeaderboard [][]string
-	for _, leaderPair := range leaderboard {
-		// guesses are ints not floats, so remove the decimal place
-		intVersion := strings.Split(leaderPair[1], ".")[0]
-		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
-	}
-
-	// display leaderboard on screen
-	c.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
-}
-
-func (c *Client) ShowTimewarp(ctx context.Context) error {
-	_, err := c.get(ctx, c.serverURL+"/onscreens/timewarp/show")
-	if err != nil {
-		slog.ErrorContext(ctx, "error showing timewarp onscreen", "err", err)
-		return err
-	}
+func (c *Client) ShowTimewarp(ctx context.Context, username string, noBackground bool) error {
+	c.publish(ctx, oe.TimewarpShowSubject(c.env, c.platform), oe.TimewarpShow{
+		Envelope:     oe.NewEnvelope(),
+		Username:     username,
+		NoBackground: noBackground,
+	})
 	return nil
 }
 
-func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
-	//TODO: bring this back
-	// url := c.serverURL + "/onscreens/flag/show"
-	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	// _, err := c.get(ctx, url)
-	// if err != nil {
-	// 	slog.ErrorContext(ctx, "error showing flag onscreen", "err", err)
-	// 	return err
-	// }
+// UpdateLocation publishes what's known about the currently-playing clip —
+// location, state, date, conditions, sunset — for the rotators to resolve their
+// $variables from (see oe.LocationData). The envelope is stamped here so callers
+// only supply the data. Fire-and-forget; tripbot republishes on a timer.
+func (c *Client) UpdateLocation(ctx context.Context, data oe.LocationData) error {
+	data.Envelope = oe.NewEnvelope()
+	c.publish(ctx, oe.LocationUpdateSubject(c.env, c.platform), data)
 	return nil
+}
+
+// PublishRotatorConfig pushes edited corner-rotator copy to a platform's
+// onscreens-server, which swaps it into its live pools.
+//
+// The platform is a parameter here rather than the client's own, unlike every
+// command above. The admin console edits all platforms' copy through whichever
+// single tripbot instance it's pointed at, and the subject's platform leaf is
+// what routes each document to the right onscreens-server — so tripbot-twitch
+// legitimately publishes YouTube's copy. Every instance in an env shares the
+// same NATS.
+//
+// EnsureRotatorConfigStream must have run first, or the publish is captured by
+// no stream and won't survive an onscreens-server restart.
+func (c *Client) PublishRotatorConfig(ctx context.Context, platform string, cfg rot.Config) error {
+	c.publish(ctx, oe.RotatorConfigSubject(c.env, platform), oe.RotatorConfig{
+		Envelope:    oe.NewEnvelope(),
+		Left:        cfg.Left,
+		Right:       cfg.Right,
+		RareMessage: cfg.RareMessage,
+	})
+	return nil
+}
+
+// EnsureRotatorConfigStream declares the last-value stream that retains the most
+// recent rotator copy per platform. Idempotent, and a no-op without JetStream;
+// onscreens-server ensures the same stream at boot, since whichever side starts
+// first has to declare it (a core publish to an uncovered subject is dropped).
+func EnsureRotatorConfigStream(ctx context.Context, js jetstream.JetStream, env string) error {
+	return natsclient.EnsureLastValueStream(ctx, js,
+		oe.RotatorConfigStreamName,
+		"Last admin-console rotator copy per platform, for restore-on-restart.",
+		[]string{oe.RotatorConfigWildcard(env)})
 }
 
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
-	url := c.serverURL + "/onscreens/gps/show"
-	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	_, err := c.get(ctx, url)
-	if err != nil {
-		slog.ErrorContext(ctx, "error showing gps onscreen", "err", err)
-		return err
-	}
+	// dur isn't transported: the GPS overlay has no auto-expiry, so it stays up
+	// until HideGPSImage. The parameter is kept for symmetry with the other
+	// timed overlays.
+	c.publish(ctx, oe.GPSShowSubject(c.env, c.platform), oe.Command{Envelope: oe.NewEnvelope()})
 	return nil
 }
 
 func (c *Client) HideGPSImage(ctx context.Context) error {
-	_, err := c.get(ctx, c.serverURL+"/onscreens/gps/hide")
-	if err != nil {
-		slog.ErrorContext(ctx, "error hiding gps onscreen", "err", err)
-		return err
-	}
+	c.publish(ctx, oe.GPSHideSubject(c.env, c.platform), oe.Command{Envelope: oe.NewEnvelope()})
 	return nil
-}
-
-//TODO: move this to a common location
-func (c *Client) get(ctx context.Context, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		slog.ErrorContext(ctx, "error building request to onscreens server", "err", err)
-		return "", err
-	}
-	response, err := c.httpClient.Do(req)
-	if err != nil {
-		slog.ErrorContext(ctx, "error connecting to onscreens server", "err", err)
-		return "", err
-	}
-	defer response.Body.Close()
-	contents, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		slog.ErrorContext(ctx, "error reading response from onscreens server", "err", err)
-		return "", err
-	}
-	// make note of non-200 status codes
-	if response.StatusCode != 200 {
-		slog.ErrorContext(ctx, "non-200 response from server", "status", response.StatusCode)
-	}
-	return string(contents), nil
 }

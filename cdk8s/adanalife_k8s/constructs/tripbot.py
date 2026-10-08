@@ -1,0 +1,701 @@
+"""Tripbot — the chatbot Deployment + Service + its ExternalSecrets,
+plus the one-shot bootstrap/seed Jobs as module-level emitters.
+
+Reproduces k8s/apps/tripbot/base + overlays:
+
+  * Deployment: a `migrate` initContainer (migrate-to-head before boot) + the
+    `tripbot` container, both PodSecurity-restricted (runAsNonRoot 65532,
+    seccomp RuntimeDefault, drop-ALL). The image declares no USER — the uid
+    comes entirely from this pod spec.
+  * envFrom order is load-bearing — config first, then DB creds, then the
+    shared OTLP/Sentry Secrets, then twitch/maps (required) and the two
+    optional discord Secrets. On the laptop the DB Secret is the on-disk
+    `tripbot-secret`; on eso envs it's the ESO `tripbot-database-creds`.
+  * Service (ClusterIP :8080) only — no Ingress. The *bot* is outbound-only
+    (EventSub via WebSocket), and its HTTP surface (the /api/* endpoints, plus
+    /health, /metrics and /version) is in-namespace: the console reaches it at
+    http://tripbot-<platform>:8080. Several /api/* routes are unauthenticated
+    writes that change what is on the live stream, so publishing them is not a
+    convenience to restore casually.
+The construct envFroms its DB + app Secrets by name but does NOT emit them —
+they're identity-level (one bot, one DB, shared by every platform stack), so
+`emit_identity_secrets` emits them once into the per-env supporting unit
+(SupportingChart): database (ESO target.template remap, or the on-disk
+`tripbot-secret` on the laptop), twitch + google-maps (extract), discord-alerts
++ discord-bot-token (bare remoteRef). The one exception is the youtube
+instance's `tripbot-youtube-creds` (YouTube OAuth client) — per-platform, not
+identity-level, so the construct emits that ExternalSecret itself.
+
+The `tripbot-config` ConfigMap keeps its STABLE name (not the kustomize hash)
+so the one-shot Jobs below can `envFrom` it; the pod template still rolls on
+config change via the `adanalife.dev/config-hash` annotation (configmap.py).
+The Jobs are NOT auto-emitted by the construct — they're module-level functions
+the deploy tasks call on demand, so a routine `apply` never runs a one-shot.
+"""
+
+from __future__ import annotations
+
+import cdk8s
+from constructs import Construct
+
+import imports.k8s as k8s
+from adanalife_k8s import appconfig, configmap, eso, scheduling
+from adanalife_k8s.config import EnvConfig
+from adanalife_k8s.contract import load_contract
+from adanalife_k8s.constructs.image_gate import emit_image_gate
+from adanalife_k8s.eso import ESData
+from adanalife_k8s.naming import app_name, meta_labels, selector
+
+IMAGE = "adanalife/tripbot"
+DB_SECRET_NAME = "tripbot-database-creds"  # ESO-materialized DB creds (eso envs)
+LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
+# Identity label for the shared (non-per-platform) Secrets — they belong to the
+# bot identity, not any one platform stack.
+NAME_IDENTITY = "tripbot"
+
+# The album library index and where it's mounted. tripbot lists the library to
+# shuffle and advance tracks but never opens a track, so it mounts the index
+# rather than the claim: a ConfigMap volume can be optional, a PVC volume can
+# not, and an unbound claim would hold every tripbot Deployment unschedulable
+# over a bed nobody is listening to. The obs repo mounts the claim itself at
+# MUSIC_MOUNT_PATH, which is the path the index's entries name — so the two
+# repos and pkg/obs/beds must agree on it exactly. bin/stage-streambeats builds
+# the ConfigMap as its last step.
+MUSIC_INDEX_CONFIGMAP = "obs-music-index"
+MUSIC_INDEX_MOUNT_PATH = "/opt/tripbot/assets/music-index"
+MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
+
+# Small but explicit requests for the helper containers (migrate init, one-shot
+# Job containers). Namespaces under a ResourceQuota that enforces requests.*
+# (stage-1's app-quota) reject any pod whose containers omit requests for the
+# quota'd resources — so every container must declare them. The memory limit
+# satisfies the cluster's require-requests-limits policy; it sits at 4x the
+# request because an OOMKilled migrate blocks the rollout it gates, and the
+# helpers are too short-lived for cAdvisor to record a peak to size from. No
+# cpu limit, deliberately.
+SMALL_RESOURCES = k8s.ResourceRequirements(
+    requests={
+        "cpu": k8s.Quantity.from_string("100m"),
+        "memory": k8s.Quantity.from_string("128Mi"),
+    },
+    limits={"memory": k8s.Quantity.from_string("512Mi")},
+)
+
+# The contract's ports, so a rename in pkg/contract reaches the manifests
+# rather than drifting against a literal spelled here.
+_PORTS = load_contract()
+
+# Constant base ConfigMap literals (base kustomization configMapGenerator). The
+# sibling-service hosts (PLAYOUT_HOST, ONSCREENS/OBS_SERVER_HOST) are per-platform, so
+# they're assembled in config_data() from app_name rather than held as literals.
+_BASE_CONFIG = {
+    "READ_ONLY": "false",
+    "DATABASE_HOST": "postgres",
+    "TRIPBOT_SERVER_PORT": str(_PORTS.port("tripbot_http")),
+}
+
+
+def config_map_name(platform: str) -> str:
+    """The per-platform tripbot ConfigMap name (stable, non-hashed) — the
+    bootstrap/seed Jobs envFrom it by name. e.g. tripbot-twitch-config."""
+    return f"{app_name('tripbot', platform)}-config"
+
+
+# Placeholder DB creds for the laptop `local` env. DB-only — everything else comes from ESO even locally.
+_LOCAL_SECRET = {
+    "DATABASE_USER": "tripbot_docker",
+    "DATABASE_PASS": "hunter2",
+    "DATABASE_DB": "tripbot_docker",
+}
+
+# Per-env tripbot identity + config values the overlays vary. Channel identity:
+# prod is the real adanalife_ channel on tripbot4000. ALL non-prod envs
+# (dev + stage + local) use tripbot4001 in adanalife_staging — reserving
+# tripbot4000 for prod. They share tripbot4001 (all on the tripbot-development
+# Twitch app), so any two can't be live at once and a re-auth rotates the shared
+# token; that clobbering is accepted as low-stakes off-prod. NATS_URL/
+# DISCORD_GUILD_ID/ONSCREENS override are per-env extras layered on the base.
+_ENV_CONFIG: dict[str, dict[str, str]] = {
+    "prod-1": {
+        "CHANNEL_NAME": "adanalife_",
+        "BOT_USERNAME": "tripbot4000",
+        "GOOGLE_APPS_PROJECT_ID": "tripbot-prod",
+        # Comped as a subscriber for sub-only commands (e.g. !find) without
+        # an actual sub. Comma-separated for more than one.
+        "COMPED_SUBSCRIBERS": "reapermoss,ferretmunchers",
+    },
+    "stage-1": {
+        "CHANNEL_NAME": "adanalife_staging",
+        # tripbot4001 (the non-prod test bot), not the prod tripbot4000.
+        "BOT_USERNAME": "tripbot4001",
+        "GOOGLE_APPS_PROJECT_ID": "tripbot-stage",
+        # ADanaLife guild snowflake — stage's discord bot is gated to it.
+        "DISCORD_GUILD_ID": "607964164220125258",
+    },
+    "development": {
+        "CHANNEL_NAME": "adanalife_staging",
+        # tripbot4001 (shared with stage), not the prod tripbot4000.
+        "BOT_USERNAME": "tripbot4001",
+        "GOOGLE_APPS_PROJECT_ID": "tripbot-stage",
+    },
+    "local": {
+        "CHANNEL_NAME": "adanalife_staging",
+        # tripbot4001 (the non-prod test bot), not the prod tripbot4000.
+        "BOT_USERNAME": "tripbot4001",
+        "GOOGLE_APPS_PROJECT_ID": "tripbot-stage",
+    },
+}
+
+
+def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
+    """The assembled tripbot-config data for an env+platform: base literals + the
+    per-platform sibling-service hosts (this platform's playout/onscreens/obs) +
+    telemetry + the per-env identity/extra block. Shared with the Jobs so a Job
+    applied on its own carries the same config the Deployment runs with. NATS_URL
+    is only present where the env defines one (absent on local)."""
+    data = dict(_BASE_CONFIG)
+    # bare "postgres" when co-located (parity); cross-namespace FQDN when the DB
+    # is isolated in its own namespace (env.data_namespace).
+    data["DATABASE_HOST"] = env.postgres_host
+    data["PLAYOUT_HOST"] = (
+        f"{app_name('playout', platform)}:{_PORTS.port('playout_http')}"
+    )
+    data["ONSCREENS_SERVER_HOST"] = (
+        f"{app_name('onscreens', platform)}:{_PORTS.port('onscreens_http')}"
+    )
+    data["OBS_SERVER_HOST"] = f"{app_name('obs', platform)}:{_PORTS.port('obs_server')}"
+    # OBS WebSocket control addr — distinct from OBS_SERVER_HOST's Flask health
+    # server. Read directly by tripbot's pkg/obs (watchdog + stream start/stop);
+    # must be per-platform so the YouTube stack dials obs-youtube, not
+    # obs-twitch.
+    data["OBS_WEBSOCKET_ADDR"] = (
+        f"{app_name('obs', platform)}:{_PORTS.port('obs_websocket')}"
+    )
+    # tripbot's Run() branches on STREAM_PLATFORM (chat transport, command
+    # allowlist, Twitch-only boot steps). twitch is the binary's default, so —
+    # same idiom as the OBS chart — only non-twitch instances carry the key,
+    # keeping the long-running twitch ConfigMaps (and their config-hash
+    # rollouts) untouched.
+    if platform != "twitch":
+        data["STREAM_PLATFORM"] = platform
+    data.update(appconfig.telemetry_config(env, platform))
+    data.update(_ENV_CONFIG[env.name])
+    if env.nats_url:
+        data["NATS_URL"] = env.nats_url
+    # Route the twitch instance's chat (both directions) and its command-time
+    # Helix calls through the platform-gateway gateway-twitch where the env
+    # wires it — required for chat to come up at all (the binary boots
+    # chat-less without it). Only the twitch platform talks Helix, so the
+    # youtube instance never carries it.
+    if platform == "twitch" and env.twitch_api_url:
+        data["TWITCH_API_URL"] = env.twitch_api_url
+    # Route the youtube instance's outbound chat sends through gateway-youtube
+    # where the env opts in. Only the youtube platform sends YouTube chat, so the
+    # twitch instance never carries it. Routed unconditionally when wired (no flag).
+    if platform == "youtube" and env.youtube_api_url:
+        data["YOUTUBE_API_URL"] = env.youtube_api_url
+    # The gateway-transport platforms reach both chat directions through
+    # their per-platform gateway instance where the env wires it — required
+    # for chat to come up at all (the binary boots chat-less without it).
+    gateway_api_urls = {
+        "facebook": env.facebook_api_url,
+        "instagram": env.instagram_api_url,
+        "tiktok": env.tiktok_api_url,
+    }
+    if gateway_api_urls.get(platform):
+        data[f"{platform.upper()}_API_URL"] = gateway_api_urls[platform]
+    # Bot-less YouTube: gate off the inbound chat poll. Only stamped when
+    # disabled (the binary defaults to enabled) so a live, inbound-enabled
+    # youtube instance keeps a minimal ConfigMap and no needless config-hash
+    # rollout. The chatbot also swaps to promo help copy when this is false.
+    if platform == "youtube" and not env.youtube_inbound_enabled:
+        data["YOUTUBE_INBOUND_ENABLED"] = "false"
+    return data
+
+
+class Tripbot(Construct):
+    def __init__(self, scope: Construct, platform: str, *, env: EnvConfig):
+        name = app_name("tripbot", platform)  # tripbot-twitch / tripbot-youtube
+        super().__init__(scope, name)
+        ns = env.namespace or None
+        labels = meta_labels(name)
+        sel = selector(name)
+        image = f"{IMAGE}:{env.tag_for('tripbot')}"
+        pull = env.pull_policy_for("tripbot")
+        cm_name = config_map_name(platform)
+        local = env.secret_source == "local"
+        db_secret = LOCAL_DB_SECRET if local else DB_SECRET_NAME
+
+        # --- ConfigMap (per-platform stable name + content-hash annotation) ---
+        data = config_data(env, platform)
+        cfg_hash = configmap.config_map(
+            self, "config", name=cm_name, namespace=ns, labels=labels, data=data
+        )
+
+        # tripbot's DB + app Secrets are identity-level (one bot, one DB — shared by
+        # every platform stack in the namespace), so they're emitted ONCE in the
+        # per-env supporting unit (emit_identity_secrets), not here. The component
+        # just envFroms them by name below.
+
+        # --- envFrom: config, DB creds, shared Sentry, then app Secrets ---
+        # Order is load-bearing: later entries win on key collision.
+        # The discord Secrets are optional so the bot boots without them, and so
+        # is Sentry outside prod (env.sentry_required) — observability gates
+        # itself off when the env vars are absent, and the pod isn't hostage to
+        # ExternalSecret sync order. Boot-required Secrets (DB creds, and twitch
+        # on a twitch instance) stay required: a missing one fails loud.
+        env_from = [
+            k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
+            k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
+            k8s.EnvFromSource(
+                secret_ref=k8s.SecretEnvSource(
+                    name="sentry-tripbot", optional=not env.sentry_required
+                )
+            ),
+        ]
+
+        # The Twitch app credentials are read only by a twitch instance, which
+        # sends the client ID in its EventSub handshake; every other platform
+        # reaches its chat through a platform-gateway that owns its own credential. The
+        # ExternalSecret stays identity-level (one Twitch dev app for the bot,
+        # like google-maps) — it's the *mount* that's per-platform.
+        if platform == "twitch":
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-twitch-creds")
+                )
+            )
+
+        if env.maps:
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-google-maps-api-key")
+                )
+            )
+
+        env_from += [
+            k8s.EnvFromSource(
+                secret_ref=k8s.SecretEnvSource(
+                    name="tripbot-discord-alerts-webhook", optional=True
+                )
+            ),
+            k8s.EnvFromSource(
+                secret_ref=k8s.SecretEnvSource(
+                    name="tripbot-discord-bot-token", optional=True
+                )
+            ),
+        ]
+
+        # YouTube OAuth client creds are per-platform (only the youtube instance
+        # reads them), so unlike the identity-level Secrets above the
+        # ExternalSecret is emitted HERE, with the instance — the whole footprint
+        # appears/disappears with the platform's entry in env.platforms. The SM
+        # JSON holds YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET (+ optionally
+        # YOUTUBE_CHANNEL_ID, the prod identity pin); extract mode materializes
+        # whichever keys exist.
+        if platform == "youtube":
+            eso.external_secret(
+                self,
+                "youtube-creds-external-secret",
+                name="tripbot-youtube-creds",
+                namespace=ns,
+                labels=labels,
+                creation_policy="Owner",
+                extract="/k8s/tripbot/youtube-creds",
+            )
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-youtube-creds")
+                )
+            )
+
+        hardened = k8s.SecurityContext(
+            allow_privilege_escalation=False,
+            capabilities=k8s.Capabilities(drop=["ALL"]),
+        )
+
+        # migrate initContainer: `migrate up` to head before tripbot starts.
+        # Idempotent (a no-op when already at head); on a fresh cluster it
+        # populates the schema before the main container's LoadFromDB runs.
+        migrate = k8s.Container(
+            name="migrate",
+            image=image,
+            image_pull_policy=pull,
+            security_context=hardened,
+            command=["migrate"],
+            args=[
+                "-path",
+                "/migrations",
+                "-database",
+                "postgres://$(DATABASE_USER):$(DATABASE_PASS)@$(DATABASE_HOST):5432/$(DATABASE_DB)?sslmode=disable",
+                "up",
+            ],
+            env_from=[
+                k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
+                k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
+            ],
+            resources=SMALL_RESOURCES,
+        )
+
+        container = k8s.Container(
+            name=name,
+            image=image,
+            image_pull_policy=pull,
+            security_context=hardened,
+            ports=[
+                k8s.ContainerPort(
+                    name="http", container_port=_PORTS.port("tripbot_http")
+                )
+            ],
+            # USER must be set so OTel's process resource detector (user.Current)
+            # doesn't crash telemetry init on a no-/etc/passwd uid-65532 binary.
+            env=[k8s.EnvVar(name="USER", value="tripbot")],
+            env_from=env_from,
+            liveness_probe=k8s.Probe(
+                http_get=k8s.HttpGetAction(
+                    path="/health/live", port=k8s.IntOrString.from_string("http")
+                ),
+                initial_delay_seconds=15,
+                period_seconds=30,
+                timeout_seconds=5,
+            ),
+            readiness_probe=k8s.Probe(
+                http_get=k8s.HttpGetAction(
+                    path="/health/ready", port=k8s.IntOrString.from_string("http")
+                ),
+                initial_delay_seconds=5,
+                period_seconds=10,
+            ),
+            resources=k8s.ResourceRequirements(
+                requests={
+                    "cpu": k8s.Quantity.from_string("100m"),
+                    "memory": k8s.Quantity.from_string("256Mi"),
+                },
+                limits={"memory": k8s.Quantity.from_string("1Gi")},
+            ),
+            # The album background-audio bed reads its track list from here.
+            volume_mounts=(
+                [
+                    k8s.VolumeMount(
+                        name="music-index",
+                        mount_path=MUSIC_INDEX_MOUNT_PATH,
+                        read_only=True,
+                    )
+                ]
+                if env.music_share
+                else None
+            ),
+        )
+
+        # Optional, and created out of band by bin/stage-streambeats rather than
+        # here: the share only changes when music is staged, which is the same
+        # moment the index is rebuilt. An absent one lists no albums, which the
+        # bed store already treats as "nothing to switch to" — so a namespace
+        # with no music staged yet still schedules and still streams.
+        music_volumes = (
+            [
+                k8s.Volume(
+                    name="music-index",
+                    config_map=k8s.ConfigMapVolumeSource(
+                        name=MUSIC_INDEX_CONFIGMAP, optional=True
+                    ),
+                )
+            ]
+            if env.music_share
+            else None
+        )
+
+        k8s.KubeDeployment(
+            self,
+            "deployment",
+            metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
+            spec=k8s.DeploymentSpec(
+                # Births parked; a console scale-up brings the platform live and
+                # Argo ignores .spec.replicas so the scale sticks (infra argocd
+                # ignore_replicas). Replica count is runtime-owned, not git-owned.
+                replicas=0,
+                selector=k8s.LabelSelector(match_labels=sel),
+                template=k8s.PodTemplateSpec(
+                    metadata=k8s.ObjectMeta(
+                        labels=sel, annotations=configmap.pod_annotations(cfg_hash)
+                    ),
+                    spec=k8s.PodSpec(
+                        security_context=k8s.PodSecurityContext(
+                            run_as_non_root=True,
+                            run_as_user=65532,
+                            run_as_group=65532,
+                            seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault"),
+                        ),
+                        priority_class_name=env.priority_class or None,
+                        # Prefer the ephemeral rpi5 worker when present, recover
+                        # to the MS-01 when it's gone (stage only). See scheduling.py.
+                        tolerations=(
+                            scheduling.prefer_rpi5_tolerations()
+                            if env.prefer_rpi5
+                            else None
+                        ),
+                        affinity=(
+                            scheduling.prefer_rpi5_affinity()
+                            if env.prefer_rpi5
+                            else None
+                        ),
+                        init_containers=[migrate],
+                        containers=[container],
+                        volumes=music_volumes,
+                    ),
+                ),
+            ),
+        )
+
+        # Refuse the sync outright when the pinned tag isn't published yet,
+        # rather than rolling a pod that can't pull it (pinned envs only — a
+        # floating tag always resolves to a prior build).
+        if env.is_pinned("tripbot"):
+            emit_image_gate(
+                self, name=name, namespace=ns, labels=labels, image_ref=image
+            )
+
+        # --- Service ---
+        k8s.KubeService(
+            self,
+            "service",
+            metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
+            spec=k8s.ServiceSpec(
+                type="ClusterIP",
+                selector=sel,
+                ports=[
+                    k8s.ServicePort(
+                        name="http",
+                        port=_PORTS.port("tripbot_http"),
+                        target_port=k8s.IntOrString.from_string("http"),
+                    )
+                ],
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Identity-level Secrets — emitted ONCE per env in the supporting unit, not per
+# component. tripbot is one bot identity against one DB, shared by every platform
+# stack in the namespace, so its DB creds + app Secrets are namespace
+# infrastructure rather than a per-component concern. Names are unchanged.
+# ---------------------------------------------------------------------------
+
+
+def emit_identity_secrets(scope: Construct, env: EnvConfig) -> None:
+    """tripbot's DB creds (ESO ExternalSecret on eso envs, on-disk Secret on the
+    laptop) + the twitch/maps/discord ExternalSecrets. Called by SupportingChart."""
+    ns = env.namespace or None
+    labels = meta_labels(NAME_IDENTITY)
+    if env.secret_source == "local":
+        k8s.KubeSecret(
+            scope,
+            "secret",
+            metadata=k8s.ObjectMeta(name=LOCAL_DB_SECRET, namespace=ns),
+            type="Opaque",
+            string_data=dict(_LOCAL_SECRET),
+        )
+    else:
+        _emit_db_external_secret(scope, ns, labels)
+    _emit_app_external_secrets(scope, ns, labels, maps=env.maps)
+
+
+def _emit_db_external_secret(scope, ns, labels):
+    # database creds: reads the shared postgres parameter JSON ({user,password,db})
+    # and remaps it onto DATABASE_* keys via target.template — a shape the
+    # eso.external_secret helper doesn't cover, so emit it as a raw ApiObject
+    # (same idiom as obs.py / postgres.py).
+    meta: dict = {"name": DB_SECRET_NAME}
+    if ns:
+        meta["namespace"] = ns
+    if labels:
+        meta["labels"] = labels
+    es = cdk8s.ApiObject(
+        scope,
+        "database-external-secret",
+        api_version="external-secrets.io/v1",
+        kind="ExternalSecret",
+        metadata=meta,
+    )
+    es.add_json_patch(
+        cdk8s.JsonPatch.add(
+            "/spec",
+            {
+                "refreshInterval": "1h",
+                "secretStoreRef": {
+                    "name": "aws-parameterstore",
+                    "kind": "SecretStore",
+                },
+                "target": {
+                    "name": DB_SECRET_NAME,
+                    "template": {
+                        "type": "Opaque",
+                        "data": {
+                            "DATABASE_USER": "{{ .user }}",
+                            "DATABASE_PASS": "{{ .password }}",
+                            "DATABASE_DB": "{{ .db }}",
+                        },
+                    },
+                },
+                "data": [
+                    {
+                        "secretKey": "user",
+                        "remoteRef": {
+                            "key": "/k8s/postgres/credentials",
+                            "property": "user",
+                        },
+                    },
+                    {
+                        "secretKey": "password",
+                        "remoteRef": {
+                            "key": "/k8s/postgres/credentials",
+                            "property": "password",
+                        },
+                    },
+                    {
+                        "secretKey": "db",
+                        "remoteRef": {
+                            "key": "/k8s/postgres/credentials",
+                            "property": "db",
+                        },
+                    },
+                ],
+            },
+        )
+    )
+
+
+def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
+    # twitch + google-maps: extract every top-level key of the parameter's JSON.
+    extracts = [
+        (
+            "twitch-external-secret",
+            "tripbot-twitch-creds",
+            "/k8s/tripbot/twitch-creds",
+        ),
+    ]
+    if maps:
+        extracts.append(
+            (
+                "google-maps-external-secret",
+                "tripbot-google-maps-api-key",
+                "/k8s/tripbot/google-maps-api-key",
+            )
+        )
+    for id_, name, sm in extracts:
+        eso.external_secret(
+            scope,
+            id_,
+            name=name,
+            namespace=ns,
+            labels=labels,
+            creation_policy="Owner",
+            extract=sm,
+        )
+    # discord alerts + bot-token: one parameter → one materialized key.
+    for id_, name, sm, key in [
+        (
+            "discord-alerts-external-secret",
+            "tripbot-discord-alerts-webhook",
+            "/k8s/tripbot/discord-alerts-webhook",
+            "DISCORD_ALERTS_WEBHOOK",
+        ),
+        (
+            "discord-bot-token-external-secret",
+            "tripbot-discord-bot-token",
+            "/k8s/tripbot/discord-bot-token",
+            "DISCORD_BOT_TOKEN",
+        ),
+    ]:
+        eso.external_secret(
+            scope,
+            id_,
+            name=name,
+            namespace=ns,
+            labels=labels,
+            creation_policy="Owner",
+            data=[ESData(key, sm)],
+        )
+
+
+# ---------------------------------------------------------------------------
+# One-shot Jobs — module-level emitters, NOT auto-run by the Tripbot construct.
+#
+# They are deliberately separate so a routine app apply never fires a one-shot;
+# the deploy tasks emit + apply them on demand. `envFrom` the PRIMARY platform's
+# tripbot ConfigMap by name (config_map_name(env.platforms[0])) — identity-level
+# (one DB), not per-platform. The DB seed is the only one: Twitch OAuth
+# bootstrap belongs to the platform-gateway.
+# ---------------------------------------------------------------------------
+
+
+def seed(scope: Construct, env: EnvConfig) -> None:
+    """DB seed Job: wait-for-postgres → migrate → seed-db. envFroms the stable
+    tripbot-config + the env's DB Secret (secret.env on local, ESO elsewhere).
+    local's variant has backoffLimit 3 and no ttl (matches seed-job.yaml)."""
+    ns = env.namespace or None
+    local = env.secret_source == "local"
+    db_secret = LOCAL_DB_SECRET if local else DB_SECRET_NAME
+    image = f"{IMAGE}:{env.tag_for('tripbot')}"
+    pull = env.pull_policy_for("tripbot")
+    db_env = [
+        k8s.EnvFromSource(
+            config_map_ref=k8s.ConfigMapEnvSource(
+                name=config_map_name(env.platforms[0])
+            )
+        ),
+        k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
+    ]
+
+    wait = k8s.Container(
+        name="wait-for-postgres",
+        image="busybox:1.36",
+        command=[
+            "sh",
+            "-c",
+            f'until nc -z {env.postgres_host} 5432; do echo "waiting for postgres..."; sleep 2; done',
+        ],
+        resources=SMALL_RESOURCES,
+    )
+    migrate = k8s.Container(
+        name="migrate",
+        image=image,
+        image_pull_policy=pull,
+        command=["migrate"],
+        args=[
+            "-path",
+            "/migrations",
+            "-database",
+            "postgres://$(DATABASE_USER):$(DATABASE_PASS)@$(DATABASE_HOST):5432/$(DATABASE_DB)?sslmode=disable",
+            "up",
+        ],
+        env_from=db_env,
+        resources=SMALL_RESOURCES,
+    )
+    seed_c = k8s.Container(
+        name="seed",
+        image=image,
+        image_pull_policy=pull,
+        command=["/usr/local/bin/seed-db"],
+        env_from=db_env,
+        resources=SMALL_RESOURCES,
+    )
+
+    spec = k8s.JobSpec(
+        backoff_limit=3,
+        # eso seed cleans up after itself; the laptop variant lingers (no ttl).
+        ttl_seconds_after_finished=None if local else 600,
+        template=k8s.PodTemplateSpec(
+            spec=k8s.PodSpec(
+                restart_policy="Never",
+                init_containers=[wait, migrate],
+                containers=[seed_c],
+            )
+        ),
+    )
+    k8s.KubeJob(
+        scope,
+        "seed",
+        metadata=k8s.ObjectMeta(name="tripbot-seed", namespace=ns),
+        spec=spec,
+    )

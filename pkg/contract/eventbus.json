@@ -1,0 +1,642 @@
+{
+  "_comment": "Generated from pkg/eventbus via `go generate ./pkg/contract` — do not hand-edit. The NATS subject + envelope registry tripbot publishes and tripbot-console consumes; payload schemas are JSON Schema (draft 2020-12).",
+  "subject_pattern": "tripbot.{env}.{domain}.{event}",
+  "subjects": {
+    "chat_message": {
+      "subject": "tripbot.{env}.chat.message",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT",
+      "schema": {
+        "type": "object",
+        "title": "ChatMessage",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "moderator": {
+            "type": "boolean"
+          },
+          "subscriber": {
+            "type": "boolean"
+          },
+          "broadcaster": {
+            "type": "boolean"
+          },
+          "badges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "emotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Emote"
+            }
+          },
+          "reply": {
+            "$ref": "#/$defs/ChatReply"
+          },
+          "message_type": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "username",
+          "text",
+          "emitted_at"
+        ]
+      }
+    },
+    "chat_deleted": {
+      "subject": "tripbot.{env}.chat.deleted",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT",
+      "schema": {
+        "type": "object",
+        "title": "ChatDeleted",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "user_id",
+          "emitted_at"
+        ]
+      }
+    },
+    "chat_subscriber": {
+      "subject": "tripbot.{env}.chat.subscriber",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "SubscriberEvent",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "months": {
+            "type": "integer"
+          },
+          "streak": {
+            "type": "integer"
+          },
+          "gift_count": {
+            "type": "integer"
+          },
+          "is_anonymous": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "kind",
+          "username",
+          "emitted_at"
+        ]
+      }
+    },
+    "viewers_count": {
+      "subject": "tripbot.{env}.viewers.count",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "ViewerCount",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "count",
+          "emitted_at"
+        ]
+      }
+    },
+    "video_changed": {
+      "subject": "tripbot.{env}.video.changed",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_VIDEO",
+      "schema": {
+        "type": "object",
+        "title": "VideoChanged",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "flagged": {
+            "type": "boolean"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "heading": {
+            "type": "number"
+          },
+          "speed_mps": {
+            "type": "number"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "file",
+          "state",
+          "flagged",
+          "lat",
+          "lng",
+          "emitted_at"
+        ]
+      }
+    },
+    "auth_status": {
+      "subject": "tripbot.{env}.auth.status.{platform}",
+      "wildcard": "tripbot.{env}.auth.status.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_AUTH",
+      "schema": {
+        "type": "object",
+        "title": "AuthStatus",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/AuthAccount"
+            }
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "accounts",
+          "emitted_at"
+        ]
+      }
+    },
+    "obs_stream": {
+      "subject": "tripbot.{env}.obs.stream.{platform}",
+      "wildcard": "tripbot.{env}.obs.stream.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_OBS",
+      "schema": {
+        "type": "object",
+        "title": "OBSStream",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "reachable",
+          "emitted_at"
+        ]
+      }
+    },
+    "egress_state": {
+      "subject": "tripbot.{env}.egress.state.{platform}",
+      "wildcard": "tripbot.{env}.egress.state.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_EGRESS",
+      "schema": {
+        "type": "object",
+        "title": "EgressState",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "configured",
+          "live",
+          "emitted_at"
+        ]
+      }
+    },
+    "audio_bed": {
+      "subject": "tripbot.{env}.audio.bed.{platform}",
+      "wildcard": "tripbot.{env}.audio.bed.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_AUDIO",
+      "schema": {
+        "type": "object",
+        "title": "AudioBed",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "bed": {
+            "type": "string"
+          },
+          "playing": {
+            "type": "string"
+          },
+          "station": {
+            "type": "string"
+          },
+          "voicing": {
+            "type": "string"
+          },
+          "album": {
+            "type": "string"
+          },
+          "playing_album": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string"
+          },
+          "shuffle": {
+            "type": "boolean"
+          },
+          "pending": {
+            "$ref": "#/$defs/AudioBedSwitch"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "bed",
+          "playing",
+          "station",
+          "voicing",
+          "shuffle",
+          "emitted_at"
+        ]
+      }
+    },
+    "chat_mode": {
+      "subject": "tripbot.{env}.chat.mode.{platform}",
+      "wildcard": "tripbot.{env}.chat.mode.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT_MODE",
+      "schema": {
+        "type": "object",
+        "title": "ChatMode",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "slow_seconds": {
+            "type": "integer"
+          },
+          "follower_minutes": {
+            "type": "integer"
+          },
+          "subscribers_only": {
+            "type": "boolean"
+          },
+          "emote_only": {
+            "type": "boolean"
+          },
+          "unique_only": {
+            "type": "boolean"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "slow_seconds",
+          "subscribers_only",
+          "emote_only",
+          "unique_only",
+          "emitted_at"
+        ]
+      }
+    },
+    "flags_snapshot": {
+      "subject": "tripbot.{env}.flags.snapshot.{platform}",
+      "wildcard": "tripbot.{env}.flags.snapshot.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_FLAGS",
+      "schema": {
+        "type": "object",
+        "title": "FeatureFlags",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FeatureFlag"
+            }
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "flags",
+          "emitted_at"
+        ]
+      }
+    },
+    "youtube_broadcast": {
+      "subject": "tripbot.{env}.youtube.broadcast",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_YOUTUBE",
+      "schema": {
+        "type": "object",
+        "title": "YoutubeBroadcast",
+        "properties": {
+          "video_id": {
+            "type": "string"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "privacy": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "video_id",
+          "live",
+          "privacy",
+          "emitted_at"
+        ]
+      }
+    },
+    "facebook_broadcast": {
+      "subject": "tripbot.{env}.facebook.broadcast",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_FACEBOOK",
+      "schema": {
+        "type": "object",
+        "title": "FacebookBroadcast",
+        "properties": {
+          "video_id": {
+            "type": "string"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "privacy": {
+            "type": "string"
+          },
+          "broadcast_id": {
+            "type": "string"
+          },
+          "permalink_url": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "video_id",
+          "live",
+          "privacy",
+          "broadcast_id",
+          "permalink_url",
+          "emitted_at"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "AuthAccount": {
+      "type": "object",
+      "title": "AuthAccount",
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "login_as": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account"
+      ]
+    },
+    "Emote": {
+      "type": "object",
+      "title": "Emote",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer"
+        },
+        "end": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "start",
+        "end"
+      ]
+    },
+    "ChatReply": {
+      "type": "object",
+      "title": "ChatReply",
+      "properties": {
+        "parent_message_id": {
+          "type": "string"
+        },
+        "parent_username": {
+          "type": "string"
+        },
+        "parent_user_id": {
+          "type": "string"
+        },
+        "parent_text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_message_id"
+      ]
+    },
+    "AudioBedSwitch": {
+      "type": "object",
+      "title": "AudioBedSwitch",
+      "properties": {
+        "bed": {
+          "type": "string"
+        },
+        "station": {
+          "type": "string"
+        },
+        "album": {
+          "type": "string"
+        },
+        "voicing": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bed",
+        "at"
+      ]
+    },
+    "FeatureFlag": {
+      "type": "object",
+      "title": "FeatureFlag",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "enabled_for_usernames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enabled_for_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_removal_date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "key",
+        "description",
+        "enabled"
+      ]
+    }
+  }
+}

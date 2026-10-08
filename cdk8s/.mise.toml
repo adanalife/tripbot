@@ -1,0 +1,18 @@
+# Tooling for the cdk8s (Python) Kubernetes authoring layer, scoped to cdk8s/ so
+# the Go CI jobs at the repo root don't pull in python/node. mise pins the
+# interpreter + CLIs; uv handles project-local Python deps.
+[tools]
+python = "3.12"
+# jsii (cdk8s's runtime) supports node ^24/^22/^20; pin 24 to avoid the
+# "untested node" warning on the host's newer node.
+node = "24"
+# The cdk8s CLI is NOT a mise tool. It lives in package.json and installs from
+# the committed package-lock.json, which pins its transitive tree — jsii,
+# jsii-pacmak and jsii-rosetta all float within their declared ranges, and a
+# fresh CI resolution picking a new one has broken the synth gate twice. The
+# lockfile also makes the CLI bot-bumpable: Dependabot has no mise backend, but
+# it does have npm.
+
+# kubeconform validates the synthed dist/ against the k8s API schemas
+# (task cdk8s:validate, mirrored in cdk8s-synth.yml).
+kubeconform = "0.8.0"

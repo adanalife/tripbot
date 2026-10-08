@@ -12,5 +12,5 @@ var leaderboardDuration = time.Duration(20 * time.Second)
 // newLeaderboardOnscreen constructs the leaderboard *Onscreen.
 func newLeaderboardOnscreen() *Onscreen {
 	slog.Info("creating onscreen", "kind", "leaderboard")
-	return newOnscreen()
+	return newOnscreen(defaultSleepInterval)
 }

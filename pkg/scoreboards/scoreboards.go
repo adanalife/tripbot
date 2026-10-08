@@ -4,65 +4,65 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
-	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
-
-// Scoreboard represents a bucket of scores, and has a name to identify it
-type Scoreboard struct {
-	ID          uint16 `gorm:"primaryKey"`
-	Name        string
-	DateCreated time.Time
-}
 
 type topUserResult struct {
 	Username string
 	Value    float32
 }
 
-func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
-	var leaderboard [][]string
-
-	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
-
+func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
 	var results []topUserResult
 	result := database.GormDB().WithContext(ctx).
 		Table("scores").
 		Select("users.username, scores.value").
 		Joins("JOIN scoreboards ON scores.scoreboard_id = scoreboards.id").
 		Joins("JOIN users ON scores.user_id = users.id").
-		Where("scoreboards.name = ?", scoreboardName).
-		Where("users.username NOT IN ?", ignoredUsers).
-		Order("scores.value DESC").
+		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, cfg.Platform).
+		// users.platform too: scores written before boards were per-platform
+		// may hang off the other platform's same-named board.
+		Where("users.is_bot = false AND users.exclude_from_leaderboard = false AND users.platform = ? AND users.username != ?", cfg.Platform, cfg.ChannelName).
+		// username breaks the tie: without it Postgres is free to return equal
+		// scores in any order, so a board that re-renders every rotation tick
+		// shuffles its tied rows on screen for no reason a viewer can see.
+		Order("scores.value DESC, users.username ASC").
 		Limit(size).
 		Scan(&results)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching top users", "err", result.Error)
 	}
 
+	return leaderboardRows(results)
+}
+
+// SnapshotTopUsers reads a frozen monthly board out of scoreboard_snapshots,
+// which the rollup tick writes once per finished month (top 50 per platform,
+// already ranked, bots and opted-out accounts already excluded). The channel
+// owner is filtered here, as TopUsers does, because the snapshot keeps them.
+func SnapshotTopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
+	var results []topUserResult
+	result := database.GormDB().WithContext(ctx).
+		Table("scoreboard_snapshots").
+		Select("username, value").
+		Where("scoreboard_name = ? AND platform = ? AND username != ?", scoreboardName, cfg.Platform, cfg.ChannelName).
+		Order("rank ASC").
+		Limit(size).
+		Scan(&results)
+	if result.Error != nil {
+		slog.ErrorContext(ctx, "error fetching snapshot top users", "err", result.Error, "scoreboard", scoreboardName)
+	}
+	return leaderboardRows(results)
+}
+
+// leaderboardRows renders query rows as the [username, value] pairs every
+// leaderboard surface consumes, with the value at one decimal.
+func leaderboardRows(results []topUserResult) [][]string {
+	var leaderboard [][]string
 	for _, r := range results {
-		valueAsString := fmt.Sprintf("%.1f", r.Value)
-		leaderboard = append(leaderboard, []string{r.Username, valueAsString})
+		leaderboard = append(leaderboard, []string{r.Username, fmt.Sprintf("%.1f", r.Value)})
 	}
 	return leaderboard
-}
-
-// findOrCreateScoreboard will find a Scoreboard in the DB or create one
-func findOrCreateScoreboard(ctx context.Context, name string) (Scoreboard, error) {
-	var scoreboard Scoreboard
-	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name}).FirstOrCreate(&scoreboard)
-	return scoreboard, result.Error
-}
-
-// createScoreboard() will actually create the DB record
-func createScoreboard(ctx context.Context, name string) (Scoreboard, error) {
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "creating scoreboard", "name", name)
-	}
-	scoreboard := Scoreboard{Name: name}
-	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
-	return scoreboard, result.Error
 }

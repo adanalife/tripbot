@@ -1,0 +1,215 @@
+package onscreensServer
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nats-io/nats.go"
+)
+
+// TestHandleMiddleShow_DecodesAndShows asserts a well-formed NATS message
+// lands on the MiddleText overlay the same way the HTTP handler would
+// (s.MiddleText.Show is the shared path).
+func TestHandleMiddleShow_DecodesAndShows(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.middle.show",
+		Data:    []byte(`{"msg":"hello from nats","emitted_at":"2026-05-28T16:00:00Z"}`),
+	}
+	s.handleMiddleShow(msg)
+
+	if !s.MiddleText.IsShowing() {
+		t.Errorf("MiddleText.IsShowing = false, want true")
+	}
+	if s.MiddleText.Content() != "hello from nats" {
+		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content(), "hello from nats")
+	}
+}
+
+// TestHandleMiddleShow_RejectsEmptyMsg covers the defensive check for a
+// malformed publisher that omits the msg field. The overlay's existing
+// Content must not change. (MiddleText starts IsShowing=true by design — it
+// carries pre-restart text — so this asserts on Content.)
+func TestHandleMiddleShow_RejectsEmptyMsg(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.SetContent("pre-existing")
+
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.middle.show",
+		Data:    []byte(`{"emitted_at":"2026-05-28T16:00:00Z"}`),
+	}
+	s.handleMiddleShow(msg)
+
+	if s.MiddleText.Content() != "pre-existing" {
+		t.Errorf("MiddleText.Content = %q, want pre-existing (empty msg should be a no-op)", s.MiddleText.Content())
+	}
+}
+
+// TestHandleMiddleShow_RejectsBadJSON covers a non-JSON payload.
+func TestHandleMiddleShow_RejectsBadJSON(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.SetContent("pre-existing")
+
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.middle.show",
+		Data:    []byte(`not json at all`),
+	}
+	s.handleMiddleShow(msg)
+
+	if s.MiddleText.Content() != "pre-existing" {
+		t.Errorf("MiddleText.Content = %q, want pre-existing (bad JSON should be a no-op)", s.MiddleText.Content())
+	}
+}
+
+// emptyMsg is an envelope-only payload — the shape every hide + the
+// empty-payload shows arrive as.
+func emptyMsg(subject string) *nats.Msg {
+	return &nats.Msg{Subject: subject, Data: []byte(`{"emitted_at":"2026-05-28T16:00:00Z"}`)}
+}
+
+func TestHandleMiddleHide(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.Show("something")
+	s.handleMiddleHide(emptyMsg("tripbot.test.onscreens.middle.hide"))
+	if s.MiddleText.IsShowing() {
+		t.Error("MiddleText.IsShowing = true, want false after hide")
+	}
+}
+
+func TestHandleLeaderboardShow(t *testing.T) {
+	s := &Server{Leaderboard: newLeaderboardOnscreen()}
+
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.leaderboard.show",
+		Data:    []byte(`{"emitted_at":"2026-05-28T16:00:00Z","title":"monthly miles","rows":[["alice","100"]]}`),
+	}
+	s.handleLeaderboardShow(msg)
+
+	if !s.Leaderboard.IsShowing() {
+		t.Error("Leaderboard.IsShowing = false, want true")
+	}
+	// Server renders the HTML from {title, rows}.
+	if !strings.Contains(s.Leaderboard.Content(), `<div class="lb-title">Monthly Miles</div>`) {
+		t.Errorf("Leaderboard.Content missing rendered title, got %q", s.Leaderboard.Content())
+	}
+	if !strings.Contains(s.Leaderboard.Content(), `<span class="lb-user">alice</span>`) {
+		t.Errorf("Leaderboard.Content missing user, got %q", s.Leaderboard.Content())
+	}
+}
+
+func TestHandleLeaderboardShow_RejectsBadJSON(t *testing.T) {
+	s := &Server{Leaderboard: newLeaderboardOnscreen()}
+	s.Leaderboard.SetContent("pre-existing")
+
+	s.handleLeaderboardShow(&nats.Msg{
+		Subject: "tripbot.test.onscreens.leaderboard.show",
+		Data:    []byte(`not json`),
+	})
+
+	if s.Leaderboard.Content() != "pre-existing" {
+		t.Errorf("Leaderboard.Content = %q, want pre-existing (bad JSON should be a no-op)", s.Leaderboard.Content())
+	}
+}
+
+func TestHandleLeaderboardHide(t *testing.T) {
+	s := &Server{Leaderboard: newLeaderboardOnscreen()}
+	s.Leaderboard.ShowFor("x", leaderboardDuration)
+	s.handleLeaderboardHide(emptyMsg("tripbot.test.onscreens.leaderboard.hide"))
+	if s.Leaderboard.IsShowing() {
+		t.Error("Leaderboard.IsShowing = true, want false after hide")
+	}
+}
+
+func TestHandleTimewarpShow(t *testing.T) {
+	s := &Server{Timewarp: newTimewarp()}
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.timewarp.show",
+		Data:    []byte(`{"username":"viewer1","emitted_at":"2026-06-18T16:00:00Z"}`),
+	}
+	s.handleTimewarpShow(msg)
+	if !s.Timewarp.IsShowing() {
+		t.Error("Timewarp.IsShowing = false, want true")
+	}
+	// The triggering chatter's username rides on Content for the credit line.
+	if s.Timewarp.Content() != "viewer1" {
+		t.Errorf("Timewarp.Content = %q, want viewer1", s.Timewarp.Content())
+	}
+}
+
+// A timewarp.show with no username still triggers the warp — just with no
+// credit line.
+func TestHandleTimewarpShow_NoUsername(t *testing.T) {
+	s := &Server{Timewarp: newTimewarp()}
+	s.handleTimewarpShow(emptyMsg("tripbot.test.onscreens.timewarp.show"))
+	if !s.Timewarp.IsShowing() {
+		t.Error("Timewarp.IsShowing = false, want true")
+	}
+	if s.Timewarp.Content() != "" {
+		t.Errorf("Timewarp.Content = %q, want empty", s.Timewarp.Content())
+	}
+}
+
+func TestHandleTimewarpHide(t *testing.T) {
+	s := &Server{Timewarp: newTimewarp()}
+	s.Timewarp.ShowFor("Timewarp!", timewarpDuration)
+	s.handleTimewarpHide(emptyMsg("tripbot.test.onscreens.timewarp.hide"))
+	if s.Timewarp.IsShowing() {
+		t.Error("Timewarp.IsShowing = true, want false after hide")
+	}
+}
+
+func TestHandleGPSShowHide(t *testing.T) {
+	s := &Server{GPS: newGPSOnscreen()}
+	s.handleGPSShow(emptyMsg("tripbot.test.onscreens.gps.show"))
+	if !s.GPS.IsShowing() {
+		t.Error("GPS.IsShowing = false, want true after show")
+	}
+	s.handleGPSHide(emptyMsg("tripbot.test.onscreens.gps.hide"))
+	if s.GPS.IsShowing() {
+		t.Error("GPS.IsShowing = true, want false after hide")
+	}
+}
+
+// TestHideLenientOnEmptyBody asserts a hide with a nil/garbage body still
+// hides — the subject is the whole intent.
+func TestHideLenientOnEmptyBody(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.Show("x")
+	s.handleMiddleHide(&nats.Msg{Subject: "tripbot.test.onscreens.middle.hide", Data: nil})
+	if s.MiddleText.IsShowing() {
+		t.Error("hide should act regardless of body")
+	}
+}
+
+// TestHandleMiddleShow_AutoHides asserts hide_after_seconds arms an auto-hide,
+// and that a second show without the field cancels the first one's timer
+// rather than letting it hide the newer message.
+func TestHandleMiddleShow_AutoHides(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+
+	show := func(body string) {
+		s.handleMiddleShow(&nats.Msg{Subject: "tripbot.test.onscreens.middle.show", Data: []byte(body)})
+	}
+	// Seconds are the wire unit, so the shortest expiry this can ask for is 1s;
+	// the timer is replaced below before it ever runs.
+	show(`{"msg":"briefly","emitted_at":"2026-05-28T16:00:00Z","hide_after_seconds":1}`)
+	if s.middleExpiry == nil {
+		t.Fatal("hide_after_seconds did not arm an auto-hide")
+	}
+	show(`{"msg":"indefinitely","emitted_at":"2026-05-28T16:00:00Z"}`)
+	if s.middleExpiry != nil {
+		t.Fatal("a show with no expiry left the previous show's timer armed")
+	}
+
+	// And the armed timer really does hide, rather than only being stored.
+	s.scheduleMiddleHide(time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
+	for s.MiddleText.IsShowing() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if s.MiddleText.IsShowing() {
+		t.Error("MiddleText still showing after its auto-hide fired")
+	}
+}

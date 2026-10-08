@@ -2,82 +2,139 @@ package chatbot
 
 import (
 	"context"
-	"runtime"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
 // These tests cover the four playback commands that refresh pkg/video state
-// after telling vlc-server to change tracks. Before App.Video was injectable,
+// after telling playout to change tracks. Before App.Video was injectable,
 // the refresh was an unobserved package-level call into video.GetCurrentlyPlaying
-// (which in turn hit vlc-server over HTTP). Now we can assert it fires.
+// (which in turn hit playout over HTTP). Now we can assert it fires.
 //
-// The *Cmd handlers early-return on Darwin via helpers.RunningOnDarwin(), so
-// each test calls skipIfDarwin to no-op when running `go test` locally on a Mac.
-// The canonical test invocation is `task test` (Linux container, ENV=testing).
+// The *Cmd handlers early-return on Darwin, so each test calls enablePlayback
+// to take the enabled path regardless of host OS.
 
-// skipIfDarwin no-ops the test when GOOS=darwin. The *Cmd handlers under test
-// short-circuit on Darwin via helpers.RunningOnDarwin(), so the assertions below
-// would never see the recording fakes get called.
-func skipIfDarwin(t *testing.T) {
+// enablePlayback forces the playback commands' host check to report Linux, so
+// the assertions below see the recording fakes get called on a Mac dev box as
+// well as in CI.
+func enablePlayback(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "darwin" {
-		t.Skip("playback *Cmd handlers early-return on darwin; covered in CI (linux)")
-	}
+	prev := runningOnDarwin
+	runningOnDarwin = func() bool { return false }
+	t.Cleanup(func() { runningOnDarwin = prev })
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern, plus captureSay's restore wired up automatically.
+// concern, restoring it afterwards. Chat output goes to the App's Chat fake
+// (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
+	prevWarp := lastTimewarpTime
 	lastTimewarpTime = time.Time{}
-	_, restore := captureSay(t)
-	defer restore()
+	t.Cleanup(func() { lastTimewarpTime = prevWarp })
 	fn()
 }
 
 // --- timewarpCmd ---
 
 func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
+	// Credit flag on → the caller's username rides the overlay call.
+	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
 	runAsAdmin(t, func() {
 		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
 	})
 
-	// Overlay: ShowTimewarp is the only call.
-	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != "ShowTimewarp()" {
-		t.Errorf("expected one ShowTimewarp overlay call, got %v", recOverlay.Calls)
+	// Overlay: ShowTimewarp is the only call, crediting the caller.
+	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != `ShowTimewarp("test")` {
+		t.Errorf("expected one ShowTimewarp overlay call crediting the caller, got %v", recOverlay.Calls)
 	}
-	// VLC: PlayRandom shuffles to a new video.
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "PlayRandom()" {
-		t.Errorf("expected one PlayRandom VLC call, got %v", recVLC.Calls)
+	// Playout: PlayRandom shuffles to a new video.
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "PlayRandom()" {
+		t.Errorf("expected one PlayRandom Playout call, got %v", recPlayout.Calls)
 	}
-	// Video: GetCurrentlyPlaying refreshes pkg/video state after the shuffle.
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	// Video: the departing clip and playhead are read for the timewarp event,
+	// then GetCurrentlyPlaying refreshes pkg/video state after the shuffle.
+	wantVideo := []string{"Current()", "CurrentProgress()", "GetCurrentlyPlaying()"}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantVideo {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
+	}
+}
+
+// With the credit flag off (the default / fresh-deploy state via noopFlags),
+// the warp still fires but the overlay gets no username — ShowTimewarp("").
+func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recOverlay := &recordingOnscreens{}
+	app.Onscreens = recOverlay
+	app.Playout = &recordingPlayout{}
+	app.Video = &recordingVideo{}
+
+	runAsAdmin(t, func() {
+		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != `ShowTimewarp("")` {
+		t.Errorf("expected ShowTimewarp with no credit, got %v", recOverlay.Calls)
+	}
+}
+
+// The no-background flag rides the same overlay call: off (the default) keeps
+// the opaque cover, on strips it.
+func TestTimewarpCmd_NoBackgroundFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		on   bool
+	}{{"flag off", false}, {"flag on", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			enablePlayback(t)
+			app := newTestApp(video.Video{})
+			recOverlay := &recordingOnscreens{}
+			app.Onscreens = recOverlay
+			app.Playout = &recordingPlayout{}
+			app.Video = &recordingVideo{}
+			app.Flags = &recordingFlags{Set: map[string]bool{timewarpNoBackgroundFlagKey: tc.on}}
+
+			runAsAdmin(t, func() {
+				app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+			})
+
+			if recOverlay.NoBackground != tc.on {
+				t.Errorf("ShowTimewarp noBackground = %v, want %v", recOverlay.NoBackground, tc.on)
+			}
+		})
 	}
 }
 
 // --- skipCmd ---
 
 func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 
 	runAsAdmin(t, func() {
@@ -85,50 +142,123 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 		app.skipCmd(context.Background(), newTestUser(adminUser), nil)
 	})
 
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Skip(1)" {
-		t.Errorf("expected one Skip(1) VLC call, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Skip(1)" {
+		t.Errorf("expected one Skip(1) Playout call, got %v", recPlayout.Calls)
 	}
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
 		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
 	}
 }
 
-func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
-	skipIfDarwin(t)
-	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
-	recVideo := &recordingVideo{}
-	app.VLC = recVLC
-	app.Video = recVideo
-
-	runAsAdmin(t, func() {
-		app.skipCmd(context.Background(), newTestUser(adminUser), []string{"3"})
-	})
-
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Skip(3)" {
-		t.Errorf("expected one Skip(3) VLC call, got %v", recVLC.Calls)
+// With an argument, !skip/!back move the playhead by a span of footage via
+// Seek rather than hopping clips: durations parse as Go durations, bare
+// numbers mean minutes, and the sign picks the direction ("!skip -10m"
+// rewinds). The chat reply states the span moved.
+func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
+	enablePlayback(t)
+	cases := []struct {
+		name     string
+		cmd      string
+		params   []string
+		wantCall string
+		wantSay  string
+	}{
+		{"skip duration", "skip", []string{"10m"}, "Seek(10m0s)", "⏩ Skipping ahead 10 minutes"},
+		{"skip bare number means minutes", "skip", []string{"3"}, "Seek(3m0s)", "⏩ Skipping ahead 3 minutes"},
+		{"skip spaced span joins", "skip", []string{"1h", "30m"}, "Seek(1h30m0s)", "⏩ Skipping ahead 1 hour 30 minutes"},
+		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10 minutes"},
+		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45 seconds"},
+		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2 minutes"},
+		{"any timescale goes through", "skip", []string{"1000h"}, "Seek(1000h0m0s)", "⏩ Skipping ahead 5 weeks 6 days"},
 	}
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.Playout = recPlayout
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				if tc.cmd == "skip" {
+					app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+				} else {
+					app.backCmd(context.Background(), newTestUser(adminUser), tc.params)
+				}
+			})
+
+			if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != tc.wantCall {
+				t.Errorf("expected one %s Playout call, got %v", tc.wantCall, recPlayout.Calls)
+			}
+			if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
+				t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+// Unparseable spans reply with usage without touching playback. Any
+// parseable timescale is allowed (the player wraps modulo the corpus), so
+// only spans that overflow time.Duration count as unparseable.
+func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
+	enablePlayback(t)
+	cases := []struct {
+		name    string
+		params  []string
+		wantSay string
+	}{
+		{"gibberish", []string{"potato"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"zero span", []string{"0m"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"bare minutes overflowing a duration", []string{"99999999999999999"}, "Usage: !skip [time, like 10m or 1h30m]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.Playout = recPlayout
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+			})
+
+			if len(recPlayout.Calls) != 0 {
+				t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+			}
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
 	}
 }
 
 // --- backCmd ---
 
 func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 
 	runAsAdmin(t, func() {
 		app.backCmd(context.Background(), newTestUser(adminUser), nil)
 	})
 
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Back(1)" {
-		t.Errorf("expected one Back(1) VLC call, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Back(1)" {
+		t.Errorf("expected one Back(1) Playout call, got %v", recPlayout.Calls)
 	}
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
 		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
@@ -143,61 +273,98 @@ func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
 // the correct-guess chain rather than just a side effect.
 
 func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
-	mock := installMockDB(t)
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
 	recVideo := &recordingVideo{Vid: vid}
 	app.Video = recVideo
 
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
-
-	_, restore := captureSay(t)
-	defer restore()
-
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
-	// guessCmd first reads the current vid (Current), then the correct-guess
-	// path runs a.timewarp() which refreshes via GetCurrentlyPlaying.
-	wantCalls := []string{"Current()", "GetCurrentlyPlaying()"}
-	if len(recVideo.Calls) != len(wantCalls) ||
-		recVideo.Calls[0] != wantCalls[0] || recVideo.Calls[1] != wantCalls[1] {
-		t.Errorf("expected calls %v, got %v", wantCalls, recVideo.Calls)
+	// guessCmd first resolves where the stream is (PlayheadLocation), reads
+	// the airing clip for the guess_submitted event, then the correct-guess
+	// path runs a.timewarp(), which reads the departing clip for the timewarp
+	// event and refreshes via GetCurrentlyPlaying.
+	wantCalls := []string{
+		"PlayheadLocation()",
+		"Current()", "CurrentProgress()", // guess_submitted airing stamp
+		"Current()", "CurrentProgress()", // timewarp departing clip
+		"GetCurrentlyPlaying()",
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if len(recVideo.Calls) != len(wantCalls) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantCalls), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantCalls {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
+	}
+}
+
+// --- timewarp event emit ---
+
+// The timewarp funnel records one event naming who triggered it, how, the
+// clip (and playhead) it left, and the clip it landed on. Every warp path —
+// !timewarp, a correct !guess, a gift effect — flows through a.timewarp, so
+// covering the funnel covers them all.
+func TestTimewarp_RecordsWarpEvent(t *testing.T) {
+	app := newTestApp(video.Video{ID: 42})
+	rec := &recordingEvents{}
+	app.Events = rec
+	app.Video = &recordingVideo{
+		Vid:          video.Video{ID: 42},
+		RefreshedVid: &video.Video{ID: 88},
+	}
+	app.Playout = &recordingPlayout{}
+
+	app.timewarp(context.Background(), "viewer1", events.WarpSourceCommand)
+
+	if len(rec.Timewarps) != 1 {
+		t.Fatalf("timewarps = %d, want 1", len(rec.Timewarps))
+	}
+	got := rec.Timewarps[0]
+	if got.Username != "viewer1" || got.Source != events.WarpSourceCommand {
+		t.Errorf("warp = %+v, want viewer1 via %q", got, events.WarpSourceCommand)
+	}
+	if got.VideoID != 42 {
+		t.Errorf("from clip = %d, want 42 (the clip airing before the warp)", got.VideoID)
+	}
+	if got.ToVideoID != 88 {
+		t.Errorf("to clip = %d, want 88 (the clip the warp landed on)", got.ToVideoID)
+	}
+	if got.TsSec == nil {
+		t.Error("ts_sec = nil, want the departing playhead stamped")
 	}
 }
 
 // --- jumpCmd ---
 //
-// jumpCmd was previously untestable because it called the package-level
-// video.FindRandomByState directly (DB-backed). With Video.FindRandomByState
-// on the injectable Video interface, we can stage results and exercise all
-// three branches: success, no-footage-for-state, and bad input.
+// jumpCmd reaches footage through the injectable Video interface, so these
+// tests stage FindRandomByState results and exercise all three branches:
+// success, no-footage-for-state, and bad input.
 
 func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
 		// staged result returned from FindRandomByState; .File() renders as
-		// "<Slug>.MP4" — that's what gets passed to VLC.PlayFileInPlaylist.
+		// "<Slug>.MP4" — that's what gets passed to Playout.PlayFileInPlaylist.
 		RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "California"},
 	}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
 	})
 
-	// Video: FindRandomByState("california") then GetCurrentlyPlaying() after VLC handoff.
-	wantVideo := []string{`FindRandomByState("california")`, "GetCurrentlyPlaying()"}
+	// Video: FindRandomByState("california"), Current() to compare against the
+	// departing clip's state, then GetCurrentlyPlaying() after Playout handoff.
+	wantVideo := []string{`FindRandomByState("california")`, "Current()", "GetCurrentlyPlaying()"}
 	if len(recVideo.Calls) != len(wantVideo) {
 		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
 	}
@@ -207,36 +374,68 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		}
 	}
 
-	// VLC: PlayFileInPlaylist called with the staged video's filename.
-	wantVLC := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != wantVLC {
-		t.Errorf("expected one %s VLC call, got %v", wantVLC, recVLC.Calls)
+	// Playout: PlayFileInPlaylist called with the staged video's filename.
+	wantPlayout := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayout {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayout, recPlayout.Calls)
 	}
 
-	// Onscreens: ShowFlag for the state's flag overlay.
-	if len(recOverlay.Calls) != 1 || !strings.HasPrefix(recOverlay.Calls[0], "ShowFlag(") {
-		t.Errorf("expected one ShowFlag overlay call, got %v", recOverlay.Calls)
+	// Onscreens: !jump drives no overlay.
+	if len(recOverlay.Calls) != 0 {
+		t.Errorf("expected no overlay calls, got %v", recOverlay.Calls)
 	}
 
-	// IRC: a "Jumping to California...!" message.
+	// Chat: a "Jumping to California...!" message.
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Jumping to California") {
 		t.Errorf("expected single 'Jumping to California' message, got %v", recIRC.Says)
 	}
 }
 
+// Jumping into the state already on screen reports it as moving around within
+// that state, and still performs the jump.
+func TestJumpCmd_SameStateSaysJumpingElsewhere(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		// currently playing California footage, and the lookup lands on
+		// another California clip
+		Vid:       video.Video{Slug: "2019_0615_120000_001", State: "California"},
+		RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "California"},
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
+	})
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Jumping elsewhere in California") {
+		t.Errorf("expected single 'Jumping elsewhere in California' message, got %v", recIRC.Says)
+	}
+
+	// the jump itself still happens
+	wantPlayout := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayout {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayout, recPlayout.Calls)
+	}
+}
+
 func TestJumpCmd_NoFootageForState(t *testing.T) {
-	skipIfDarwin(t)
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
-		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
+		RandomErr: terrors.ErrNoFootageForState,
 	}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
@@ -247,29 +446,195 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 		t.Errorf("expected single FindRandomByState(\"wyoming\"), got %v", recVideo.Calls)
 	}
 
-	// No VLC handoff, no flag overlay.
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC calls on no-footage path, got %v", recVLC.Calls)
+	// No Playout handoff, no overlay.
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on no-footage path, got %v", recPlayout.Calls)
 	}
 	if len(recOverlay.Calls) != 0 {
 		t.Errorf("expected no overlay calls on no-footage path, got %v", recOverlay.Calls)
 	}
 
-	// IRC: the "No footage for X... yet!" message (titlecased).
+	// Chat: the "No footage for X... yet!" message (titlecased).
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
 		t.Errorf("expected single 'No footage for Wyoming' message, got %v", recIRC.Says)
 	}
 }
 
-func TestJumpCmd_RejectsBadInput(t *testing.T) {
-	skipIfDarwin(t)
+// jumpCmd sanitizes its params before the lookup: multi-word state names keep
+// their interior space, stray whitespace and punctuation are cleaned up, and
+// case is left for the lookup to resolve.
+func TestJumpCmd_StateNameParsing(t *testing.T) {
+	enablePlayback(t)
+	tests := []struct {
+		name      string
+		params    []string
+		wantState string
+		wantSay   string
+	}{
+		{"single word", []string{"utah"}, "utah", "Jumping to Utah"},
+		{"multi-word name", []string{"new", "york"}, "new york", "Jumping to New York"},
+		{"upper case multi-word name", []string{"NEW", "YORK"}, "NEW YORK", "Jumping to New York"},
+		{"extra whitespace between words", []string{"", "", "NEW", "", "york", ""}, "NEW york", "Jumping to New York"},
+		{"trailing punctuation", []string{"utah!"}, "utah", "Jumping to Utah"},
+		{"abbreviation", []string{"dc"}, "dc", "Jumping to District of Columbia"},
+		{"three-word territory", []string{"district", "of", "columbia"}, "district of columbia", "Jumping to District of Columbia"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recVideo := &recordingVideo{
+				RandomVid: video.Video{Slug: "2019_0615_183000_001"},
+			}
+			recIRC := &recordingChat{}
+			app.Playout = &recordingPlayout{}
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				app.jumpCmd(context.Background(), newTestUser(adminUser), tt.params)
+			})
+
+			wantCall := fmt.Sprintf("FindRandomByState(%q)", tt.wantState)
+			if len(recVideo.Calls) == 0 || recVideo.Calls[0] != wantCall {
+				t.Errorf("expected first Video call %s, got %v", wantCall, recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], tt.wantSay) {
+				t.Errorf("expected a %q message, got %v", tt.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+// An unrecognized multi-word name still reaches the friendly no-footage reply
+// rather than erroring out.
+func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
+	enablePlayback(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
-	recVideo := &recordingVideo{}
-	recIRC := &recordingIRC{}
-	app.VLC = recVLC
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		RandomErr: terrors.ErrNoFootageForState,
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"north", "atlantis"})
+	})
+
+	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != `FindRandomByState("north atlantis")` {
+		t.Errorf("expected single FindRandomByState(\"north atlantis\"), got %v", recVideo.Calls)
+	}
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on no-footage path, got %v", recPlayout.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for North Atlantis") {
+		t.Errorf("expected single 'No footage for North Atlantis' message, got %v", recIRC.Says)
+	}
+}
+
+// Input that sanitizes down to nothing gets the usage reply without a lookup.
+func TestJumpCmd_NoStateNameInParams(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{}
+	recIRC := &recordingChat{}
+	app.Playout = &recordingPlayout{}
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"123!?"})
+	})
+
+	if len(recVideo.Calls) != 0 {
+		t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Usage: !jump [state]") {
+		t.Errorf("expected the usage message, got %v", recIRC.Says)
+	}
+}
+
+// --- daytimeCmd ---
+
+func TestDaytimeCmd_AdminJumpsToNextMorning(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		Vid:        video.Video{Slug: "2018_0514_224801_001"},
+		DaytimeVid: video.Video{Slug: "2018_0515_120000_009"},
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	// Video: reads the current clip, finds the next daytime one, then refreshes.
+	wantVideo := []string{"Current()", `FindNextDaytime("2018_0514_224801_001")`, "GetCurrentlyPlaying()"}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantVideo {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
+	}
+
+	// Playout: plays the daytime clip's file.
+	wantPlayout := `PlayFileInPlaylist("2018_0515_120000_009.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayout {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayout, recPlayout.Calls)
+	}
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "next morning") {
+		t.Errorf("expected a 'next morning' message, got %v", recIRC.Says)
+	}
+}
+
+func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		DaytimeErr: terrors.ErrNoDaytimeFound,
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	// No Playout handoff on the not-found path, and no GetCurrentlyPlaying refresh.
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on no-daytime path, got %v", recPlayout.Calls)
+	}
+	wantVideo := []string{"Current()", `FindNextDaytime("")`}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "enjoy the night") {
+		t.Errorf("expected an 'enjoy the night' message, got %v", recIRC.Says)
+	}
+}
+
+func TestJumpCmd_RejectsBadInput(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), nil)
@@ -279,12 +644,173 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	if len(recVideo.Calls) != 0 {
 		t.Errorf("expected no Video calls on bad input, got %v", recVideo.Calls)
 	}
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC calls on bad input, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on bad input, got %v", recPlayout.Calls)
 	}
 
-	// IRC: usage message.
+	// Chat: usage message.
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Usage: !jump") {
 		t.Errorf("expected usage message via IRC, got %v", recIRC.Says)
+	}
+}
+
+// parseSeekSpan folds case because time.ParseDuration only accepts lowercase
+// unit suffixes, and params reach handlers with the viewer's original casing.
+func TestParseSeekSpan_UppercaseUnits(t *testing.T) {
+	for _, in := range []string{"1H30M", "1h30M", "45S"} {
+		t.Run(in, func(t *testing.T) {
+			got, err := parseSeekSpan(in)
+			if err != nil {
+				t.Fatalf("parseSeekSpan(%q): %v", in, err)
+			}
+			want, err := time.ParseDuration(strings.ToLower(in))
+			if err != nil {
+				t.Fatalf("bad test case %q: %v", in, err)
+			}
+			if got != want {
+				t.Errorf("parseSeekSpan(%q) = %v, want %v", in, got, want)
+			}
+		})
+	}
+}
+
+// "No footage for that state" is a normal reply, not a failure, so it has to
+// survive wrapping: anything added between pkg/video and here that annotates
+// the error must not reclassify the reply into the internal-error branch, which
+// sends the usage string instead.
+func TestJumpCmd_NoFootageForState_Wrapped(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{
+		RandomErr: fmt.Errorf("query state footage: %w", terrors.ErrNoFootageForState),
+	}
+	recPlayout := &recordingPlayout{}
+	recIRC := &recordingChat{}
+	app.Video = recVideo
+	app.Playout = recPlayout
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
+	})
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
+		t.Errorf("expected the no-footage reply through a wrap, got %v", recIRC.Says)
+	}
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+	}
+}
+
+// Same wrap-safety check for the !daytime path.
+func TestDaytimeCmd_NoDaytimeAhead_Wrapped(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{
+		DaytimeErr: fmt.Errorf("scan window: %w", terrors.ErrNoDaytimeFound),
+	}
+	recPlayout := &recordingPlayout{}
+	recIRC := &recordingChat{}
+	app.Video = recVideo
+	app.Playout = recPlayout
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "enjoy the night") {
+		t.Errorf("expected the no-daytime reply through a wrap, got %v", recIRC.Says)
+	}
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+	}
+}
+
+// On a host without playout, every playhead command has to answer chat rather
+// than reach for a player that isn't there. This is the branch a Mac dev box
+// takes; pinning it keeps the apology (and the early return) from rotting
+// while the rest of the file drives the enabled path.
+func TestPlaybackCmds_WithoutPlayoutApologizeAndDoNothing(t *testing.T) {
+	prev := runningOnDarwin
+	runningOnDarwin = func() bool { return true }
+	t.Cleanup(func() { runningOnDarwin = prev })
+
+	cases := []struct {
+		name string
+		want string
+		run  func(a *App, ctx context.Context, u *users.User)
+	}{
+		{"timewarp", "Sorry, timewarp isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.timewarpCmd(ctx, u, nil) }},
+		{"jump", "Sorry, jump isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.jumpCmd(ctx, u, []string{"nevada"}) }},
+		{"daytime", "Sorry, daytime isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.daytimeCmd(ctx, u, nil) }},
+		{"skip", "Sorry, skip isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.skipCmd(ctx, u, nil) }},
+		{"back", "Sorry, back isn't available right now",
+			func(a *App, ctx context.Context, u *users.User) { a.backCmd(ctx, u, nil) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			chat := &recordingChat{}
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			app.Chat = chat
+			app.Playout = recPlayout
+			app.Video = recVideo
+
+			runAsAdmin(t, func() { tc.run(app, context.Background(), newTestUser(adminUser)) })
+
+			if len(chat.Says) != 1 || chat.Says[0] != tc.want {
+				t.Errorf("chat = %v, want [%q]", chat.Says, tc.want)
+			}
+			if len(recPlayout.Calls) != 0 {
+				t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+			}
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+			}
+		})
+	}
+}
+
+// "!state <state>" is the jump; bare "!state" stays the where-are-we read.
+func TestStateCmd_WithArgJumps(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "Massachusetts"}}
+	app.Onscreens = &recordingOnscreens{}
+	app.Playout = &recordingPlayout{}
+	app.Video = recVideo
+	app.Chat = &recordingChat{}
+
+	runAsAdmin(t, func() {
+		app.stateCmd(context.Background(), newTestUser(adminUser), []string{"ma"})
+	})
+
+	if len(recVideo.Calls) == 0 || recVideo.Calls[0] != `FindRandomByState("ma")` {
+		t.Errorf("!state ma should jump via FindRandomByState, got calls %v", recVideo.Calls)
+	}
+}
+
+// A !find whose whole query is a state name jumps there instead of searching.
+func TestFindCmd_StateNameJumps(t *testing.T) {
+	enablePlayback(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "New York"}}
+	app.Onscreens = &recordingOnscreens{}
+	app.Playout = &recordingPlayout{}
+	app.Video = recVideo
+	app.Chat = &recordingChat{}
+
+	runAsAdmin(t, func() {
+		app.findCmd(context.Background(), newTestUser(adminUser), []string{"New", "York"})
+	})
+
+	if len(recVideo.Calls) == 0 || recVideo.Calls[0] != `FindRandomByState("New York")` {
+		t.Errorf("!find New York should jump via FindRandomByState, got calls %v", recVideo.Calls)
 	}
 }

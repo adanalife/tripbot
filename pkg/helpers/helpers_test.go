@@ -6,81 +6,6 @@ import (
 	"time"
 )
 
-func TestParseLatLng(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		wantLat   float64
-		wantLon   float64
-		wantErr   bool
-		errSubstr string
-	}{
-		{
-			name:    "valid USA coords (Salt Lake City area)",
-			input:   "W111.845329N40.774768",
-			wantLat: 40.774768,
-			wantLon: -111.845329,
-			wantErr: false,
-		},
-		{
-			name:      "missing N character",
-			input:     "W111.845329S40.774768",
-			wantErr:   true,
-			errSubstr: "can't find an N",
-		},
-		{
-			name:      "N is the first letter",
-			input:     "N40.774768",
-			wantErr:   true,
-			errSubstr: "N was the first letter",
-		},
-		{
-			name:      "garbage that parses to zero",
-			input:     "WxxxNyyy",
-			wantErr:   true,
-			errSubstr: "failed to convert",
-		},
-		{
-			name:      "lat outside USA bounds",
-			input:     "W120.0N10.0",
-			wantErr:   true,
-			errSubstr: "outside USA",
-		},
-		{
-			name:      "lon outside USA bounds (too far west)",
-			input:     "W175.0N40.0",
-			wantErr:   true,
-			errSubstr: "outside USA",
-		},
-		{
-			name:      "lat above 90 (impossible)",
-			input:     "W120.0N91.0",
-			wantErr:   true,
-			errSubstr: "impossible magnitude",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lat, lon, err := ParseLatLng(tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil (lat=%v lon=%v)", tt.errSubstr, lat, lon)
-				}
-				if !strings.Contains(err.Error(), tt.errSubstr) {
-					t.Fatalf("expected error containing %q, got %q", tt.errSubstr, err.Error())
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if lat != tt.wantLat || lon != tt.wantLon {
-				t.Fatalf("got (%v, %v), want (%v, %v)", lat, lon, tt.wantLat, tt.wantLon)
-			}
-		})
-	}
-}
-
 func TestDurationToMiles(t *testing.T) {
 	tests := []struct {
 		name string
@@ -114,56 +39,6 @@ func TestGoogleMapsURL(t *testing.T) {
 	}
 }
 
-func TestSplitOnRegex(t *testing.T) {
-	tests := []struct {
-		name      string
-		text      string
-		delimiter string
-		want      []string
-	}{
-		{"simple comma split", "a,b,c", ",", []string{"a", "b", "c"}},
-		{"empty input", "", ",", []string{""}},
-		{"no matches", "abc", ",", []string{"abc"}},
-		{"trailing delimiter yields empty tail", "a,b,", ",", []string{"a", "b", ""}},
-		{"regex char class", "a1b2c3d", "[0-9]", []string{"a", "b", "c", "d"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SplitOnRegex(tt.text, tt.delimiter)
-			if len(got) != len(tt.want) {
-				t.Fatalf("got %v (len=%d), want %v (len=%d)", got, len(got), tt.want, len(tt.want))
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Fatalf("index %d: got %q, want %q", i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
-}
-
-func TestRemoveNonLetters(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"empty", "", ""},
-		{"all letters", "Hello", "Hello"},
-		{"mixed", "Hello, World! 123", "HelloWorld"},
-		{"only punctuation", "!!!", ""},
-		{"unicode (non-ascii) is stripped", "café", "caf"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := RemoveNonLetters(tt.input)
-			if got != tt.want {
-				t.Fatalf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestStripAtSign(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -174,6 +49,7 @@ func TestStripAtSign(t *testing.T) {
 		{"without @ prefix", "dana", "dana"},
 		{"@ in middle is preserved", "da@na", "da@na"},
 		{"only @ sign", "@", ""},
+		{"empty string", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -185,50 +61,6 @@ func TestStripAtSign(t *testing.T) {
 	}
 }
 
-func TestBase64RoundTrip(t *testing.T) {
-	cases := []string{"", "hello", "Hello, World!", "miles: 42.0\n@dana"}
-	for _, in := range cases {
-		t.Run(in, func(t *testing.T) {
-			encoded := Base64Encode(in)
-			decoded, err := Base64Decode(encoded)
-			if err != nil {
-				t.Fatalf("decode error: %v", err)
-			}
-			if decoded != in {
-				t.Fatalf("round-trip mismatch: got %q, want %q", decoded, in)
-			}
-		})
-	}
-}
-
-func TestBase64DecodeError(t *testing.T) {
-	_, err := Base64Decode("!!!not-base64!!!")
-	if err == nil {
-		t.Fatal("expected decode error, got nil")
-	}
-}
-
-func TestInvertMap(t *testing.T) {
-	in := map[string]string{"a": "1", "b": "2", "c": "3"}
-	got := InvertMap(in)
-	want := map[string]string{"1": "a", "2": "b", "3": "c"}
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Fatalf("key %q: got %q, want %q", k, got[k], v)
-		}
-	}
-}
-
-func TestInvertMapEmpty(t *testing.T) {
-	got := InvertMap(map[string]string{})
-	if len(got) != 0 {
-		t.Fatalf("expected empty map, got %v", got)
-	}
-}
-
 func TestActualDate(t *testing.T) {
 	utc := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
 	got := ActualDate(utc, 40.7128, -74.0060)
@@ -237,6 +69,33 @@ func TestActualDate(t *testing.T) {
 	}
 	if !got.Equal(utc) {
 		t.Fatalf("instant changed: got %v, want %v", got, utc)
+	}
+}
+
+func TestIsDaytime(t *testing.T) {
+	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
+
+	// 12:00 UTC on July 4 is 08:00 EDT — well after sunrise, well before sunset.
+	if !IsDaytime(time.Date(2024, 7, 4, 12, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 08:00 EDT to be daytime")
+	}
+	// 02:00 UTC on July 5 is 22:00 EDT on July 4 — after sunset.
+	if IsDaytime(time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 22:00 EDT to be nighttime")
+	}
+}
+
+func TestLocalDate(t *testing.T) {
+	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
+
+	// 02:00 UTC on July 5 is 22:00 EDT on July 4 — the local calendar day is
+	// the 4th, not the 5th the UTC instant falls on.
+	got := LocalDate(time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), lat, lon)
+	if y, m, d := got.Date(); y != 2024 || m != time.July || d != 4 {
+		t.Errorf("LocalDate = %04d-%02d-%02d, want 2024-07-04", y, m, d)
+	}
+	if h, mn, s := got.Clock(); h != 0 || mn != 0 || s != 0 {
+		t.Errorf("LocalDate not truncated to midnight: %v", got)
 	}
 }
 
@@ -253,5 +112,32 @@ func TestSunsetStrFutureAndPast(t *testing.T) {
 	got = SunsetStr(nightUTC, lat, lon)
 	if !strings.HasPrefix(got, "Sunset on this day was") || !strings.HasSuffix(got, "ago") {
 		t.Fatalf("expected past-tense sunset, got %q", got)
+	}
+}
+
+func TestTimeAgoSince(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		then time.Time
+		want string
+	}{
+		{"years and months", time.Date(2023, 7, 3, 12, 0, 0, 0, time.UTC), "3 years 2 months ago"},
+		{"whole years only", time.Date(2024, 9, 3, 12, 0, 0, 0, time.UTC), "2 years ago"},
+		{"one year singular", time.Date(2025, 9, 3, 12, 0, 0, 0, time.UTC), "1 year ago"},
+		{"months only", time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC), "5 months ago"},
+		{"one month singular", time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC), "1 month ago"},
+		{"day-of-month not yet reached", time.Date(2025, 9, 30, 12, 0, 0, 0, time.UTC), "11 months ago"},
+		{"under a month falls back to durafmt", time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC), "2 weeks ago"},
+		{"zero timestamp", time.Time{}, ""},
+		{"future timestamp", now.Add(time.Hour), ""},
+		{"now", now, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := timeAgoSince(tt.then, now); got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

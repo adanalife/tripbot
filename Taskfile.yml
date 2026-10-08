@@ -1,8 +1,16 @@
 version: '3'
 
-# All targets shell into the `test` service defined in
-# infra/docker/docker-compose.testing.yml via bin/devenv. Env vars
+# The test targets run in the one-shot `test` service defined in
+# infra/docker/docker-compose.testing.yml (layered on the base compose):
+# it boots postgres, applies migrations, then runs `go test`. Env vars
 # come from .env.testing; module/build caches live in named volumes.
+
+vars:
+  # The compose stack the test targets run against — the same base +
+  # testing overlay CI uses (infra/docker/docker-compose.testing.yml).
+  COMPOSE: >-
+    docker compose --project-directory . --env-file infra/docker/env.docker
+    -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml
 
 tasks:
   default:
@@ -10,91 +18,118 @@ tasks:
     cmds:
       - task --list
 
-  test:
-    desc: Run all unit tests
+  # The test image is a thin layer over the mirrored Go base, so a local copy
+  # built months ago still satisfies compose and silently runs an old toolchain
+  # against a go.mod that has moved on. Rebuilding with --pull refreshes the
+  # base; the version check turns the resulting failure into a legible one.
+  test:image:
+    desc: Rebuild the test image against the latest mirrored Go base and verify its toolchain satisfies go.mod
     cmds:
-      - ENV=testing bin/devenv run --rm test go test ./...
+      - "{{.COMPOSE}} build --pull test"
+      - >-
+        {{.COMPOSE}} run --rm --no-deps test bash -c 'want=$(grep -m1 "^go " go.mod | cut -d" " -f2);
+        got=$(go version | cut -d" " -f3 | sed "s/^go//");
+        printf "%s\n%s\n" "$want" "$got" | sort -V -C ||
+        { echo "test image ships Go $got, but go.mod requires >= $want" >&2; exit 1; }'
+
+  test:
+    desc: 'Run all unit tests; flags pass through: task test -- -run TestName'
+    deps: [test:image]
+    cmds:
+      - "{{.COMPOSE}} run --rm test go test ./... {{.CLI_ARGS}}"
+
+  # No test:image dep, deliberately: rebuilding the image is what makes a
+  # `task test` run exceed an agent's command timeout, and it is wasted work
+  # when the question is whether one package passes. The stack's
+  # TESTDB_REQUIRED turns a postgres-unreachable skip into a failure, which is
+  # the point — a bare host `go test` over a DB-backed package answers `ok` in
+  # under a second having run nothing, and the SKIP lines only appear under -v.
+  # GOTOOLCHAIN=auto covers a test image whose Go is older than go.mod asks.
+  test:pkg:
+    desc: 'Run one package''s tests against the compose postgres, skipping the image rebuild: task test:pkg -- ./pkg/users/'
+    cmds:
+      - "{{.COMPOSE}} run --rm -e GOTOOLCHAIN=auto test go test {{.CLI_ARGS}} -count=1"
 
   test:cover:
     desc: Run tests with coverage + race detector; prints per-function and total coverage
+    deps: [test:image]
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
+      - "{{.COMPOSE}} run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'"
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
+    deps: [test:image]
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'
+      - "{{.COMPOSE}} run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'"
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
+    deps: [test:image]
     cmds:
-      - ENV=testing bin/devenv run --rm test go test -race ./...
+      - "{{.COMPOSE}} run --rm test go test -race ./..."
 
-  # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
-  # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
-  # required for `go test` too, per vault/tripbot/vlc-server/gotchas.md).
-  # `dotenv` injects .env.testing's keys as real env vars so the config
-  # loader resolves them from the environment — `go test` runs each package
-  # from its own dir, so the .env.testing file itself isn't on the path.
-  test:macos:
-    desc: Run all unit tests natively on macOS (host mise, no docker)
-    platforms: [darwin]
-    dotenv: ['.env.testing']
-    env:
-      ENV: testing
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+  # The postgres container outlives a `task test` run, and golang-migrate records
+  # what it has applied — so editing a migration that already ran leaves the old
+  # schema in place and the next run tests against it, passing or failing for
+  # reasons the files on disk no longer explain. Recreating the container is what
+  # re-applies the whole chain from scratch; the down migration isn't involved,
+  # so this also works on a migration whose `down` is itself broken.
+  #
+  # Only db + migrate go: the module and build caches live in their own named
+  # volumes, and dropping those would turn every reset into a full recompile.
+  test:db:reset:
+    desc: Recreate the test postgres from scratch — run after editing an already-applied migration
     cmds:
-      - mise exec -- go test ./...
+      - "{{.COMPOSE}} rm -sf db migrate"
+      - 'echo "test database removed; the next task test / test:cover re-migrates from scratch"'
 
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
+    deps: [test:image]
     cmds:
-      - ENV=testing bin/devenv run --rm test bash
+      - "{{.COMPOSE}} run --rm test bash"
 
-  auth:bootstrap:
-    desc: Bootstrap BOTH Twitch OAuth identities (bot + broadcaster) back-to-back. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB). Sign in as the bot account when the first browser tab opens, then as the broadcaster on the second.
+  # Twitch OAuth consent + token bootstrap is owned by the platform-gateway
+  # (gateway-twitch's /auth/* flow writes the oauth_tokens rows), so there's no
+  # auth-bootstrap task here: re-auth is a browser click at the gateway consent
+  # page (surfaced in tripbot-console).
+
+  # Changelog (towncrier). Fragments live in changelog.d/; assembled into
+  # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
+  changelog:add:
+    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; the release numbers it). Types: gateway chatbot onscreens playout console fix deploy ci cleanup misc summary'
+    vars:
+      TYPE: '{{.TYPE | default "misc"}}'
+      # The branch is the fallback slug because it is unique per PR. Defaulting
+      # to the type instead gives every no-SLUG entry the same +<type>.<type>.md.
+      BRANCH:
+        sh: git rev-parse --abbrev-ref HEAD | tr -c '[:alnum:]' '-' | sed 's/-\{1,\}/-/g; s/^-//; s/-$//'
+      # Placeholders wait on main until a release numbers them, so a slug has to
+      # stay unique across every open PR and every unreleased one — a reused
+      # SLUG or branch name would otherwise land on the same file. Four hex
+      # digits make that a 1-in-65536 accident rather than a habit.
+      SUFFIX:
+        sh: openssl rand -hex 2
+      NAME: '+{{.SLUG | default .BRANCH}}-{{.SUFFIX}}'
     cmds:
-      - task: auth:bootstrap:bot
-      - task: auth:bootstrap:broadcaster
+      - uvx towncrier create --config towncrier.toml {{.NAME}}.{{.TYPE}}.md
 
-  auth:bootstrap:bot:
-    desc: Bootstrap the bot's Twitch OAuth token (chat:read/edit etc.). Writes the row to oauth_tokens keyed by BOT_USERNAME.
-    env:
-      ENV: '{{.ENV | default "development"}}'
-      DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
-      EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
+  changelog:preview:
+    desc: Preview the pending changelog from the current fragments (towncrier draft)
     cmds:
-      - |
-        secret=$(aws-vault exec adanalife-stage -- \
-          aws secretsmanager get-secret-value \
-          --secret-id k8s/tripbot/twitch-creds \
-          --query SecretString --output text)
-        export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
-        export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
-        printf '\a'
-        mise exec -- go run ./cmd/auth-bootstrap --account=bot
+      - uvx towncrier build --draft --config towncrier.toml --version {{.VERSION | default "Unreleased"}}
 
-  auth:bootstrap:broadcaster:
-    desc: Bootstrap the broadcaster's Twitch OAuth token (channel:read:subscriptions, moderator:read:followers, user:edit:broadcast). Writes the row to oauth_tokens keyed by CHANNEL_NAME. Required for subscriber/follower polling.
-    env:
-      ENV: '{{.ENV | default "development"}}'
-      DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
-      EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
+  changelog:build:
+    desc: Collate fragments into CHANGELOG.md for a release + delete them (VERSION=3.9.0)
+    requires:
+      vars: [VERSION]
     cmds:
-      - |
-        secret=$(aws-vault exec adanalife-stage -- \
-          aws secretsmanager get-secret-value \
-          --secret-id k8s/tripbot/twitch-creds \
-          --query SecretString --output text)
-        export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
-        export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
-        printf '\a'
-        mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
+      - scripts/number-fragments.sh
+      - uvx towncrier build --yes --config towncrier.toml --version {{trimPrefix "v" .VERSION}}
 
-  # Release smoke flow — see vault/tripbot/release-checklist.md.
+  # Release smoke flow.
   # Targets the local k3d cluster running the stage-1 overlay
   # (cloudflared tunnel + apps).
 
@@ -108,8 +143,7 @@ tasks:
       TAG: '{{trimPrefix "v" .VERSION}}'
     cmds:
       - docker buildx imagetools inspect adanalife/tripbot:{{.TAG}}
-      - docker buildx imagetools inspect adanalife/vlc:{{.TAG}}
-      - docker buildx imagetools inspect adanalife/obs:{{.TAG}}
+      - docker buildx imagetools inspect adanalife/onscreens-server:{{.TAG}}
 
   release:smoke:whalecore:
     desc: Smoke-check tripbot.whalecore.com (requires allowlisted IP). Blocks on failure.
@@ -118,7 +152,7 @@ tasks:
       - 'echo "✓ tripbot.whalecore.com/health/live"'
 
   release:smoke:local:
-    desc: Smoke-check in-cluster tripbot+vlc-server health via kubectl port-forward.
+    desc: Smoke-check in-cluster tripbot health via kubectl port-forward.
     cmds:
       - bin/release-smoke-local
 
@@ -127,8 +161,6 @@ tasks:
     cmds:
       - task -d {{.HOME}}/adanalife/infra k8s-apply-stage-1
       - kubectl rollout status deploy/tripbot     --timeout=120s
-      - kubectl rollout status deploy/vlc-server  --timeout=120s
-      - kubectl rollout status deploy/obs         --timeout=120s
       - kubectl rollout status deploy/cloudflared --timeout=60s
       - task: release:smoke:local
       - task: release:smoke:whalecore
@@ -138,36 +170,144 @@ tasks:
     cmds:
       - task: release:smoke:stage-1
 
-  obs:browser:refresh:
-    desc: Refresh all OBS browser sources via websocket (docker-compose; OBS must be running)
-    env:
-      OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
-    cmds:
-      - uv run --with obsws-python bin/obs-browser-refresh
 
-  # vlc-server native macOS build — links against the libvlc bundled
-  # inside VLC.app. Saves recreating the CGO incantation from memory.
-  # See vault/tripbot/vlc-server/gotchas.md for the full story; key bits:
-  #   * rpath is required for `go test` / `go run`, not just `go build` —
-  #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
-  #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS
-  #     directive already does it; duplicating triggers a linker warning.
-  #   * `-Wno-error=incompatible-function-pointer-types` mutes a
-  #     libvlc-go/v3 vs Apple-clang fatal that's harmless at runtime.
-
-  vlc-server:vet:macos:
-    desc: Run `go vet` on vlc-server against VLC.app's libvlc headers (no link)
-    platforms: [darwin]
-    env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+  # platforms.json is the fleet-wide supported-platform set, owned by
+  # platform-gateway (its Go adapter registry is the source of truth) and synced
+  # into every repo — the same sibling-checkout convention the eventbus/contract
+  # bridges use. cdk8s reads it into SUPPORTED_PLATFORMS; never hand-edit it here.
+  platforms:sync:
+    desc: Re-sync platforms.json from the sibling platform-gateway checkout (the source of truth)
+    vars:
+      # The sibling checkouts sit next to this repo's *main* worktree, which is
+      # not the working directory when this runs from ~/adanalife/worktrees/ —
+      # there, `..` is the worktrees dir. `--git-common-dir` always names the
+      # shared .git regardless of which worktree asks, so its grandparent is the
+      # siblings' parent either way. `--path-format=absolute` matters: from the
+      # main checkout the common dir is the relative `.git`, whose grandparent
+      # would otherwise be `.`.
+      SIBLINGS:
+        sh: dirname "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    preconditions:
+      # The copy reads the sibling's working tree, and a checkout behind
+      # origin/main syncs stale content and succeeds silently. Refuse unless the
+      # synced file matches origin/main.
+      - sh: git -C {{.SIBLINGS}}/platform-gateway fetch -q origin && git -C {{.SIBLINGS}}/platform-gateway diff --quiet origin/main -- platforms.json
+        msg: "{{.SIBLINGS}}/platform-gateway platforms.json differs from origin/main — pull that checkout (or push its change) first; syncing from it copies stale content"
     cmds:
-      - mise exec -- go vet ./pkg/vlc-server/...
+      - cp {{.SIBLINGS}}/platform-gateway/platforms.json platforms.json
 
-  vlc-server:build:macos:
-    desc: Build vlc-server natively on macOS against VLC.app's libvlc
-    platforms: [darwin]
-    env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+  # cdk8s — the Python authoring layer for tripbot's app workload manifests
+  # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
+  # per-env identity unit + the one-shot Job files), which Argo delivers
+  # cross-repo. The stateful + shared-platform units stay in infra/cdk8s.
+  cdk8s:cli:
+    desc: Install the pinned cdk8s CLI into cdk8s/node_modules from the committed package-lock.json
+    dir: cdk8s
     cmds:
-      - mise exec -- go build -o bin/vlc-server ./cmd/vlc-server
+      - mise exec -- npm ci
+    # npm ci stamps node_modules/.package-lock.json; skip the reinstall while it
+    # is newer than the lockfile it was built from.
+    status:
+      - test node_modules/.package-lock.json -nt package-lock.json
+
+  cdk8s:imports:
+    desc: Generate the typed k8s + ESO constructs (cdk8s import) into cdk8s/imports/ — gitignored, needed before synth/test on a fresh checkout
+    dir: cdk8s
+    deps: [cdk8s:cli]
+    cmds:
+      - mise exec -- uv run npx cdk8s import
+
+  cdk8s:synth:
+    desc: Synthesize the manifests (offline) -> cdk8s/dist/<env>-<component>-<platform>.k8s.yaml (+ identity / jobs)
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run npx cdk8s synth
+      # prod-1 app manifests are pinned to their release version: frozen here and
+      # regenerated only on release-please's release PR, so a chart change on
+      # main doesn't reach prod's committed dist until the next release — which
+      # is what puts the config delta in the same diff as the version bump.
+      # Discard this HEAD re-synth of the pinned app files. Match every prod-1
+      # app manifest (all components × all platforms) so a newly-supported
+      # platform is frozen like the rest without editing this list; identity +
+      # one-shot Jobs carry no per-platform suffix and re-synth normally.
+      - |
+        pinned=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)')
+        [ -n "$pinned" ] && git checkout -- $pinned || true
+
+  cdk8s:test:
+    desc: Run the cdk8s synth-time checks on the committed dist/
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run pytest -q
+
+  cdk8s:check:
+    desc: Golden-file gate — re-synth and fail if cdk8s/dist/ is stale (run cdk8s:synth and commit)
+    dir: cdk8s
+    cmds:
+      - task: cdk8s:synth
+      - git diff --exit-code -- dist/ || { echo "dist/ is stale — run task cdk8s:synth and commit"; exit 1; }
+
+  # Schema-validate the committed dist/*.k8s.yaml (what Argo actually applies)
+  # against the cluster's k8s API version — catches API-version drift after a
+  # k8s bump. dist/apps/*.json is the ApplicationSet discovery index (see
+  # main.py), not a manifest, so the glob excludes it. CRD kinds resolve via
+  # the datree CRDs-catalog; anything not there is skipped, not failed. The
+  # {{`{{.Group}}`}} backtick wrapping keeps kubeconform's URL template out of
+  # Task's own templating. Mirrored in cdk8s-synth.yml.
+  cdk8s:validate:
+    desc: Validate the committed dist/*.k8s.yaml manifests against the k8s API schemas (kubeconform)
+    dir: cdk8s
+    cmds:
+      # -kubernetes-version tracks the live cluster (kubectl version); bump it with talos upgrades
+      - mise exec -- kubeconform -strict -summary -kubernetes-version 1.36.0 -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{`{{.Group}}`}}/{{`{{.ResourceKind}}`}}_{{`{{.ResourceAPIVersion}}`}}.json' -ignore-missing-schemas dist/*.k8s.yaml
+
+  cdk8s:verify:
+    desc: The cdk8s edit loop in one step — synth, show what changed in dist/, run the synth-time checks
+    dir: cdk8s
+    cmds:
+      - task: cdk8s:synth
+      - git status --short -- dist/
+      - git diff --stat -- dist/
+      - mise exec -- uv run pytest -q
+
+  cdk8s:stage:diff:
+    desc: kubectl diff the synthed stage-1 app manifests against the live cluster (read-only)
+    dir: cdk8s
+    cmds:
+      - task: cdk8s:synth
+      - for: { var: f, split: "\n" }
+        cmd: kubectl diff -f "{{.f}}" || true
+        vars:
+          f:
+            sh: ls dist/stage-1-*.k8s.yaml | grep -v -- '-job-'
+
+  cdk8s:prod:diff:
+    desc: kubectl diff the committed (release-pinned) prod-1 app manifests against the live cluster (read-only)
+    dir: cdk8s
+    cmds:
+      - task: cdk8s:synth
+      - for: { var: f, split: "\n" }
+        cmd: kubectl diff -f "{{.f}}" || true
+        vars:
+          f:
+            sh: ls dist/prod-1-*.k8s.yaml | grep -v -- '-job-'
+
+  cdk8s:prod:bump:
+    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=tripbot|onscreens-server), e.g. a rollback'
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    requires:
+      vars: [COMPONENT]
+    cmds:
+      # Full synth regenerates ALL prod app files from HEAD; freeze every OTHER
+      # component back to its own pinned release so only COMPONENT's manifests
+      # change (its tag + any config delta this release introduced). DISTNAME
+      # strips the -server suffix (onscreens-server -> onscreens); tripbot is
+      # unchanged.
+      - mise exec -- uv run npx cdk8s synth
+      - |
+        distname="{{.COMPONENT}}"; distname="${distname%-server}"
+        others=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)' | grep -v "prod-1-${distname}-" || true)
+        [ -n "$others" ] && git checkout -- $others || true

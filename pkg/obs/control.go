@@ -3,43 +3,86 @@ package obs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 
+	"github.com/adanalife/tripbot/pkg/contract"
 	goobs "github.com/andreykaipov/goobs"
 )
 
-// dial opens a fresh OBS WebSocket connection using the same env vars
-// PollStreamingActive reads. Callers are responsible for client.Disconnect().
-// Returns an error if either OBS is unreachable or the password is rejected;
-// caller logs at the appropriate level for its context.
-func dial(_ context.Context) (*goobs.Client, error) {
+// defaultOBSWebsocketAddr is the fallback dialed when OBS_WEBSOCKET_ADDR is
+// unset. Derived from the shared contract so it tracks the canonical
+// obs-twitch service name + websocket port instead of drifting when OBS is
+// renamed (it was left as the pre-per-platform "obs:4455" once and broke the
+// watchdog on stage). In-cluster, cdk8s stamps OBS_WEBSOCKET_ADDR per platform
+// so the YouTube stack dials obs-youtube; this default only covers the
+// env-unset case.
+var defaultOBSWebsocketAddr = fmt.Sprintf("%s:%d", contract.ServiceOBSTwitch, contract.PortOBSWebsocket)
+
+// Dial opens an OBS WebSocket connection using the same env vars
+// PollStreamingActive reads (OBS_WEBSOCKET_ADDR / OBS_WEBSOCKET_PASSWD),
+// applying any extra goobs options on top of the password. Callers are
+// responsible for client.Disconnect(). Returns an error if either OBS is
+// unreachable or the password is rejected; caller logs at the appropriate
+// level for its context.
+//
+// Exported so the audio-fallback watchdog's long-lived volume-meter
+// connection can add goobs.WithEventSubscriptions without duplicating the
+// addr/password resolution.
+func Dial(_ context.Context, opts ...goobs.Option) (*goobs.Client, error) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
-		addr = "obs:4455"
+		addr = defaultOBSWebsocketAddr
 	}
 	passwd := os.Getenv("OBS_WEBSOCKET_PASSWD")
 	if passwd == "" {
 		passwd = "adanalife"
 	}
-	return goobs.New(addr, goobs.WithPassword(passwd))
+	return goobs.New(addr, append([]goobs.Option{goobs.WithPassword(passwd)}, opts...)...)
+}
+
+// dial opens a fresh OBS WebSocket connection with no extra options — the
+// per-call form used by the Start/Stop/Get helpers below.
+func dial(ctx context.Context) (*goobs.Client, error) {
+	return Dial(ctx)
+}
+
+// StartStreamOn tells OBS to begin streaming over an existing connection.
+func StartStreamOn(client *goobs.Client) error {
+	_, err := client.Stream.StartStream()
+	return err
+}
+
+// StopStreamOn tells OBS to stop streaming over an existing connection.
+// obs-websocket answers as soon as the stop is initiated; StreamActiveOn is
+// how a caller waits for the output to actually go down.
+func StopStreamOn(client *goobs.Client) error {
+	_, err := client.Stream.StopStream()
+	return err
+}
+
+// StreamActiveOn reads OBS's raw outputActive flag over an existing
+// connection. Note a reconnecting output still reports active.
+func StreamActiveOn(client *goobs.Client) (bool, error) {
+	resp, err := client.Stream.GetStreamStatus()
+	if err != nil {
+		return false, err
+	}
+	return resp.OutputActive, nil
 }
 
 // StartStream tells OBS to begin streaming. Opens a fresh connection per
 // call — toggle clicks are rare, so a long-lived shared client isn't worth
-// the coordination cost.
+// the coordination cost. A caller issuing several requests in a row holds one
+// connection and uses the *On helpers instead.
 func StartStream(ctx context.Context) error {
 	client, err := dial(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
-	_, err = client.Stream.StartStream()
-	return err
+	defer disconnect(ctx, client)
+	return StartStreamOn(client)
 }
 
 // StopStream tells OBS to stop streaming. Symmetric to StartStream.
@@ -48,13 +91,16 @@ func StopStream(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
-	_, err = client.Stream.StopStream()
-	return err
+	defer disconnect(ctx, client)
+	return StopStreamOn(client)
+}
+
+// disconnect closes a client and logs a failure to close — never fatal, the
+// request it was opened for has already been answered.
+func disconnect(ctx context.Context, client *goobs.Client) {
+	if err := client.Disconnect(); err != nil {
+		slog.WarnContext(ctx, "obs disconnect", "err", err)
+	}
 }
 
 // ErrUnreachable is returned by GetStreamStatus when OBS itself can't be
@@ -71,14 +117,38 @@ func GetStreamStatus(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, errors.Join(ErrUnreachable, err)
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
-	resp, err := client.Stream.GetStreamStatus()
-	if err != nil {
-		return false, err
+	defer disconnect(ctx, client)
+	return StreamActiveOn(client)
+}
+
+// StreamState is OBS's streaming output as three distinct states rather than a
+// boolean. Reconnecting is deliberately not folded into either neighbour: it is
+// neither healthy nor idle, and a caller that collapses it into "not streaming"
+// stands down on the one state where OBS has already admitted something is
+// wrong.
+type StreamState int
+
+const (
+	// StreamInactive: the output is stopped. Nothing is wrong and nothing is
+	// streaming — a parked or scaled-down instance lives here.
+	StreamInactive StreamState = iota
+	// StreamReconnecting: OBS knows the RTMP session failed and is retrying.
+	// Recovery may be underway, or OBS may have given up after one attempt;
+	// only elapsed time tells those apart from outside.
+	StreamReconnecting
+	// StreamSteady: outputActive with no reconnect in progress. The silent
+	// half-open lives here — OBS believes it is streaming, which is why this
+	// state still has to be cross-checked against the platform.
+	StreamSteady
+)
+
+func (s StreamState) String() string {
+	switch s {
+	case StreamReconnecting:
+		return "reconnecting"
+	case StreamSteady:
+		return "steady"
+	default:
+		return "inactive"
 	}
-	return resp.OutputActive, nil
 }

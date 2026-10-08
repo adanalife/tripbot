@@ -1,0 +1,345 @@
+"""Synth-time checks on the committed deploy units in cdk8s/dist/.
+
+Reads the committed YAML rather than re-synthing — the cdk8s dependency (jsii
+needs node) stays out of the default test run; the cdk8s-synth CI job covers
+dist/ freshness separately (golden gate).
+"""
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+from adanalife_k8s.config import ENVS, SUPPORTED_PLATFORMS
+
+DIST = Path(__file__).resolve().parents[1] / "dist"
+VERSIONS = Path(__file__).resolve().parents[1] / "versions.yaml"
+
+# (env, platform) the app charts are synthed for, read off the env definitions
+# rather than restated — a platform added to platforms.json (the fleet-wide
+# source of truth, synced by `task platforms:sync`) is covered here the moment
+# it synths. adanalife_k8s.config is stdlib + yaml only, so importing it keeps
+# jsii/node out of the default test run.
+ENV_PLATFORMS = {name: env.platforms for name, env in ENVS.items()}
+COMPONENTS = ("tripbot", "onscreens")
+
+# Every platform except twitch reaches chat through its own platform-gateway
+# instance and carries a <PLATFORM>_API_URL to find it (the EnvConfig
+# <platform>_api_url fields). twitch is excluded because it's the one instance
+# that also holds a Twitch credential of its own (the EventSub client ID), so
+# its secret mount and its URL are asserted separately below.
+GATEWAY_PLATFORMS = tuple(p for p in SUPPORTED_PLATFORMS if p != "twitch")
+
+# The (env, platform) pairs of every synthed app unit — for assertions that
+# should hold on each platform rather than a hand-picked sample of two.
+ENV_PLATFORM_PAIRS = [
+    (env, platform)
+    for env, platforms in ENV_PLATFORMS.items()
+    for platform in platforms
+]
+
+
+def _objects(stem: str) -> list[dict]:
+    with (DIST / f"{stem}.k8s.yaml").open() as f:
+        return [o for o in yaml.safe_load_all(f) if o]
+
+
+def _by_kind(objs: list[dict], kind: str) -> list[dict]:
+    return [o for o in objs if o["kind"] == kind]
+
+
+def _env_components():
+    for env, platforms in ENV_PLATFORMS.items():
+        for platform in platforms:
+            for comp in COMPONENTS:
+                yield env, comp, platform
+
+
+@pytest.mark.parametrize(
+    "env,comp,platform", list(_env_components()), ids=lambda v: str(v)
+)
+def test_each_component_has_deployment_and_service(env, comp, platform):
+    objs = _objects(f"{env}-{comp}-{platform}")
+    kinds = {o["kind"] for o in objs}
+    assert "Deployment" in kinds, f"{env}-{comp}-{platform} missing Deployment"
+    assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
+
+
+@pytest.mark.parametrize("env,platform", ENV_PLATFORM_PAIRS, ids=lambda v: str(v))
+@pytest.mark.parametrize("comp", ["tripbot"])
+def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
+    """tripbot's OBS-websocket client (watchdog + stream start/stop) must dial
+    its OWN platform's OBS — the youtube instance dials obs-youtube, not the
+    baked-in obs-twitch default."""
+    cms = _by_kind(_objects(f"{env}-{comp}-{platform}"), "ConfigMap")
+    data = next(cm["data"] for cm in cms if "OBS_WEBSOCKET_ADDR" in cm.get("data", {}))
+    assert data["OBS_WEBSOCKET_ADDR"] == f"obs-{platform}:4455"
+
+
+@pytest.mark.parametrize("env,platform", ENV_PLATFORM_PAIRS, ids=lambda v: str(v))
+def test_prod_pinned_others_float(env, platform):
+    """prod deploys the exact versions.yaml pin with IfNotPresent; every other
+    env floats on its EnvConfig.image_tag with Always — "main" for stage and
+    development, "latest" on the laptop."""
+    pins = yaml.safe_load(VERSIONS.read_text())
+    dep = _by_kind(_objects(f"{env}-tripbot-{platform}"), "Deployment")[0]
+    container = next(
+        c
+        for c in dep["spec"]["template"]["spec"]["containers"]
+        if c["name"].startswith("tripbot")
+    )
+    # Split on the first colon: the repo has no registry-host:port prefix, and
+    # the tag itself may carry a @sha256 digest suffix (a digest-pinned deploy).
+    image, tag = container["image"].split(":", 1)
+    assert image == "adanalife/tripbot"  # public Docker Hub image, no v-prefix tag
+    if env == "prod-1":
+        assert tag == pins["prod-1"]["tripbot"]
+        assert container["imagePullPolicy"] == "IfNotPresent"
+    else:
+        assert tag == ENVS[env].image_tag
+        assert container["imagePullPolicy"] == "Always"
+
+
+@pytest.mark.parametrize("env", list(ENV_PLATFORMS))
+def test_identity_unit_emits_app_secrets(env):
+    objs = _objects(f"{env}-tripbot-identity")
+    es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}
+    secret_names = {o["metadata"]["name"] for o in objs if o["kind"] == "Secret"}
+    # twitch is a required app cred in every env; maps follows env.maps.
+    assert "tripbot-twitch-creds" in es_names
+    assert ("tripbot-google-maps-api-key" in es_names) == ENVS[env].maps
+    if env == "local":
+        # laptop carries on-disk DB creds, not an ESO ExternalSecret.
+        assert "tripbot-secret" in secret_names
+    else:
+        assert "tripbot-database-creds" in es_names
+
+
+def test_priority_classes_owned_by_infra_not_tripbot():
+    # The prod-stream / prod-support scheduling tiers moved to infra
+    # (adanalife_k8s/priority.py, delivered by the prod-1 SupportingChart) —
+    # tripbot's identity unit emits no PriorityClass in any env; app pods
+    # reference the infra-owned class by name (priorityClassName=env.priority_class).
+    for stem in ("prod-1-tripbot-identity", "stage-1-tripbot-identity"):
+        assert "PriorityClass" not in {o["kind"] for o in _objects(stem)}
+    # The co-tenant ResourceQuota still lives here.
+    assert "ResourceQuota" in {o["kind"] for o in _objects("stage-1-tripbot-identity")}
+
+
+def test_stage_quota_caps_and_limit_defaults():
+    objs = _objects("stage-1-tripbot-identity")
+    quota = _by_kind(objs, "ResourceQuota")[0]
+    # every axis a runaway stage workload could starve prod on: scheduling
+    # (requests), usage (limits.memory), GPU slots, pod count, and the shared
+    # physical disk (scoped to local-path so NFS claims don't count)
+    assert set(quota["spec"]["hard"]) == {
+        "requests.cpu",
+        "requests.memory",
+        "limits.memory",
+        "requests.gpu.intel.com/i915",
+        "pods",
+        "local-path.storageclass.storage.k8s.io/requests.storage",
+    }
+    # the LimitRange backfills the quota'd fields for pods that omit them —
+    # without it a quota'd namespace rejects such pods outright
+    lr = _by_kind(objs, "LimitRange")[0]
+    item = lr["spec"]["limits"][0]
+    assert item["type"] == "Container"
+    assert set(item["defaultRequest"]) == {"cpu", "memory"}
+    # memory-only default limit: cpu stays uncapped by design
+    assert set(item["default"]) == {"memory"}
+    # prod is the protected party — no quota or defaults on its namespace
+    prod = {o["kind"] for o in _objects("prod-1-tripbot-identity")}
+    assert "ResourceQuota" not in prod and "LimitRange" not in prod
+
+
+def _env_from_secrets(stem: str) -> set[str]:
+    """The Secret names a stem's tripbot container pulls env from."""
+    dep = _by_kind(_objects(stem), "Deployment")[0]
+    container = next(
+        c
+        for c in dep["spec"]["template"]["spec"]["containers"]
+        if c["name"].startswith("tripbot")
+    )
+    return {
+        src["secretRef"]["name"]
+        for src in container.get("envFrom", [])
+        if "secretRef" in src
+    }
+
+
+def test_only_twitch_mounts_the_twitch_creds_secret():
+    """The Twitch app credentials are read only by a twitch instance, which sends
+    the client ID in its EventSub handshake; every other platform reaches its chat
+    through a platform-gateway that owns its own credential. The ExternalSecret
+    stays identity-level, so what's guarded here is the per-platform *mount*.
+
+    stage-1 rather than prod-1: prod's app manifests are release-pinned, so they
+    lag stage until the next release re-synths them.
+    """
+    assert "tripbot-twitch-creds" in _env_from_secrets("stage-1-tripbot-twitch")
+    for platform in GATEWAY_PLATFORMS:
+        stem = f"stage-1-tripbot-{platform}"
+        assert "tripbot-twitch-creds" not in _env_from_secrets(stem), (
+            f"{stem} mounts Twitch credentials it never reads"
+        )
+
+
+def test_every_platform_still_mounts_shared_app_secrets():
+    """Guards the blast radius of the twitch-creds scoping: the genuinely
+    identity-level Secrets stay on every platform."""
+    for platform in ENV_PLATFORMS["stage-1"]:
+        mounted = _env_from_secrets(f"stage-1-tripbot-{platform}")
+        assert "tripbot-database-creds" in mounted, (
+            f"stage-1-tripbot-{platform} lost a shared app Secret: {mounted}"
+        )
+
+
+@pytest.mark.parametrize("env", ["prod-1", "stage-1"])
+def test_maps_secret_mount_follows_the_env_flag(env):
+    """The Maps key is mounted only where env.maps says so — an env whose AWS
+    account has no seeded key would otherwise carry an ExternalSecret that can
+    never sync, which reads as a permanently Degraded Argo app. The binary
+    treats the key as optional (geo.ErrDisabled), so an env without it warns
+    and runs."""
+    for platform in ENV_PLATFORMS[env]:
+        mounted = _env_from_secrets(f"{env}-tripbot-{platform}")
+        assert ("tripbot-google-maps-api-key" in mounted) == ENVS[env].maps
+
+
+def test_youtube_tripbot_emits_youtube_creds():
+    objs = _objects("stage-1-tripbot-youtube")
+    es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}
+    assert "tripbot-youtube-creds" in es_names
+
+
+def test_stage_parks_every_platform():
+    """Every stage platform Deployment renders replicas:0 — the resting state is
+    everything-off; a platform comes online via the console's mode switch. Prod's
+    replica count isn't pinned here: replicas are runtime-owned (Argo ignores
+    .spec.replicas per infra#877), so prod births at 0 too and a live scale
+    sticks — the committed prod value is just whatever the last release synthed
+    (0), not a policy this test guards."""
+
+    def _deploy(stem):
+        return _by_kind(_objects(stem), "Deployment")[0]
+
+    for platform in ENV_PLATFORMS["stage-1"]:
+        stem = f"stage-1-tripbot-{platform}"
+        assert _deploy(stem)["spec"]["replicas"] == 0, f"{stem} should be parked"
+    # prod still renders its Deployment (existence is the invariant; the replica
+    # count is Argo-ignored, so it isn't asserted).
+    assert _deploy("prod-1-tripbot-twitch")
+
+
+def test_stage_twitch_routes_through_gateway():
+    """Both stage and prod tripbot-twitch carry TWITCH_API_URL (the gateway is
+    the single Helix caller); the youtube instances do not."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    assert (
+        _cm_data("stage-1-tripbot-twitch").get("TWITCH_API_URL")
+        == "http://gateway-twitch.stage-1.svc.cluster.local:8080"
+    )
+    assert (
+        _cm_data("prod-1-tripbot-twitch").get("TWITCH_API_URL")
+        == "http://gateway-twitch.prod-1.svc.cluster.local:8080"
+    )
+    assert "TWITCH_API_URL" not in _cm_data("stage-1-tripbot-youtube")
+    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-youtube")
+
+
+def test_stage_youtube_routes_sends_through_gateway():
+    """Stage tripbot-youtube carries YOUTUBE_API_URL (outbound send via the
+    gateway); the twitch instance does not."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    assert (
+        _cm_data("stage-1-tripbot-youtube").get("YOUTUBE_API_URL")
+        == "http://gateway-youtube.stage-1.svc.cluster.local:8080"
+    )
+    assert "YOUTUBE_API_URL" not in _cm_data("stage-1-tripbot-twitch")
+
+
+def test_gateway_platforms_route_through_gateway():
+    """Every non-twitch platform carries its <PLATFORM>_API_URL in both stage and
+    prod — required for chat to come up at all (the binary boots chat-less
+    without it). twitch is excluded: its gateway URL is optional, with the
+    in-process path as the fallback."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    for env in ("stage-1", "prod-1"):
+        for platform in GATEWAY_PLATFORMS:
+            key = f"{platform.upper()}_API_URL"
+            assert (
+                _cm_data(f"{env}-tripbot-{platform}").get(key)
+                == f"http://gateway-{platform}.{env}.svc.cluster.local:8080"
+            ), f"{env}-tripbot-{platform} missing {key}"
+
+
+def _pod_spec(stem: str) -> dict:
+    return _by_kind(_objects(stem), "Deployment")[0]["spec"]["template"]["spec"]
+
+
+def _prefers_rpi5(spec: dict) -> bool:
+    """True iff the pod tolerates the rpi5 taint AND prefers the board label."""
+    tolerates = any(
+        t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
+    )
+    prefs = (
+        spec.get("affinity", {})
+        .get("nodeAffinity", {})
+        .get("preferredDuringSchedulingIgnoredDuringExecution", [])
+    )
+    biases = any(
+        req.get("key") == "dana.lol/board" and "rpi5" in req.get("values", [])
+        for term in prefs
+        for req in term.get("preference", {}).get("matchExpressions", [])
+    )
+    return tolerates and biases
+
+
+def _colocates_with_obs(spec: dict, obs_app: str) -> bool:
+    """True iff the pod prefers (podAffinity) the node running `obs_app`."""
+    prefs = (
+        spec.get("affinity", {})
+        .get("podAffinity", {})
+        .get("preferredDuringSchedulingIgnoredDuringExecution", [])
+    )
+    return any(
+        term.get("podAffinityTerm", {}).get("topologyKey") == "kubernetes.io/hostname"
+        and term.get("podAffinityTerm", {})
+        .get("labelSelector", {})
+        .get("matchLabels", {})
+        .get("app")
+        == obs_app
+        for term in prefs
+    )
+
+
+def test_stage_tripbot_prefers_rpi5():
+    """tripbot-youtube is control-plane (chat/EventSub), not a realtime OBS feeder,
+    so it keeps the independent rpi5 node-preference — tolerate the taint and bias
+    toward the board label, recovering onto the MS-01 when the Pi is gone."""
+    assert _prefers_rpi5(_pod_spec("stage-1-tripbot-youtube"))
+
+
+def test_stage_obs_feeders_colocate_with_obs():
+    """onscreens feeds OBS continuously (browser-source) and must reach it on
+    localhost, not across the LAN. It anchors to its platform's OBS pod via
+    podAffinity instead of pulling toward the Pi on its own — keeping the
+    rpi5 toleration so it can follow OBS onto the Pi, but NOT an independent
+    board node-affinity, which splits the pipeline across nodes (and stutters
+    the stream) whenever OBS spills to the MS-01."""
+    spec = _pod_spec("stage-1-onscreens-youtube")
+    assert _colocates_with_obs(spec, "obs-youtube")
+    # follows OBS onto the Pi if OBS lands there ...
+    assert any(t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", []))
+    # ... but carries no independent rpi5 board pull.
+    assert not _prefers_rpi5(spec)

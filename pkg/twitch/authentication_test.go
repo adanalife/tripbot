@@ -1,204 +1,48 @@
 package twitch
 
 import (
-	"errors"
-	"strings"
 	"testing"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 )
 
-// resetToken restores currentUserToken after a test mutation.
-func resetToken(t *testing.T) {
-	t.Helper()
-	saved := currentUserToken
-	t.Cleanup(func() {
-		tokenMu.Lock()
-		currentUserToken = saved
-		tokenMu.Unlock()
-	})
+// clientWithTokens builds a fresh *API seeded with the given bot +
+// broadcaster tokens. Each test gets its own isolated client — no shared
+// global to save/restore, no mutex dance for single-goroutine setup.
+func clientWithTokens(bot, bcast oauthtokens.Token) *API {
+	cl := New()
+	cl.currentUserToken = bot
+	cl.currentBroadcasterToken = bcast
+	return cl
 }
 
-// resetBroadcasterToken restores currentBroadcasterToken after a mutation.
-func resetBroadcasterToken(t *testing.T) {
-	t.Helper()
-	saved := currentBroadcasterToken
-	t.Cleanup(func() {
-		tokenMu.Lock()
-		currentBroadcasterToken = saved
-		tokenMu.Unlock()
-	})
-}
-
-func TestIRCAuthToken_PrefixesOauth(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{AccessToken: "abc123"}
-	tokenMu.Unlock()
-
-	got := IRCAuthToken()
-	if got != "oauth:abc123" {
-		t.Errorf("IRCAuthToken() = %q, want %q", got, "oauth:abc123")
+func TestBroadcasterUserAccessToken_RawNoPrefix(t *testing.T) {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "abc123"})
+	// pkg/eventsub passes this straight into the WS handshake, which wants the
+	// bare token — an "oauth:" prefix would be rejected.
+	if got := cl.BroadcasterUserAccessToken(); got != "abc123" {
+		t.Errorf("BroadcasterUserAccessToken() = %q, want %q", got, "abc123")
 	}
 }
 
-func TestIRCAuthToken_EmptyWhenUnloaded(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{}
-	tokenMu.Unlock()
-
-	if got := IRCAuthToken(); got != "" {
-		t.Errorf("IRCAuthToken() with empty token = %q, want \"\"", got)
+func TestBroadcasterUserAccessToken_EmptyWhenUnloaded(t *testing.T) {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{})
+	if got := cl.BroadcasterUserAccessToken(); got != "" {
+		t.Errorf("BroadcasterUserAccessToken() with empty token = %q, want \"\"", got)
 	}
 }
 
-func TestCurrentUserAccessToken_ReturnsRaw(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{AccessToken: "raw-no-prefix"}
-	tokenMu.Unlock()
-
-	if got := CurrentUserAccessToken(); got != "raw-no-prefix" {
-		t.Errorf("CurrentUserAccessToken() = %q, want %q", got, "raw-no-prefix")
+// TestNew_IsolatedState confirms two constructed clients don't share token
+// state — each *API carries its own.
+func TestNew_IsolatedState(t *testing.T) {
+	a := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "a-tok"})
+	b := New()
+	if a.BroadcasterUserAccessToken() == "" {
+		t.Fatal("client a should carry its seeded token")
 	}
-}
-
-func TestBotScopes_IncludesIRCBotScopes(t *testing.T) {
-	required := []string{"chat:read", "chat:edit"}
-	have := map[string]bool{}
-	for _, s := range BotScopes {
-		have[s] = true
-	}
-	for _, r := range required {
-		if !have[r] {
-			t.Errorf("BotScopes missing required IRC scope %q (have %v)", r, BotScopes)
-		}
-	}
-}
-
-func TestBotScopes_NoDuplicates(t *testing.T) {
-	seen := map[string]bool{}
-	for _, s := range BotScopes {
-		if seen[s] {
-			t.Errorf("duplicate scope %q in BotScopes", s)
-		}
-		seen[s] = true
-	}
-}
-
-func TestBotScopes_DropsOpenID(t *testing.T) {
-	// openid was in the previous scope set but the bot doesn't read ID
-	// claims; dropping it shrinks the consent screen and reduces surface.
-	for _, s := range BotScopes {
-		if s == "openid" {
-			t.Errorf("BotScopes still includes openid; expected drop")
-		}
-	}
-}
-
-func TestBroadcasterScopes_IncludesSubscriptionsAndFollowers(t *testing.T) {
-	required := []string{"channel:read:subscriptions", "moderator:read:followers"}
-	have := map[string]bool{}
-	for _, s := range BroadcasterScopes {
-		have[s] = true
-	}
-	for _, r := range required {
-		if !have[r] {
-			t.Errorf("BroadcasterScopes missing required scope %q (have %v)", r, BroadcasterScopes)
-		}
-	}
-}
-
-func TestBroadcasterScopes_DisjointFromBotScopes(t *testing.T) {
-	// The two scope sets serve different identities; if a scope appears in
-	// both it suggests confusion about which token authorizes which call.
-	bot := map[string]bool{}
-	for _, s := range BotScopes {
-		bot[s] = true
-	}
-	for _, s := range BroadcasterScopes {
-		if bot[s] {
-			t.Errorf("scope %q appears in both BotScopes and BroadcasterScopes", s)
-		}
-	}
-}
-
-func TestBroadcasterTokenLoaded_FalseWhenEmpty(t *testing.T) {
-	resetBroadcasterToken(t)
-	tokenMu.Lock()
-	currentBroadcasterToken = oauthtokens.Token{}
-	tokenMu.Unlock()
-
-	if broadcasterTokenLoaded() {
-		t.Error("broadcasterTokenLoaded() = true with empty token; want false")
-	}
-}
-
-func TestBroadcasterTokenLoaded_TrueWhenSet(t *testing.T) {
-	resetBroadcasterToken(t)
-	tokenMu.Lock()
-	currentBroadcasterToken = oauthtokens.Token{AccessToken: "broadcaster-tok"}
-	tokenMu.Unlock()
-
-	if !broadcasterTokenLoaded() {
-		t.Error("broadcasterTokenLoaded() = false with token set; want true")
-	}
-}
-
-func TestErrIdentityMismatch_MessageNamesBoth(t *testing.T) {
-	err := &ErrIdentityMismatch{Expected: "tripbot4000", Got: "adanalife_", AccountID: "bot"}
-	msg := err.Error()
-	for _, want := range []string{"tripbot4000", "adanalife_", "bot"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("ErrIdentityMismatch.Error() = %q; missing %q", msg, want)
-		}
-	}
-}
-
-func TestErrIdentityMismatch_ErrorsAs(t *testing.T) {
-	var orig error = &ErrIdentityMismatch{Expected: "x", Got: "y", AccountID: "broadcaster"}
-	var target *ErrIdentityMismatch
-	if !errors.As(orig, &target) {
-		t.Fatal("errors.As did not extract *ErrIdentityMismatch")
-	}
-	if target.Expected != "x" || target.Got != "y" || target.AccountID != "broadcaster" {
-		t.Errorf("extracted: %+v", target)
-	}
-}
-
-func TestAuthInitURL_BuildsInitPath(t *testing.T) {
-	got := AuthInitURL("bot")
-	want := c.Conf.ExternalURL + "/auth/init?account=bot&login_as=" + c.Conf.BotUsername
-	if got != want {
-		t.Errorf("AuthInitURL(\"bot\") = %q, want %q", got, want)
-	}
-	// No CSRF state / secret should ever leak into the logged URL — it's the
-	// indirection path, not the fully-formed Twitch authorize URL.
-	if strings.Contains(got, "state=") || strings.Contains(got, "client_id=") {
-		t.Errorf("AuthInitURL leaked a sensitive query param: %q", got)
-	}
-}
-
-func TestAuthInitURL_BroadcasterAccount(t *testing.T) {
-	got := AuthInitURL("broadcaster")
-	want := c.Conf.ExternalURL + "/auth/init?account=broadcaster&login_as=" + c.Conf.ChannelName
-	if got != want {
-		t.Errorf("AuthInitURL(\"broadcaster\") = %q, want %q", got, want)
-	}
-}
-
-func TestAccountLabel_BotUsernameIsBot(t *testing.T) {
-	if got := accountLabel(c.Conf.BotUsername); got != "bot" {
-		t.Errorf("accountLabel(bot username) = %q, want \"bot\"", got)
-	}
-}
-
-func TestAccountLabel_UnknownDefaultsToBot(t *testing.T) {
-	if got := accountLabel("some-unrelated-login"); got != "bot" {
-		t.Errorf("accountLabel(unknown) = %q, want \"bot\"", got)
+	if b.BroadcasterUserAccessToken() != "" {
+		t.Errorf("client b should be empty; got %q — state leaked between instances", b.BroadcasterUserAccessToken())
 	}
 }
 
@@ -208,19 +52,16 @@ func TestErrNoToken_AliasesOAuthTokens(t *testing.T) {
 	}
 }
 
-// TestIRCAuthToken_ConcurrentReads is a smoke check that the RWMutex doesn't
-// deadlock under parallel reads while a writer takes the lock.
-func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{AccessToken: "race-check"}
-	tokenMu.Unlock()
+// TestTokenReads_Concurrent is a smoke check that the RWMutex doesn't deadlock
+// under parallel reads.
+func TestTokenReads_Concurrent(t *testing.T) {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "race-check"})
 
 	done := make(chan struct{})
 	for i := 0; i < 8; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				_ = IRCAuthToken()
+				_ = cl.BroadcasterUserAccessToken()
 			}
 			done <- struct{}{}
 		}()
@@ -230,80 +71,79 @@ func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
 		select {
 		case <-done:
 		case <-deadline:
-			t.Fatal("concurrent IRCAuthToken readers timed out (deadlock?)")
+			t.Fatal("concurrent token readers timed out (deadlock?)")
 		}
 	}
 }
 
-// withReauthConf sets the bot/broadcaster identities AccountsNeedingReauth
-// reads and restores them afterward.
-func withReauthConf(t *testing.T, bot, channel string) {
-	t.Helper()
-	savedBot, savedChan := c.Conf.BotUsername, c.Conf.ChannelName
-	c.Conf.BotUsername, c.Conf.ChannelName = bot, channel
-	t.Cleanup(func() { c.Conf.BotUsername, c.Conf.ChannelName = savedBot, savedChan })
-}
+func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
+	botExp := time.Now().Add(3 * time.Hour)
+	bcastExp := time.Now().Add(2 * time.Hour)
+	cl := clientWithTokens(
+		oauthtokens.Token{AccessToken: "good", ExpiresAt: botExp},
+		oauthtokens.Token{AccessToken: "good", ExpiresAt: bcastExp},
+	)
 
-func setTokens(t *testing.T, bot, bcast oauthtokens.Token) {
-	t.Helper()
-	resetToken(t)
-	resetBroadcasterToken(t)
-	tokenMu.Lock()
-	currentUserToken, currentBroadcasterToken = bot, bcast
-	tokenMu.Unlock()
-}
-
-func TestAccountsNeedingReauth_AllHealthy(t *testing.T) {
-	withReauthConf(t, "tripbot4000", "adanalife_")
-	future := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, future, future)
-
-	if got := AccountsNeedingReauth(); got != nil {
-		t.Fatalf("AccountsNeedingReauth() = %+v, want nil when both tokens are healthy", got)
+	got := cl.TokenStatuses("tripbot4000", "adanalife_")
+	if len(got) != 2 {
+		t.Fatalf("got %d statuses, want 2 (bot + broadcaster): %+v", len(got), got)
+	}
+	// Healthy identities are still reported (with their expiry) so the console
+	// can show a countdown.
+	if got[0].Account != "bot" || got[0].Reason != "" || !got[0].ExpiresAt.Equal(botExp) {
+		t.Errorf("bot status = %+v, want healthy with botExp", got[0])
+	}
+	if got[1].Account != "broadcaster" || got[1].Reason != "" || !got[1].ExpiresAt.Equal(bcastExp) {
+		t.Errorf("broadcaster status = %+v, want healthy with bcastExp", got[1])
 	}
 }
 
-func TestAccountsNeedingReauth_BotMissing(t *testing.T) {
-	withReauthConf(t, "tripbot4000", "adanalife_")
+func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, oauthtokens.Token{}, healthy) // bot blank → missing
+	cl := clientWithTokens(oauthtokens.Token{}, healthy) // bot blank → missing
 
-	got := AccountsNeedingReauth()
-	if len(got) != 1 {
-		t.Fatalf("got %d accounts, want 1: %+v", len(got), got)
-	}
-	if got[0].Account != "bot" || got[0].Reason != "missing" || got[0].LoginAs != "tripbot4000" {
-		t.Errorf("entry = %+v, want bot/missing/tripbot4000", got[0])
-	}
-	if !strings.Contains(got[0].InitURL, "account=bot") {
-		t.Errorf("InitURL %q should target the bot account", got[0].InitURL)
+	got := cl.TokenStatuses("tripbot4000", "adanalife_")
+	if len(got) != 2 || got[0].Account != "bot" || got[0].Reason != "missing" {
+		t.Fatalf("got %+v, want bot row with Reason=missing", got)
 	}
 }
 
-func TestAccountsNeedingReauth_BroadcasterExpired(t *testing.T) {
-	withReauthConf(t, "tripbot4000", "adanalife_")
+// A short grant reads healthy by presence and expiry, so the scopes EventSub
+// found missing are what flag it — until a clean round clears them. A missing
+// token outranks the scope report, since a re-consent fixes both.
+func TestTokenStatuses_MissingScope(t *testing.T) {
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	expired := oauthtokens.Token{AccessToken: "stale", ExpiresAt: time.Now().Add(-time.Hour)}
-	setTokens(t, healthy, expired)
+	cl := clientWithTokens(healthy, healthy)
 
-	got := AccountsNeedingReauth()
-	if len(got) != 1 {
-		t.Fatalf("got %d accounts, want 1: %+v", len(got), got)
+	cl.SetBroadcasterMissingScopes([]string{"channel:read:subscriptions", "moderator:read:followers"})
+	got := cl.TokenStatuses("tripbot4000", "adanalife_")
+	if want := "missing_scope: channel:read:subscriptions moderator:read:followers"; got[1].Reason != want {
+		t.Errorf("broadcaster Reason = %q, want %q", got[1].Reason, want)
 	}
-	if got[0].Account != "broadcaster" || got[0].Reason != "expired" {
-		t.Errorf("entry = %+v, want broadcaster/expired", got[0])
+	if got[0].Reason != "" {
+		t.Errorf("bot Reason = %q, want healthy — the scope report is the broadcaster's", got[0].Reason)
+	}
+
+	cl.currentBroadcasterToken = oauthtokens.Token{}
+	if got := cl.TokenStatuses("tripbot4000", "adanalife_"); got[1].Reason != "missing" {
+		t.Errorf("broadcaster Reason with no token = %q, want missing", got[1].Reason)
+	}
+
+	cl.currentBroadcasterToken = healthy
+	cl.SetBroadcasterMissingScopes(nil)
+	if got := cl.TokenStatuses("tripbot4000", "adanalife_"); got[1].Reason != "" {
+		t.Errorf("broadcaster Reason after a clean round = %q, want healthy", got[1].Reason)
 	}
 }
 
 // When the bot and broadcaster are the same account, there's no separate
-// broadcaster row — a blank broadcaster slot must not produce a phantom
-// re-auth prompt.
-func TestAccountsNeedingReauth_NoSeparateBroadcaster(t *testing.T) {
-	withReauthConf(t, "tripbot4000", "tripbot4000")
+// broadcaster row — a blank broadcaster slot must not produce a phantom entry.
+func TestTokenStatuses_NoSeparateBroadcaster(t *testing.T) {
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, healthy, oauthtokens.Token{}) // broadcaster slot blank, but irrelevant
+	cl := clientWithTokens(healthy, oauthtokens.Token{})
 
-	if got := AccountsNeedingReauth(); got != nil {
-		t.Fatalf("AccountsNeedingReauth() = %+v, want nil when no distinct broadcaster identity", got)
+	got := cl.TokenStatuses("tripbot4000", "tripbot4000")
+	if len(got) != 1 || got[0].Account != "bot" {
+		t.Fatalf("TokenStatuses() = %+v, want only the bot row when no distinct broadcaster identity", got)
 	}
 }

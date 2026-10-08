@@ -1,82 +1,175 @@
 package onscreensServer
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strings"
 	"testing"
 
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/gorilla/mux"
 )
 
-// These tests exercise *parse-error* paths only — the handlers reject bad
-// input before reaching the onscreen singletons.
-
-func TestOnscreensMiddleHandlerInvalidBase64Returns422(t *testing.T) {
+// The leaderboard onscreen is registered with RenderAsHTML, so its render
+// HTML must opt the JS into innerHTML (data-html="true") and ship the
+// .lb-grid CSS.
+func TestRenderLeaderboardEmitsHTMLMode(t *testing.T) {
 	s := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/show?msg=!!!not-base64!!!", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "show"})
+	req := httptest.NewRequest(http.MethodGet, "/onscreens/render/leaderboard", nil)
+	req = mux.SetURLVars(req, map[string]string{"name": SlugLeaderboard})
 	rec := httptest.NewRecorder()
 
-	s.onscreensMiddleHandler(rec, req)
+	s.onscreensRenderHandler(rec, req)
 
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-html="true"`) {
+		t.Fatalf("expected data-html=\"true\" on leaderboard root, got body:\n%s", body)
+	}
+	if !strings.Contains(body, ".lb-grid") {
+		t.Fatalf("expected .lb-grid CSS in leaderboard render, got body:\n%s", body)
 	}
 }
 
-func TestOnscreensMiddleHandlerMissingMsgReturns417(t *testing.T) {
+// Middle-text renders inline markdown, so its browser source must opt into
+// innerHTML (data-html="true") and ship the monospace `code` styling.
+func TestRenderMiddleTextEmitsHTMLMode(t *testing.T) {
 	s := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/show", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "show"})
+	req := httptest.NewRequest(http.MethodGet, "/onscreens/render/middle-text", nil)
+	req = mux.SetURLVars(req, map[string]string{"name": SlugMiddleText})
 	rec := httptest.NewRecorder()
 
-	s.onscreensMiddleHandler(rec, req)
+	s.onscreensRenderHandler(rec, req)
 
-	if rec.Code != http.StatusExpectationFailed {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusExpectationFailed)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-html="true"`) {
+		t.Fatalf("expected data-html=\"true\" on middle-text root, got body:\n%s", body)
+	}
+	if !strings.Contains(body, "#root code") {
+		t.Fatalf("expected #root code CSS in middle-text render, got body:\n%s", body)
 	}
 }
 
-func TestOnscreensMiddleHandlerUnknownActionReturns417(t *testing.T) {
+// state.json serves a Markdown-flagged onscreen as rendered HTML and a
+// non-flagged one verbatim, while the stored Content stays the raw source in
+// both cases. Re-setting the content re-renders, which is what keeps the memo
+// behind renderedContent honest.
+func TestStateHandlerRendersMarkdown(t *testing.T) {
 	s := newTestServer(t)
+	s.MiddleText.Show("use `!find` to search")
+	// Timewarp is registered without Markdown, so its backticks stay literal.
+	s.Timewarp.Show("use `!find` to search")
 
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/explode", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "explode"})
-	rec := httptest.NewRecorder()
+	// Decode the wire JSON (the encoder \u-escapes '<'/'>'; the browser's
+	// JSON.parse decodes them back to real tags before innerHTML).
+	state := func() map[string]struct {
+		Content string `json:"content"`
+	} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/onscreens/state.json", nil)
+		rec := httptest.NewRecorder()
+		s.onscreensStateHandler(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("got status %d, want 200", rec.Code)
+		}
+		var got map[string]struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decoding state.json: %v", err)
+		}
+		return got
+	}
 
-	s.onscreensMiddleHandler(rec, req)
+	got := state()
+	if want := "use <code>!find</code> to search"; got[SlugMiddleText].Content != want {
+		t.Fatalf("middle-text wire content = %q, want %q", got[SlugMiddleText].Content, want)
+	}
+	if want := "use `!find` to search"; got[SlugTimewarp].Content != want {
+		t.Fatalf("timewarp wire content = %q, want %q (not markdown-flagged)", got[SlugTimewarp].Content, want)
+	}
+	// Stored Content stays untouched raw markdown.
+	if c := s.MiddleText.Content(); c != "use `!find` to search" {
+		t.Fatalf("stored Content was mutated: %q", c)
+	}
 
-	if rec.Code != http.StatusExpectationFailed {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusExpectationFailed)
+	// A second poll over unchanged content serves the same HTML...
+	if got2 := state(); got2[SlugMiddleText].Content != got[SlugMiddleText].Content {
+		t.Fatalf("repeat poll content = %q, want %q", got2[SlugMiddleText].Content, got[SlugMiddleText].Content)
+	}
+	// ...and a re-set renders the new content.
+	s.MiddleText.Show("try `!miles` instead")
+	if want := "try <code>!miles</code> instead"; state()[SlugMiddleText].Content != want {
+		t.Fatalf("after re-set, middle-text wire content = %q, want %q", state()[SlugMiddleText].Content, want)
 	}
 }
 
-func TestOnscreensLeaderboardHandlerInvalidBase64Returns422(t *testing.T) {
+// The corner rotators take their font + shrink-to-fit budget from pkg/rotator
+// rather than from the registry literal, so this asserts the rendered browser
+// source actually carries those numbers. Without it a broken styleFor would ship
+// a stream-visible overlay at font-size 0 with no fit width, and nothing else
+// here would notice.
+func TestRenderRotatorsCarryTheirBudgets(t *testing.T) {
 	s := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/leaderboard/show?content=!!!", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "show"})
-	rec := httptest.NewRecorder()
+	for _, tc := range []struct {
+		slug string
+		side rot.Side
+	}{
+		{SlugLeftMessage, rot.SideLeft},
+		{SlugRightMessage, rot.SideRight},
+	} {
+		t.Run(tc.slug, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/onscreens/render/"+tc.slug, nil)
+			req = mux.SetURLVars(req, map[string]string{"name": tc.slug})
+			rec := httptest.NewRecorder()
 
-	s.onscreensLeaderboardHandler(rec, req)
+			s.onscreensRenderHandler(rec, req)
 
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
-
-func TestOnscreensFlagHandlerUnknownActionReturns417(t *testing.T) {
-	s := newTestServer(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/flag/explode", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "explode"})
-	rec := httptest.NewRecorder()
-
-	s.onscreensFlagHandler(rec, req)
-
-	if rec.Code != http.StatusExpectationFailed {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusExpectationFailed)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("got status %d, want 200", rec.Code)
+			}
+			body := rec.Body.String()
+			b := rot.BudgetFor(tc.side)
+			for _, want := range []string{
+				fmt.Sprintf("font-size: %dpx", b.FontSizePx),
+				fmt.Sprintf("width: %dpx", b.FitWidthPx),
+				b.FontFamilyCSS,
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("render missing %q", want)
+				}
+			}
+			// The shrink-to-fit constants land in a <script>, where html/template
+			// pads an injected number ("= 18 ;"), so these match on the value
+			// rather than on exact spacing.
+			for _, want := range []struct {
+				name  string
+				value int
+			}{
+				{"MAX_FONT_PX", b.FontSizePx},
+				{"MIN_FONT_PX", b.MinFontSizePx},
+				{"FIT_WIDTH_PX", b.FitWidthPx},
+			} {
+				re := regexp.MustCompile(want.name + `\s*=\s*` + fmt.Sprint(want.value) + `\s*;`)
+				if !re.MatchString(body) {
+					t.Errorf("render missing %s = %d", want.name, want.value)
+				}
+			}
+			// Anchored mode is what the shrink-to-fit pass keys off.
+			if !strings.Contains(body, `data-anchored="true"`) {
+				t.Error("rotator render should be in anchored mode")
+			}
+		})
 	}
 }

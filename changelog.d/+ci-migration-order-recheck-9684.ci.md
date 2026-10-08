@@ -1,0 +1,1 @@
+A migration that takes a number main already holds now fails `migration-order` before merge: the check compares migrations by file name, and every push that adds a migration to main re-runs it on the open PRs that carry one.

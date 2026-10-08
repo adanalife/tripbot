@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram-config
+  namespace: prod-1
+data:
+  BOT_USERNAME: tripbot4000
+  CHANNEL_NAME: adanalife_
+  COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
+  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local.
+  ENV: production
+  GOOGLE_APPS_PROJECT_ID: tripbot-prod
+  INSTAGRAM_API_URL: http://gateway-instagram.prod-1.svc.cluster.local:8080
+  NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
+  OBS_SERVER_HOST: obs-instagram:8080
+  OBS_WEBSOCKET_ADDR: obs-instagram:4455
+  ONSCREENS_SERVER_HOST: onscreens-instagram:8080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=instagram
+  OTEL_SDK_DISABLED: "false"
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  PLAYOUT_HOST: playout-instagram:8080
+  READ_ONLY: "false"
+  SENTRY_ENVIRONMENT: prod-1
+  STREAM_PLATFORM: instagram
+  TRIPBOT_SERVER_PORT: "8080"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram
+  namespace: prod-1
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: tripbot-instagram
+  template:
+    metadata:
+      annotations:
+        adanalife.dev/config-hash: 0deebefb59
+      labels:
+        app: tripbot-instagram
+    spec:
+      containers:
+        - env:
+            - name: USER
+              value: tripbot
+          envFrom:
+            - configMapRef:
+                name: tripbot-instagram-config
+            - secretRef:
+                name: tripbot-database-creds
+            - secretRef:
+                name: sentry-tripbot
+                optional: false
+            - secretRef:
+                name: tripbot-google-maps-api-key
+            - secretRef:
+                name: tripbot-discord-alerts-webhook
+                optional: true
+            - secretRef:
+                name: tripbot-discord-bot-token
+                optional: true
+          image: adanalife/tripbot:5.27.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          name: tripbot-instagram
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /opt/tripbot/assets/music-index
+              name: music-index
+              readOnly: true
+      initContainers:
+        - args:
+            - -path
+            - /migrations
+            - -database
+            - postgres://$(DATABASE_USER):$(DATABASE_PASS)@$(DATABASE_HOST):5432/$(DATABASE_DB)?sslmode=disable
+            - up
+          command:
+            - migrate
+          envFrom:
+            - configMapRef:
+                name: tripbot-instagram-config
+            - secretRef:
+                name: tripbot-database-creds
+          image: adanalife/tripbot:5.27.0
+          imagePullPolicy: IfNotPresent
+          name: migrate
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      priorityClassName: prod-stream
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - configMap:
+            name: obs-music-index
+            optional: true
+          name: music-index
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram-image-gate
+  namespace: prod-1
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tripbot-instagram
+        app.kubernetes.io/part-of: tripbot
+    spec:
+      containers:
+        - args:
+            - manifest
+            - adanalife/tripbot:5.27.0
+          image: gcr.io/go-containerregistry/crane:v0.21.7
+          name: image-gate
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+  ttlSecondsAfterFinished: 86400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram
+  namespace: prod-1
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    app: tripbot-instagram
+  type: ClusterIP

@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
@@ -26,23 +28,22 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Config bundles the runtime knobs cmd/onscreens-server passes into New.
-// Build-time configuration (bind address, server type, etc.) still flows
-// through the package-level config.Conf var imported as `c` — Config is
-// only for the handful of values that vary per process invocation.
+// Config bundles what cmd/onscreens-server passes into New.
 type Config struct {
 	// Version is the build-time tag returned by /version. Typically set
 	// from cmd/onscreens-server's `main.version` var, which is overridden
 	// via `-ldflags "-X main.version=..."`.
 	Version string
+	// Conf is the process config, loaded once in main via config.Load().
+	Conf *c.OnscreensServerConfig
 }
 
 // Server owns the onscreen singletons and the HTTP listener that serves
 // them. Construct via New; call Start to block on the HTTP listener.
 type Server struct {
 	Version string
+	cfg     *c.OnscreensServerConfig
 
-	Flag         *Onscreen
 	GPS          *Onscreen
 	Leaderboard  *Onscreen
 	LeftRotator  *Onscreen
@@ -50,10 +51,28 @@ type Server struct {
 	RightRotator *Onscreen
 	Timewarp     *Onscreen
 
+	// The corner rotators behind LeftRotator / RightRotator. Kept so copy
+	// edited in the admin console, arriving over NATS, can be swapped into the
+	// live pools.
+	left  *rotator
+	right *rotator
+
+	// timewarpNoBackground is the last warp's "strip the opaque cover" choice,
+	// carried on timewarp.show and served in state.json for the browser source
+	// to apply. Server-level rather than a field on the Onscreen: it's styling
+	// for one overlay, not state every overlay has.
+	timewarpNoBackground atomic.Bool
+
+	// middleExpiry is the pending auto-hide for the middle text, when the show
+	// that set it asked for one. Held so the next show can cancel it —
+	// otherwise the previous message's timer hides the new one early.
+	middleExpiryMu sync.Mutex
+	middleExpiry   *time.Timer
+
 	http *http.Server
 }
 
-// New constructs a *Server with all seven onscreens initialised and
+// New constructs a *Server with all six onscreens initialised and
 // their background loops (rotators, expiry sweepers) running. It does
 // not bind any sockets — Start does that.
 func New(cfg Config) *Server {
@@ -61,15 +80,18 @@ func New(cfg Config) *Server {
 	if version == "" {
 		version = "dev"
 	}
+	left, right := startRotators(cfg.Conf)
 	return &Server{
 		Version:      version,
-		Flag:         newFlagOnscreen(),
+		cfg:          cfg.Conf,
 		GPS:          newGPSOnscreen(),
 		Leaderboard:  newLeaderboardOnscreen(),
-		LeftRotator:  newLeftRotator(),
+		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
-		RightRotator: newRightRotator(),
+		RightRotator: right.osc,
 		Timewarp:     newTimewarp(),
+		left:         left,
+		right:        right,
 	}
 }
 
@@ -85,7 +107,11 @@ func New(cfg Config) *Server {
 // (listener-error vs. clean-stop) and lets the signal handler control
 // the shutdown deadline.
 func (s *Server) Start(ctx context.Context) error {
-	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", c.Conf.OnscreensServerBindAddress)
+	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", s.cfg.OnscreensServerBindAddress)
+
+	// Attach NATS subscribers. No-op when the natsclient singleton is
+	// nil (NATS_URL unset); HTTP remains the sole transport in that case.
+	s.StartNATSSubscribers(ctx)
 
 	r := mux.NewRouter()
 
@@ -98,20 +124,17 @@ func (s *Server) Start(ctx context.Context) error {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// onscreen endpoints
+	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps)
+	// arrive over NATS now (see nats.go); only the browser-source feeds
+	// remain on HTTP: state JSON, per-onscreen HTML pages, and image assets.
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.Handle("/flag/{action}", tagged("/onscreens/flag/{action}", s.onscreensFlagHandler))
-	osc.Handle("/gps/{action}", tagged("/onscreens/gps/{action}", s.onscreensGpsHandler))
-	osc.Handle("/leaderboard/{action}", tagged("/onscreens/leaderboard/{action}", s.onscreensLeaderboardHandler))
-	osc.Handle("/middle/{action}", tagged("/onscreens/middle/{action}", s.onscreensMiddleHandler))
-	osc.Handle("/timewarp/{action}", tagged("/onscreens/timewarp/{action}", s.onscreensTimewarpHandler))
-	// browser-source feeds: state JSON, per-onscreen HTML pages, and image assets.
 	osc.Handle("/state.json", tagged("/onscreens/state.json", s.onscreensStateHandler))
 	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
 	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
 
-	// admin actions — tailnet-only by virtue of where the Ingress is exposed;
-	// no app-layer auth gate. /admin/shutdown is the admin panel's "restart
+	// admin actions — no app-layer auth gate. onscreens-server publishes no
+	// Ingress, so this is reachable only in-cluster (Service DNS) or through a
+	// port-forward. /admin/shutdown is the admin panel's "restart
 	// onscreens-server" surface; the shared handler SIGTERMs the process and
 	// k8s restartPolicy: Always brings the pod back.
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
@@ -123,7 +146,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// catch everything else
 	r.Handle("/", tagged("/", catchAllHandler))
 
-	if c.Conf.Verbose {
+	if s.cfg.Verbose {
 		helpers.PrintAllRoutes(r)
 	}
 
@@ -131,19 +154,19 @@ func (s *Server) Start(ctx context.Context) error {
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
 	app := negroni.New(
-		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
 		httpmw.NewSlogLogger(),
 	)
 
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  c.Conf.ServerType,
+		Service:  s.cfg.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: c.Conf.IsDevelopment(),
+		IsDevelopment: s.cfg.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -152,12 +175,12 @@ func (s *Server) Start(ctx context.Context) error {
 	app.UseHandler(r)
 
 	s.http = &http.Server{
-		Addr:           c.Conf.OnscreensServerBindAddress,
+		Addr:           s.cfg.OnscreensServerBindAddress,
 		WriteTimeout:   time.Second * 15,
 		ReadTimeout:    time.Second * 15,
 		IdleTimeout:    time.Second * 60,
 		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
+		Handler:        otelhttp.NewHandler(app, s.cfg.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so Start can block on ctx.Done()
@@ -181,54 +204,30 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-// Shutdown gracefully stops the HTTP listener, allowing in-flight
-// requests up to ctx's deadline to complete before closing connections,
-// then signals every onscreen's background goroutines (the expiry
-// sweepers plus the two rotator loops) to exit and waits for them to
-// return. Returns the error from http.Server.Shutdown so callers can
-// log or act on an HTTP-drain timeout. Safe to call once Start has
-// returned (or concurrently while Start is blocked on ctx.Done()), and
-// safe to call more than once; calling on a zero-value Server (Start
-// never ran) skips the HTTP drain but still stops the onscreen loops.
-//
-// The onscreen-loop wait runs against ctx, so a caller that's already
-// past its deadline returns immediately rather than blocking on
-// goroutines that should be exiting any moment. The goroutines select
-// on a closed stop channel and exit on the next loop iteration, which
-// in the worst case is one SleepInterval (5s for the expiry sweeper)
-// or one rotator interval (45s/90s) away — well inside the 5s HTTP
-// shutdown deadline cmd/onscreens-server passes, but the ctx-aware
-// wait keeps Shutdown bounded regardless.
-func (s *Server) Shutdown(ctx context.Context) error {
-	var httpErr error
-	if s.http != nil {
-		httpErr = s.http.Shutdown(ctx)
-	}
-	s.shutdownOnscreens(ctx)
-	return httpErr
+// RestoreFromJetStream restores the state a restart would otherwise lose —
+// the permanent middle-text overlay and the console-edited rotator copy — from
+// their JetStream last-value caches. Run it from the NATS on-connect callback
+// (see cmd/onscreens-server), not from Start: the client connects
+// asynchronously and keeps retrying, so a restore issued before the connection
+// is up times out against a server that isn't there yet, while the value
+// still sits in the stream. Best-effort: a nil JetStream (NATS off) or an
+// empty cache leaves each overlay at its constructed default.
+func (s *Server) RestoreFromJetStream(ctx context.Context) {
+	s.RestoreMiddleText(ctx)
+	s.RestoreRotatorCopy(ctx)
 }
 
-// shutdownOnscreens closes each onscreen's stop channel and waits for
-// every spawned goroutine to exit, bounded by ctx. Called from
-// Shutdown; split out so the wait can be expressed as a single
-// select-on-ctx without further nesting Shutdown's logic.
-func (s *Server) shutdownOnscreens(ctx context.Context) {
-	all := s.all()
-	// Signal everyone first so the waits overlap.
-	for _, osc := range all {
-		osc.signalStop()
+// Shutdown gracefully stops the HTTP listener, allowing in-flight
+// requests up to ctx's deadline to complete before closing connections.
+// Returns the error from http.Server.Shutdown so callers can log or act
+// on a timeout. Safe to call once Start has returned (or concurrently
+// while Start is blocked on ctx.Done()); calling on a zero-value Server
+// (Start never ran) is a no-op.
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.http == nil {
+		return nil
 	}
-	done := make(chan struct{})
-	go func() {
-		for _, osc := range all {
-			osc.wg.Wait()
-		}
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
+	return s.http.Shutdown(ctx)
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the

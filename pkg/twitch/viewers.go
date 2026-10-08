@@ -1,69 +1,35 @@
 package twitch
 
-import (
-	"context"
-	"log/slog"
-
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/nicklaw5/helix/v2"
-)
-
-// BotID is the Twitch user ID for the bot account (moderator identity for
-// API calls that require moderator:read:chatters).
-var BotID string
-
-// currentChatters holds the most recent chatter list from the Helix API.
-var currentChatters []helix.ChatChatter
-
-// chatterCount is the total reported by the API (may exceed len(currentChatters)
-// if the channel has more than the default page size of chatters).
-var chatterCount int
-
-// ChatterCount returns the number of chatters as reported by Twitch.
-func ChatterCount() int {
-	return chatterCount
+// ChannelID returns the cached twitch-internal user ID for the channel, seeded
+// by SetChannelID; "" until then. Exposed for cmd/tripbot's EventSub
+// subscription setup.
+func (cl *API) ChannelID() string {
+	return cl.channelID
 }
 
-// Chatters returns a set of current chatter logins.
-func Chatters() map[string]struct{} {
-	chatters := make(map[string]struct{})
-	for _, chatter := range currentChatters {
-		chatters[chatter.UserLogin] = struct{}{}
+// SetChannelID seeds the cached channel ID from out-of-band (the
+// platform-gateway's /v1/users/{login}). The gateway owns Helix, so nothing
+// resolves the ID in-process; EventSub setup would otherwise see "".
+func (cl *API) SetChannelID(id string) {
+	cl.channelID = id
+}
+
+// ChatterCount returns the number of chatters as reported by Twitch, cached
+// from the gateway via SetChatters.
+func (cl *API) ChatterCount() int {
+	cl.audienceMu.RLock()
+	defer cl.audienceMu.RUnlock()
+	return cl.chatterCount
+}
+
+// Chatters returns a set of current chatter logins, cached from the gateway via
+// SetChatters.
+func (cl *API) Chatters() map[string]struct{} {
+	cl.audienceMu.RLock()
+	defer cl.audienceMu.RUnlock()
+	chatters := make(map[string]struct{}, len(cl.currentChatters))
+	for _, login := range cl.currentChatters {
+		chatters[login] = struct{}{}
 	}
 	return chatters
-}
-
-// UpdateChatters fetches the current chatter list via the Helix chat/chatters
-// endpoint and updates the in-memory state. Requires the bot account to be a
-// moderator of the channel (moderator:read:chatters scope).
-func UpdateChatters() {
-	client, err := Client()
-	if err != nil {
-		slog.Error("twitch API client unavailable", "err", err)
-		return
-	}
-	if ChannelID == "" {
-		ChannelID = getChannelID(c.Conf.ChannelName)
-	}
-	if BotID == "" {
-		BotID = getChannelID(c.Conf.BotUsername)
-	}
-
-	resp, err := client.GetChannelChatChatters(&helix.GetChatChattersParams{
-		BroadcasterID: ChannelID,
-		ModeratorID:   BotID,
-	})
-	if err != nil {
-		slog.Error("error getting chatters from twitch", "err", err)
-		return
-	}
-	if checkHelixResp(context.Background(), "GetChannelChatChatters", "bot", &resp.ResponseCommon) {
-		// don't overwrite cached chatter state with an empty response —
-		// 4xx here means the bot lost a scope or moderator role and the
-		// next call probably succeeds once that's fixed.
-		return
-	}
-
-	currentChatters = resp.Data.Chatters
-	chatterCount = resp.Data.Total
 }
