@@ -106,10 +106,10 @@ func (a *App) fetchLeaderboard(ctx context.Context, kind leaderboardKind) (strin
 		return "Correct Guesses This Month", a.Scoreboards.TopGuesses(ctx, onscreenRows)
 	case guessrDailyLeaderboard:
 		title, rows := a.guessrLeaderboard(ctx, "daily", "2006-01-02", "January 2")
-		return title, overlayRows(rows, onscreenRows)
+		return title, withMisses(ctx, "daily", overlayRows(rows, onscreenRows))
 	case guessrMonthlyLeaderboard:
 		title, rows := a.guessrLeaderboard(ctx, "monthly", "2006-01", "January")
-		return title, overlayRows(rows, guessrMonthlyRows)
+		return title, withMisses(ctx, "monthly", overlayRows(rows, guessrMonthlyRows))
 	default:
 		return a.Scoreboards.MilesMonth() + " Miles", a.Scoreboards.TopMiles(ctx, onscreenRows)
 	}
