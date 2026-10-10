@@ -56,6 +56,7 @@ jobs:
           docker.io/migrate/migrate:4 ghcr.io/adanalife/mirror/migrate:4
           docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
           docker.io/python:3.13-slim-bookworm ghcr.io/adanalife/mirror/python:3.13-slim-bookworm
+          docker.io/python:3.14-slim ghcr.io/adanalife/mirror/python:3.14-slim
           EOF
 
   # A weekly cron nobody watches: this refresh failed silently for eleven
