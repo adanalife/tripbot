@@ -509,7 +509,8 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !time", "username", user.Username)
 	var err error
 	var lat, lng float64
-	vid := a.Video.Current()
+	vid, elapsed := a.Video.Playhead(ctx)
+	at := vid.FilmedAt(elapsed)
 	if vid.Flagged {
 		var next video.Video
 		next, err = vid.NextUnflagged(ctx)
@@ -522,10 +523,10 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	if err != nil {
 		a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
+		realDate := helpers.ActualDate(at, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
 		msg := fmt.Sprintf("This moment was %s", fmtTime)
-		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+		if ago := helpers.TimeAgo(at); ago != "" {
 			msg += fmt.Sprintf(" (%s)", ago)
 		}
 		a.Reply(ctx, msg)
@@ -536,7 +537,8 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !date", "username", user.Username)
 	var err error
 	var lat, lng float64
-	vid := a.Video.Current()
+	vid, elapsed := a.Video.Playhead(ctx)
+	at := vid.FilmedAt(elapsed)
 	if vid.Flagged {
 		var next video.Video
 		next, err = vid.NextUnflagged(ctx)
@@ -549,10 +551,10 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	if err != nil {
 		a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
+		realDate := helpers.ActualDate(at, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
 		msg := fmt.Sprintf("This moment was %s", fmtDate)
-		if ago := helpers.TimeAgo(vid.DateFilmed); ago != "" {
+		if ago := helpers.TimeAgo(at); ago != "" {
 			msg += fmt.Sprintf(" (%s)", ago)
 		}
 		a.Reply(ctx, msg)
