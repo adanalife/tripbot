@@ -149,6 +149,16 @@ func slugCorpus(slug string) string {
 	return ""
 }
 
+// FilmedAt is when the moment clip seconds into the video was filmed: the
+// clip's start plus the driving time those seconds stand for. A video with
+// no film date stays zero, so callers keep treating it as unknown.
+func (v Video) FilmedAt(clip time.Duration) time.Time {
+	if v.DateFilmed.IsZero() {
+		return v.DateFilmed
+	}
+	return v.DateFilmed.Add(v.realElapsed(clip))
+}
+
 // realElapsed converts a span of clip time to the driving time it stands for.
 // A second of an s2fast clip is six seconds of road, so anything that
 // differences over clip time — a speed, an elapsed time — goes through here.

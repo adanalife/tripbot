@@ -132,3 +132,19 @@ func TestRealElapsed(t *testing.T) {
 		}
 	}
 }
+
+func TestFilmedAt(t *testing.T) {
+	start := time.Date(2026, 6, 5, 14, 45, 19, 0, time.UTC)
+	for _, tc := range []struct {
+		v    Video
+		want time.Time
+	}{
+		{Video{DateFilmed: start, Speed: 1}, start.Add(30 * time.Second)},
+		{Video{DateFilmed: start, Speed: 6}, start.Add(3 * time.Minute)},
+		{Video{}, time.Time{}},
+	} {
+		if got := tc.v.FilmedAt(30 * time.Second); !got.Equal(tc.want) {
+			t.Errorf("Speed %d: FilmedAt(30s) = %v, want %v", tc.v.Speed, got, tc.want)
+		}
+	}
+}

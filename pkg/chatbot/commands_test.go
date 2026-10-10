@@ -1745,3 +1745,19 @@ func TestLastMonthCmd_FlagOff_SkipsGuessr(t *testing.T) {
 		t.Errorf("chat said %q, want %q", out(), want)
 	}
 }
+
+func TestTimeCmd_ReadsThePlayheadAtTheClipsSpeed(t *testing.T) {
+	// 18:30 UTC start; 10 clip-minutes into a 6x clip is an hour of road.
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Date(2026, 6, 15, 18, 30, 0, 0, time.UTC))
+	vid.Speed = 6
+	app := newTestApp(vid)
+	app.Video.(*recordingVideo).Elapsed = 10 * time.Minute
+	out, _ := captureSay(t, app)
+
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	// Colorado is UTC-6 in June: 19:30 UTC reads 1:30pm.
+	if !strings.Contains(out(), "1:30pm") {
+		t.Errorf("expected the playhead's 1:30pm, got %q", out())
+	}
+}
