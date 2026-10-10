@@ -40,6 +40,8 @@ type recordingVideo struct {
 	// staging a playhead jump that lands on a different clip, the way a real
 	// refresh re-reads the player after playout shuffles.
 	RefreshedVid *video.Video
+	// Elapsed is how far into Vid Playhead reports the playhead.
+	Elapsed time.Duration
 }
 
 func (r *recordingVideo) Current() video.Video {
@@ -60,6 +62,10 @@ func (r *recordingVideo) CurrentProgress() time.Duration {
 func (r *recordingVideo) PlayheadLocation(_ context.Context) (video.Video, video.Moment, bool) {
 	r.Calls = append(r.Calls, "PlayheadLocation()")
 	return r.Vid, r.Moment, r.PlayheadTracked
+}
+func (r *recordingVideo) Playhead(_ context.Context) (video.Video, time.Duration) {
+	r.Calls = append(r.Calls, "Playhead()")
+	return r.Vid, r.Elapsed
 }
 func (r *recordingVideo) PlayheadVelocity(_ context.Context) (video.Velocity, bool) {
 	r.Calls = append(r.Calls, "PlayheadVelocity()")
