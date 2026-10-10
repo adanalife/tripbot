@@ -174,13 +174,13 @@ const randomByStateQuery = `
 	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state AND corpus = @corpus))
 	LIMIT 1`
 
-// airingCorpus is the corpus a pick stays inside: the one on screen. A clip is
+// AiringCorpus is the corpus a pick stays inside: the one on screen. A clip is
 // on playout's playlist exactly when its corpus is live, so staying in the
 // current clip's corpus is what keeps a pick off a parked clip that playout
 // would refuse. Nothing on screen yet reads as the ambient corpus.
 // ponytail: a set of live corpora would let a pick cross from s2 back to s1;
 // playout owns that set, and tripbot doesn't read it yet.
-func airingCorpus(current Video) string {
+func AiringCorpus(current Video) string {
 	if current.Corpus == "" {
 		return CorpusS1
 	}
@@ -203,7 +203,7 @@ func FindRandomByState(ctx context.Context, state string, current Video) (Video,
 	state = helpers.TitlecaseState(state)
 
 	result := database.GormDB().WithContext(ctx).
-		Raw(randomByStateQuery, sql.Named("state", state), sql.Named("corpus", airingCorpus(current))).
+		Raw(randomByStateQuery, sql.Named("state", state), sql.Named("corpus", AiringCorpus(current))).
 		Scan(&vid)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
@@ -239,7 +239,7 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 
 	var clips []Video
 	err := database.GormDB().WithContext(ctx).
-		Where("corpus = ? AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", airingCorpus(after), after.DateFilmed).
+		Where("corpus = ? AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", AiringCorpus(after), after.DateFilmed).
 		Order("date_filmed").
 		Limit(nextDaytimeScanLimit).
 		Find(&clips).Error
