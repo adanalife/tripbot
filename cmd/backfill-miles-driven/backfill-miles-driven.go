@@ -3,7 +3,7 @@
 //
 // Each clip carries a single GPS fix (see cmd/backfill-coords), so the
 // distance driven during clip A is approximated as the great-circle distance
-// from A's fix to the next clip's fix in film order. Clips are contiguous
+// from A's fix to the next fix in its corpus, in film order. Clips are contiguous
 // ~3-minute dashcam segments while driving, so the chord between consecutive
 // fixes tracks the road closely; a finer per-clip GPS track (the video-pipeline
 // coords stage) can later overwrite these values through the same column.
@@ -58,7 +58,7 @@ const (
 	sourceInterpolated = "interpolated"
 )
 
-// clip is one row of the videos table, in film order.
+// clip is one row of the videos table, in corpus then film order.
 type clip struct {
 	id     int
 	slug   string
@@ -67,6 +67,8 @@ type clip struct {
 	source string
 	filmed time.Time
 	miles  sql.NullFloat64 // current miles_driven
+	corpus string
+	speed  int // real seconds per clip second
 }
 
 // hasFix reports whether the clip carries a usable coordinate.
@@ -120,7 +122,12 @@ func main() {
 		log.Fatalf("loading clips: %s", err)
 	}
 
-	decisions := analyze(clips, *maxGap, *maxSpeedMph)
+	// A fast corpus's pieces start speed× farther apart in film time, so the
+	// continuous-recording gap stretches with it.
+	var decisions []decision
+	for _, run := range byCorpus(clips) {
+		decisions = append(decisions, analyze(run, *maxGap*time.Duration(run[0].speed), *maxSpeedMph)...)
+	}
 
 	switch {
 	case *outputSQL:
@@ -150,9 +157,9 @@ func openDB() (*sql.DB, error) {
 
 func loadClips(db *sql.DB) ([]clip, error) {
 	rows, err := db.Query(`
-		SELECT id, slug, lat, lng, COALESCE(coord_source, 'ocr'), date_filmed, miles_driven
+		SELECT id, slug, lat, lng, COALESCE(coord_source, 'ocr'), date_filmed, miles_driven, corpus, speed
 		FROM videos
-		ORDER BY date_filmed, id`)
+		ORDER BY corpus, date_filmed, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -161,12 +168,25 @@ func loadClips(db *sql.DB) ([]clip, error) {
 	var clips []clip
 	for rows.Next() {
 		var c clip
-		if err := rows.Scan(&c.id, &c.slug, &c.lat, &c.lng, &c.source, &c.filmed, &c.miles); err != nil {
+		if err := rows.Scan(&c.id, &c.slug, &c.lat, &c.lng, &c.source, &c.filmed, &c.miles, &c.corpus, &c.speed); err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)
 	}
 	return clips, rows.Err()
+}
+
+// byCorpus splits clips, sorted by corpus first, into one run per corpus, so
+// no walk pairs a fix from one trip with a fix from another.
+func byCorpus(clips []clip) [][]clip {
+	var runs [][]clip
+	for i, c := range clips {
+		if i == 0 || c.corpus != clips[i-1].corpus {
+			runs = append(runs, nil)
+		}
+		runs[len(runs)-1] = append(runs[len(runs)-1], c)
+	}
+	return runs
 }
 
 // analyze computes one decision per clip, in the same film order as the
