@@ -118,3 +118,14 @@ func TestChangedIsIdempotentAcrossRealRoundTrip(t *testing.T) {
 		t.Error("value → NULL should report a change")
 	}
 }
+
+func TestByCorpusSplitsRuns(t *testing.T) {
+	clips := []clip{{id: 1, corpus: "s1"}, {id: 2, corpus: "s1"}, {id: 3, corpus: "s2"}, {id: 4, corpus: "s2fast"}}
+	runs := byCorpus(clips)
+	if len(runs) != 3 || len(runs[0]) != 2 || runs[1][0].id != 3 || runs[2][0].id != 4 {
+		t.Fatalf("byCorpus = %+v, want [s1 s1] [s2] [s2fast]", runs)
+	}
+	if byCorpus(nil) != nil {
+		t.Error("byCorpus(nil) should be nil")
+	}
+}
