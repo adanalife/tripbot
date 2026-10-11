@@ -134,6 +134,25 @@
   }
   .lb-score, .lb-user { white-space: nowrap; }
   .lb-score { text-align: right; }
+{{if eq .Name "speedometer"}}
+  /* Speedometer: the number on a white speed-limit sign, centered in the
+     browser source. The labels are pseudo-elements, so setting textContent to
+     the number leaves them in place. Sized in em off FontSizePx, so the whole
+     sign scales from the registry. */
+  body { display: flex; align-items: center; justify-content: center; }
+  #root.text {
+    width: auto; height: auto;
+    flex-direction: column;
+    padding: 0.12em 0.32em 0.1em;
+    background: #ffffff;
+    border: 0.06em solid #111111;
+    border-radius: 0.14em;
+    box-shadow: 0 0 0 0.04em #ffffff, 0 4px 12px rgba(0,0,0,0.5);
+    font-weight: 700; line-height: 1; white-space: nowrap;
+  }
+  #root.text::before { content: "SPEED"; font-size: 0.3em; letter-spacing: 0.08em; margin-bottom: 0.1em; }
+  #root.text::after { content: "MPH"; font-size: 0.26em; letter-spacing: 0.08em; margin-top: 0.08em; }
+{{end}}
 {{end}}
 </style>
 </head>
