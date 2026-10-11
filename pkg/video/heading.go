@@ -48,6 +48,11 @@ type Velocity struct {
 	// stoppedMetres — a parked van, or GPS scatter that would otherwise read
 	// as a bearing.
 	Moving bool
+	// Interpolated is true when either sample was inferred between two reads
+	// rather than read off the frame. Interpolation is constant-velocity by
+	// construction, so the speed across such a span is an average, not a
+	// reading.
+	Interpolated bool
 }
 
 // VelocityAt reports which way and how fast the van was travelling at `at`
@@ -83,15 +88,38 @@ func VelocityAt(ctx context.Context, vid Video, at time.Duration) (v Velocity, o
 		return Velocity{}, false
 	}
 
+	interpolated := start.Source == CoordSourceInterpolated || end.Source == CoordSourceInterpolated
 	dist := distanceM(start, end)
 	if dist < stoppedMetres {
-		return Velocity{}, true
+		return Velocity{Interpolated: interpolated}, true
 	}
 	return Velocity{
-		Bearing:  bearingDeg(start, end),
-		SpeedMPS: dist / vid.realElapsed(to-from).Seconds(),
-		Moving:   true,
+		Bearing:      bearingDeg(start, end),
+		SpeedMPS:     dist / vid.realElapsed(to-from).Seconds(),
+		Moving:       true,
+		Interpolated: interpolated,
 	}, true
+}
+
+// maxShownMPH is the fastest reading an overlay will put on stream. A bad fix
+// at either end of the baseline reads as an absurd speed, and a van over this
+// is a misread, not a moment worth showing.
+//
+// ponytail: a flat ceiling; a per-clip outlier check against neighbouring
+// readings if misreads under it turn up.
+const maxShownMPH = 100
+
+// DisplayMPH is the speed an on-stream overlay should show for a VelocityAt
+// reading, or nil when there is nothing honest to show: no track, a span
+// interpolated between two reads (constant-velocity by construction, so the
+// needle would sit eerily still), or a reading over maxShownMPH. A stopped van
+// shows 0.
+func DisplayMPH(v Velocity, ok bool) *float64 {
+	if !ok || v.Interpolated || v.MPH() > maxShownMPH {
+		return nil
+	}
+	mph := v.MPH()
+	return &mph
 }
 
 // MPH and KPH render a Velocity in the units chat reads.

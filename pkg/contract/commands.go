@@ -7,7 +7,7 @@ import (
 
 // This file declares the onscreens *command* registry — the NATS subjects that
 // drive the on-screen overlays (timewarp, middle text, leaderboard, GPS)
-// plus the passive location feed, with each payload as a JSON Schema (draft
+// plus the passive location and speed feeds, with each payload as a JSON Schema (draft
 // 2020-12). It is emitted as the sibling commands.json by
 // `go generate ./pkg/contract`, exactly like eventbus.json.
 //
@@ -61,6 +61,10 @@ var (
 		{"weather", strType(), true},
 		{"sunset", strType(), true},
 	}
+	speedUpdateFields = []field{
+		{"emitted_at", dateType(), true},
+		{"mph", numType(), false},
+	}
 	// One rotator line: the text plus its optional platform scoping and
 	// selection weight. Mirrors pkg/rotator.Message.
 	rotatorMessageFields = []field{
@@ -95,6 +99,7 @@ var commandEnvelopeFields = map[string][]field{
 	"TimewarpShow":    timewarpShowFields,
 	"LeaderboardShow": leaderboardShowFields,
 	"LocationData":    locationUpdateFields,
+	"SpeedUpdate":     speedUpdateFields,
 	"RotatorConfig":   rotatorConfigFields,
 	"Command":         commandFields,
 }
@@ -111,7 +116,7 @@ func commandSubject(overlay, verb, schemaTitle string, fields []field) orderedOb
 }
 
 // commandsContract builds the full onscreens command registry in stable on-disk
-// order, grouped by overlay (show before hide), then the passive location feed.
+// order, grouped by overlay (show before hide), then the passive feeds.
 func commandsContract() orderedObject {
 	return orderedObject{
 		{"_comment", commandsComment},
@@ -126,6 +131,7 @@ func commandsContract() orderedObject {
 			{"gps_show", commandSubject("gps", "show", "Command", commandFields)},
 			{"gps_hide", commandSubject("gps", "hide", "Command", commandFields)},
 			{"location_update", commandSubject("location", "update", "LocationData", locationUpdateFields)},
+			{"speed_update", commandSubject("speed", "update", "SpeedUpdate", speedUpdateFields)},
 			{"rotator_config", commandSubject("rotator", "config", "RotatorConfig", rotatorConfigFields)},
 		}},
 	}

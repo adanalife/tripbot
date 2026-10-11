@@ -92,6 +92,10 @@ type Moment struct {
 	// CityM is how far the coordinate is from City, in metres; 0 means inside
 	// its limits. Meaningless when City is empty.
 	CityM float64
+
+	// Source is the row's provenance: CoordSourceOCR for a fix read off the
+	// frame, CoordSourceInterpolated for one inferred between two reads.
+	Source string
 }
 
 // Place renders the moment the way chat should hear it: inside a place, near
@@ -133,7 +137,7 @@ func (v Video) Place() string {
 // false before true, so rows within ocrWindow come first, then within those
 // the ones read off the frame, then nearest wins.
 const coordAtQuery = `
-SELECT lat, lng, state, city, city_m FROM video_coords
+SELECT lat, lng, state, city, city_m, source FROM video_coords
 WHERE video_id = @vid AND ts_sec IS NOT NULL AND abs(ts_sec - @ts) <= @window
 ORDER BY abs(ts_sec - @ts) > @ocr, source <> 'ocr', abs(ts_sec - @ts)
 LIMIT 1`
@@ -159,6 +163,7 @@ func CoordAt(ctx context.Context, vid Video, at time.Duration) (Moment, bool) {
 		State    sql.NullString
 		City     sql.NullString
 		CityM    sql.NullFloat64
+		Source   string
 	}
 	res := database.GormDB().WithContext(ctx).Raw(coordAtQuery,
 		sql.Named("vid", vid.ID),
@@ -176,5 +181,6 @@ func CoordAt(ctx context.Context, vid Video, at time.Duration) (Moment, bool) {
 	return Moment{
 		Lat: row.Lat, Lng: row.Lng,
 		State: row.State.String, City: row.City.String, CityM: row.CityM.Float64,
+		Source: row.Source,
 	}, true
 }

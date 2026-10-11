@@ -1265,6 +1265,13 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(60*time.Second, "video.LocationFeed", func(ctx context.Context) {
 		t.locationFeed.Emit(ctx, t.player.Current())
 	})
+	// The speedometer overlay's feed. Ten seconds is the velocity baseline, so
+	// a faster tick would re-read mostly the same two track samples.
+	speedFeed := onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform)
+	t.addJob(10*time.Second, "video.SpeedFeed", func(ctx context.Context) {
+		vid, at := t.player.Playhead(ctx)
+		_ = speedFeed.UpdateSpeed(ctx, video.DisplayMPH(video.VelocityAt(ctx, vid, at)))
+	})
 	// Every instance has its own onscreens-server, which can't record its own
 	// deploys (no database). Start immediately so a rollout of both lands the
 	// onscreens row beside tripbot's own.

@@ -97,6 +97,12 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	// Content is the bare whole-mph number; the template's speedometer block
+	// draws the sign around it.
+	SlugSpeedometer: {
+		Name: SlugSpeedometer, FontCSS: `"Arial Narrow", "Helvetica Neue", Arial, sans-serif`, FontSizePx: 64,
+		ColorCSS: "#111111",
+	},
 }
 
 // rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
