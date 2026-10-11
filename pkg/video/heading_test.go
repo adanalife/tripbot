@@ -149,3 +149,55 @@ func TestVelocityAt_DividesBySpeed(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplayMPH(t *testing.T) {
+	moving := Velocity{SpeedMPS: 10, Moving: true} // 22.37 mph
+	for _, tc := range []struct {
+		name string
+		v    Velocity
+		ok   bool
+		want float64 // -1 for nil
+	}{
+		{"no track", moving, false, -1},
+		{"interpolated span", Velocity{SpeedMPS: 10, Moving: true, Interpolated: true}, true, -1},
+		{"implausible", Velocity{SpeedMPS: 50, Moving: true}, true, -1}, // 112 mph
+		{"stopped", Velocity{}, true, 0},
+		{"driving", moving, true, 22.37},
+	} {
+		got := DisplayMPH(tc.v, tc.ok)
+		switch {
+		case tc.want < 0 && got != nil:
+			t.Errorf("%s: DisplayMPH = %v, want nil", tc.name, *got)
+		case tc.want >= 0 && (got == nil || math.Abs(*got-tc.want) > 0.01):
+			t.Errorf("%s: DisplayMPH = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A baseline with an interpolated end is flagged, so the overlay can refuse a
+// speed that interpolation made up; an all-OCR one is not.
+func TestVelocityAt_FlagsInterpolatedSpans(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	conf := 1.0
+
+	for _, tc := range []struct {
+		slug, endSource string
+		want            bool
+	}{
+		{"2018_0514_224801_081", "ocr", false},
+		{"2018_0514_224801_082", "interpolated", true},
+	} {
+		vid := insertVideo(t, db, Video{Slug: tc.slug, Speed: 1, CoordConfidence: &conf})
+		for ts, src := range map[int]string{0: "ocr", 10: tc.endSource} {
+			if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+				VALUES (?, ?, ?, ?, -110, ?)`, vid.ID, ts, ts, 40.0+float64(ts)*0.00025, src).Error; err != nil {
+				t.Fatalf("insert coord: %v", err)
+			}
+		}
+		v, ok := VelocityAt(ctx, vid, 10*time.Second)
+		if !ok || v.Interpolated != tc.want {
+			t.Errorf("%s (end %s): Interpolated = %v, ok = %v; want %v, true", tc.slug, tc.endSource, v.Interpolated, ok, tc.want)
+		}
+	}
+}
