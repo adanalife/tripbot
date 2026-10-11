@@ -167,6 +167,19 @@ func (osc *Onscreen) ShowFor(content string, dur time.Duration) {
 	osc.content = content
 }
 
+// Refresh shows content until ttl from now, replacing any earlier expiry
+// rather than adding to it. A periodic feed calls it on every update, so the
+// overlay stays up while updates keep coming and hides within ttl of them
+// stopping.
+func (osc *Onscreen) Refresh(content string, ttl time.Duration) {
+	osc.mu.Lock()
+	defer osc.mu.Unlock()
+	osc.dontExpire = false
+	osc.expires = time.Now().Add(ttl)
+	osc.isShowing = true
+	osc.content = content
+}
+
 // Hide will remove an onscreen from the screen
 func (osc *Onscreen) Hide() {
 	osc.mu.Lock()

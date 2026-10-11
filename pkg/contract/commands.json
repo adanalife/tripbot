@@ -203,6 +203,26 @@
         ]
       }
     },
+    "speed_update": {
+      "subject": "tripbot.{env}.onscreens.speed.update.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "SpeedUpdate",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mph": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
     "rotator_config": {
       "subject": "tripbot.{env}.onscreens.rotator.config.{platform}",
       "transport": "core",

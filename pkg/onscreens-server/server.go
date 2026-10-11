@@ -49,6 +49,7 @@ type Server struct {
 	LeftRotator  *Onscreen
 	MiddleText   *Onscreen
 	RightRotator *Onscreen
+	Speedometer  *Onscreen
 	Timewarp     *Onscreen
 
 	// The corner rotators behind LeftRotator / RightRotator. Kept so copy
@@ -89,6 +90,7 @@ func New(cfg Config) *Server {
 		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
 		RightRotator: right.osc,
+		Speedometer:  newSpeedometer(),
 		Timewarp:     newTimewarp(),
 		left:         left,
 		right:        right,
