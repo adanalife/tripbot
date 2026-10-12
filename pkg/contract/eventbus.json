@@ -55,6 +55,15 @@
           "color": {
             "type": "string"
           },
+          "video_id": {
+            "type": "integer"
+          },
+          "video_file": {
+            "type": "string"
+          },
+          "video_ts_sec": {
+            "type": "number"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"

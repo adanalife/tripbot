@@ -97,6 +97,7 @@ func (a *App) connectViaGateway(inner ChatClient) {
 		channel:     a.Cfg.ChannelName,
 		platform:    a.Cfg.Platform,
 		botUsername: a.Cfg.BotUsername,
+		stamp:       a.stampAiring,
 	}
 }
 

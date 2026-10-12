@@ -140,8 +140,14 @@ type ChatMessage struct {
 	// "#RRGGBB". Empty for a chatter who never picked one, the bot's own
 	// sends, and every platform that has no such setting — a renderer then
 	// falls back to its own palette.
-	Color     string `json:"color,omitempty"`
-	EmittedAt string `json:"emitted_at"`
+	Color string `json:"color,omitempty"`
+	// VideoID, VideoFile and VideoTsSec are the clip on screen when the line
+	// was said, and how far into it — what a reader needs to see what the
+	// chatter saw. Empty when the writing instance had no playhead.
+	VideoID    int      `json:"video_id,omitempty"`
+	VideoFile  string   `json:"video_file,omitempty"`
+	VideoTsSec *float64 `json:"video_ts_sec,omitempty"`
+	EmittedAt  string   `json:"emitted_at"`
 }
 
 // ChatReply is the parent of a threaded chat line. ParentMessageID is the
