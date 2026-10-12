@@ -9,6 +9,26 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.28.0] — 2026-10-10
+
+### Chatbot
+
+- **Season-2 clips are known to the database before any of them airs.** `videos` gains a `corpus` (`s1`/`s2`/`s2fast`) and a `speed` column; a season-2 piece's name is read in its own shape, so a runtime-created row is dated at the piece's offset into its original rather than at a year in the 2030s; `!jump`/`!goto` and `!daytime` stay inside the corpus on screen; and `!speed` reads driving speed over real time, so a 6x clip reports a sixth of what its frames suggest. ([#1651](https://github.com/adanalife/tripbot/pull/1651))
+- `!find` searches only the trip on screen, and the coordinate backfills walk each trip on its own. Videos are indexed by trip and film date. ([#1655](https://github.com/adanalife/tripbot/pull/1655))
+- `!time` and `!date` answer for the moment on screen rather than the start of the clip, counting a fast clip's seconds at its speed. ([#1657](https://github.com/adanalife/tripbot/pull/1657))
+
+### Onscreens
+
+- onscreens-server's shutdown stops every overlay's background loops, the expiry sweepers and the two corner rotators, instead of leaving them running until the process exits. ([#606](https://github.com/adanalife/tripbot/pull/606))
+
+### Fixes
+
+- Go 1.26.9 and golang.org/x/net 0.60.0 for GO-2026-6612/6613/6617. ([#1656](https://github.com/adanalife/tripbot/pull/1656))
+
+### CI / Tooling
+
+- A migration that takes a number main already holds now fails `migration-order` before merge: the check compares migrations by file name, and every push that adds a migration to main re-runs it on the open PRs that carry one. ([#1642](https://github.com/adanalife/tripbot/pull/1642))
+
 ## [v5.27.0] — 2026-10-07
 
 ### Onscreens
