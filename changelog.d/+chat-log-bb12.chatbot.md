@@ -1,1 +1,0 @@
-A permanent chat log: every line seen in chat — viewers' messages and the bot's own sends — lands in `chat_messages` with the clip on screen when it was said, and `GET /api/chat/history` pages it newest-first for the console's history page.
