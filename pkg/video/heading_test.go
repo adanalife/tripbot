@@ -3,6 +3,7 @@ package video
 import (
 	"context"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -149,3 +150,34 @@ func TestVelocityAt_DividesBySpeed(t *testing.T) {
 		}
 	}
 }
+
+// The track is the aired moments in clip order — not the footage outside the
+// trim — and a clip below the trust gate has none at all.
+func TestTrack(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	hi, lo := 1.0, 0.5
+
+	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_081", CoordConfidence: &hi})
+	for _, r := range []struct {
+		ts     *float64
+		source float64
+		lat    float64
+	}{{ptr(2), 7, 40.1}, {nil, 3, 39.9}, {ptr(0), 5, 40.0}} {
+		if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+			VALUES (?, ?, ?, ?, -110, 'ocr')`, vid.ID, r.ts, r.source, r.lat).Error; err != nil {
+			t.Fatalf("insert coord: %v", err)
+		}
+	}
+	want := []TrackPoint{{0, 40.0, -110}, {2, 40.1, -110}}
+	if got := Track(ctx, vid); !reflect.DeepEqual(got, want) {
+		t.Errorf("Track = %v, want %v", got, want)
+	}
+
+	vid.CoordConfidence = &lo
+	if got := Track(ctx, vid); got != nil {
+		t.Errorf("Track on an untrusted clip = %v, want nil", got)
+	}
+}
+
+func ptr(f float64) *float64 { return &f }
