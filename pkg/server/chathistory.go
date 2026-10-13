@@ -44,8 +44,9 @@ type chatHistoryPage struct {
 }
 
 // Newest first within the WHERE, then flipped in Go so a page reads top-down
-// like the log it extends. @before = 0 means "from the newest"; @platform =
-// ” means every platform. The clip join is LEFT: a line with no stamp still
+// like the log it extends. @before = 0 means "from the newest"; @until is the
+// jump-to-date cutoff (endOfLog when none was asked for); @platform = ”
+// means every platform. The clip join is LEFT: a line with no stamp still
 // has its text.
 const chatHistorySQL = `
 SELECT m.id, m.platform, m.username, m.user_id, m.message_id, m.text, m.emitted_at,
@@ -57,10 +58,14 @@ FROM chat_messages m
 LEFT JOIN videos v ON v.id = m.video_id
 WHERE (@platform = '' OR m.platform = @platform)
   AND (@before = 0 OR m.id < @before)
+  AND m.emitted_at < @until
 ORDER BY m.id DESC
 LIMIT @n`
 
-func chatHistory(ctx context.Context, platform string, before int64, n int) (chatHistoryPage, error) {
+// endOfLog is the cutoff when no date was asked for: later than any line.
+var endOfLog = time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+func chatHistory(ctx context.Context, platform string, before int64, until time.Time, n int) (chatHistoryPage, error) {
 	var rows []struct {
 		ID         int64
 		Platform   string
@@ -76,7 +81,7 @@ func chatHistory(ctx context.Context, platform string, before int64, n int) (cha
 		City       string
 	}
 	err := database.GormDB().WithContext(ctx).
-		Raw(chatHistorySQL, sql.Named("platform", platform), sql.Named("before", before), sql.Named("n", n)).
+		Raw(chatHistorySQL, sql.Named("platform", platform), sql.Named("before", before), sql.Named("until", until), sql.Named("n", n)).
 		Scan(&rows).Error
 	if err != nil {
 		return chatHistoryPage{}, err
@@ -101,11 +106,17 @@ func chatHistory(ctx context.Context, platform string, before int64, n int) (cha
 	return page, nil
 }
 
-// chatHistoryHandler serves GET /api/chat/history?before=<id>&n=&platform=.
+// chatHistoryHandler serves GET /api/chat/history?before=<id>&until=<date>&n=&platform=.
+// `until` (YYYY-MM-DD) jumps to the end of that UTC day: the page is the last
+// lines said on or before it. An unparseable date is ignored, like a bad `n`.
 func chatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	n := queryInt(r, "n", chatHistoryDefaultLines, 1, chatHistoryMaxLines)
 	before := int64(queryInt(r, "before", 0, 0, int(^uint(0)>>1)))
-	page, err := chatHistory(r.Context(), r.URL.Query().Get("platform"), before, n)
+	until := endOfLog
+	if day, err := time.Parse(time.DateOnly, r.URL.Query().Get("until")); err == nil {
+		until = day.AddDate(0, 0, 1)
+	}
+	page, err := chatHistory(r.Context(), r.URL.Query().Get("platform"), before, until, n)
 	if err != nil {
 		logQueryFailure(r.Context(), "chat history query failed", err, "before", before, "n", n)
 		http.Error(w, `{"error":"couldn't read chat history"}`, http.StatusInternalServerError)
