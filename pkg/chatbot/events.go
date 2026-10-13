@@ -45,6 +45,9 @@ type Events interface {
 	// CommandRefused, every command attempt lands in exactly one of the two
 	// kinds — the split any refusal rate or usage rollup is computed over.
 	CommandRan(ctx context.Context, r events.CommandRun) error
+	// ChatLine appends one line of chat — a viewer's or the bot's own — to the
+	// chat log, stamped with the clip on screen when it was said.
+	ChatLine(ctx context.Context, l events.ChatLine) error
 
 	// GuessRecord reads back a viewer's answerable-!guess history as
 	// (total, correct) — the two numbers a batting average is the ratio of.
@@ -91,6 +94,10 @@ func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusa
 
 func (r realEvents) CommandRan(ctx context.Context, run events.CommandRun) error {
 	return events.CommandRan(ctx, r.cfg, run)
+}
+
+func (r realEvents) ChatLine(ctx context.Context, l events.ChatLine) error {
+	return events.RecordChat(ctx, r.cfg, l)
 }
 
 func (r realEvents) GuessRecord(ctx context.Context, platform, username string) (int64, int64) {

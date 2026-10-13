@@ -34,6 +34,8 @@ type consoleMirror struct {
 	// stamp adds what's on screen to the send, as HandleMessage does for a
 	// viewer's line; nil leaves it unstamped (tests).
 	stamp func(*eventbus.ChatMessage)
+	// record appends the send to the chat log; nil keeps none (tests).
+	record func(eventbus.ChatMessage)
 }
 
 func (m consoleMirror) Say(msg string) {
@@ -65,6 +67,9 @@ func (m consoleMirror) mirror(msg string, reply *eventbus.ChatReply) {
 		m.stamp(&line)
 	}
 	eventbus.EmitChatMessage(context.Background(), m.env, line)
+	if m.record != nil {
+		m.record(line)
+	}
 }
 
 // disconnectedChat is App.Chat's default between New() and the connect path,
