@@ -27,7 +27,9 @@ jobs:
           app-id: ${{ vars.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: tripbot-console
+          # Every repo that keeps a copy of a pkg/contract file and listens for
+          # contract-changed; keep in step with the loop below.
+          repositories: tripbot-console,platform-gateway,infra,obs,playout
           permission-contents: write
 
       # curl rather than `gh api`: not every runner image ships the gh CLI.
@@ -35,8 +37,10 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          curl -fsS -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY_OWNER}/tripbot-console/dispatches" \
-            -d '{"event_type":"contract-changed","client_payload":{"source":"'"${GITHUB_REPOSITORY}"'","sha":"'"${GITHUB_SHA}"'"}}'
+          for repo in tripbot-console platform-gateway infra obs playout; do
+            curl -fsS -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY_OWNER}/${repo}/dispatches" \
+              -d '{"event_type":"contract-changed","client_payload":{"source":"'"${GITHUB_REPOSITORY}"'","sha":"'"${GITHUB_SHA}"'"}}'
+          done
