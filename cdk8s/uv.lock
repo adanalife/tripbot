@@ -55,16 +55,16 @@ wheels = [
 
 [[package]]
 name = "cdk8s"
-version = "2.70.98"
+version = "2.70.104"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "constructs" },
     { name = "jsii" },
     { name = "publication" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d0/5b/1c9adc20e77eda3acb10a0cd215854d7e33fe282a8d068f3d26747c6e6fd/cdk8s-2.70.98.tar.gz", hash = "sha256:f1f7710ea70f2a9e99a98c70fcd83f99908d10f1cabbf13081211166740cd9da", size = 387933, upload-time = "2026-08-29T12:18:12.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/cf/529f3fe3875f310384ee955f3f7ea58c0cb4000ed07b938ffc0061b469b0/cdk8s-2.70.104.tar.gz", hash = "sha256:fe01b44af37290829ac5a4bea32ca56d38b55c79d2f7ee70f4fc60fd019d1919", size = 387944, upload-time = "2026-09-21T14:44:10.298Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/41/04/ecccf234b2fcc4bdd496c675752a9bf2342174e0489c7c1452578f65b7e2/cdk8s-2.70.98-py3-none-any.whl", hash = "sha256:cdf85db2eb8cbf2aef6b42d4fa7cd8a530decc64dd5fe33eebc06141d65b5b86", size = 385859, upload-time = "2026-08-29T12:18:10.493Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/9e/55e15d6f892b3941a5be337699b005f90963ce62d20632ea93ba0d5eab8a/cdk8s-2.70.104-py3-none-any.whl", hash = "sha256:b3b4095e361e3d7fac4d78097582a794b19f041588acad8bf4902372752b1d83", size = 385894, upload-time = "2026-09-21T14:44:08.351Z" },
 ]
 
 [[package]]
