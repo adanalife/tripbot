@@ -38,6 +38,7 @@ type Server struct {
 	rotators   RotatorStore
 	rotatorPub RotatorPublisher
 	userFlags  UserFlagger
+	playhead   Playhead
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
@@ -107,6 +108,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// the recent breadcrumbs of each platform, so a fresh console seeds its map
 	// trail from the database rather than from what the video stream can replay.
 	r.Handle("/admin/map/recent", tagged("/admin/map/recent", mapRecentHandler)).Methods("GET")
+	// this instance's playhead and the clip's track, so the console's pin
+	// follows the road for the whole clip.
+	r.Handle("/api/map/playhead", tagged("/api/map/playhead", s.mapPlayheadHandler)).Methods("GET")
 	// read-only JSON of the feature-flag snapshot, and a write to flip a flag's
 	// global default — the console's feature-flag panel. Internal-only like the
 	// rest of /api (no Ingress; reached over the in-namespace Service).

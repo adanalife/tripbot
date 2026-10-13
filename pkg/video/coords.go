@@ -178,3 +178,32 @@ func CoordAt(ctx context.Context, vid Video, at time.Duration) (Moment, bool) {
 		State: row.State.String, City: row.City.String, CityM: row.CityM.Float64,
 	}, true
 }
+
+// TrackPoint is one moment of a clip's track: Sec into the clip, and where the
+// van was then.
+type TrackPoint struct {
+	Sec, Lat, Lng float64
+}
+
+// The primary key is one row per moment of the source recording, so the aired
+// rows are already one per moment of the clip; null ts_sec rows lie outside
+// the trim.
+const trackQuery = `
+SELECT ts_sec AS sec, lat, lng FROM video_coords
+WHERE video_id = @vid AND ts_sec IS NOT NULL
+ORDER BY ts_sec`
+
+// Track returns vid's whole per-moment track in clip order, gated like
+// CoordAt: nil when the clip has no track worth believing, which is the
+// caller's signal to fall back to the clip-level fix.
+func Track(ctx context.Context, vid Video) []TrackPoint {
+	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < minCoordConfidence {
+		return nil
+	}
+	var pts []TrackPoint
+	if err := database.GormDB().WithContext(ctx).Raw(trackQuery, sql.Named("vid", vid.ID)).Scan(&pts).Error; err != nil {
+		slog.ErrorContext(ctx, "video_coords track lookup failed", "err", err, "slug", vid.Slug)
+		return nil
+	}
+	return pts
+}
