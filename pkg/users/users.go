@@ -1,3 +1,18 @@
+// Package users tracks who is in chat and the miles they earn by being there.
+//
+// Miles are connected time: DurationToMiles converts a session's length at
+// 0.1 mi per 3 minutes, banked by the checkpoint cron and at logout. Presence
+// is the platform's chatters list, so a silent lurker earns exactly what a
+// talkative viewer does — on slow TV the lurker is the audience, and gating
+// miles on activity would punish the viewers the stream is for.
+//
+// The same property means an idle account, or many, can farm the leaderboard,
+// and nothing in the chatters list tells a farm from a room of lurkers. That
+// residual is accepted. The defense is to bound it and make it visible, not
+// to block it: a session stops accruing after 24h (maxSessionDuration) and
+// records a session_over_24h event when it crosses, and an admin reviewing
+// presence hours flips a suspect account's is_bot or exclude_from_leaderboard
+// flag to take it off the board.
 package users
 
 import (
@@ -65,7 +80,15 @@ type User struct {
 	// has already banked in the DB. sessionMiles subtracts it so the banked
 	// portion isn't also counted as still-in-flight.
 	milesCheckpointed float32 `gorm:"-"`
+	// overCapReported records that this session's session_over_24h event is
+	// already written, so the checkpoint cron and logout emit it once.
+	overCapReported bool `gorm:"-"`
 }
+
+// maxSessionDuration caps how long one session accrues miles, matching the
+// 24h bound cmd/backfill-miles applies to the events-table recompute. Past it
+// the session keeps its miles but earns no more until the viewer's next login.
+const maxSessionDuration = 24 * time.Hour
 
 // this is how long they have before they can guess again
 var guessCooldown = 3 * time.Minute
@@ -75,13 +98,15 @@ var guessCooldown = 3 * time.Minute
 // source. They take the User as a parameter so the session state and the
 // per-user data stay explicitly separate.
 
+// loggedInDur is how long u's session has accrued miles: the time since
+// login, capped at maxSessionDuration.
 func (s *Sessions) loggedInDur(u User) time.Duration {
 	// lookup the user in the session so the LoggedIn value is current
 	live, ok := s.get(u.Username)
 	if !ok {
 		return 0 * time.Second
 	}
-	return time.Since(live.LoggedIn)
+	return min(time.Since(live.LoggedIn), maxSessionDuration)
 }
 
 func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
