@@ -143,6 +143,9 @@ var (
 		{"reply", refType("ChatReply"), false},
 		{"message_type", strType(), false},
 		{"color", strType(), false},
+		{"video_id", intType(), false},
+		{"video_file", strType(), false},
+		{"video_ts_sec", numType(), false},
 		{"emitted_at", dateType(), true},
 	}
 	chatReplyFields = []field{

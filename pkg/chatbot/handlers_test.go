@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -924,5 +925,25 @@ func TestSessionUser_IsModReadsTheMessageFlag(t *testing.T) {
 	}
 	if !(sessionUser{cfg: cfg, u: &users.User{Username: adminUser}}).IsMod() {
 		t.Error("the broadcaster does not read as a mod")
+	}
+}
+
+// A chat line going out on the bus carries the clip on screen and the
+// playhead into it — what the console's "what did they see" reads.
+func TestStampAiring(t *testing.T) {
+	app := newTestApp(video.Video{ID: 77, Slug: "2018_0514_224801_013"})
+	var line eventbus.ChatMessage
+	app.stampAiring(&line)
+	if line.VideoID != 77 || line.VideoFile != "2018_0514_224801_013.MP4" {
+		t.Errorf("stamp = %d %q, want 77 2018_0514_224801_013.MP4", line.VideoID, line.VideoFile)
+	}
+	if line.VideoTsSec == nil {
+		t.Error("video_ts_sec = nil, want the playhead stamped")
+	}
+	app.Video = nil
+	var bare eventbus.ChatMessage
+	app.stampAiring(&bare)
+	if bare.VideoID != 0 || bare.VideoFile != "" || bare.VideoTsSec != nil {
+		t.Errorf("no video source should leave the line unstamped: %+v", bare)
 	}
 }

@@ -219,6 +219,24 @@ func withRefusalMark(ctx context.Context) (context.Context, *bool) {
 	return context.WithValue(ctx, refusalMarkKey{}, refused), refused
 }
 
+// stampAiring puts the clip on screen, and the playhead into it, onto a chat
+// line about to go out — what lets a console reader see what the chatter was
+// reacting to. Current() is the cached notion of what's playing, no I/O.
+// An instance with no video source leaves the fields empty.
+func (a *App) stampAiring(line *eventbus.ChatMessage) {
+	if a.Video == nil {
+		return
+	}
+	cur := a.Video.Current()
+	if cur.ID == 0 {
+		return
+	}
+	line.VideoID = cur.ID
+	line.VideoFile = cur.File()
+	secs := a.Video.CurrentProgress().Seconds()
+	line.VideoTsSec = &secs
+}
+
 // recordRefusal writes a command_refused event, stamping whatever clip is
 // airing so a refusal can be read back against what was on screen. Best-effort:
 // the viewer already got their answer in chat, so a failed insert is logged and
@@ -612,7 +630,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, eventbus.ChatMessage{
+	line := eventbus.ChatMessage{
 		Platform:    a.Platform,
 		Username:    msg.User,
 		UserID:      msg.UserID,
@@ -626,7 +644,9 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Reply:       msg.Reply,
 		MessageType: msg.MessageType,
 		Color:       msg.Color,
-	})
+	}
+	a.stampAiring(&line)
+	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, line)
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.
