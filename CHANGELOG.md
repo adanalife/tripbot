@@ -9,6 +9,17 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.29.0] — 2026-10-13
+
+### Chatbot
+
+- Each chat line on the bus carries the clip on screen when it was said (`video_id`, `video_file`, `video_ts_sec`), for viewer messages and the bot's own sends alike — what lets the console show what a chatter was reacting to. ([#1660](https://github.com/adanalife/tripbot/pull/1660))
+- A permanent chat log: every line seen in chat — viewers' messages and the bot's own sends — lands in `chat_messages` with the clip on screen when it was said, and `GET /api/chat/history` pages it newest-first for the console's history page. ([#1662](https://github.com/adanalife/tripbot/pull/1662))
+
+### CI / Tooling
+
+- The weekly base-image mirror copies `python:3.14-slim` to GHCR, for video-pipeline's Dockerfile. ([#1658](https://github.com/adanalife/tripbot/pull/1658))
+
 ## [v5.28.0] — 2026-10-10
 
 ### Chatbot

@@ -1,1 +1,0 @@
-Each chat line on the bus carries the clip on screen when it was said (`video_id`, `video_file`, `video_ts_sec`), for viewer messages and the bot's own sends alike — what lets the console show what a chatter was reacting to.
