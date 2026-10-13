@@ -237,6 +237,25 @@ func (a *App) stampAiring(line *eventbus.ChatMessage) {
 	line.VideoTsSec = &secs
 }
 
+// recordChat appends a chat line, stamp and all, to the chat log. Best-effort:
+// the line is already on the bus, so a failed insert is logged and dropped.
+func (a *App) recordChat(ctx context.Context, line eventbus.ChatMessage) {
+	if a.Events == nil {
+		return
+	}
+	err := a.Events.ChatLine(ctx, events.ChatLine{
+		Username:  line.Username,
+		UserID:    line.UserID,
+		MessageID: line.MessageID,
+		Text:      line.Text,
+		VideoID:   line.VideoID,
+		TsSec:     line.VideoTsSec,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "error recording chat line", "err", err, "user", line.Username)
+	}
+}
+
 // recordRefusal writes a command_refused event, stamping whatever clip is
 // airing so a refusal can be read back against what was on screen. Best-effort:
 // the viewer already got their answer in chat, so a failed insert is logged and
@@ -647,6 +666,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	}
 	a.stampAiring(&line)
 	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, line)
+	a.recordChat(ctx, line)
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.

@@ -25,6 +25,7 @@ func (noopEvents) CommandRefused(_ context.Context, _ events.CommandRefusal) err
 func (noopEvents) CommandRan(_ context.Context, _ events.CommandRun) error {
 	return nil
 }
+func (noopEvents) ChatLine(_ context.Context, _ events.ChatLine) error { return nil }
 func (noopEvents) GuessRecord(_ context.Context, _, _ string) (int64, int64) {
 	return 0, 0
 }
@@ -50,11 +51,17 @@ type recordingEvents struct {
 	Refusals []events.CommandRefusal
 	Raids    []events.Raid
 	Runs     []events.CommandRun
+	Lines    []events.ChatLine
 
 	// GuessTotal/GuessCorrect is what GuessRecord answers, for the commands
 	// that read a viewer's history back rather than adding to it.
 	GuessTotal   int64
 	GuessCorrect int64
+}
+
+func (r *recordingEvents) ChatLine(_ context.Context, l events.ChatLine) error {
+	r.Lines = append(r.Lines, l)
+	return nil
 }
 
 func (r *recordingEvents) GuessRecord(_ context.Context, _, _ string) (int64, int64) {
