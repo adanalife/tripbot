@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
@@ -84,6 +85,18 @@ func (f *stubFlagger) SetExcludeFromLeaderboard(_ context.Context, u string, v b
 	return f.write(u, "exclude_from_leaderboard", v)
 }
 
+func (f *stubFlagger) SetStarred(_ context.Context, u string, v bool) error {
+	return f.write(u, "starred", v)
+}
+
+func (f *stubFlagger) SetNote(_ context.Context, u, note string) error {
+	if u == "ghost" {
+		return gorm.ErrRecordNotFound
+	}
+	f.got = append(f.got, u+" note="+note)
+	return nil
+}
+
 func TestUserFlagsHandler(t *testing.T) {
 	post := func(s *Server, username, body string) *httptest.ResponseRecorder {
 		r := mux.NewRouter()
@@ -121,5 +134,58 @@ func TestUserFlagsHandler(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), field) {
 			t.Errorf("body missing %s: %s", field, rec.Body.String())
 		}
+	}
+}
+
+// A star and a note ride the same write as the flags; the note is trimmed, and
+// one past the cap is refused before anything is written.
+func TestUserFlagsHandler_StarAndNote(t *testing.T) {
+	post := func(s *Server, body string) *httptest.ResponseRecorder {
+		r := mux.NewRouter()
+		r.Handle("/api/user/{username}/flags", http.HandlerFunc(s.userFlagsHandler)).Methods("POST")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/user/kiwi/flags", strings.NewReader(body)))
+		return rec
+	}
+	f := &stubFlagger{}
+	s := New(testConf)
+	s.SetUserFlags(f)
+
+	if rec := post(s, `{"note":"`+strings.Repeat("é", maxNoteRunes+1)+`"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("long note: status = %d, want 400", rec.Code)
+	}
+	if len(f.got) != 0 {
+		t.Fatalf("a refused note wrote %v", f.got)
+	}
+	rec := post(s, `{"starred":true,"note":"  my sister  "}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	want := "kiwi starred=true,kiwi note=my sister"
+	if got := strings.Join(f.got, ","); got != want {
+		t.Errorf("writes = %s, want %s", got, want)
+	}
+	if !strings.Contains(rec.Body.String(), `"note":"my sister"`) {
+		t.Errorf("echo = %s", rec.Body.String())
+	}
+}
+
+func TestStarredUsersHandler(t *testing.T) {
+	saved := starredUsers
+	t.Cleanup(func() { starredUsers = saved })
+	starredUsers = func(context.Context) ([]users.User, error) {
+		return []users.User{{Platform: "twitch", Username: "kiwi", Note: "my sister"}}, nil
+	}
+	rec := httptest.NewRecorder()
+	starredUsersHandler(rec, httptest.NewRequest(http.MethodGet, "/api/users/starred", nil))
+	if got, want := rec.Body.String(), `[{"platform":"twitch","username":"kiwi","note":"my sister"}]`+"\n"; got != want {
+		t.Errorf("body = %s, want %s", got, want)
+	}
+
+	starredUsers = func(context.Context) ([]users.User, error) { return nil, nil }
+	rec = httptest.NewRecorder()
+	starredUsersHandler(rec, httptest.NewRequest(http.MethodGet, "/api/users/starred", nil))
+	if rec.Body.String() != "[]\n" {
+		t.Errorf("none starred: body = %s, want []", rec.Body.String())
 	}
 }

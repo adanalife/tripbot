@@ -352,6 +352,40 @@ func TestSetExcludeFromLeaderboard(t *testing.T) {
 	}
 }
 
+// A star and a note persist, survive a session save (which never writes
+// them), and the starred list reads them back.
+func TestSetStarredAndNote(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	user, err := FindOrCreate(ctx, testConf.Platform, "kiwi")
+	if err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
+	if _, err := FindOrCreate(ctx, testConf.Platform, "stranger"); err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
+	if err := s.SetStarred(ctx, "kiwi", true); err != nil {
+		t.Fatalf("SetStarred: %v", err)
+	}
+	if err := s.SetNote(ctx, "kiwi", "my sister"); err != nil {
+		t.Fatalf("SetNote: %v", err)
+	}
+	user.save(ctx) // the stale copy from before the writes
+
+	got, err := Starred(ctx)
+	if err != nil {
+		t.Fatalf("Starred: %v", err)
+	}
+	if len(got) != 1 || got[0].Username != "kiwi" || got[0].Note != "my sister" {
+		t.Errorf("Starred = %+v, want kiwi with her note", got)
+	}
+	if err := s.SetStarred(ctx, "ghost", true); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Errorf("unknown user: want gorm.ErrRecordNotFound, got %v", err)
+	}
+}
+
 func TestGuessCooldownRemaining(t *testing.T) {
 	t.Run("zero lastLocation returns no cooldown", func(t *testing.T) {
 		u := User{}

@@ -57,6 +57,8 @@ type userProfile struct {
 	Username     string    `json:"username"`
 	Found        bool      `json:"found"`
 	IsBot        bool      `json:"is_bot"`
+	Starred      bool      `json:"starred"`
+	Note         string    `json:"note"`
 	Miles        float32   `json:"miles"`         // lifetime
 	MonthlyMiles float32   `json:"monthly_miles"` // current month
 	Sessions     int64     `json:"sessions"`
@@ -117,6 +119,8 @@ func gatherUserProfile(ctx context.Context, platform, platformUserID, username s
 	prof.Username = u.Username
 	prof.Found = true
 	prof.IsBot = u.IsBot
+	prof.Starred = u.Starred
+	prof.Note = u.Note
 	prof.Miles = u.Miles
 	prof.MonthlyMiles = monthlyMiles(ctx, u)
 	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, u.Username))

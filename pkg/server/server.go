@@ -96,6 +96,8 @@ func (s *Server) Start(ctx context.Context) error {
 	// the write behind the presence report: flag an account as a bot or keep
 	// it off the leaderboard.
 	r.Handle("/api/user/{username}/flags", tagged("/api/user/{username}/flags", s.userFlagsHandler)).Methods("POST")
+	// every starred account, so the console can pick friends out of its lists.
+	r.Handle("/api/users/starred", tagged("/api/users/starred", starredUsersHandler)).Methods("GET")
 	// read-only JSON list of the logins currently in chat, for the console's
 	// currently-active-chatters panel.
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
