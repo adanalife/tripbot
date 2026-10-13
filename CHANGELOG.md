@@ -9,6 +9,18 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.30.0] — 2026-10-13
+
+### Console / API
+
+- Serve each instance's playhead and the clip's GPS track at `/api/map/playhead`, so the console's map pin can follow the road for the whole clip. ([#1670](https://github.com/adanalife/tripbot/pull/1670))
+- Serve one clip's record at `/api/videos/{id}` (file, place, coordinates, recorded-at, neighbours and its airings) for the console's video page. ([#1671](https://github.com/adanalife/tripbot/pull/1671))
+- Accounts can be starred and carry a note (`users.starred`, `users.note`): set through `POST /api/user/{name}/flags`, read on the profile and presence reports, and listed at `/api/users/starred` so the console can pick friends out of its lists. ([#1673](https://github.com/adanalife/tripbot/pull/1673))
+
+### Misc
+
+- The `events` table is append-only at the database: UPDATE, DELETE and TRUNCATE raise, so history that miles and the rollups derive from can only be corrected by inserting an event. ([#1669](https://github.com/adanalife/tripbot/pull/1669))
+
 ## [v5.29.0] — 2026-10-13
 
 ### Chatbot

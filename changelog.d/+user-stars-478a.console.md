@@ -1,1 +1,0 @@
-Accounts can be starred and carry a note (`users.starred`, `users.note`): set through `POST /api/user/{name}/flags`, read on the profile and presence reports, and listed at `/api/users/starred` so the console can pick friends out of its lists.
