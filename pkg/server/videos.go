@@ -38,6 +38,31 @@ type videoDetail struct {
 	// the latest one's start, empty when the clip has never aired.
 	Plays        int64  `json:"plays"`
 	LastPlayedAt string `json:"last_played_at"`
+	// Track is the clip's route as [sec, lat, lng] in clip order, and
+	// PrevTrack / NextTrack are its neighbours' — the road into and out of it.
+	// Each is empty when that clip has no track worth believing.
+	Track     [][3]float64 `json:"track"`
+	PrevTrack [][3]float64 `json:"prev_track"`
+	NextTrack [][3]float64 `json:"next_track"`
+}
+
+// trackOf is vid's track as triples, never nil, so it encodes as [].
+func trackOf(ctx context.Context, vid video.Video) [][3]float64 {
+	out := [][3]float64{}
+	for _, p := range clipTrack(ctx, vid) {
+		out = append(out, [3]float64{p.Sec, p.Lat, p.Lng})
+	}
+	return out
+}
+
+// neighbourTrack is the track of the clip id names, empty when there is no
+// neighbour or it can't be read: a missing side road is not worth a 500.
+func neighbourTrack(ctx context.Context, db *gorm.DB, id *int64) [][3]float64 {
+	var v video.Video
+	if id == nil || db.First(&v, *id).Error != nil {
+		return [][3]float64{}
+	}
+	return trackOf(ctx, v)
 }
 
 // ponytail: video_plays is indexed by (platform, started_at), so this scans
@@ -62,7 +87,7 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	d := videoDetail{
 		ID: v.ID, File: v.File(), State: v.State, City: v.City, CityM: v.CityM,
 		Place: v.Place(), Lat: v.Lat, Lng: v.Lng, Flagged: v.Flagged, Corpus: v.Corpus,
-		Plays: plays.Plays,
+		Plays: plays.Plays, Track: trackOf(ctx, v),
 	}
 	if !v.DateFilmed.IsZero() {
 		d.RecordedAt = v.DateFilmed.UTC().Format(time.RFC3339)
@@ -73,6 +98,8 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	if v.NextVid.Valid {
 		d.NextID = &v.NextVid.Int64
 	}
+	d.PrevTrack = neighbourTrack(ctx, db, d.PrevID)
+	d.NextTrack = neighbourTrack(ctx, db, d.NextID)
 	if plays.Last.Valid {
 		d.LastPlayedAt = plays.Last.Time.UTC().Format(time.RFC3339)
 	}
