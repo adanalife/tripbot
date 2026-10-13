@@ -9,11 +9,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/users"
 )
 
 // The presence report ranks accounts by connected time, for spotting the idle
@@ -44,6 +46,8 @@ type presenceRow struct {
 	LongestSessionHours    float64 `json:"longest_session_hours"`
 	IsBot                  bool    `json:"is_bot"`
 	ExcludeFromLeaderboard bool    `json:"exclude_from_leaderboard"`
+	Starred                bool    `json:"starred"`
+	Note                   string  `json:"note"`
 }
 
 // presenceResponse is the wire shape of GET /api/insights/presence.
@@ -68,7 +72,9 @@ SELECT o.platform,
        COUNT(*) AS sessions,
        ROUND((MAX(EXTRACT(EPOCH FROM (o.date_created - l.date_created))) / 3600.0)::numeric, 2)::float8 AS longest_session_hours,
        u.is_bot,
-       u.exclude_from_leaderboard
+       u.exclude_from_leaderboard,
+       u.starred,
+       u.note
 FROM events o
 JOIN events l ON l.session_id = o.session_id
              AND l.event = 'login'
@@ -79,7 +85,7 @@ WHERE o.event = 'logout'
   AND o.session_id <> '00000000-0000-0000-0000-000000000000'
   AND o.date_created >= now() - make_interval(days => @days)
   AND o.date_created >= l.date_created
-GROUP BY o.platform, o.username, u.is_bot, u.exclude_from_leaderboard
+GROUP BY o.platform, o.username, u.is_bot, u.exclude_from_leaderboard, u.starred, u.note
 ORDER BY presence_hours DESC, o.platform, o.username
 LIMIT @limit`
 
@@ -110,14 +116,20 @@ func presenceInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, payload)
 }
 
-// UserFlagger writes the two account flags the presence report surfaces.
+// UserFlagger writes the account flags the presence report surfaces, and the
+// operator's note.
 // *users.Sessions implements it, which keeps the live session copy in step:
 // a DB-only is_bot write would be reverted by the next miles checkpoint's
 // save of a logged-in viewer.
 type UserFlagger interface {
 	SetBot(ctx context.Context, username string, isBot bool) error
 	SetExcludeFromLeaderboard(ctx context.Context, username string, exclude bool) error
+	SetStarred(ctx context.Context, username string, starred bool) error
+	SetNote(ctx context.Context, username, note string) error
 }
+
+// maxNoteRunes caps a note: a line about who someone is, not a dossier.
+const maxNoteRunes = 280
 
 // SetUserFlags injects the flag writer backing POST /api/user/{username}/flags.
 // Called from cmd/tripbot before Start runs the HTTP server (so there's no race
@@ -126,9 +138,9 @@ func (s *Server) SetUserFlags(f UserFlagger) {
 	s.userFlags = f
 }
 
-// userFlagsHandler serves POST /api/user/{username}/flags. The body sets
-// either flag or both — {"is_bot": true}, {"exclude_from_leaderboard": false}
-// — for the account on this instance's platform, so the console sends it to
+// userFlagsHandler serves POST /api/user/{username}/flags. The body sets any
+// of the account's marks — {"is_bot": true}, {"exclude_from_leaderboard":
+// false}, {"starred": true}, {"note": "my sister"} — for the account on this instance's platform, so the console sends it to
 // the instance matching the report row's platform. An account with no row on
 // this platform is a 404. The response echoes what was written.
 func (s *Server) userFlagsHandler(w http.ResponseWriter, r *http.Request) {
@@ -138,12 +150,23 @@ func (s *Server) userFlagsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.ToLower(strings.TrimSpace(mux.Vars(r)["username"]))
 	var body struct {
-		IsBot                  *bool `json:"is_bot"`
-		ExcludeFromLeaderboard *bool `json:"exclude_from_leaderboard"`
+		IsBot                  *bool   `json:"is_bot"`
+		ExcludeFromLeaderboard *bool   `json:"exclude_from_leaderboard"`
+		Starred                *bool   `json:"starred"`
+		Note                   *string `json:"note"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || (body.IsBot == nil && body.ExcludeFromLeaderboard == nil) {
-		http.Error(w, "body must set is_bot or exclude_from_leaderboard", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil ||
+		(body.IsBot == nil && body.ExcludeFromLeaderboard == nil && body.Starred == nil && body.Note == nil) {
+		http.Error(w, "body must set is_bot, exclude_from_leaderboard, starred or note", http.StatusBadRequest)
 		return
+	}
+	if body.Note != nil {
+		note := strings.TrimSpace(*body.Note)
+		if utf8.RuneCountInString(note) > maxNoteRunes {
+			http.Error(w, fmt.Sprintf("note is longer than %d characters", maxNoteRunes), http.StatusBadRequest)
+			return
+		}
+		body.Note = &note
 	}
 	var err error
 	if body.IsBot != nil {
@@ -151,6 +174,12 @@ func (s *Server) userFlagsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && body.ExcludeFromLeaderboard != nil {
 		err = s.userFlags.SetExcludeFromLeaderboard(r.Context(), username, *body.ExcludeFromLeaderboard)
+	}
+	if err == nil && body.Starred != nil {
+		err = s.userFlags.SetStarred(r.Context(), username, *body.Starred)
+	}
+	if err == nil && body.Note != nil {
+		err = s.userFlags.SetNote(r.Context(), username, *body.Note)
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.Error(w, "no such user on this platform", http.StatusNotFound)
@@ -162,7 +191,8 @@ func (s *Server) userFlagsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.InfoContext(r.Context(), "user flags set via console", "username", username,
-		"is_bot", body.IsBot, "exclude_from_leaderboard", body.ExcludeFromLeaderboard)
+		"is_bot", body.IsBot, "exclude_from_leaderboard", body.ExcludeFromLeaderboard,
+		"starred", body.Starred, "note_set", body.Note != nil)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":                       true,
@@ -170,5 +200,39 @@ func (s *Server) userFlagsHandler(w http.ResponseWriter, r *http.Request) {
 		"username":                 username,
 		"is_bot":                   body.IsBot,
 		"exclude_from_leaderboard": body.ExcludeFromLeaderboard,
+		"starred":                  body.Starred,
+		"note":                     body.Note,
 	})
+}
+
+// starredUsers is the data seam the starred endpoint reads through,
+// overridable in tests so the handler renders without a DB.
+var starredUsers = users.Starred
+
+// starredUser is one starred account in GET /api/users/starred.
+type starredUser struct {
+	Platform string `json:"platform"`
+	Username string `json:"username"`
+	Note     string `json:"note"`
+}
+
+// starredUsersHandler serves GET /api/users/starred: every starred account on
+// every platform, with its note. The console reads the whole set once and
+// marks those names wherever it lists people — chat, the chatter list, the
+// boards — rather than each of those reads joining users for one boolean.
+func starredUsersHandler(w http.ResponseWriter, r *http.Request) {
+	us, err := starredUsers(r.Context())
+	if err != nil {
+		logQueryFailure(r.Context(), "starred users query failed", err)
+		http.Error(w, `{"error":"couldn't read starred users"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]starredUser, 0, len(us))
+	for _, u := range us {
+		out = append(out, starredUser{Platform: u.Platform, Username: u.Username, Note: u.Note})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		logQueryFailure(r.Context(), "starred users encode failed", err)
+	}
 }

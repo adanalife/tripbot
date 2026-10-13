@@ -34,6 +34,11 @@ type User struct {
 	// while leaving it a normal chatter everywhere else. Independent of
 	// IsBot, which carries behavioral meaning beyond ranking.
 	ExcludeFromLeaderboard bool
+	// Starred and Note are the operator's own marks, set from the console:
+	// a friend to pick out of its lists, and who someone is. save() leaves
+	// both alone, like ExcludeFromLeaderboard.
+	Starred bool
+	Note    string
 	// Moderator is the platform's word, on the message being handled, that
 	// this chatter moderates the channel. Per message, never persisted: a
 	// mod gate should track the platform's roster, not a snapshot of it.
@@ -193,6 +198,35 @@ func (s *Sessions) SetExcludeFromLeaderboard(ctx context.Context, username strin
 	}
 	s.mu.Unlock()
 	return nil
+}
+
+// SetStarred flips users.starred for a username, and SetNote replaces
+// users.note. Both write the column directly: save() never writes them, and
+// nothing reads them off a session, so there is no live copy to keep in step.
+// Return gorm.ErrRecordNotFound if the user doesn't exist in the DB.
+func (s *Sessions) SetStarred(ctx context.Context, username string, starred bool) error {
+	return s.setColumn(ctx, username, "starred", starred)
+}
+
+func (s *Sessions) SetNote(ctx context.Context, username, note string) error {
+	return s.setColumn(ctx, username, "note", note)
+}
+
+func (s *Sessions) setColumn(ctx context.Context, username, column string, value any) error {
+	user, err := Find(ctx, s.cfg.Platform, username)
+	if err != nil {
+		return err
+	}
+	return database.GormDB().WithContext(ctx).Model(&user).Update(column, value).Error
+}
+
+// Starred lists every starred account on every platform, with its note.
+func Starred(ctx context.Context) ([]User, error) {
+	var out []User
+	err := database.GormDB().WithContext(ctx).
+		Select("platform", "username", "note").
+		Where("starred").Order("platform, username").Find(&out).Error
+	return out, err
 }
 
 // IsFollower returns true if the user is a follower
