@@ -1,14 +1,14 @@
 name: platforms-contract
 
-# Guards the fleet-wide platform-set contract: platform-gateway owns
-# platforms.json (its Go adapter registry is the source of truth) and every repo
-# syncs a copy via `task platforms:sync`. This asserts the synced copy still
-# matches the gateway's main — catching both a stale local copy and the gateway
-# adding/removing a platform we haven't re-synced.
+# Keeps this repo's copy of platforms.json (the fleet-wide platform set, owned
+# by platform-gateway's Go adapter registry) in step with the gateway's main,
+# through infra's shared contract-sync workflow. A drifted copy becomes a PR on
+# `bot/contract-sync`.
 #
-# The daily schedule is the point of this workflow: gateway-side drift lands
-# with no PR here to notice it. The PR-time check is a step of the `gates` job
-# in pr-gates.yml.
+# The triggers are the point of this workflow: upstream drift lands with no PR
+# here to notice it. The owners send `contract-changed` when a push to their
+# main touches a contract, and the daily schedule catches a missed dispatch.
+# The PR-time checks are steps of the `gates` job in pr-gates.yml.
 on:
   push:
     branches:
@@ -16,6 +16,8 @@ on:
   schedule:
     - cron: '17 13 * * *'
   workflow_dispatch:
+  repository_dispatch:
+    types: [contract-changed]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,30 +28,8 @@ permissions:
 
 jobs:
   platforms-contract:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-
-      # The gateway repo is private, so read it with an org-scoped automation
-      # app token (least privilege: platform-gateway only), not GITHUB_TOKEN.
-      - name: Mint automation app token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: platform-gateway
-
-      - name: Assert platforms.json matches platform-gateway/main
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          gh api "repos/${{ github.repository_owner }}/platform-gateway/contents/platforms.json?ref=main" \
-            -H "Accept: application/vnd.github.raw" > gateway-platforms.json
-          if ! diff -u gateway-platforms.json platforms.json; then
-            echo "::error::platforms.json is out of sync with platform-gateway/main — run 'task platforms:sync' and commit."
-            exit 1
-          fi
-          rm -f gateway-platforms.json
+    uses: adanalife/infra/.github/workflows/contract-sync.yml@main
+    with:
+      runs-on: ubuntu-latest
+      platforms: true
+    secrets: inherit
