@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.31.0] — 2026-10-13
+
+### Console / API
+
+- The chat history API takes `until=YYYY-MM-DD`, so the console's history page can jump straight to a day. ([#1675](https://github.com/adanalife/tripbot/pull/1675))
+- A clip's record (`/api/videos/{id}`) carries its route and its neighbours' as `track` / `prev_track` / `next_track`, so the console's video page can draw the road instead of one point. ([#1677](https://github.com/adanalife/tripbot/pull/1677))
+
 ## [v5.30.0] — 2026-10-13
 
 ### Console / API
