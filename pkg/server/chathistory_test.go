@@ -68,3 +68,35 @@ func TestChatHistoryHandler_PagesBack(t *testing.T) {
 		t.Errorf("youtube page = %+v, want none", page)
 	}
 }
+
+// `until` jumps to the end of a UTC day: lines after it drop out, the day
+// itself stays, and the cursor still pages back from there.
+func TestChatHistoryHandler_Until(t *testing.T) {
+	db := testdb.New(t)
+	cfg := &c.TripbotConfig{Platform: "twitch"}
+	for _, text := range []string{"before", "on the day", "after"} {
+		if err := events.RecordChat(context.Background(), cfg, events.ChatLine{Username: "alice", Text: text}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for text, at := range map[string]string{"before": "2026-10-01 12:00Z", "on the day": "2026-10-02 23:59Z", "after": "2026-10-03 00:00Z"} {
+		if err := db.Exec(`UPDATE chat_messages SET emitted_at = ? WHERE text = ?`, at, text).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var page chatHistoryPage
+	rec := insightsGET(t, "/api/chat/history?n=1&until=2026-10-02", chatHistoryHandler)
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Lines) != 1 || page.Lines[0].Text != "on the day" || page.NextBefore == 0 {
+		t.Fatalf("until page = %+v", page)
+	}
+	rec = insightsGET(t, "/api/chat/history?until=nonsense", chatHistoryHandler)
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Lines) != 3 {
+		t.Errorf("a bad until filtered: %+v", page)
+	}
+}
