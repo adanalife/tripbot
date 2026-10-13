@@ -42,9 +42,9 @@ type TripbotConfig struct {
 	// PlayoutHost is the host:port of playout's playback HTTP API
 	// (/playout/current).
 	PlayoutHost string `required:"true" envconfig:"PLAYOUT_HOST"`
-	// OnscreensServerHost is the host:port for the onscreens-server HTTP
-	// API (state.json, render/, asset/, plus the show/hide endpoints the
-	// chatbot drives).
+	// OnscreensServerHost is the host:port of this platform's
+	// onscreens-server. Overlay commands reach it over NATS; tripbot reads
+	// only its /version, to record its deploys.
 	OnscreensServerHost string `required:"true" envconfig:"ONSCREENS_SERVER_HOST"`
 	// ObsServerHost is the host:port of obs-server — the Flask process
 	// baked into the OBS image that exposes /health/ready, /version,

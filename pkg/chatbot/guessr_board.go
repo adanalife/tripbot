@@ -44,10 +44,22 @@ const guessrTimeout = 5 * time.Second
 // a title that didn't name the day would be quietly wrong for the first hours
 // of a stream.
 func guessrBoard(ctx context.Context, board string) (string, [][]string, error) {
+	return guessrBoardFor(ctx, board, "")
+}
+
+// guessrBoardFor is guessrBoard pinned to a span: month is a YYYY-MM the game
+// serves as a finished month's final standings (empty asks for the running
+// span, which is what guessrBoard does). The game refuses a month that has not
+// started, so a caller passing one gets the error rather than an empty board.
+func guessrBoardFor(ctx context.Context, board, month string) (string, [][]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, guessrTimeout)
 	defer cancel()
 
-	u := guessrBoardURL + "?board=" + url.QueryEscape(board)
+	q := url.Values{"board": {board}}
+	if month != "" {
+		q.Set("month", month)
+	}
+	u := guessrBoardURL + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", nil, err

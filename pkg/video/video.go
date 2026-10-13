@@ -76,6 +76,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		p.timeStarted = time.Now()
 
 		// share the Video with the system
+		prev := p.CurrentlyPlaying
 		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
 		if err != nil {
 			// Downstream of playout.CurrentlyPlaying; the wrapper there already
@@ -99,7 +100,8 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// restart records a fresh play for the clip already on screen, since its
 		// true start time wasn't observed.
 		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
-			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng,
+			p.switchCause(prev))
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
@@ -108,6 +110,24 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		} else {
 			p.onscreens.HideGPSImage(ctx)
 		}
+	}
+}
+
+// switchCause is the structural reading of why the clip changed, for a
+// switch no chatbot command claims: the first observation after boot found
+// the clip already up; a clip that follows the previous one in corpus order
+// advanced naturally; anything else is a jump this process did not send.
+// Unknown ("") when either clip has no DB row to compare.
+func (p *Player) switchCause(prev Video) string {
+	switch {
+	case p.preVid == "":
+		return viewstats.CauseResume
+	case prev.ID == 0 || p.CurrentlyPlaying.ID == 0:
+		return ""
+	case prev.NextVid.Valid && int(prev.NextVid.Int64) == p.CurrentlyPlaying.ID:
+		return viewstats.CauseNatural
+	default:
+		return viewstats.CauseExternal
 	}
 }
 

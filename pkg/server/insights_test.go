@@ -1,7 +1,11 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -14,6 +18,26 @@ import (
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
+
+func TestLogQueryFailure_LevelFollowsTheCaller(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	logQueryFailure(context.Background(), "q failed", errors.New("boom"), "days", 7)
+	if got := buf.String(); !strings.Contains(got, "level=ERROR") || !strings.Contains(got, "days=7") {
+		t.Errorf("live caller: got %q, want level=ERROR with days=7", got)
+	}
+
+	buf.Reset()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	logQueryFailure(ctx, "q failed", errors.New("pq: canceling statement due to user request"))
+	if got := buf.String(); !strings.Contains(got, "level=WARN") {
+		t.Errorf("caller gone: got %q, want level=WARN", got)
+	}
+}
 
 func TestInsightsDays(t *testing.T) {
 	cases := []struct {

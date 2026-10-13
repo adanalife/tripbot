@@ -36,6 +36,10 @@ type VideoPlay struct {
 	// the zero value over its DEFAULT CURRENT_TIMESTAMP. See pkg/events for
 	// the full story.
 	StartedAt time.Time `gorm:"autoCreateTime"`
+	// Cause is why the clip changed — one of the Cause* constants, or ""
+	// when it couldn't be told (the clip had no DB row to compare against,
+	// or the row predates the column).
+	Cause string
 	// EndedAt is when the clip stopped airing, stamped by the play that
 	// supersedes this row. nil means the end was never observed — the process
 	// crashed or restarted while the clip was up, or the row predates the
@@ -66,6 +70,78 @@ type ViewerSample struct {
 	ChatMessages *int
 	// autoCreateTime: see VideoPlay.StartedAt.
 	SampledAt time.Time `gorm:"autoCreateTime"`
+}
+
+// Why a clip changed, as a video_plays row records it. The Player reads the
+// structural causes off the switch it observes; the command causes are noted
+// by the chatbot before the command goes out (NoteCause) and claimed by the
+// next switch RecordPlay sees.
+const (
+	// CauseNatural — the clip before it ended and playout advanced in corpus
+	// order.
+	CauseNatural = "natural"
+	// CauseResume — the first observation after this process started: the
+	// clip was already up, and its real start was never seen.
+	CauseResume = "resume"
+	// CauseExternal — a jump this process did not send: the console, another
+	// client, or playout restarting onto its last-played clip.
+	CauseExternal = "external"
+	// CauseTimewarp — !timewarp, a correct guess, a gift effect: playout's
+	// random pick.
+	CauseTimewarp = "timewarp"
+	// CauseJump — !jump / !daytime: a chosen clip.
+	CauseJump = "jump"
+	// CauseFind — !find: a chosen moment.
+	CauseFind = "find"
+	// CauseSkip — !skip / !back by clips.
+	CauseSkip = "skip"
+	// CauseSeek — !skip / !back by duration, when the seek crosses a clip
+	// boundary.
+	CauseSeek = "seek"
+)
+
+// causeWindow is how long a noted cause waits to be claimed. The now-playing
+// poll runs every 60s, so a switch is observed up to a minute after the
+// command that caused it; a command playout never acted on expires unclaimed.
+// ponytail: a natural switch landing between a command and the next poll is
+// attributed to the command — the poll interval is the resolution, and a
+// playout-reported cause on the video.changed event is the upgrade path.
+const causeWindow = 90 * time.Second
+
+type notedCause struct {
+	cause string
+	at    time.Time
+}
+
+var (
+	causeMu     sync.Mutex
+	notedCauses = map[string]notedCause{}
+)
+
+// NoteCause records that this platform's chatbot just sent playout a command
+// that will change the clip, so the switch the Player observes next is
+// recorded with that cause rather than read as external. A later note
+// replaces an unclaimed earlier one.
+func NoteCause(platform, cause string) {
+	causeMu.Lock()
+	notedCauses[platform] = notedCause{cause: cause, at: time.Now()}
+	causeMu.Unlock()
+}
+
+// claimCause returns the platform's noted cause if one is waiting within
+// causeWindow, consuming it, and the Player's structural reading otherwise.
+func claimCause(platform, structural string) string {
+	causeMu.Lock()
+	defer causeMu.Unlock()
+	n, ok := notedCauses[platform]
+	if !ok {
+		return structural
+	}
+	delete(notedCauses, platform)
+	if time.Since(n.at) > causeWindow {
+		return structural
+	}
+	return n.cause
 }
 
 // openPlayIDs remembers, per platform, the id of the video_plays row this
@@ -100,8 +176,9 @@ func closePreviousPlay(ctx context.Context, platform string) {
 // RecordPlay writes a video_plays row for a clip switch, closing the
 // platform's previous row (its clip stopped airing the moment this one
 // started). Pass videoID 0 when the clip has no DB row; the row is written
-// with a NULL video_id.
-func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64) {
+// with a NULL video_id. cause is the Player's structural reading of the
+// switch; a command the chatbot noted since the last play takes precedence.
+func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64, cause string) {
 	if cfg.ReadOnly {
 		return
 	}
@@ -117,6 +194,7 @@ func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state st
 		Flagged:  flagged,
 		Lat:      lat,
 		Lng:      lng,
+		Cause:    claimCause(cfg.Platform, cause),
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&play).Error; err != nil {
 		slog.ErrorContext(ctx, "error recording video play", "err", err, "video_id", videoID)

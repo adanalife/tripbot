@@ -108,7 +108,7 @@ func New(onscreens Publisher, geo CityLookup, weather WeatherLookup) *Emitter {
 // DateFilmed is not a clip at all: either the player returned an empty Video, or
 // the row exists but nothing has stamped its date yet — video.Create writes the
 // zero value on insert, unflagged and at 0,0. Neither trips the flagged check,
-// and publishing either paints "Monday January 1, 0001" and a sunset derived
+// and publishing either paints "January 1, 0001" and a sunset derived
 // from it onto an ambient rotator that nobody has to ask for.
 func (e *Emitter) Emit(ctx context.Context, vid video.Video) {
 	lat, lng, err := vid.Location()
@@ -125,7 +125,7 @@ func (e *Emitter) Emit(ctx context.Context, vid video.Video) {
 	_ = e.onscreens.UpdateLocation(ctx, oe.LocationData{
 		Location: place,
 		State:    vid.State,
-		Date:     local.Format("Monday January 2, 2006"),
+		Date:     local.Format("January 2, 2006"),
 		Weather:  conditions,
 		Sunset:   helpers.SunsetAt(vid.DateFilmed, lat, lng).Format("3:04 PM"),
 	})

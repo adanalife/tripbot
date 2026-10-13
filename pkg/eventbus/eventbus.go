@@ -140,8 +140,14 @@ type ChatMessage struct {
 	// "#RRGGBB". Empty for a chatter who never picked one, the bot's own
 	// sends, and every platform that has no such setting — a renderer then
 	// falls back to its own palette.
-	Color     string `json:"color,omitempty"`
-	EmittedAt string `json:"emitted_at"`
+	Color string `json:"color,omitempty"`
+	// VideoID, VideoFile and VideoTsSec are the clip on screen when the line
+	// was said, and how far into it — what a reader needs to see what the
+	// chatter saw. Empty when the writing instance had no playhead.
+	VideoID    int      `json:"video_id,omitempty"`
+	VideoFile  string   `json:"video_file,omitempty"`
+	VideoTsSec *float64 `json:"video_ts_sec,omitempty"`
+	EmittedAt  string   `json:"emitted_at"`
 }
 
 // ChatReply is the parent of a threaded chat line. ParentMessageID is the
@@ -268,7 +274,7 @@ type AuthAccount struct {
 	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
 	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339Nano UTC; empty when unknown (missing token, or auto-refreshed)
-	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired"
+	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired" | "missing_scope: <scopes>"
 }
 
 // AuthStatus is the wire format for tripbot.<env>.auth.status.<platform> — a
@@ -613,12 +619,6 @@ type ChatMode struct {
 	EmoteOnly       bool   `json:"emote_only"`
 	UniqueOnly      bool   `json:"unique_only"`
 	EmittedAt       string `json:"emitted_at"`
-}
-
-// ChatModeSubject returns the publish subject for one platform's chat mode.
-// Per-platform so TRIPBOT_CHAT_MODE retains a last value per platform.
-func ChatModeSubject(env, platform string) string {
-	return subject(env, "chat", "mode") + "." + platform
 }
 
 // ChatModeWildcard returns the subscribe pattern covering every platform's chat

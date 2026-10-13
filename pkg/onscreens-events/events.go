@@ -75,7 +75,7 @@ type TimewarpShow struct {
 // LocationData is the payload for the location.update subject — everything
 // onscreens-server knows about the currently-playing clip, pre-formatted for
 // display: the location ("City, State", or a bare state when geocoding is
-// unavailable), the state on its own, the date ("Monday January 2, 2006"), the
+// unavailable), the state on its own, the date ("January 2, 2006"), the
 // conditions when it was filmed ("Partly cloudy, 71°F"), and that day's sunset
 // at that spot ("8:42 PM").
 //

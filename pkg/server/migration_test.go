@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,5 +78,22 @@ func TestMigrationVersionAPIHandler_DBError(t *testing.T) {
 	// snake_case wire format the console reads.
 	if !strings.Contains(rec.Body.String(), `"ok"`) {
 		t.Errorf("expected snake_case keys: %s", rec.Body.String())
+	}
+}
+
+func TestGatherMigrationVersion_DepartedCallerLogsWarn(t *testing.T) {
+	withMigrationSeam(t, 0, false, errors.New("pq: canceling statement due to user request"))
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := gatherMigrationVersion(ctx); got.OK {
+		t.Errorf("OK = true on a read error")
+	}
+	if got := buf.String(); !strings.Contains(got, "level=WARN") {
+		t.Errorf("got %q, want level=WARN", got)
 	}
 }

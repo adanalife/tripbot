@@ -86,6 +86,11 @@ class EnvConfig:
         "development"  # OTEL deployment.environment + telemetry env id
     )
     secret_source: str = "eso"  # eso | local
+    # Mount the Sentry Secrets as required: a pod whose Sentry ExternalSecret
+    # never synced fails to start instead of running with error reporting
+    # silently off. Prod only — elsewhere the pod boots ahead of the sync and
+    # Sentry gates itself off when its env vars are absent.
+    sentry_required: bool = False
     gpu: bool = False  # request gpu.intel.com/i915
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
     # Emit the Google Maps ExternalSecret + envFrom it. Off by default: every
@@ -226,9 +231,12 @@ class EnvConfig:
     @property
     def postgres_host(self) -> str:
         """DATABASE_HOST apps connect to: the bare Service name when co-located
-        (parity), the cross-namespace FQDN when the DB is isolated."""
+        (parity), the cross-namespace FQDN when the DB is isolated. The FQDN is
+        absolute (trailing dot): with 4 dots under the pod's ndots:5 it would
+        otherwise walk every search suffix, the node's upstream one included,
+        before resolving as written — on every new connection."""
         return (
-            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local"
+            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local."
             if self.data_isolated
             else self.postgres_service
         )
@@ -252,6 +260,7 @@ ENVS: dict[str, EnvConfig] = {
         sentry_env="prod-1",
         binary_env="production",
         deployment_env="prod-1",
+        sentry_required=True,
         gpu=True,
         otel=True,
         # Prod's key is seeded and syncing; keep it mounted. Nothing on the

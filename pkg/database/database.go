@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"log/slog"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -55,6 +55,12 @@ func connectToDB() *sql.DB {
 		slog.Error("DB connection failed", "err", err)
 		return nil
 	}
+	// Keep enough idle connections to serve a console poll's parallel
+	// insights queries warm. Go's default of 2 makes each poll open fresh
+	// connections, and a slow connect then surfaces as a statement-timeout
+	// cancel. The idle timeout hands them back once polling stops.
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 	if _, err := otelsql.RegisterDBStatsMetrics(db,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 	); err != nil {
@@ -158,7 +164,8 @@ func connectGorm() *gorm.DB {
 	return gdb
 }
 
-// connStr returns the postgres:// url the pool dials.
+// connStr returns the postgres:// url the pool dials. The credentials are
+// percent-encoded, so a password holding `@`, `/`, `#` or `%` parses intact.
 //
 // connect_timeout (seconds) bounds a dial to a host that never answers, which
 // otherwise waits out the OS's SYN retries. statement_timeout (milliseconds) is
@@ -172,6 +179,12 @@ func connStr() string {
 	pgDatabase := os.Getenv("DATABASE_DB")
 	pgHost := os.Getenv("DATABASE_HOST")
 
-	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&connect_timeout=5&statement_timeout=60000",
-		pgUser, pgPassword, pgHost, pgDatabase)
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(pgUser, pgPassword),
+		Host:     pgHost,
+		Path:     pgDatabase,
+		RawQuery: "sslmode=disable&connect_timeout=5&statement_timeout=60000",
+	}
+	return u.String()
 }

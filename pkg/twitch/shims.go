@@ -19,6 +19,9 @@ func BroadcasterUserAccessToken() string { return defaultClient.BroadcasterUserA
 func TokenStatuses(botUser, broadcasterUser string) []AccountTokenStatus {
 	return defaultClient.TokenStatuses(botUser, broadcasterUser)
 }
+func SetBroadcasterMissingScopes(scopes []string) {
+	defaultClient.SetBroadcasterMissingScopes(scopes)
+}
 
 // --- cached audience state (fed from the platform-gateway) ---
 

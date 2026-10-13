@@ -85,13 +85,14 @@ class OnscreensServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
-                # onscreens-server reports to its own Sentry project. The
-                # Secret is optional so the pod can start before the
+                # onscreens-server reports to its own Sentry project. Outside
+                # prod the Secret is optional so the pod can start before the
                 # ExternalSecrets sync; Sentry gates off when the env vars
                 # are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-onscreens-server", optional=True
+                        name="sentry-onscreens-server",
+                        optional=not env.sentry_required,
                     )
                 ),
             ],

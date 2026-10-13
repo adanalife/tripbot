@@ -261,6 +261,17 @@
       ]
     },
     {
+      "trigger": "!lastmonth",
+      "aliases": [
+        "!lastleaderboard",
+        "!lastlb"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!leaderboard",
       "aliases": [
         "!monthlyleaderboard",

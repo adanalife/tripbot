@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"gorm.io/gorm"
 )
 
@@ -379,5 +380,34 @@ func TestPlayer_GetCurrentlyPlaying_EmptyPlayoutResult_NoTransition(t *testing.T
 	}
 	if p.Current() != (Video{}) {
 		t.Errorf("Current() after empty-playout first call = %+v, want zero Video", p.Current())
+	}
+}
+
+// switchCause reads the switch structurally: the first observation after boot
+// is a resume, a clip that follows the previous one in corpus order is
+// natural, any other landing is a jump this process did not send, and a
+// missing DB row on either side is unknown.
+func TestSwitchCause(t *testing.T) {
+	seq := Video{ID: 7, NextVid: sql.NullInt64{Int64: 8, Valid: true}}
+	tests := []struct {
+		name   string
+		preVid string
+		prev   Video
+		cur    Video
+		want   string
+	}{
+		{"first observation after boot", "", Video{}, Video{ID: 8}, viewstats.CauseResume},
+		{"corpus order", "a.MP4", seq, Video{ID: 8}, viewstats.CauseNatural},
+		{"landed elsewhere", "a.MP4", seq, Video{ID: 42}, viewstats.CauseExternal},
+		{"previous clip unknown", "a.MP4", Video{}, Video{ID: 8}, ""},
+		{"current clip unknown", "a.MP4", seq, Video{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Player{preVid: tt.preVid, CurrentlyPlaying: tt.cur}
+			if got := p.switchCause(tt.prev); got != tt.want {
+				t.Errorf("switchCause = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

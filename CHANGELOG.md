@@ -9,6 +9,99 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.28.0] — 2026-10-10
+
+### Chatbot
+
+- **Season-2 clips are known to the database before any of them airs.** `videos` gains a `corpus` (`s1`/`s2`/`s2fast`) and a `speed` column; a season-2 piece's name is read in its own shape, so a runtime-created row is dated at the piece's offset into its original rather than at a year in the 2030s; `!jump`/`!goto` and `!daytime` stay inside the corpus on screen; and `!speed` reads driving speed over real time, so a 6x clip reports a sixth of what its frames suggest. ([#1651](https://github.com/adanalife/tripbot/pull/1651))
+- `!find` searches only the trip on screen, and the coordinate backfills walk each trip on its own. Videos are indexed by trip and film date. ([#1655](https://github.com/adanalife/tripbot/pull/1655))
+- `!time` and `!date` answer for the moment on screen rather than the start of the clip, counting a fast clip's seconds at its speed. ([#1657](https://github.com/adanalife/tripbot/pull/1657))
+
+### Onscreens
+
+- onscreens-server's shutdown stops every overlay's background loops, the expiry sweepers and the two corner rotators, instead of leaving them running until the process exits. ([#606](https://github.com/adanalife/tripbot/pull/606))
+
+### Fixes
+
+- Go 1.26.9 and golang.org/x/net 0.60.0 for GO-2026-6612/6613/6617. ([#1656](https://github.com/adanalife/tripbot/pull/1656))
+
+### CI / Tooling
+
+- A migration that takes a number main already holds now fails `migration-order` before merge: the check compares migrations by file name, and every push that adds a migration to main re-runs it on the open PRs that carry one. ([#1642](https://github.com/adanalife/tripbot/pull/1642))
+
+## [v5.27.0] — 2026-10-07
+
+### Onscreens
+
+- **onscreens-server deploys land in the events table.** It has no database, so its rollouts were never recorded; each tripbot instance now reads its own onscreens-server's `/version` every five minutes and records a `deploy` event (component `onscreens-server`) when the version changes. ([#1647](https://github.com/adanalife/tripbot/pull/1647))
+
+### Fixes
+
+- **A broadcaster grant missing a scope now shows.** A subscription Twitch refused with 403 counted as held, so `tripbot_eventsub_subscriptions{result="denied"}` stayed at 0 on a short grant and the partial-grant alert could not fire, while the console auth card read healthy. A 403 now counts as denied, and the broadcaster's auth reason becomes `missing_scope: <scopes>` until a re-consent and a clean subscribe round clear it. ([#1645](https://github.com/adanalife/tripbot/pull/1645))
+- EventSub shutdown no longer logs a spurious `use of closed network connection` warning, and a subscribe round still running when the socket closes finishes before its counts are read. ([#1649](https://github.com/adanalife/tripbot/pull/1649))
+
+### Cleanup
+
+- Folded two more duplicates: the backfill commands share helpers.MilesBetween instead of their own haversine copies, and GET /api/flags and the flags eventbus snapshot share one flag type and converter. ([#1648](https://github.com/adanalife/tripbot/pull/1648))
+
+## [v5.26.0] — 2026-10-06
+
+### Chatbot
+
+- **mathgaming stays off the leaderboards.** The channel owner's personal account is flagged `exclude_from_leaderboard`, like `adanalife_` and `tripbot4000`, so it no longer ranks against viewers on the onscreen and chat boards. ([#1611](https://github.com/adanalife/tripbot/pull/1611))
+- `!lastmonth` (`!lastleaderboard`, `!lastlb`) answers with the month just ended as it finished: the podium for miles, correct guesses and the guessr monthly board in one chat line, with the final miles board on the overlay. Until the rollup tick has frozen the month it says so rather than showing the running boards. ([#1613](https://github.com/adanalife/tripbot/pull/1613))
+- `!givemiles` clamps a clawback at the viewer's lifetime balance, so the lifetime miles total can no longer go below zero, and says so in chat when less came off than asked. ([#1616](https://github.com/adanalife/tripbot/pull/1616))
+- The YouTube stream no longer posts the timed help message in chat. ([#1640](https://github.com/adanalife/tripbot/pull/1640))
+
+### Onscreens
+
+- The rotator `$date` variable reads `September 26, 2018` without the day of the week, so the YouTube overlay's `📅` date line fits the right corner. ([#1614](https://github.com/adanalife/tripbot/pull/1614))
+
+### Fixes
+
+- `backfill-miles-driven` connects with a password that holds a space or quote. ([#1643](https://github.com/adanalife/tripbot/pull/1643))
+
+### Deploy / Infra
+
+- In prod, tripbot and onscreens-server now require their Sentry Secret, so a pod whose Sentry ExternalSecret never synced fails to start instead of running with error reporting silently off. Stage and dev still boot without it. ([#1635](https://github.com/adanalife/tripbot/pull/1635))
+
+### CI / Tooling
+
+- tripbot publishes `pkg/contract/metrics.json`, every Prometheus series name it emits, generated from the instrumentation registry so infra can fail an alert rule that names a metric tripbot no longer emits. ([#1639](https://github.com/adanalife/tripbot/pull/1639))
+
+### Cleanup
+
+- Dropped six duplicated or unreachable bits: a redundant month regex, two copies of existing helpers, an unused find-request envelope, an uncalled chat-mode subject helper, and an unreachable zero guard. ([#1644](https://github.com/adanalife/tripbot/pull/1644))
+
+## [v5.25.1] — 2026-10-04
+
+### Fixes
+
+- A read API query cancelled because its caller hung up (the console gives up after 2s) logs a warning rather than an error, so it no longer opens Sentry events. ([#1627](https://github.com/adanalife/tripbot/pull/1627))
+- Keep up to 10 idle Postgres connections per process (released after 5 idle minutes), so a console poll's parallel insights queries reuse warm connections instead of opening fresh ones that a slow connect turns into statement-timeout cancels. ([#1629](https://github.com/adanalife/tripbot/pull/1629))
+- The Postgres connection URL percent-encodes the database user and password, so a password containing `@`, `/`, `#`, `?` or `%` no longer breaks the DSN. ([#1632](https://github.com/adanalife/tripbot/pull/1632))
+- A console read that gives up before the schema-migration or user-profile query finishes logs a warning instead of an error, so it no longer opens a Sentry event. ([#1633](https://github.com/adanalife/tripbot/pull/1633))
+
+### Deploy / Infra
+
+- The cross-namespace `DATABASE_HOST` is an absolute name (`pg-rw.<env>-data.svc.cluster.local.`), so each new Postgres connection resolves it directly instead of walking every `ndots:5` search suffix first. ([#1630](https://github.com/adanalife/tripbot/pull/1630))
+
+### CI / Tooling
+
+- Test how OBS's output flags map onto the three stream states and the names the `obs.stream` subject carries. ([#1631](https://github.com/adanalife/tripbot/pull/1631))
+- Test the broadcast restart: the output comes back after the platform reports offline, after the offline wait times out, and after the caller cancels, and a failed stop skips the start. ([#1631](https://github.com/adanalife/tripbot/pull/1631))
+- Test that a failed broadcast-cap restart reaches `OnRestart` with its error and is not retried on the same broadcast. ([#1631](https://github.com/adanalife/tripbot/pull/1631))
+
+## [v5.25.0] — 2026-10-01
+
+### Platform gateway
+
+- The Twitch instance restarts its stream an hour before Twitch's 48-hour broadcast limit. It stops OBS, waits until Twitch reports the channel offline, then starts a fresh broadcast, so the stream takes a gap of a few minutes instead of being cut. ([#1623](https://github.com/adanalife/tripbot/pull/1623))
+
+### Chatbot
+
+- `video_plays` rows now carry a `cause`: `natural` when playout advanced in corpus order, `resume` for the clip already up when tripbot started, `external` for a jump tripbot did not send, or the chat command behind it (`timewarp`, `jump`, `find`, `skip`, `seek`). ([#1620](https://github.com/adanalife/tripbot/pull/1620))
+
 ## [v5.24.0] — 2026-10-01
 
 ### Chatbot

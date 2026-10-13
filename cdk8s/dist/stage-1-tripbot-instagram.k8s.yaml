@@ -9,7 +9,7 @@ metadata:
 data:
   BOT_USERNAME: tripbot4001
   CHANNEL_NAME: adanalife_staging
-  DATABASE_HOST: pg-rw.stage-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.stage-1-data.svc.cluster.local.
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
@@ -45,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: ed93b2069f
+        adanalife.dev/config-hash: ba86547d18
       labels:
         app: tripbot-instagram
     spec:

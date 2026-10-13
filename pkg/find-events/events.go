@@ -9,10 +9,7 @@
 // binary.
 package findEvents
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // RunSubject builds tripbot.<env>.find.run.<platform>. Per-platform because
 // each platform's tripbot drives its own playout; only that instance answers.
@@ -20,20 +17,8 @@ func RunSubject(env, platform string) string {
 	return fmt.Sprintf("tripbot.%s.find.run.%s", env, platform)
 }
 
-// Envelope is embedded in every find request. EmittedAt is an RFC3339Nano UTC
-// timestamp, useful for latency/debugging.
-type Envelope struct {
-	EmittedAt string `json:"emitted_at"`
-}
-
-// NewEnvelope returns an Envelope stamped with the current UTC time.
-func NewEnvelope() Envelope {
-	return Envelope{EmittedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-}
-
 // Run is the request: find query and jump the stream there.
 type Run struct {
-	Envelope
 	Query string `json:"query"`
 }
 

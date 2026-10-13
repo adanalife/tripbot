@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 // headingLookback is how far back along the track the bearing is measured. A
@@ -16,9 +18,6 @@ const headingLookback = 10 * time.Second
 // same place. GPS scatter alone moves a parked van several metres, so a bearing
 // computed under this is noise with a number attached.
 const stoppedMetres = 15
-
-// earthRadiusM is the mean radius, for the haversine distance below.
-const earthRadiusM = 6371000
 
 // compassPoints are the eight headings chat hears, in the order the bearing
 // walks through them from north.
@@ -60,7 +59,9 @@ type Velocity struct {
 // baseline as the speed. Moving is false when the two samples are closer
 // together than stoppedMetres, which is the caller's signal to say the van is
 // stopped rather than to name a direction. ok is false when the clip has no
-// track covering both moments, exactly as CoordAt reports it.
+// track covering both moments, exactly as CoordAt reports it. The baseline is
+// clip time; the speed is over the driving time it stands for, so a 6x clip
+// reads a sixth of the speed its frames suggest.
 //
 // ponytail: the speed is a chord over ten seconds, which under-reads a tight
 // bend by a few percent; a track integral if that ever matters.
@@ -88,7 +89,7 @@ func VelocityAt(ctx context.Context, vid Video, at time.Duration) (v Velocity, o
 	}
 	return Velocity{
 		Bearing:  bearingDeg(start, end),
-		SpeedMPS: dist / (to - from).Seconds(),
+		SpeedMPS: dist / vid.realElapsed(to-from).Seconds(),
 		Moving:   true,
 	}, true
 }
@@ -108,14 +109,9 @@ func bearingDeg(a, b Moment) float64 {
 	return math.Mod(deg(math.Atan2(y, x))+360, 360)
 }
 
-// distanceM is the haversine distance between two moments, in metres.
+// distanceM is the great-circle distance between two moments, in metres.
 func distanceM(a, b Moment) float64 {
-	lat1, lat2 := rad(a.Lat), rad(b.Lat)
-	dLat, dLon := rad(b.Lat-a.Lat), rad(b.Lng-a.Lng)
-
-	h := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1)*math.Cos(lat2)*math.Sin(dLon/2)*math.Sin(dLon/2)
-	return 2 * earthRadiusM * math.Asin(math.Sqrt(h))
+	return helpers.MilesBetween(a.Lat, a.Lng, b.Lat, b.Lng) * 1609.344
 }
 
 func rad(d float64) float64 { return d * math.Pi / 180 }

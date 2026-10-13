@@ -31,6 +31,11 @@ type consoleMirror struct {
 	platform    string
 	channel     string
 	botUsername string
+	// stamp adds what's on screen to the send, as HandleMessage does for a
+	// viewer's line; nil leaves it unstamped (tests).
+	stamp func(*eventbus.ChatMessage)
+	// record appends the send to the chat log; nil keeps none (tests).
+	record func(eventbus.ChatMessage)
 }
 
 func (m consoleMirror) Say(msg string) {
@@ -52,12 +57,19 @@ func (m consoleMirror) mirror(msg string, reply *eventbus.ChatReply) {
 	// live console — the platform doesn't echo our sent messages back, so
 	// without this the console would miss everything the bot says.
 	// Fire-and-forget; no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(context.Background(), m.env, eventbus.ChatMessage{
+	line := eventbus.ChatMessage{
 		Platform: m.platform,
 		Username: m.botUsername,
 		Text:     msg,
 		Reply:    reply,
-	})
+	}
+	if m.stamp != nil {
+		m.stamp(&line)
+	}
+	eventbus.EmitChatMessage(context.Background(), m.env, line)
+	if m.record != nil {
+		m.record(line)
+	}
 }
 
 // disconnectedChat is App.Chat's default between New() and the connect path,

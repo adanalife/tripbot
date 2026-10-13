@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/geo"
 )
@@ -97,6 +98,8 @@ func (a *App) connectViaGateway(inner ChatClient) {
 		channel:     a.Cfg.ChannelName,
 		platform:    a.Cfg.Platform,
 		botUsername: a.Cfg.BotUsername,
+		stamp:       a.stampAiring,
+		record:      func(line eventbus.ChatMessage) { a.recordChat(context.Background(), line) },
 	}
 }
 

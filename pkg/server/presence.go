@@ -103,7 +103,7 @@ func presenceInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", presenceDefaultLimit, 1, presenceMaxLimit)
 	payload, err := gatherPresence(r.Context(), days, limit)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "presence insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "presence insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather presence insights")
 		return
 	}

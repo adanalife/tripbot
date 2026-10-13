@@ -126,6 +126,8 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/insights/viewers", tagged("/api/insights/viewers", viewerSeriesHandler)).Methods("GET")
 	r.Handle("/api/insights/sessions", tagged("/api/insights/sessions", sessionInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/presence", tagged("/api/insights/presence", presenceInsightsHandler)).Methods("GET")
+	// the chat log, paged newest-first, for the console's /history page.
+	r.Handle("/api/chat/history", tagged("/api/chat/history", chatHistoryHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")

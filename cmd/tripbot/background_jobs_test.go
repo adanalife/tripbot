@@ -19,13 +19,21 @@ import (
 // with no other symptom than a feature quietly running where it can't work.
 
 // neutralJobs run on every instance regardless of platform: each one plays
-// video, posts the periodic chatter, and republishes the rotators' clip feed.
+// video, posts the periodic chatter, republishes the rotators' clip feed, and
+// records its own onscreens-server's deploys.
 var neutralJobs = []string{
 	"video.GetCurrentlyPlaying",
 	"video.TrackState",
 	"chatbot.Chatter",
 	"video.LocationFeed",
+	"events.OnscreensDeploy",
 }
+
+// youtubeJobs is the neutral set minus the periodic chatter: the YouTube
+// instance keeps its chat free of the timed help message.
+var youtubeJobs = slices.DeleteFunc(slices.Clone(neutralJobs), func(j string) bool {
+	return j == "chatbot.Chatter"
+})
 
 // twitchOnlyJobs each need something only Twitch has. Session and presence
 // tracking read Twitch chatters; the leaderboards need viewers who earn miles
@@ -162,12 +170,12 @@ func TestScheduleBackgroundJobs_PlatformGates(t *testing.T) {
 		{
 			name: "youtube without a gateway url",
 			cfg:  &c.TripbotConfig{Platform: "youtube"},
-			want: neutralJobs,
+			want: youtubeJobs,
 		},
 		{
 			name: "youtube with a gateway url",
 			cfg:  &c.TripbotConfig{Platform: "youtube", YouTubeAPIURL: "http://gateway-youtube:8080"},
-			want: append(slices.Clone(neutralJobs), youtubeDiscoveryJob),
+			want: append(slices.Clone(youtubeJobs), youtubeDiscoveryJob),
 		},
 		{
 			name: "facebook without a gateway url",
@@ -190,7 +198,7 @@ func TestScheduleBackgroundJobs_PlatformGates(t *testing.T) {
 				YouTubeAPIURL:  "http://gateway-youtube:8080",
 				FacebookAPIURL: "http://gateway-facebook:8080",
 			},
-			want: append(slices.Clone(neutralJobs), youtubeDiscoveryJob, facebookDiscoveryJob),
+			want: append(slices.Clone(youtubeJobs), youtubeDiscoveryJob, facebookDiscoveryJob),
 		},
 		{
 			name: "instagram",

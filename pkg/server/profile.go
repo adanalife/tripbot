@@ -79,7 +79,7 @@ func resolveUser(ctx context.Context, platform, platformUserID, username string)
 			return u, nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			slog.ErrorContext(ctx, "error finding user by platform id", "err", err,
+			logQueryFailure(ctx, "error finding user by platform id", err,
 				"platform_user_id", platformUserID)
 		}
 	}
@@ -107,7 +107,7 @@ func gatherUserProfile(ctx context.Context, platform, platformUserID, username s
 		// not-found renders as Found=false; a real DB error does too, but
 		// gets logged so it's visible as a failure rather than a ghost user.
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			logQueryFailure(ctx, "error finding user", err, "username", username)
 		}
 		return prof
 	}

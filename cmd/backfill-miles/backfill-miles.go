@@ -35,6 +35,7 @@ import (
 	"log"
 	"log/slog"
 	"math"
+	"net/url"
 	"os"
 	"strings"
 
@@ -102,7 +103,8 @@ func connStr() string {
 	if user == "" || host == "" || dbName == "" {
 		log.Fatal("DATABASE_USER, DATABASE_HOST, and DATABASE_DB must be set")
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", user, pass, host, dbName)
+	u := url.URL{Scheme: "postgres", User: url.UserPassword(user, pass), Host: host, Path: dbName, RawQuery: "sslmode=disable"}
+	return u.String()
 }
 
 func main() {

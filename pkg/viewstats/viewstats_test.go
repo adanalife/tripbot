@@ -23,9 +23,17 @@ func setup(t *testing.T) *gorm.DB {
 
 	resetOpenPlays()
 	t.Cleanup(resetOpenPlays)
+	resetNotedCauses()
+	t.Cleanup(resetNotedCauses)
 	resetPeaks()
 	t.Cleanup(resetPeaks)
 	return db
+}
+
+func resetNotedCauses() {
+	causeMu.Lock()
+	notedCauses = map[string]notedCause{}
+	causeMu.Unlock()
 }
 
 func resetOpenPlays() {
@@ -87,7 +95,7 @@ func allSamples(t *testing.T, db *gorm.DB) []ViewerSample {
 func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
 	db := setup(t)
 
-	RecordPlay(context.Background(), testConf, 42, "Utah", true, 38.5, -109.5)
+	RecordPlay(context.Background(), testConf, 42, "Utah", true, 38.5, -109.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 1 {
@@ -113,12 +121,78 @@ func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
 	}
 }
 
+// The row carries the cause the Player read off the switch.
+func TestRecordPlay_PersistsStructuralCause(t *testing.T) {
+	db := setup(t)
+
+	RecordPlay(context.Background(), testConf, 42, "Utah", false, 38.5, -109.5, CauseResume)
+
+	if got := allPlays(t, db)[0].Cause; got != CauseResume {
+		t.Errorf("cause: want %q, got %q", CauseResume, got)
+	}
+}
+
+// A command the chatbot noted since the last play names the switch, whatever
+// the Player made of it structurally — and it is claimed once: the play
+// after it falls back to the Player's reading.
+func TestRecordPlay_ClaimsNotedCauseOnce(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+
+	NoteCause("twitch", CauseTimewarp)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5, CauseExternal)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
+
+	plays := allPlays(t, db)
+	if len(plays) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(plays))
+	}
+	if plays[0].Cause != CauseTimewarp || plays[1].Cause != CauseNatural {
+		t.Errorf("causes: want [timewarp natural], got [%s %s]", plays[0].Cause, plays[1].Cause)
+	}
+}
+
+// A note playout never acted on must not label a switch a minute and a half
+// later: past causeWindow the Player's reading stands and the note is gone.
+func TestRecordPlay_ExpiredNoteIsDropped(t *testing.T) {
+	db := setup(t)
+
+	causeMu.Lock()
+	notedCauses["twitch"] = notedCause{cause: CauseFind, at: time.Now().Add(-causeWindow - time.Second)}
+	causeMu.Unlock()
+	RecordPlay(context.Background(), testConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
+
+	if got := allPlays(t, db)[0].Cause; got != CauseNatural {
+		t.Errorf("cause: want %q, got %q", CauseNatural, got)
+	}
+	causeMu.Lock()
+	_, still := notedCauses["twitch"]
+	causeMu.Unlock()
+	if still {
+		t.Error("expired note was left behind")
+	}
+}
+
+// Notes are per platform: a Twitch !skip never names the YouTube instance's
+// next switch.
+func TestRecordPlay_NoteIsPerPlatform(t *testing.T) {
+	db := setup(t)
+	youtubeConf := &c.TripbotConfig{Environment: "testing", Platform: "youtube"}
+
+	NoteCause("twitch", CauseSkip)
+	RecordPlay(context.Background(), youtubeConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
+
+	if got := allPlays(t, db)[0].Cause; got != CauseNatural {
+		t.Errorf("cause: want %q, got %q", CauseNatural, got)
+	}
+}
+
 // A clip with no DB row (LoadOrCreate failed) still records the switch, with a
 // NULL video_id.
 func TestRecordPlay_ZeroVideoIDWritesNull(t *testing.T) {
 	db := setup(t)
 
-	RecordPlay(context.Background(), testConf, 0, "", false, 0, 0)
+	RecordPlay(context.Background(), testConf, 0, "", false, 0, 0, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 1 {
@@ -136,8 +210,8 @@ func TestRecordPlay_ClosesPreviousPlay(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 2 {
@@ -171,7 +245,7 @@ func TestRecordPlay_LeavesPriorProcessRowOpen(t *testing.T) {
 	}
 	resetOpenPlays()
 
-	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 2 {
@@ -189,8 +263,8 @@ func TestRecordPlay_ClosesOnlyOwnPlatform(t *testing.T) {
 	ctx := context.Background()
 	youtubeConf := &c.TripbotConfig{Environment: "testing", Platform: "youtube"}
 
-	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordPlay(ctx, youtubeConf, 43, "Colorado", false, 39.1, -108.5)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
+	RecordPlay(ctx, youtubeConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 2 {
@@ -293,7 +367,7 @@ func TestReadOnly_SkipsWrites(t *testing.T) {
 	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 	ctx := context.Background()
 
-	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
+	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
 	RecordSample(ctx, readOnlyConf, 5, Audience{}, 42, nil)
 
 	if plays := allPlays(t, db); len(plays) != 0 {

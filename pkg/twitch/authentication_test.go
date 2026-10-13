@@ -108,6 +108,34 @@ func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
 	}
 }
 
+// A short grant reads healthy by presence and expiry, so the scopes EventSub
+// found missing are what flag it — until a clean round clears them. A missing
+// token outranks the scope report, since a re-consent fixes both.
+func TestTokenStatuses_MissingScope(t *testing.T) {
+	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
+	cl := clientWithTokens(healthy, healthy)
+
+	cl.SetBroadcasterMissingScopes([]string{"channel:read:subscriptions", "moderator:read:followers"})
+	got := cl.TokenStatuses("tripbot4000", "adanalife_")
+	if want := "missing_scope: channel:read:subscriptions moderator:read:followers"; got[1].Reason != want {
+		t.Errorf("broadcaster Reason = %q, want %q", got[1].Reason, want)
+	}
+	if got[0].Reason != "" {
+		t.Errorf("bot Reason = %q, want healthy — the scope report is the broadcaster's", got[0].Reason)
+	}
+
+	cl.currentBroadcasterToken = oauthtokens.Token{}
+	if got := cl.TokenStatuses("tripbot4000", "adanalife_"); got[1].Reason != "missing" {
+		t.Errorf("broadcaster Reason with no token = %q, want missing", got[1].Reason)
+	}
+
+	cl.currentBroadcasterToken = healthy
+	cl.SetBroadcasterMissingScopes(nil)
+	if got := cl.TokenStatuses("tripbot4000", "adanalife_"); got[1].Reason != "" {
+		t.Errorf("broadcaster Reason after a clean round = %q, want healthy", got[1].Reason)
+	}
+}
+
 // When the bot and broadcaster are the same account, there's no separate
 // broadcaster row — a blank broadcaster slot must not produce a phantom entry.
 func TestTokenStatuses_NoSeparateBroadcaster(t *testing.T) {

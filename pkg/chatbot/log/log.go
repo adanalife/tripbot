@@ -13,15 +13,15 @@ package log
 import (
 	"context"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
-	logglobal "go.opentelemetry.io/otel/log/global"
 )
 
 const scopeName = "twitch-chat"
 
 func ChatMsg(username, channel, msg string) {
-	logger := logglobal.GetLoggerProvider().Logger(scopeName)
+	logger := otel.GetLoggerProvider().Logger(scopeName)
 
 	var rec otellog.Record
 	rec.SetBody(attribute.StringValue(msg))

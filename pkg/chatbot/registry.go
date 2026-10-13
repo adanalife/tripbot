@@ -329,6 +329,13 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!lastmonth",
+			Help:           "Last month's final boards: the podium for miles, correct guesses and guessr",
+			Aliases:        []string{"!lastleaderboard", "!lastlb"},
+			Handler:        a.lastMonthCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!guessr",
 			Help:           "The dashcam guessing game leaderboard; add 'monthly' for the running total",
 			Aliases:        []string{"!guessrleaderboard", "!grlb"},

@@ -1,8 +1,12 @@
 package video
 
 import (
+	"context"
 	"math"
 	"testing"
+	"time"
+
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 )
 
 func TestCompass(t *testing.T) {
@@ -110,5 +114,38 @@ func TestVelocityUnits(t *testing.T) {
 	}
 	if got := v.MPH(); math.Abs(got-22.37) > 0.01 {
 		t.Errorf("MPH = %v, want 22.37", got)
+	}
+}
+
+// The same 278 m over ten seconds of clip is 28 m/s of driving on a real-time
+// clip and a sixth of that on an s2fast one, whose ten clip-seconds stand for
+// a minute of road.
+func TestVelocityAt_DividesBySpeed(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	conf := 1.0
+
+	for _, tc := range []struct {
+		slug    string
+		speed   int
+		wantMPS float64
+	}{
+		{"2018_0514_224801_080", 1, 27.8},
+		{"20260605144519_000001_s0180", 6, 4.6},
+	} {
+		vid := insertVideo(t, db, Video{Slug: tc.slug, Speed: tc.speed, CoordConfidence: &conf})
+		for ts, lat := range map[int]float64{0: 40.0, 10: 40.0025} {
+			if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+				VALUES (?, ?, ?, ?, -110, 'ocr')`, vid.ID, ts, ts, lat).Error; err != nil {
+				t.Fatalf("insert coord: %v", err)
+			}
+		}
+		v, ok := VelocityAt(ctx, vid, 10*time.Second)
+		if !ok || !v.Moving {
+			t.Fatalf("%s: VelocityAt = %+v, %v; want a moving reading", tc.slug, v, ok)
+		}
+		if math.Abs(v.SpeedMPS-tc.wantMPS) > 0.2 {
+			t.Errorf("%s (speed %d): SpeedMPS = %.1f, want ≈ %.1f", tc.slug, tc.speed, v.SpeedMPS, tc.wantMPS)
+		}
 	}
 }

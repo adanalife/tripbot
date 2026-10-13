@@ -227,10 +227,15 @@ func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err 
 // when no number was available — a platform that publishes none, a gateway
 // too old to serve /v1/viewers, or a failed call — which callers must not
 // flatten to a count of zero.
+//
+// StartedAt is when the running broadcast began, on platforms that report it
+// (Twitch). Zero when nothing is live, when the platform has no such field,
+// or when the gateway predates it.
 type Audience struct {
-	Count    int
-	Live     bool
-	Reported bool
+	Count     int
+	Live      bool
+	Reported  bool
+	StartedAt time.Time
 }
 
 // Viewers returns the channel's concurrent-viewer count (GET /v1/viewers).
@@ -248,13 +253,14 @@ func (c *Client) Viewers(ctx context.Context) (Audience, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var body struct {
-			Count int  `json:"count"`
-			Live  bool `json:"live"`
+			Count     int       `json:"count"`
+			Live      bool      `json:"live"`
+			StartedAt time.Time `json:"started_at"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			return Audience{}, fmt.Errorf("gateway viewers decode: %w", err)
 		}
-		return Audience{Count: body.Count, Live: body.Live, Reported: true}, nil
+		return Audience{Count: body.Count, Live: body.Live, Reported: true, StartedAt: body.StartedAt}, nil
 	case http.StatusNotFound:
 		return Audience{}, nil // platform reports no viewer count — expected
 	default:

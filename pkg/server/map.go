@@ -296,7 +296,7 @@ func mapRecentHandler(w http.ResponseWriter, r *http.Request) {
 	n := queryInt(r, "n", mapRecentDefaultPoints, 1, mapRecentMaxPoints)
 	trails, err := recentTrails(r.Context(), n)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "recent trails query failed", "err", err, "n", n)
+		logQueryFailure(r.Context(), "recent trails query failed", err, "n", n)
 		http.Error(w, `{"error":"couldn't read recent trails"}`, http.StatusInternalServerError)
 		return
 	}

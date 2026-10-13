@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/users"
 )
@@ -11,10 +12,13 @@ import (
 // leaderboards — both boards read as empty and a credited guess goes nowhere.
 type noopScoreboards struct{}
 
-func (noopScoreboards) TopMiles(_ context.Context, _ int) [][]string   { return nil }
-func (noopScoreboards) TopGuesses(_ context.Context, _ int) [][]string { return nil }
-func (noopScoreboards) MilesMonth() string                             { return "Month" }
-func (noopScoreboards) CreditGuess(_ context.Context, _ *users.User)   {}
+func (noopScoreboards) TopMiles(_ context.Context, _ int) [][]string         { return nil }
+func (noopScoreboards) TopGuesses(_ context.Context, _ int) [][]string       { return nil }
+func (noopScoreboards) MilesMonth() string                                   { return "Month" }
+func (noopScoreboards) LastMonthMiles(_ context.Context, _ int) [][]string   { return nil }
+func (noopScoreboards) LastMonthGuesses(_ context.Context, _ int) [][]string { return nil }
+func (noopScoreboards) LastMonth() time.Time                                 { return time.Time{} }
+func (noopScoreboards) CreditGuess(_ context.Context, _ *users.User)         {}
 
 // recordingScoreboards stages what each board returns and records the credits
 // written to it, so a leaderboard test asserts on rows rather than on the SQL
@@ -26,6 +30,11 @@ type recordingScoreboards struct {
 	// Month is what MilesMonth reports; a fixed value keeps overlay-title
 	// assertions from depending on when the suite runs.
 	Month string
+	// LastMiles / LastGuesses are the frozen boards LastMonthMiles and
+	// LastMonthGuesses return; Last is what LastMonth reports, fixed for the
+	// same reason as Month.
+	LastMiles, LastGuesses [][]string
+	Last                   time.Time
 	// Credited lists the usernames CreditGuess was called for, in order.
 	Credited []string
 }
@@ -45,6 +54,23 @@ func (r *recordingScoreboards) MilesMonth() string {
 		return "Month"
 	}
 	return r.Month
+}
+
+func (r *recordingScoreboards) LastMonthMiles(_ context.Context, size int) [][]string {
+	r.Calls = append(r.Calls, fmt.Sprintf("LastMonthMiles(%d)", size))
+	return r.LastMiles
+}
+
+func (r *recordingScoreboards) LastMonthGuesses(_ context.Context, size int) [][]string {
+	r.Calls = append(r.Calls, fmt.Sprintf("LastMonthGuesses(%d)", size))
+	return r.LastGuesses
+}
+
+func (r *recordingScoreboards) LastMonth() time.Time {
+	if r.Last.IsZero() {
+		return time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
+	}
+	return r.Last
 }
 
 func (r *recordingScoreboards) CreditGuess(_ context.Context, u *users.User) {

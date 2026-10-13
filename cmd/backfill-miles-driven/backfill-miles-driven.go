@@ -3,7 +3,7 @@
 //
 // Each clip carries a single GPS fix (see cmd/backfill-coords), so the
 // distance driven during clip A is approximated as the great-circle distance
-// from A's fix to the next clip's fix in film order. Clips are contiguous
+// from A's fix to the next fix in its corpus, in film order. Clips are contiguous
 // ~3-minute dashcam segments while driving, so the chord between consecutive
 // fixes tracks the road closely; a finer per-clip GPS track (the video-pipeline
 // coords stage) can later overwrite these values through the same column.
@@ -41,9 +41,12 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/helpers"
 	_ "github.com/lib/pq"
 )
 
@@ -55,7 +58,7 @@ const (
 	sourceInterpolated = "interpolated"
 )
 
-// clip is one row of the videos table, in film order.
+// clip is one row of the videos table, in corpus then film order.
 type clip struct {
 	id     int
 	slug   string
@@ -64,6 +67,8 @@ type clip struct {
 	source string
 	filmed time.Time
 	miles  sql.NullFloat64 // current miles_driven
+	corpus string
+	speed  int // real seconds per clip second
 }
 
 // hasFix reports whether the clip carries a usable coordinate.
@@ -117,7 +122,12 @@ func main() {
 		log.Fatalf("loading clips: %s", err)
 	}
 
-	decisions := analyze(clips, *maxGap, *maxSpeedMph)
+	// A fast corpus's pieces start speed× farther apart in film time, so the
+	// continuous-recording gap stretches with it.
+	var decisions []decision
+	for _, run := range byCorpus(clips) {
+		decisions = append(decisions, analyze(run, *maxGap*time.Duration(run[0].speed), *maxSpeedMph)...)
+	}
 
 	switch {
 	case *outputSQL:
@@ -132,22 +142,24 @@ func main() {
 	}
 }
 
+// openDB builds a URL DSN so a password holding a space or quote survives,
+// which a key=value DSN does not.
 func openDB() (*sql.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("DATABASE_HOST"),
-		os.Getenv("DATABASE_USER"),
-		os.Getenv("DATABASE_PASS"),
-		os.Getenv("DATABASE_DB"),
-	)
-	return sql.Open("postgres", dsn)
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(os.Getenv("DATABASE_USER"), os.Getenv("DATABASE_PASS")),
+		Host:     os.Getenv("DATABASE_HOST"),
+		Path:     os.Getenv("DATABASE_DB"),
+		RawQuery: "sslmode=disable",
+	}
+	return sql.Open("postgres", u.String())
 }
 
 func loadClips(db *sql.DB) ([]clip, error) {
 	rows, err := db.Query(`
-		SELECT id, slug, lat, lng, COALESCE(coord_source, 'ocr'), date_filmed, miles_driven
+		SELECT id, slug, lat, lng, COALESCE(coord_source, 'ocr'), date_filmed, miles_driven, corpus, speed
 		FROM videos
-		ORDER BY date_filmed, id`)
+		ORDER BY corpus, date_filmed, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -156,12 +168,25 @@ func loadClips(db *sql.DB) ([]clip, error) {
 	var clips []clip
 	for rows.Next() {
 		var c clip
-		if err := rows.Scan(&c.id, &c.slug, &c.lat, &c.lng, &c.source, &c.filmed, &c.miles); err != nil {
+		if err := rows.Scan(&c.id, &c.slug, &c.lat, &c.lng, &c.source, &c.filmed, &c.miles, &c.corpus, &c.speed); err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)
 	}
 	return clips, rows.Err()
+}
+
+// byCorpus splits clips, sorted by corpus first, into one run per corpus, so
+// no walk pairs a fix from one trip with a fix from another.
+func byCorpus(clips []clip) [][]clip {
+	var runs [][]clip
+	for i, c := range clips {
+		if i == 0 || c.corpus != clips[i-1].corpus {
+			runs = append(runs, nil)
+		}
+		runs[len(runs)-1] = append(runs[len(runs)-1], c)
+	}
+	return runs
 }
 
 // analyze computes one decision per clip, in the same film order as the
@@ -190,7 +215,7 @@ func analyze(clips []clip, maxGap time.Duration, maxSpeedMph float64) []decision
 			out[i].reason = "gap"
 			continue
 		}
-		miles := haversineMiles(c.lat, c.lng, clips[next].lat, clips[next].lng)
+		miles := helpers.MilesBetween(c.lat, c.lng, clips[next].lat, clips[next].lng)
 		if miles/gap.Hours() > maxSpeedMph {
 			out[i].reason = "speed"
 			continue
@@ -198,17 +223,6 @@ func analyze(clips []clip, maxGap time.Duration, maxSpeedMph float64) []decision
 		out[i].newMiles = sql.NullFloat64{Float64: round3(miles), Valid: true}
 	}
 	return out
-}
-
-// haversineMiles returns the great-circle distance between two lat/lng points.
-func haversineMiles(lat1, lng1, lat2, lng2 float64) float64 {
-	const earthRadiusMiles = 3958.7613
-	rad := math.Pi / 180
-	dLat := (lat2 - lat1) * rad
-	dLng := (lng2 - lng1) * rad
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
-	return earthRadiusMiles * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
 func applyDecisions(db *sql.DB, decisions []decision) error {
@@ -240,23 +254,11 @@ func writeSQL(w *os.File, decisions []decision) {
 			continue
 		}
 		if d.newMiles.Valid {
-			fmt.Fprintf(w, "UPDATE videos SET miles_driven=%.3f WHERE slug='%s';\n", d.newMiles.Float64, sqlQuote(d.slug))
+			fmt.Fprintf(w, "UPDATE videos SET miles_driven=%.3f WHERE slug='%s';\n", d.newMiles.Float64, strings.ReplaceAll(d.slug, "'", "''"))
 		} else {
-			fmt.Fprintf(w, "UPDATE videos SET miles_driven=NULL WHERE slug='%s';\n", sqlQuote(d.slug))
+			fmt.Fprintf(w, "UPDATE videos SET miles_driven=NULL WHERE slug='%s';\n", strings.ReplaceAll(d.slug, "'", "''"))
 		}
 	}
-}
-
-// sqlQuote escapes single quotes for inlined SQL string literals.
-func sqlQuote(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r == '\'' {
-			out = append(out, '\'')
-		}
-		out = append(out, r)
-	}
-	return string(out)
 }
 
 func writeReport(w *os.File, decisions []decision) {

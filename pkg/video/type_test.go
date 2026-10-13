@@ -103,10 +103,48 @@ func TestVideoLocation(t *testing.T) {
 }
 
 func TestVideoToDate(t *testing.T) {
-	v := Video{Slug: "2018_0514_224801_013"}
-	got := v.toDate()
-	want := time.Date(2018, 5, 14, 22, 48, 1, 0, time.UTC)
-	if !got.Equal(want) {
-		t.Fatalf("toDate() = %v, want %v", got, want)
+	cases := []struct {
+		slug string
+		want time.Time
+	}{
+		{"2018_0514_224801_013", time.Date(2018, 5, 14, 22, 48, 1, 0, time.UTC)},
+		{"2018_0514_224801_013_a_opt", time.Date(2018, 5, 14, 22, 48, 1, 0, time.UTC)},
+		// A season-2 piece is dated at its offset into the original.
+		{"20260605144519_000001_s0000", time.Date(2026, 6, 5, 14, 45, 19, 0, time.UTC)},
+		{"20260605144519_000001_s0180", time.Date(2026, 6, 5, 14, 48, 19, 0, time.UTC)},
+		// Neither shape: no date, rather than a season-1 slice of the digits.
+		{"20260605144519_000001", time.Time{}},
+		{"", time.Time{}},
+	}
+	for _, tc := range cases {
+		if got := (Video{Slug: tc.slug}).toDate(); !got.Equal(tc.want) {
+			t.Errorf("toDate(%q) = %v, want %v", tc.slug, got, tc.want)
+		}
+	}
+}
+
+// A second of s2fast clip is six seconds of road; real-time clips, and a
+// Video that never came from the DB (Speed 0), read as themselves.
+func TestRealElapsed(t *testing.T) {
+	for speed, want := range map[int]time.Duration{0: 10 * time.Second, 1: 10 * time.Second, 6: time.Minute} {
+		if got := (Video{Speed: speed}).realElapsed(10 * time.Second); got != want {
+			t.Errorf("Speed %d: realElapsed(10s) = %v, want %v", speed, got, want)
+		}
+	}
+}
+
+func TestFilmedAt(t *testing.T) {
+	start := time.Date(2026, 6, 5, 14, 45, 19, 0, time.UTC)
+	for _, tc := range []struct {
+		v    Video
+		want time.Time
+	}{
+		{Video{DateFilmed: start, Speed: 1}, start.Add(30 * time.Second)},
+		{Video{DateFilmed: start, Speed: 6}, start.Add(3 * time.Minute)},
+		{Video{}, time.Time{}},
+	} {
+		if got := tc.v.FilmedAt(30 * time.Second); !got.Equal(tc.want) {
+			t.Errorf("Speed %d: FilmedAt(30s) = %v, want %v", tc.v.Speed, got, tc.want)
+		}
 	}
 }
