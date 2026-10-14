@@ -271,6 +271,72 @@ func TestPlaybackStatsHandler_Aggregates(t *testing.T) {
 	}
 }
 
+func TestPlaybackDailySince(t *testing.T) {
+	now := time.Date(2026, 10, 14, 23, 30, 0, 0, time.UTC)
+	if got := playbackDailySince(1, now); !got.Equal(time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("one day = today's midnight, got %v", got)
+	}
+	if got := playbackDailySince(7, now); !got.Equal(time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("seven days end today, got %v", got)
+	}
+}
+
+// One row per day of the window, oldest first, zeros where nothing happened;
+// events outside the window and bots' events count toward nothing.
+func TestPlaybackDailyHandler_Buckets(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "daily_alice", false)
+	seedUser(t, db, "daily_bot", true)
+	in := time.Now().Add(-1 * time.Hour)
+	earlier := time.Now().Add(-3 * 24 * time.Hour)
+	out := time.Now().Add(-40 * 24 * time.Hour)
+
+	vid := seedVideo(t, db, "stats_clip_daily", "Utah", "", nil)
+	seedPlay(t, db, vid, in)
+	seedPlay(t, db, vid, out)
+	seedEvent(t, db, "", "state_crossing", `{"sequential":true}`, earlier)
+	seedEvent(t, db, "daily_alice", "timewarp", `{}`, earlier)
+	seedEvent(t, db, "daily_alice", "guess_submitted", `{"correct":true}`, in)
+	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!guess"}`, in)
+	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!miles"}`, in)
+	seedEvent(t, db, "daily_bot", "command_run", `{"command":"!miles"}`, in)
+	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!miles"}`, out)
+
+	rec := insightsGET(t, "/api/stats/playback/daily?days=7", playbackDailyHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got playbackDailyResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if got.Days != 7 || len(got.Buckets) != 7 {
+		t.Fatalf("days = %d, buckets = %d, want 7 and 7: %s", got.Days, len(got.Buckets), rec.Body.String())
+	}
+	var sum playbackDay
+	busy := 0
+	for i, b := range got.Buckets {
+		if i > 0 && b.Day <= got.Buckets[i-1].Day {
+			t.Errorf("buckets out of order at %d: %s after %s", i, b.Day, got.Buckets[i-1].Day)
+		}
+		sum.Plays += b.Plays
+		sum.Crossings += b.Crossings
+		sum.Timewarps += b.Timewarps
+		sum.Guesses += b.Guesses
+		sum.Commands += b.Commands
+		if b.Commands > 0 {
+			busy++
+		}
+	}
+	want := playbackDay{Plays: 1, Crossings: 1, Timewarps: 1, Guesses: 1, Commands: 2}
+	if sum != want {
+		t.Errorf("window totals = %+v, want %+v", sum, want)
+	}
+	if busy != 1 {
+		t.Errorf("commands landed on %d days, want 1", busy)
+	}
+}
+
 // seedMilesUser writes a users row with a display-miles total and leaderboard
 // eligibility flags.
 func seedMilesUser(t *testing.T, db *gorm.DB, username string, miles float64, isBot, optedOut bool) {
