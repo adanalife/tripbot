@@ -350,7 +350,7 @@ func TestRunCommand_MiddleTextKeepsCapitalization(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	app.runCommand(context.Background(), newTestUser(adminUser), " !MIDDLE Hello World ")
+	app.runCommand(context.Background(), newAdminUser(), " !MIDDLE Hello World ")
 
 	want := `ShowMiddleText("Hello World")`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -366,7 +366,7 @@ func TestRunCommand_MiddleHideStillHides(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	app.runCommand(context.Background(), newTestUser(adminUser), "!middle HIDE")
+	app.runCommand(context.Background(), newAdminUser(), "!middle HIDE")
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
 		t.Errorf("overlay calls = %v, want [HideMiddleText()]", rec.Calls)
@@ -388,7 +388,7 @@ func TestRunCommand_UnknownCommandStaysBelowError(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	defer slog.SetDefault(restore)
 
-	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime")
+	app.runCommand(context.Background(), newAdminUser(), "!watchtime")
 
 	if strings.Contains(buf.String(), "level=ERROR") {
 		t.Errorf("unknown command logged at ERROR (reaches Sentry); log = %q", buf.String())
@@ -417,7 +417,7 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 	out, says := captureSay(t, app)
 
 	// !somafm is in the registry but outside the v1 allowlist Facebook runs.
-	app.runCommand(context.Background(), newTestUser(adminUser), "!somafm")
+	app.runCommand(context.Background(), newAdminUser(), "!somafm")
 
 	if len(rec.Refusals) != 1 {
 		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
@@ -457,7 +457,7 @@ func TestRunCommand_RefusalStampsAiringClip(t *testing.T) {
 	rec := &recordingEvents{}
 	app.Events = rec
 
-	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime extra args")
+	app.runCommand(context.Background(), newAdminUser(), "!watchtime extra args")
 
 	if len(rec.Refusals) != 1 {
 		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
@@ -923,8 +923,24 @@ func TestSessionUser_IsModReadsTheMessageFlag(t *testing.T) {
 	if !(sessionUser{cfg: cfg, u: &users.User{Username: "viewer1", Moderator: true}}).IsMod() {
 		t.Error("a flagged moderator does not read as a mod")
 	}
-	if !(sessionUser{cfg: cfg, u: &users.User{Username: adminUser}}).IsMod() {
+	if !(sessionUser{cfg: cfg, u: newAdminUser()}).IsMod() {
 		t.Error("the broadcaster does not read as a mod")
+	}
+}
+
+// The admin gate is the platform's broadcaster flag, set from the sender's
+// user id. A viewer whose display name happens to match the channel name —
+// free to pick on YouTube, Facebook and TikTok — must not pass it.
+func TestSessionUser_IsAdminReadsTheBroadcasterFlagNotTheName(t *testing.T) {
+	cfg := testConf
+	if (sessionUser{cfg: cfg, u: &users.User{Username: adminUser}}).IsAdmin() {
+		t.Error("a viewer named after the channel reads as admin")
+	}
+	if (sessionUser{cfg: cfg, u: &users.User{Username: adminUser, Moderator: true}}).IsAdmin() {
+		t.Error("a moderator named after the channel reads as admin")
+	}
+	if !(sessionUser{cfg: cfg, u: &users.User{Username: "anything", Broadcaster: true}}).IsAdmin() {
+		t.Error("the flagged broadcaster does not read as admin")
 	}
 }
 

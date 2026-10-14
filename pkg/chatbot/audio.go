@@ -84,7 +84,7 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	// No argument, or no permission to act on one: answer the question underneath
 	// either message — what's on air — so a non-admin gets something useful
 	// rather than a refusal. !song is where that answer lives.
-	if arg == "" || !a.Cfg.UserIsAdmin(user.Username) {
+	if arg == "" || !user.Broadcaster {
 		a.songCmd(ctx, user, nil)
 		return
 	}

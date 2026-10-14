@@ -194,9 +194,9 @@ func (f *fakeBeds) firstUnder(selection string) string {
 	return selection
 }
 
-// newAudioTestApp wires an App with a fake bed store on the given bed. adminUser
-// passes UserIsAdmin (it matches testConf.ChannelName); any other name is a
-// plain viewer.
+// newAudioTestApp wires an App with a fake bed store on the given bed.
+// newAdminUser() passes the admin gate (its Broadcaster flag); any plain
+// newTestUser is a viewer.
 func newAudioTestApp(t *testing.T, bed beds.Bed, track string) (*App, *fakeBeds, func() string) {
 	t.Helper()
 	app := newTestApp(video.Video{})
@@ -242,7 +242,7 @@ func TestAudioCmd_ViewerNamingABedStillCannotSwitch(t *testing.T) {
 func TestAudioCmd_AdminSwitchesAndAnnouncesTheAlbum(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Album"}) // case-insensitive
+	app.audioCmd(context.Background(), newAdminUser(), []string{"Album"}) // case-insensitive
 
 	if len(fake.sets) != 1 || fake.sets[0] != beds.Album {
 		t.Fatalf("expected one switch to the album, got %v", fake.sets)
@@ -265,7 +265,7 @@ func TestAudioCmd_AdminSwitchesAndAnnouncesTheAlbum(t *testing.T) {
 func TestAudioCmd_AdminTunesASomaFMStation(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"DroneZone"}) // case-insensitive
+	app.audioCmd(context.Background(), newAdminUser(), []string{"DroneZone"}) // case-insensitive
 
 	if len(fake.sets) != 0 {
 		t.Errorf("a station is a tune, not a bed switch, got %v", fake.sets)
@@ -284,7 +284,7 @@ func TestAudioCmd_AdminPicksAnAlbumByName(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 	fake.onShare = []string{"fifty-horizons", "streambeats-lofi-secluded"}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Streambeats-Lofi-Secluded"}) // case-insensitive
+	app.audioCmd(context.Background(), newAdminUser(), []string{"Streambeats-Lofi-Secluded"}) // case-insensitive
 
 	if len(fake.sets) != 0 {
 		t.Errorf("an album is a selection, not a bare bed switch, got %v", fake.sets)
@@ -303,7 +303,7 @@ func TestAudioCmd_AdminPicksAnAlbumByShorthand(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 	fake.onShare = []string{"fifty-horizons", "streambeats-synthwave-rose", "streambeats-lofi-secluded"}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"rose"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"rose"})
 
 	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-synthwave-rose" {
 		t.Fatalf("expected the shorthand to reach synthwave-rose, got %v", fake.albums)
@@ -318,7 +318,7 @@ func TestAudioCmd_AdminPicksAnAlbumByShorthand(t *testing.T) {
 func TestAudioCmd_AlbumAnnouncementUsesTheCreditNotTheDirectory(t *testing.T) {
 	app, _, out := newAudioTestApp(t, beds.CarHum, "")
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"fifty-horizons"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"fifty-horizons"})
 
 	got := out()
 	if !strings.Contains(got, "Fifty Horizons, by wooderCZ") {
@@ -336,7 +336,7 @@ func TestAudioCmd_UncreditedAlbumIsNamedFromItsDirectory(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 	fake.onShare = []string{"streambeats-synthwave-lone-wolf"}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"lone-wolf"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"lone-wolf"})
 
 	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-synthwave-lone-wolf" {
 		t.Fatalf("expected the uncredited album to be selected, got %v", fake.albums)
@@ -371,7 +371,7 @@ func TestAudioCmd_UnknownBedListsOptionsWithoutSwitching(t *testing.T) {
 		"fifty-horizons", "streambeats-lofi-gold", "streambeats-lofi-secluded",
 	}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"spaceship"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"spaceship"})
 
 	if len(fake.sets) != 0 {
 		t.Fatalf("an unknown bed must not switch, got %v", fake.sets)
@@ -401,7 +401,7 @@ func TestAudioCmd_FailedSwitchDoesNotClaimSuccess(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 	fake.err = errors.New("no album tracks mounted")
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"album"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"album"})
 
 	if got := out(); strings.Contains(got, "Switched") {
 		t.Errorf("a rejected switch must not announce success, got %q", got)
@@ -413,7 +413,7 @@ func TestAudioCmd_NoBedStoreReportsUnavailable(t *testing.T) {
 	app.Beds = nil
 	out, says := captureSay(t, app)
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"album"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"album"})
 
 	if got := out(); got == "" {
 		t.Error("expected an unavailable message rather than silence")
@@ -444,7 +444,7 @@ func TestAudioCmd_AdminPicksAGroup(t *testing.T) {
 		"fifty-horizons", "streambeats-lofi-gold", "streambeats-synthwave-rose",
 	}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"streambeats"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"streambeats"})
 
 	if len(fake.albums) != 1 || fake.albums[0] != "streambeats" {
 		t.Fatalf("expected one selection of the streambeats group, got %v", fake.albums)
@@ -505,7 +505,7 @@ func TestAudioCmd_AnnouncesAPendingSwitchInTheFuture(t *testing.T) {
 		At:    time.Now().Add(5 * time.Second),
 	}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"rose"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"rose"})
 
 	if got := out(); got != "🎵 Switching to Streambeats Synthwave Rose in 5s" {
 		t.Errorf("got %q", got)
@@ -518,7 +518,7 @@ func TestAudioCmd_NamesTheWholeShareWhenNothingIsSelected(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 	fake.pending = &beds.Switch{Bed: beds.Album, At: time.Now().Add(5 * time.Second)}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"album"})
+	app.audioCmd(context.Background(), newAdminUser(), []string{"album"})
 
 	if got := out(); !strings.Contains(got, "everything on the music share") {
 		t.Errorf("got %q", got)

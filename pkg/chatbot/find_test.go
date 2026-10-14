@@ -54,7 +54,7 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"snowy", "mountains"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"snowy", "mountains"})
 	})
 
 	if len(search.Queries) != 1 || search.Queries[0] != "snowy mountains" {
@@ -76,7 +76,7 @@ func TestFindCmd_NoHits(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Hits: nil})
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"unicorns"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"unicorns"})
 	})
 
 	if len(recPlayout.Calls) != 0 {
@@ -95,7 +95,7 @@ func TestFindCmd_DistanceTooFarIsAMiss(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"something"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"something"})
 	})
 
 	if len(recPlayout.Calls) != 0 {
@@ -111,7 +111,7 @@ func TestFindCmd_SearchError(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Err: errors.New("responder down")})
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"anything"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"anything"})
 	})
 
 	if len(recPlayout.Calls) != 0 {
@@ -128,7 +128,7 @@ func TestFindCmd_NoArgsShowsUsage(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), nil)
+		app.findCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	if len(search.Queries) != 0 {
@@ -216,7 +216,7 @@ func TestFindCmd_SearchesTheCorpusOnScreen(t *testing.T) {
 		app, _, _ := newFindTestApp(t, search)
 		app.Video = &recordingVideo{Vid: video.Video{Corpus: tc.onScreen}}
 		runAsAdmin(t, func() {
-			app.findCmd(context.Background(), newTestUser(adminUser), []string{"a", "bridge"})
+			app.findCmd(context.Background(), newAdminUser(), []string{"a", "bridge"})
 		})
 		if len(search.Corpora) != 1 || search.Corpora[0] != tc.want {
 			t.Errorf("on screen %q: searched %v, want [%s]", tc.onScreen, search.Corpora, tc.want)

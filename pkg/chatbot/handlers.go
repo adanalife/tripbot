@@ -108,8 +108,14 @@ func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 func (su sessionUser) IsSubscriber() bool {
 	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
 }
+
+// IsAdmin is the platform's own word that the sender is the channel owner.
+// It reads the flag the gateway set from the sender's user id, never the
+// username: display names are free to pick on most platforms, so a name
+// compare would hand the admin commands to whoever renamed themselves after
+// the channel.
 func (su sessionUser) IsAdmin() bool {
-	return su.cfg.UserIsAdmin(su.u.Username)
+	return su.u.Broadcaster
 }
 
 // IsMod is the broadcaster or anyone the platform flagged as a moderator on
@@ -672,6 +678,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// through: runCommand folds only the trigger token for matching.
 	user := a.chatUser(ctx, msg.User, msg.UserID)
 	user.Moderator = msg.Moderator
+	user.Broadcaster = msg.Broadcaster
 	a.runCommand(withReplyParent(ctx, msg.MessageID), user, msg.Text)
 }
 

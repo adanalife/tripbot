@@ -16,8 +16,11 @@ func (c TripbotConfig) IsDevelopment() bool {
 	return c.Environment == "development"
 }
 
-// UserIsAdmin returns true if a given user runs the channel
-// it's used to restrict admin features
+// UserIsAdmin reports whether a username is the channel's own account — the
+// leaderboards use it to leave the owner's row out, and the follower check
+// to skip asking whether the broadcaster follows themselves. It is a name
+// compare and therefore NOT the admin gate: command access reads the
+// per-message Broadcaster flag the gateway derives from the platform user id.
 func (c TripbotConfig) UserIsAdmin(username string) bool {
 	return strings.EqualFold(username, c.ChannelName)
 }
