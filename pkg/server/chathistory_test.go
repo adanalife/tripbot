@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
@@ -98,5 +99,29 @@ func TestChatHistoryHandler_Until(t *testing.T) {
 	}
 	if len(page.Lines) != 3 {
 		t.Errorf("a bad until filtered: %+v", page)
+	}
+}
+
+// A line the platform removed comes back flagged deleted, so the console
+// strikes it; its neighbours don't.
+func TestChatHistoryHandler_StruckLine(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+	cfg := &c.TripbotConfig{Platform: "twitch"}
+	for _, id := range []string{"m1", "m2"} {
+		if err := events.RecordChat(ctx, cfg, events.ChatLine{Username: "alice", UserID: "1", MessageID: id, Text: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := events.StrikeChat(ctx, cfg, "1", "m1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	var page chatHistoryPage
+	rec := insightsGET(t, "/api/chat/history", chatHistoryHandler)
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Lines) != 2 || !page.Lines[0].Deleted || page.Lines[1].Deleted {
+		t.Fatalf("lines = %+v, want m1 deleted and m2 not", page.Lines)
 	}
 }
