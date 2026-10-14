@@ -1,9 +1,8 @@
 name: contract-dispatch
 
-# Tells the consumers that a contract this repo owns changed on main, so each
-# one's contract workflow re-syncs its copy and opens (or updates) a sync PR
-# within minutes rather than at its next daily sweep. Consumers that don't
-# listen for `contract-changed` still catch the change on that sweep.
+# Tells the consumers that a contract this repo owns changed on main, via the shared
+# contract-dispatch workflow (adanalife/infra), so each one's contract workflow
+# re-syncs its copy within minutes rather than at its next daily sweep.
 on:
   push:
     branches:
@@ -11,36 +10,13 @@ on:
     paths:
       - 'pkg/contract/*.json'
 
-# The dispatch goes through the app token below; GITHUB_TOKEN can't reach
-# another repo.
 permissions: {}
 
 jobs:
   dispatch:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Mint automation app token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          # Every repo that keeps a copy of a pkg/contract file and listens for
-          # contract-changed; keep in step with the loop below.
-          repositories: tripbot-console,platform-gateway,infra,obs,playout
-          permission-contents: write
-
-      # curl rather than `gh api`: not every runner image ships the gh CLI.
-      - name: Send contract-changed
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          for repo in tripbot-console platform-gateway infra obs playout; do
-            curl -fsS -X POST \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY_OWNER}/${repo}/dispatches" \
-              -d '{"event_type":"contract-changed","client_payload":{"source":"'"${GITHUB_REPOSITORY}"'","sha":"'"${GITHUB_SHA}"'"}}'
-          done
+    uses: adanalife/infra/.github/workflows/contract-dispatch.yml@main
+    with:
+      # Every repo that keeps a copy and listens for contract-changed.
+      repositories: tripbot-console,platform-gateway,infra,obs,playout
+    secrets:
+      AUTOMATION_APP_PRIVATE_KEY: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
