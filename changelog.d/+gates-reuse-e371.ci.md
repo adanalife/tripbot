@@ -1,1 +1,1 @@
-CI workflows call the org's shared reusable workflows (adanalife/infra) — the per-PR gates, pre-commit, release-please, the weekly super-linter sweep and the cdk8s sweep — instead of carrying their own copies.
+CI workflows call the org's shared reusable workflows (adanalife/infra) instead of each carrying its own copy.
