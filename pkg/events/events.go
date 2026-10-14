@@ -126,8 +126,20 @@ func Follow(ctx context.Context, cfg *c.TripbotConfig, user string) error {
 // event carrying the amount in extra_miles_earned, so the rollup folds it into
 // user_rollups.extra_miles alongside the session bonuses. This is the audit
 // trail for out-of-band miles changes the login/logout pairing can't see.
-func Correction(ctx context.Context, cfg *c.TripbotConfig, user string, delta float64) error {
-	return record(ctx, cfg, Event{Username: user, Event: "correction", ExtraMilesEarned: &delta})
+// user is the recipient (the rollup sums by it); issuedBy, who ran the
+// correction, rides in meta.
+func Correction(ctx context.Context, cfg *c.TripbotConfig, user, issuedBy string, delta float64) error {
+	payload, err := json.Marshal(correctionMeta{IssuedBy: issuedBy})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Username: user, Event: "correction", ExtraMilesEarned: &delta, Meta: &meta})
+}
+
+// correctionMeta is a correction event's meta payload.
+type correctionMeta struct {
+	IssuedBy string `json:"issued_by"`
 }
 
 // stateCrossingMeta is a state_crossing event's meta payload.

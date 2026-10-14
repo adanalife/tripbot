@@ -60,7 +60,7 @@ var writers = []struct {
 		return Follow(ctx, cfg, "someone")
 	}},
 	{"Correction", "correction", func(ctx context.Context, cfg *c.TripbotConfig) error {
-		return Correction(ctx, cfg, "someone", -1.5)
+		return Correction(ctx, cfg, "someone", "dana", -1.5)
 	}},
 	{"WatchdogRestart", "watchdog_restart", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return WatchdogRestart(ctx, cfg, "tiktok", WatchdogOutcomeOK)
@@ -224,6 +224,32 @@ func TestSessionWritersZeroAiringWritesNull(t *testing.T) {
 // and a meta document naming the transition. The exact JSON matters — the
 // rollups and any Grafana query address it as meta->>'from' / meta->>'to' /
 // meta->>'sequential'.
+// A correction row is the recipient's, carrying the delta, and names who
+// issued it in meta — the rollup sums by username, so the issuer can't go there.
+func TestCorrectionRow(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"target",                // username: the recipient
+			"twitch",                // platform
+			"correction",            // event
+			sqlmock.AnyArg(),        // session_id
+			sqlmock.AnyArg(),        // date_created
+			-1.5,                    // extra_miles_earned
+			nil,                     // video_id
+			nil,                     // video_ts_sec
+			`{"issued_by":"a_mod"}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := Correction(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "target", "a_mod", -1.5); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestStateCrossingRow(t *testing.T) {
 	mock := installMockDB(t)
 	mock.ExpectQuery(`INSERT INTO "events"`).
