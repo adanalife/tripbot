@@ -1,0 +1,1 @@
+The chat log marks a line struck when the platform removes it (a moderator delete, a timeout, a ban), and `/api/chat/history` returns it flagged `deleted`, so the console's `/history` shows it struck the way the live log does instead of pristine.
