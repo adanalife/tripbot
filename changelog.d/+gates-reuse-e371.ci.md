@@ -1,1 +1,1 @@
-`pr-gates` calls the org's reusable `gates` workflow (adanalife/infra) instead of carrying its own copy of every gate.
+CI workflows call the org's shared reusable workflows (adanalife/infra) — the per-PR gates, pre-commit, release-please, the weekly super-linter sweep and the cdk8s sweep — instead of carrying their own copies.
