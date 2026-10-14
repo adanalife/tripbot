@@ -103,7 +103,7 @@ func (a *App) commandsCmd(ctx context.Context, user *users.User, params []string
 func (a *App) helpFor(user *users.User, name string) string {
 	trigger := "!" + strings.TrimPrefix(strings.ToLower(name), "!")
 	cmd, ok := a.singleWordLookup[trigger]
-	isAdmin := user != nil && a.Cfg != nil && a.Cfg.UserIsAdmin(user.Username)
+	isAdmin := user != nil && user.Broadcaster
 	if !ok || cmd.Help == "" || (cmd.RequiresAdmin && !isAdmin) {
 		return "I don't know " + trigger + " — try !commands"
 	}

@@ -57,7 +57,7 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
 	runAsAdmin(t, func() {
-		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+		app.timewarpCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	// Overlay: ShowTimewarp is the only call, crediting the caller.
@@ -92,7 +92,7 @@ func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
 	app.Video = &recordingVideo{}
 
 	runAsAdmin(t, func() {
-		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+		app.timewarpCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != `ShowTimewarp("")` {
@@ -117,7 +117,7 @@ func TestTimewarpCmd_NoBackgroundFlag(t *testing.T) {
 			app.Flags = &recordingFlags{Set: map[string]bool{timewarpNoBackgroundFlagKey: tc.on}}
 
 			runAsAdmin(t, func() {
-				app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+				app.timewarpCmd(context.Background(), newAdminUser(), nil)
 			})
 
 			if recOverlay.NoBackground != tc.on {
@@ -139,7 +139,7 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 
 	runAsAdmin(t, func() {
 		// No params → n = 1.
-		app.skipCmd(context.Background(), newTestUser(adminUser), nil)
+		app.skipCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Skip(1)" {
@@ -183,9 +183,9 @@ func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 
 			runAsAdmin(t, func() {
 				if tc.cmd == "skip" {
-					app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+					app.skipCmd(context.Background(), newAdminUser(), tc.params)
 				} else {
-					app.backCmd(context.Background(), newTestUser(adminUser), tc.params)
+					app.backCmd(context.Background(), newAdminUser(), tc.params)
 				}
 			})
 
@@ -227,7 +227,7 @@ func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
 			app.Chat = recIRC
 
 			runAsAdmin(t, func() {
-				app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+				app.skipCmd(context.Background(), newAdminUser(), tc.params)
 			})
 
 			if len(recPlayout.Calls) != 0 {
@@ -254,7 +254,7 @@ func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	app.Video = recVideo
 
 	runAsAdmin(t, func() {
-		app.backCmd(context.Background(), newTestUser(adminUser), nil)
+		app.backCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Back(1)" {
@@ -359,7 +359,7 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
+		app.jumpCmd(context.Background(), newAdminUser(), []string{"california"})
 	})
 
 	// Video: FindRandomByState("california"), Current() to compare against the
@@ -409,7 +409,7 @@ func TestJumpCmd_SameStateSaysJumpingElsewhere(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
+		app.jumpCmd(context.Background(), newAdminUser(), []string{"california"})
 	})
 
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Jumping elsewhere in California") {
@@ -438,7 +438,7 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
+		app.jumpCmd(context.Background(), newAdminUser(), []string{"wyoming"})
 	})
 
 	// FindRandomByState was called; no GetCurrentlyPlaying refresh after.
@@ -491,7 +491,7 @@ func TestJumpCmd_StateNameParsing(t *testing.T) {
 			app.Chat = recIRC
 
 			runAsAdmin(t, func() {
-				app.jumpCmd(context.Background(), newTestUser(adminUser), tt.params)
+				app.jumpCmd(context.Background(), newAdminUser(), tt.params)
 			})
 
 			wantCall := fmt.Sprintf("FindRandomByState(%q)", tt.wantState)
@@ -520,7 +520,7 @@ func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"north", "atlantis"})
+		app.jumpCmd(context.Background(), newAdminUser(), []string{"north", "atlantis"})
 	})
 
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != `FindRandomByState("north atlantis")` {
@@ -545,7 +545,7 @@ func TestJumpCmd_NoStateNameInParams(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"123!?"})
+		app.jumpCmd(context.Background(), newAdminUser(), []string{"123!?"})
 	})
 
 	if len(recVideo.Calls) != 0 {
@@ -572,7 +572,7 @@ func TestDaytimeCmd_AdminJumpsToNextMorning(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+		app.daytimeCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	// Video: reads the current clip, finds the next daytime one, then refreshes.
@@ -610,7 +610,7 @@ func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+		app.daytimeCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	// No Playout handoff on the not-found path, and no GetCurrentlyPlaying refresh.
@@ -637,7 +637,7 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), nil)
+		app.jumpCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	// No state lookup, no playback.
@@ -691,7 +691,7 @@ func TestJumpCmd_NoFootageForState_Wrapped(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
+		app.jumpCmd(context.Background(), newAdminUser(), []string{"wyoming"})
 	})
 
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
@@ -716,7 +716,7 @@ func TestDaytimeCmd_NoDaytimeAhead_Wrapped(t *testing.T) {
 	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
-		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+		app.daytimeCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "enjoy the night") {
@@ -762,7 +762,7 @@ func TestPlaybackCmds_WithoutPlayoutApologizeAndDoNothing(t *testing.T) {
 			app.Playout = recPlayout
 			app.Video = recVideo
 
-			runAsAdmin(t, func() { tc.run(app, context.Background(), newTestUser(adminUser)) })
+			runAsAdmin(t, func() { tc.run(app, context.Background(), newAdminUser()) })
 
 			if len(chat.Says) != 1 || chat.Says[0] != tc.want {
 				t.Errorf("chat = %v, want [%q]", chat.Says, tc.want)
@@ -788,7 +788,7 @@ func TestStateCmd_WithArgJumps(t *testing.T) {
 	app.Chat = &recordingChat{}
 
 	runAsAdmin(t, func() {
-		app.stateCmd(context.Background(), newTestUser(adminUser), []string{"ma"})
+		app.stateCmd(context.Background(), newAdminUser(), []string{"ma"})
 	})
 
 	if len(recVideo.Calls) == 0 || recVideo.Calls[0] != `FindRandomByState("ma")` {
@@ -807,7 +807,7 @@ func TestFindCmd_StateNameJumps(t *testing.T) {
 	app.Chat = &recordingChat{}
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"New", "York"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"New", "York"})
 	})
 
 	if len(recVideo.Calls) == 0 || recVideo.Calls[0] != `FindRandomByState("New York")` {

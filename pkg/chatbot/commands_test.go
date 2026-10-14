@@ -50,6 +50,12 @@ func newTestUser(name string) *users.User {
 	return &users.User{Username: name}
 }
 
+// newAdminUser is the channel owner as the gateway delivers them: flagged
+// Broadcaster off the platform user id. The name alone grants nothing.
+func newAdminUser() *users.User {
+	return &users.User{Username: adminUser, Broadcaster: true}
+}
+
 // newTestVideo returns a non-flagged Video with the given fields set.
 func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 	return video.Video{State: state, Lat: lat, Lng: lng, DateFilmed: date}
@@ -931,7 +937,9 @@ func TestGuessCmd_StatelessVideo_RecordsNoGuess(t *testing.T) {
 
 // --- middleCmd ---
 
-// adminUser matches CHANNEL_NAME in .env.testing, satisfying c.UserIsAdmin.
+// adminUser is the channel owner's login (CHANNEL_NAME in .env.testing). On
+// its own it is just a name; newAdminUser carries the Broadcaster flag that
+// actually opens the admin gate.
 const adminUser = "test"
 
 // --- refreshOverlaysCmd ---
@@ -941,7 +949,7 @@ func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
 	app.OBS = &recordingOBS{Refreshed: 3}
 	out, says := captureSay(t, app)
 
-	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+	app.refreshOverlaysCmd(context.Background(), newAdminUser(), nil)
 
 	if !strings.Contains(out(), "Refreshed 3 overlay") {
 		t.Errorf("expected refreshed-count report, got %q", out())
@@ -956,7 +964,7 @@ func TestRefreshOverlaysCmd_ErrorIsReported(t *testing.T) {
 	app.OBS = &recordingOBS{refreshErr: errors.New("obs unreachable")}
 	out, says := captureSay(t, app)
 
-	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+	app.refreshOverlaysCmd(context.Background(), newAdminUser(), nil)
 
 	if !strings.Contains(out(), "Couldn't refresh") {
 		t.Errorf("expected failure message, got %q", out())
@@ -970,7 +978,7 @@ func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 	app := newTestApp(video.Video{})
 	out, says := captureSay(t, app)
 
-	app.middleCmd(context.Background(), newTestUser(adminUser), nil)
+	app.middleCmd(context.Background(), newAdminUser(), nil)
 
 	if !strings.Contains(out(), "What do you want to say") {
 		t.Errorf("expected prompt, got %q", out())
@@ -987,7 +995,7 @@ func TestMiddleCmd_Hide_DrivesHideOverlay(t *testing.T) {
 
 	out, says := captureSay(t, app)
 
-	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hide"})
+	app.middleCmd(context.Background(), newAdminUser(), []string{"hide"})
 
 	if !strings.Contains(out(), "Hiding the message") {
 		t.Errorf("expected hide confirmation in chat, got %q", out())
@@ -1006,7 +1014,7 @@ func TestMiddleCmd_Hide_CaseInsensitive(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"HIDE"})
+	app.middleCmd(context.Background(), newAdminUser(), []string{"HIDE"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
 		t.Errorf("expected one HideMiddleText overlay call for 'HIDE', got %v", rec.Calls)
@@ -1019,7 +1027,7 @@ func TestMiddleCmd_Text_DrivesShowOverlay(t *testing.T) {
 	app.Onscreens = rec
 
 	// Multiple words get joined with a space into the overlay text.
-	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hello", "everyone"})
+	app.middleCmd(context.Background(), newAdminUser(), []string{"hello", "everyone"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != `ShowMiddleText("hello everyone")` {
 		t.Errorf("expected ShowMiddleText with joined text, got %v", rec.Calls)
@@ -1403,7 +1411,7 @@ func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
 		rec := &recordingSessions{}
 		app.Sessions = rec
 
-		app.giveMilesCmd(context.Background(), newTestUser(adminUser), params)
+		app.giveMilesCmd(context.Background(), newAdminUser(), params)
 
 		if len(rec.Calls) != 0 {
 			t.Errorf("params %v: expected no Sessions calls, got %v", params, rec.Calls)
@@ -1424,7 +1432,7 @@ func TestGiveMilesCmd_CorrectMilesFails_SaysFailureNotANumber(t *testing.T) {
 
 	out, says := captureSay(t, app)
 
-	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+	app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "50"})
 
 	msg := out()
 	if !strings.Contains(msg, "try again in a bit") {
@@ -1458,7 +1466,7 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		app.Events = rec
 		out, says := captureSay(t, app)
 
-		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+		app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "50"})
 
 		if msg := out(); msg != "@target now has 60.00mi" {
 			t.Errorf("expected the running total in the reply, got %q", msg)
@@ -1483,7 +1491,7 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		app.Events = rec
 		out, says := captureSay(t, app)
 
-		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+		app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "50"})
 
 		if msg := out(); strings.Contains(msg, "now has") {
 			t.Errorf("expected no total in the reply, got %q", msg)
@@ -1511,7 +1519,7 @@ func TestGiveMilesCmd_ClampedClawback_RecordsAppliedDelta(t *testing.T) {
 	app.Events = rec
 	out, says := captureSay(t, app)
 
-	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "-50"})
+	app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "-50"})
 
 	if msg := out(); msg != "@target only had 30.00mi to remove, now has 0.00mi" {
 		t.Errorf("expected the clamp in the reply, got %q", msg)
@@ -1530,7 +1538,7 @@ func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), nil)
+	app.makeBotCmd(context.Background(), newAdminUser(), nil)
 
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no Sessions calls without target, got %v", rec.Calls)
@@ -1542,7 +1550,7 @@ func TestMakeBotCmd_Admin_FlipsToTrue(t *testing.T) {
 	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "tripbot4000"}}
 	app.Sessions = rec
 
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"tripbot4000"})
+	app.makeBotCmd(context.Background(), newAdminUser(), []string{"tripbot4000"})
 
 	want := `SetBot("tripbot4000", true)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1555,7 +1563,7 @@ func TestMakeBotCmd_Admin_StripsAtAndLowercases(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"@TripBot4000"})
+	app.makeBotCmd(context.Background(), newAdminUser(), []string{"@TripBot4000"})
 
 	want := `SetBot("tripbot4000", true)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1569,7 +1577,7 @@ func TestMakeBotCmd_UnknownUser_SwallowsError(t *testing.T) {
 	app.Sessions = rec
 
 	// Must not panic — the handler logs and returns.
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"ghost"})
+	app.makeBotCmd(context.Background(), newAdminUser(), []string{"ghost"})
 
 	want := `SetBot("ghost", true)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1582,7 +1590,7 @@ func TestUnBotCmd_Admin_FlipsToFalse(t *testing.T) {
 	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "innocent"}}
 	app.Sessions = rec
 
-	app.unBotCmd(context.Background(), newTestUser(adminUser), []string{"innocent"})
+	app.unBotCmd(context.Background(), newAdminUser(), []string{"innocent"})
 
 	want := `SetBot("innocent", false)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {

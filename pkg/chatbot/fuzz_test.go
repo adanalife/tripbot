@@ -124,7 +124,7 @@ func FuzzMiddleCmd(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		app := newTestApp(video.Video{})
 		params := splitFuzzParams(s)
-		app.middleCmd(context.Background(), newTestUser(adminUser), params)
+		app.middleCmd(context.Background(), newAdminUser(), params)
 	})
 }
 
@@ -138,8 +138,8 @@ func FuzzSetBotFlag(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		app := newTestApp(video.Video{})
 		params := splitFuzzParams(s)
-		app.makeBotCmd(context.Background(), newTestUser(adminUser), params)
-		app.unBotCmd(context.Background(), newTestUser(adminUser), params)
+		app.makeBotCmd(context.Background(), newAdminUser(), params)
+		app.unBotCmd(context.Background(), newAdminUser(), params)
 	})
 }
 

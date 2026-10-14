@@ -43,6 +43,11 @@ type User struct {
 	// this chatter moderates the channel. Per message, never persisted: a
 	// mod gate should track the platform's roster, not a snapshot of it.
 	Moderator bool `gorm:"-"`
+	// Broadcaster is the platform's word, on the message being handled, that
+	// this chatter is the channel owner — matched on the platform-native user
+	// id, never on a display name a viewer could pick for themselves. It is the
+	// admin gate. Per message, never persisted, for the same reason Moderator is.
+	Broadcaster bool `gorm:"-"`
 	// autoCreateTime stamps these with the current time on insert. create()
 	// builds a User without setting them, so without the tag GORM writes the
 	// zero value (0001-01-01) into columns whose DEFAULT is CURRENT_TIMESTAMP —

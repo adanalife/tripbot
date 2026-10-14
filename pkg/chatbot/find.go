@@ -263,7 +263,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// rate-limit non-admins, shared with the other playback jumps.
-	if !a.Cfg.UserIsAdmin(user.Username) {
+	if !user.Broadcaster {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return

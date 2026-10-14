@@ -2,13 +2,13 @@ package config
 
 import "testing"
 
-// UserIsAdmin is the only gate on the admin-only chat commands (!shutdown,
-// !givemiles and the rest) and on the rate-limit bypass every playback command
-// shares, so it decides who can stop the bot and who can yank the playhead. Load
-// lowercases ChannelName but a chat username arrives however the viewer's
-// platform spells it — a display name on Twitch is mixed-case — so the
-// comparison has to fold case. Swapping EqualFold for == locks Dana out of his
-// own admin commands whenever the platform hands over "ADanaLife_".
+// UserIsAdmin names the channel's own account for the leaderboard exclusion
+// and the follower short-circuit (the admin gate itself is the per-message
+// Broadcaster flag, not this compare). Load lowercases ChannelName but a chat
+// username arrives however the viewer's platform spells it — a display name
+// on Twitch is mixed-case — so the comparison has to fold case. Swapping
+// EqualFold for == puts Dana's own row back on the leaderboard whenever the
+// platform hands over "ADanaLife_".
 func TestUserIsAdmin(t *testing.T) {
 	cfg := TripbotConfig{ChannelName: "adanalife_"}
 
