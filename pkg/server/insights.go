@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
 )
@@ -26,10 +27,15 @@ import (
 // pkg/rollups' snapshot read applies.
 
 // Insights windows are clamped so an arbitrary ?days can't turn a window scan
-// into a table scan.
+// into a table scan. The insight endpoints themselves also take days=0, "all
+// time": footage and regions only settle over many plays, and the tables
+// behind them grow by a sample a minute per platform — a few hundred thousand
+// rows a year, which a whole-table aggregate reads in well under the
+// console's budget. The stats and presence reads keep the clamp.
 const (
 	insightsMinDays = 1
 	insightsMaxDays = 90
+	insightsAllTime = 0
 
 	commandInsightsDefaultDays = 7
 	guessInsightsDefaultDays   = 30
@@ -46,6 +52,22 @@ const (
 // and clamping to [insightsMinDays, insightsMaxDays].
 func insightsDays(r *http.Request, def int) int {
 	return queryInt(r, "days", def, insightsMinDays, insightsMaxDays)
+}
+
+// insightsWindowDays is insightsDays for the insight endpoints, where 0 (or
+// anything below the minimum) asks for all time.
+func insightsWindowDays(r *http.Request, def int) int {
+	return queryInt(r, "days", def, insightsAllTime, insightsMaxDays)
+}
+
+// insightsSince is the window's lower bound as a timestamp: `days` ago, or the
+// epoch for all time. A timestamp rather than an interval in the SQL keeps the
+// predicate a plain range the date indexes scan, whichever the window is.
+func insightsSince(days int) time.Time {
+	if days <= insightsAllTime {
+		return time.Unix(0, 0).UTC()
+	}
+	return time.Now().AddDate(0, 0, -days)
 }
 
 // queryInt parses the named integer query parameter, falling back to def when
@@ -107,7 +129,7 @@ WITH runs AS (
     FROM events e
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_run'
-      AND e.date_created >= now() - make_interval(days => @days)
+      AND e.date_created >= @since
       AND u.is_bot = false
     GROUP BY 1
 ),
@@ -117,7 +139,7 @@ refused AS (
     FROM events e
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_refused'
-      AND e.date_created >= now() - make_interval(days => @days)
+      AND e.date_created >= @since
       AND u.is_bot = false
     GROUP BY 1
 )
@@ -136,7 +158,7 @@ SELECT COALESCE(e.meta->>'reason', '') AS reason,
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_refused'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY count DESC, reason`
@@ -153,7 +175,7 @@ FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_refused'
   AND e.meta->>'reason' = 'unknown'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY count DESC, typed
@@ -167,13 +189,13 @@ func gatherCommandInsights(ctx context.Context, days int) (commandInsightsRespon
 		UnknownCommands: []unknownCommand{},
 	}
 	db := database.GormDB().WithContext(ctx)
-	if err := db.Raw(commandUsageSQL, sql.Named("days", days)).Scan(&out.Commands).Error; err != nil {
+	if err := db.Raw(commandUsageSQL, sql.Named("since", insightsSince(days))).Scan(&out.Commands).Error; err != nil {
 		return out, fmt.Errorf("command usage: %w", err)
 	}
-	if err := db.Raw(refusalReasonsSQL, sql.Named("days", days)).Scan(&out.RefusalReasons).Error; err != nil {
+	if err := db.Raw(refusalReasonsSQL, sql.Named("since", insightsSince(days))).Scan(&out.RefusalReasons).Error; err != nil {
 		return out, fmt.Errorf("refusal reasons: %w", err)
 	}
-	if err := db.Raw(unknownCommandsSQL, sql.Named("days", days)).Scan(&out.UnknownCommands).Error; err != nil {
+	if err := db.Raw(unknownCommandsSQL, sql.Named("since", insightsSince(days))).Scan(&out.UnknownCommands).Error; err != nil {
 		return out, fmt.Errorf("unknown commands: %w", err)
 	}
 	return out, nil
@@ -205,7 +227,7 @@ SELECT COUNT(*) AS total,
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'guess_submitted'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false`
 
 const guessStatesSQL = `
@@ -215,7 +237,7 @@ SELECT COALESCE(e.meta->>'actual', '') AS state,
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'guess_submitted'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY guesses DESC, state
@@ -229,11 +251,11 @@ func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, 
 		Correct int64
 		Players int64
 	}
-	if err := db.Raw(guessTotalsSQL, sql.Named("days", days)).Scan(&totals).Error; err != nil {
+	if err := db.Raw(guessTotalsSQL, sql.Named("since", insightsSince(days))).Scan(&totals).Error; err != nil {
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
-	if err := db.Raw(guessStatesSQL, sql.Named("days", days)).Scan(&out.States).Error; err != nil {
+	if err := db.Raw(guessStatesSQL, sql.Named("since", insightsSince(days))).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
 	}
 	return out, nil
@@ -305,7 +327,7 @@ WITH samples AS (
            AVG(chat_messages) AS chat_per_min
     FROM viewer_samples
     WHERE video_id IS NOT NULL
-      AND sampled_at >= now() - make_interval(days => @days)
+      AND sampled_at >= @since
     GROUP BY video_id
     HAVING COUNT(*) >= @min_samples
 ),
@@ -316,7 +338,7 @@ plays AS (
            AVG(EXTRACT(EPOCH FROM (ended_at - started_at))) AS avg_played_seconds
     FROM video_plays
     WHERE video_id IS NOT NULL
-      AND started_at >= now() - make_interval(days => @days)
+      AND started_at >= @since
     GROUP BY video_id
 )
 SELECT s.video_id,
@@ -346,7 +368,7 @@ const footagePlatformsSQL = `
 SELECT DISTINCT platform
 FROM viewer_samples
 WHERE video_id IS NOT NULL
-  AND sampled_at >= now() - make_interval(days => @days)
+  AND sampled_at >= @since
 ORDER BY platform`
 
 // clipLabelNearLimitM matches pkg/video's nearPlaceLimit: beyond 10 km the
@@ -387,7 +409,7 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 		CityM            *float64
 	}
 	err := database.GormDB().WithContext(ctx).
-		Raw(footageSQL, sql.Named("days", days), sql.Named("min_samples", footageMinSamples)).
+		Raw(footageSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", footageMinSamples)).
 		Scan(&rows).Error
 	if err != nil {
 		return out, fmt.Errorf("footage: %w", err)
@@ -408,7 +430,7 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 		})
 	}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(footagePlatformsSQL, sql.Named("days", days)).
+		Raw(footagePlatformsSQL, sql.Named("since", insightsSince(days))).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("footage platforms: %w", err)
 	}
@@ -450,7 +472,7 @@ func insightsError(w http.ResponseWriter, msg string) {
 // distinct-user / refusal counts, refusal reasons, and the top unknown tokens
 // over the ?days window.
 func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, commandInsightsDefaultDays)
+	days := insightsWindowDays(r, commandInsightsDefaultDays)
 	payload, err := gatherCommandInsights(r.Context(), days)
 	if err != nil {
 		logQueryFailure(r.Context(), "command insights query failed", err, "days", days)
@@ -464,7 +486,7 @@ func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
 // accuracy, distinct players, and the per-state breakdown over the ?days
 // window.
 func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, guessInsightsDefaultDays)
+	days := insightsWindowDays(r, guessInsightsDefaultDays)
 	payload, err := gatherGuessInsights(r.Context(), days)
 	if err != nil {
 		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
@@ -478,7 +500,7 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 // counts and airing, chatter, viewer and chat-rate aggregates over the ?days
 // window.
 func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, footageInsightsDefaultDays)
+	days := insightsWindowDays(r, footageInsightsDefaultDays)
 	payload, err := gatherFootageInsights(r.Context(), days)
 	if err != nil {
 		logQueryFailure(r.Context(), "footage insights query failed", err, "days", days)
@@ -579,7 +601,7 @@ WITH samples AS (
     JOIN videos v ON v.id = s.video_id
     WHERE s.video_id IS NOT NULL
       AND v.state <> ''
-      AND s.sampled_at >= now() - make_interval(days => @days)
+      AND s.sampled_at >= @since
     GROUP BY v.state
     HAVING COUNT(*) >= @min_samples
 ),
@@ -592,7 +614,7 @@ airtime AS (
     JOIN videos v ON v.id = p.video_id
     WHERE p.video_id IS NOT NULL
       AND v.state <> ''
-      AND p.started_at >= now() - make_interval(days => @days)
+      AND p.started_at >= @since
     GROUP BY v.state
 ),
 churn AS (
@@ -606,7 +628,7 @@ churn AS (
       AND e.video_id IS NOT NULL
       AND v.state <> ''
       AND u.is_bot = false
-      AND e.date_created >= now() - make_interval(days => @days)
+      AND e.date_created >= @since
     GROUP BY v.state
 )
 SELECT s.state,
@@ -638,19 +660,19 @@ FROM viewer_samples s
 JOIN videos v ON v.id = s.video_id
 WHERE s.video_id IS NOT NULL
   AND v.state <> ''
-  AND s.sampled_at >= now() - make_interval(days => @days)
+  AND s.sampled_at >= @since
 ORDER BY s.platform`
 
 func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse, error) {
 	out := regionInsightsResponse{Days: days, Regions: []regionInsight{}, Platforms: []string{}}
 	err := database.GormDB().WithContext(ctx).
-		Raw(regionsSQL, sql.Named("days", days), sql.Named("min_samples", regionMinSamples)).
+		Raw(regionsSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", regionMinSamples)).
 		Scan(&out.Regions).Error
 	if err != nil {
 		return out, fmt.Errorf("regions: %w", err)
 	}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(regionPlatformsSQL, sql.Named("days", days)).
+		Raw(regionPlatformsSQL, sql.Named("since", insightsSince(days))).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("region platforms: %w", err)
 	}
@@ -660,7 +682,7 @@ func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse
 // regionInsightsHandler serves GET /api/insights/regions: per-state airtime,
 // audience and join/leave churn over the ?days window.
 func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, regionInsightsDefaultDays)
+	days := insightsWindowDays(r, regionInsightsDefaultDays)
 	payload, err := gatherRegionInsights(r.Context(), days)
 	if err != nil {
 		logQueryFailure(r.Context(), "region insights query failed", err, "days", days)
@@ -810,12 +832,12 @@ WITH visits AS (
     FROM events l
     JOIN events o ON o.session_id = l.session_id
                  AND o.event = 'logout'
-                 AND o.date_created >= now() - make_interval(days => @days)
+                 AND o.date_created >= @since
     JOIN users u  ON u.platform = l.platform AND u.username = l.username
     WHERE l.event = 'login'
       AND l.session_id IS NOT NULL
       AND l.session_id <> '00000000-0000-0000-0000-000000000000'
-      AND l.date_created >= now() - make_interval(days => @days)
+      AND l.date_created >= @since
       AND u.is_bot = false
       AND o.date_created >= l.date_created
       AND o.date_created - l.date_created <= interval '24 hours'
@@ -836,7 +858,7 @@ ORDER BY platform`
 func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsResponse, error) {
 	out := sessionInsightsResponse{Days: days, Platforms: []sessionStats{}}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(sessionsSQL, sql.Named("days", days)).
+		Raw(sessionsSQL, sql.Named("since", insightsSince(days))).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("sessions: %w", err)
 	}
@@ -846,7 +868,7 @@ func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsRespon
 // sessionInsightsHandler serves GET /api/insights/sessions: per-platform
 // human session length over the ?days window.
 func sessionInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, sessionInsightsDefaultDays)
+	days := insightsWindowDays(r, sessionInsightsDefaultDays)
 	payload, err := gatherSessionInsights(r.Context(), days)
 	if err != nil {
 		logQueryFailure(r.Context(), "session insights query failed", err, "days", days)
