@@ -41,9 +41,15 @@ const (
 	findRandomizeTopN = 10
 	// findMaxDistance is the cosine-distance ceiling for "close enough to jump".
 	// pgvector's <=> is (1 - cosine_similarity). Above this we treat the query
-	// as a miss rather than yanking the stream to a bad match. Calibrated on the
-	// stage corpus: a real match ("rain") tops out around 0.887, a nonsense
-	// query around 0.977, so 0.93 splits the two.
+	// as a miss rather than yanking the stream to a bad match. The gap is narrow
+	// and the ceiling sits in the middle of it: on video-pipeline's find-eval set
+	// against the stage corpus (327k SigLIP2 frames), real queries' best hit
+	// ranges 0.818-0.919 (0.929 for a facet-filtered one like "sunset in nevada",
+	// whose candidate pool is smaller) while nonsense queries bottom out at 0.941
+	// ("a close-up portrait of a smiling face"); the easy nonsense sits near
+	// 0.98. Loosening past 0.94 admits garbage, tightening under 0.92 drops real
+	// matches, and the scale is a property of the checkpoint: re-run find-eval
+	// before changing either the model or this number.
 	findMaxDistance = 0.93
 	// findJumpLeadInSec lands the playhead this many seconds BEFORE the matched
 	// frame, so the moment is still upcoming when playback resumes (we don't
