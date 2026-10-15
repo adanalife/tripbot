@@ -819,15 +819,17 @@ type sessionInsightsResponse struct {
 	Platforms []sessionStats `json:"platforms"`
 }
 
-// sessionsSQL pairs each login with the logout sharing its session_id. Both
-// sides are windowed, as orphanedSessionsSQL does it: a logout for a login in
-// the window can only be at or after the window's start. Logins with no
-// logout (an ungraceful exit, or a viewer still here) and pairs over 24h
-// (missed logouts, the rollups' rule) are left out rather than guessed at.
-// The all-zero UUID is what a row without a session writes.
-const sessionsSQL = `
-WITH visits AS (
+// visitsCTE pairs each login since @since with the logout sharing its
+// session_id, one row per closed human visit with its platform, its login day
+// and its length in minutes. Both sides are windowed, as orphanedSessionsSQL
+// does it: a logout for a login in the window can only be at or after the
+// window's start. Logins with no logout (an ungraceful exit, or a viewer still
+// here) and pairs over 24h (missed logouts, the rollups' rule) are left out
+// rather than guessed at. The all-zero UUID is what a row without a session
+// writes. Shared by sessionsSQL and playbackDailySQL.
+const visitsCTE = `visits AS (
     SELECT l.platform,
+           l.date_created::date AS day,
            EXTRACT(EPOCH FROM (o.date_created - l.date_created)) / 60.0 AS minutes
     FROM events l
     JOIN events o ON o.session_id = l.session_id
@@ -841,7 +843,11 @@ WITH visits AS (
       AND u.is_bot = false
       AND o.date_created >= l.date_created
       AND o.date_created - l.date_created <= interval '24 hours'
-)
+)`
+
+// sessionsSQL summarises the visits per platform.
+const sessionsSQL = `
+WITH ` + visitsCTE + `
 SELECT platform,
        COUNT(*) AS sessions,
        ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes)::numeric, 1)::float8 AS median_minutes,
