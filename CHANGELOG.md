@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.33.0] — 2026-10-15
+
+### Chatbot
+
+- `!state`, `!daytime` and `!find` only jump to clips someone has reviewed, so footage fresh out of the video pipeline stays off the air until it is watched. ([#1695](https://github.com/adanalife/tripbot/pull/1695))
+
+### Console / API
+
+- `/health/deps` on the Twitch instance reports whether the EventSub session is holding its subscriptions, so the console shows a dropped or wholly denied session as degraded ("eventsub unusable") instead of healthy. ([#1686](https://github.com/adanalife/tripbot/pull/1686))
+- `/api/stats/playback/daily` carries the closed human visits that began each day and their median length, so the console can draw a trend under the stays block. ([#1687](https://github.com/adanalife/tripbot/pull/1687))
+
+### Fixes
+
+- The video API names a clip's previous neighbour and its track, so the console's clip page draws the road in as well as the road out. ([#1691](https://github.com/adanalife/tripbot/pull/1691))
+
 ## [v5.32.0] — 2026-10-15
 
 ### Chatbot
