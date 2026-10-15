@@ -65,6 +65,38 @@ func TestInsightsDays(t *testing.T) {
 	}
 }
 
+func TestInsightsWindowDays_ZeroIsAllTime(t *testing.T) {
+	cases := []struct {
+		query string
+		want  int
+	}{
+		{"", 7},        // absent -> default
+		{"days=0", 0},  // all time
+		{"days=-5", 0}, // below range -> all time, not a one-day window
+		{"days=30", 30},
+		{"days=500", 90},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest(http.MethodGet, "/api/insights/footage?"+c.query, nil)
+		if got := insightsWindowDays(r, 7); got != c.want {
+			t.Errorf("insightsWindowDays(%q) = %d, want %d", c.query, got, c.want)
+		}
+	}
+}
+
+func TestInsightsSince(t *testing.T) {
+	if got := insightsSince(0); !got.Equal(time.Unix(0, 0)) {
+		t.Errorf("all time should start at the epoch, got %v", got)
+	}
+	since := insightsSince(7)
+	if d := time.Since(since); d < 7*24*time.Hour-time.Minute || d > 7*24*time.Hour+time.Minute {
+		t.Errorf("a 7-day window should start a week ago, got %v ago", d)
+	}
+	if !insightsSince(90).After(insightsSince(0)) {
+		t.Error("a bounded window must start after the epoch")
+	}
+}
+
 func TestClipLabel(t *testing.T) {
 	near := 5000.0
 	far := 50000.0
@@ -383,6 +415,42 @@ func TestFootageInsightsHandler_Aggregates(t *testing.T) {
 		if !sameClip(got.Clips[i], want[i]) {
 			t.Errorf("clips[%d] = %s, want %s", i, clipJSON(t, got.Clips[i]), clipJSON(t, want[i]))
 		}
+	}
+}
+
+// days=0 reads the whole history: a clip whose every sample predates any
+// bounded window still reports, and the response says which window it is.
+func TestFootageInsightsHandler_AllTime(t *testing.T) {
+	db := testdb.New(t)
+	old := time.Now().Add(-200 * 24 * time.Hour)
+	clip := seedVideo(t, db, "insights_clip_old", "Oregon", "", nil)
+	for i, n := range []int{2, 3, 4} {
+		seedSample(t, db, clip, n, old.Add(time.Duration(i)*time.Minute))
+	}
+	seedPlay(t, db, clip, old)
+
+	decode := func(rec *httptest.ResponseRecorder) footageInsightsResponse {
+		t.Helper()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+		}
+		var got footageInsightsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+		}
+		return got
+	}
+
+	bounded := decode(insightsGET(t, "/api/insights/footage?days=90", footageInsightsHandler))
+	if bounded.Days != 90 || len(bounded.Clips) != 0 {
+		t.Errorf("90d: days = %d, clips = %+v; want 90 and none", bounded.Days, bounded.Clips)
+	}
+	all := decode(insightsGET(t, "/api/insights/footage?days=0", footageInsightsHandler))
+	if all.Days != 0 {
+		t.Errorf("all time: days = %d, want 0", all.Days)
+	}
+	if len(all.Clips) != 1 || all.Clips[0].VideoID != clip || all.Clips[0].Plays != 1 {
+		t.Errorf("all time: clips = %s, want the 200-day-old clip with its one play", clipJSON(t, all.Clips[0]))
 	}
 }
 
