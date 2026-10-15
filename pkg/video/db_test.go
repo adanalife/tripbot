@@ -249,6 +249,27 @@ func TestFindRandomByState_StaysInTheAiringCorpus(t *testing.T) {
 	}
 }
 
+// An unreviewed clip is never picked, and a state with only unreviewed
+// footage has none to offer.
+func TestFindRandomByState_SkipsUnreviewedClips(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	want := insertVideo(t, db, Video{Slug: "2018_0514_224801_080", State: "Idaho"})
+	unreview(t, db, insertVideo(t, db, Video{Slug: "2018_0514_224801_081", State: "Idaho"}))
+	unreview(t, db, insertVideo(t, db, Video{Slug: "2018_0514_224801_082", State: "Montana"}))
+
+	for range 10 {
+		got, err := FindRandomByState(ctx, "ID", Video{})
+		if err != nil || got.ID != want.ID {
+			t.Fatalf("FindRandomByState(\"ID\") = id %d, %v; want the reviewed clip %d", got.ID, err, want.ID)
+		}
+	}
+	if _, err := FindRandomByState(ctx, "MT", Video{}); !errors.Is(err, terrors.ErrNoFootageForState) {
+		t.Errorf("FindRandomByState(\"MT\") error = %v, want %v", err, terrors.ErrNoFootageForState)
+	}
+}
+
 func TestFindNextDaytime(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
@@ -271,12 +292,16 @@ func TestFindNextDaytime(t *testing.T) {
 	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
 	// An earlier daytime clip from another corpus: parked, so not an answer.
 	other := insertVideo(t, db, Video{Slug: "20990515160000_000001_s0000", Lat: lat, Lng: lng, Corpus: CorpusS2})
+	// An earlier daytime clip nobody has reviewed: not an answer either.
+	unreviewed := insertVideo(t, db, Video{Slug: "2099_0515_110000_005", Lat: lat, Lng: lng})
+	unreview(t, db, unreviewed)
 
-	backdate(current, "2099-05-15T04:00:00Z")   // 22:00 MDT May 14 — night, day May 14
-	backdate(nextNight, "2099-05-15T09:00:00Z") // 03:00 MDT May 15 — night, day May 15
-	backdate(other, "2099-05-15T16:00:00Z")     // 10:00 MDT May 15 — daytime, but s2
-	backdate(morning, "2099-05-15T18:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
-	backdate(lateDay, "2099-05-15T21:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
+	backdate(current, "2099-05-15T04:00:00Z")    // 22:00 MDT May 14 — night, day May 14
+	backdate(nextNight, "2099-05-15T09:00:00Z")  // 03:00 MDT May 15 — night, day May 15
+	backdate(other, "2099-05-15T16:00:00Z")      // 10:00 MDT May 15 — daytime, but s2
+	backdate(unreviewed, "2099-05-15T17:00:00Z") // 11:00 MDT May 15 — daytime, but unreviewed
+	backdate(morning, "2099-05-15T18:00:00Z")    // 12:00 MDT May 15 — daytime, day May 15
+	backdate(lateDay, "2099-05-15T21:00:00Z")    // 15:00 MDT May 15 — daytime, day May 15
 
 	got, err := FindNextDaytime(ctx, reload(t, current.ID))
 	if err != nil {

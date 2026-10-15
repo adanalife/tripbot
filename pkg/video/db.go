@@ -170,8 +170,8 @@ func validate(slug string) error {
 // share one statement, so no clip can be added or removed between them.
 const randomByStateQuery = `
 	SELECT * FROM videos
-	WHERE state = @state AND corpus = @corpus
-	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state AND corpus = @corpus))
+	WHERE state = @state AND corpus = @corpus AND reviewed_at IS NOT NULL
+	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state AND corpus = @corpus AND reviewed_at IS NOT NULL))
 	LIMIT 1`
 
 // AiringCorpus is the corpus a pick stays inside: the one on screen. A clip is
@@ -187,8 +187,8 @@ func AiringCorpus(current Video) string {
 	return current.Corpus
 }
 
-// FindRandomByState returns a random clip filmed in `state`, from the corpus
-// `current` is in.
+// FindRandomByState returns a random reviewed clip filmed in `state`, from the
+// corpus `current` is in.
 func FindRandomByState(ctx context.Context, state string, current Video) (Video, error) {
 	var vid Video
 
@@ -226,8 +226,8 @@ const nextDaytimeScanLimit = 5000
 // !daytime. The dashcam corpus is daytime driving footage, so from a dusk or
 // night clip the next daylight is the following day's first daylight clip; this
 // walks clips in film order and returns it. Clips without a GPS fix are skipped
-// (daytime needs coords to resolve sunrise/sunset), and so are clips from any
-// corpus but `after`'s. Returns a terrors.ErrNoDaytimeFound when no later
+// (daytime needs coords to resolve sunrise/sunset), and so are unreviewed clips
+// and clips from any corpus but `after`'s. Returns a terrors.ErrNoDaytimeFound when no later
 // daytime clip exists in the scanned window.
 func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 	// Baseline calendar day: the current clip's local day when it has a fix,
@@ -239,7 +239,7 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 
 	var clips []Video
 	err := database.GormDB().WithContext(ctx).
-		Where("corpus = ? AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", AiringCorpus(after), after.DateFilmed).
+		Where("corpus = ? AND reviewed_at IS NOT NULL AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", AiringCorpus(after), after.DateFilmed).
 		Order("date_filmed").
 		Limit(nextDaytimeScanLimit).
 		Find(&clips).Error
