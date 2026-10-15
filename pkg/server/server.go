@@ -138,6 +138,8 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/chat/history", tagged("/api/chat/history", chatHistoryHandler)).Methods("GET")
 	// one clip's record, for the console's video page.
 	r.Handle("/api/videos/{id}", tagged("/api/videos/{id}", videoHandler)).Methods("GET")
+	// the operator's marks on a moment of a clip: a star, or a bad GPS point.
+	r.Handle("/api/videos/{id}/moments", tagged("/api/videos/{id}/moments", videoMomentsHandler)).Methods("POST")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")

@@ -44,6 +44,8 @@ type videoDetail struct {
 	Track     [][3]float64 `json:"track"`
 	PrevTrack [][3]float64 `json:"prev_track"`
 	NextTrack [][3]float64 `json:"next_track"`
+	// Moments are the operator's marks on the clip, in clip order.
+	Moments []moment `json:"moments"`
 }
 
 // trackOf is vid's track as triples, never nil, so it encodes as [].
@@ -108,6 +110,11 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	}
 	d.PrevTrack = neighbourTrack(ctx, db, d.PrevID)
 	d.NextTrack = neighbourTrack(ctx, db, d.NextID)
+	moments, err := momentsOf(ctx, db, id)
+	if err != nil {
+		return videoDetail{}, err
+	}
+	d.Moments = moments
 	if plays.Last.Valid {
 		d.LastPlayedAt = plays.Last.Time.UTC().Format(time.RFC3339)
 	}
