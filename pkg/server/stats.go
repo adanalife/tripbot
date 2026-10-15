@@ -390,6 +390,107 @@ func playbackStatsHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, payload)
 }
 
+// playbackDailyResponse is the wire shape of GET /api/stats/playback/daily:
+// the playback counters per day over the ?days window, oldest first, with a
+// row for every day whether or not anything happened — so a chart's x-axis is
+// the calendar and a quiet day reads as zero rather than vanishing.
+type playbackDailyResponse struct {
+	Days    int           `json:"days"`
+	Buckets []playbackDay `json:"buckets"`
+}
+
+// playbackDay is one day's counters, the kinds playbackStatsResponse totals.
+// Days are the database session's calendar days (UTC on the cluster).
+type playbackDay struct {
+	Day       string `json:"day"`
+	Plays     int64  `json:"plays"`
+	Crossings int64  `json:"crossings"`
+	Timewarps int64  `json:"timewarps"`
+	Guesses   int64  `json:"guesses"`
+	Commands  int64  `json:"commands"`
+}
+
+// The daily series defaults to the whole clamp: a trend wants the long view,
+// and 90 rows of six integers is a small payload.
+const playbackDailyDefaultDays = insightsMaxDays
+
+// playbackDailySQL counts each kind per day and joins the counts onto a
+// generated calendar, so every day in the window is a row. `since` is the
+// first day's midnight; the same bot exclusion as playbackSQL applies to the
+// viewer-attributed kinds.
+const playbackDailySQL = `
+WITH days AS (
+    SELECT generate_series(CAST(@since AS date), CAST(@since AS date) + (CAST(@days AS int) - 1), interval '1 day')::date AS day
+),
+plays AS (
+    SELECT started_at::date AS day, COUNT(*) AS n
+    FROM video_plays
+    WHERE started_at >= @since
+    GROUP BY 1
+),
+crossings AS (
+    SELECT date_created::date AS day, COUNT(*) AS n
+    FROM events
+    WHERE event = 'state_crossing'
+      AND date_created >= @since
+    GROUP BY 1
+),
+actions AS (
+    SELECT e.date_created::date AS day, e.event, COUNT(*) AS n
+    FROM events e
+    JOIN users u ON u.platform = e.platform AND u.username = e.username
+    WHERE e.event IN ('timewarp', 'guess_submitted', 'command_run')
+      AND e.date_created >= @since
+      AND u.is_bot = false
+    GROUP BY 1, 2
+)
+SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+       COALESCE(p.n, 0) AS plays,
+       COALESCE(c.n, 0) AS crossings,
+       COALESCE(t.n, 0) AS timewarps,
+       COALESCE(g.n, 0) AS guesses,
+       COALESCE(m.n, 0) AS commands
+FROM days d
+LEFT JOIN plays p     ON p.day = d.day
+LEFT JOIN crossings c ON c.day = d.day
+LEFT JOIN actions t   ON t.day = d.day AND t.event = 'timewarp'
+LEFT JOIN actions g   ON g.day = d.day AND g.event = 'guess_submitted'
+LEFT JOIN actions m   ON m.day = d.day AND m.event = 'command_run'
+ORDER BY d.day`
+
+// playbackDailySince is midnight (UTC) of the first day in a window of
+// `days` days ending today.
+func playbackDailySince(days int, now time.Time) time.Time {
+	y, m, d := now.UTC().Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -(days - 1))
+}
+
+func gatherPlaybackDaily(ctx context.Context, days int) (playbackDailyResponse, error) {
+	out := playbackDailyResponse{Days: days, Buckets: []playbackDay{}}
+	err := database.GormDB().WithContext(ctx).
+		Raw(playbackDailySQL,
+			sql.Named("since", playbackDailySince(days, time.Now())),
+			sql.Named("days", days)).
+		Scan(&out.Buckets).Error
+	if err != nil {
+		return out, fmt.Errorf("playback daily: %w", err)
+	}
+	return out, nil
+}
+
+// playbackDailyHandler serves GET /api/stats/playback/daily: the playback
+// counters per day over the ?days window, for a trend beside the totals.
+func playbackDailyHandler(w http.ResponseWriter, r *http.Request) {
+	days := insightsDays(r, playbackDailyDefaultDays)
+	payload, err := gatherPlaybackDaily(r.Context(), days)
+	if err != nil {
+		logQueryFailure(r.Context(), "playback daily query failed", err, "days", days)
+		insightsError(w, "couldn't gather the daily playback counts")
+		return
+	}
+	writeInsights(w, r, payload)
+}
+
 // communityStatsHandler serves GET /api/stats/community: subscription and
 // correction counts over the ?days window, the lifetime miles top 10, and
 // the latest month's frozen scoreboards.

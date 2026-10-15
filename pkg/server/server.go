@@ -140,6 +140,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/playback/daily", tagged("/api/stats/playback/daily", playbackDailyHandler)).Methods("GET")
 	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
 	r.Handle("/api/stats/songs", tagged("/api/stats/songs", songStatsHandler)).Methods("GET")
 
