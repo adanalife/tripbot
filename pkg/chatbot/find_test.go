@@ -193,7 +193,7 @@ func TestSearchFrameEmbeddings_WithStateAndMonthFilters(t *testing.T) {
 
 func TestSearchFrameEmbeddings_FiltersToCorpus(t *testing.T) {
 	mock := installMockDB(t)
-	mock.ExpectQuery(`AND v\.corpus = \$3`).
+	mock.ExpectQuery(`AND v\.corpus = \$3\s+AND v\.reviewed_at IS NOT NULL`).
 		WithArgs(sqlmock.AnyArg(), "model-x", video.CorpusS2, sqlmock.AnyArg(), 5).
 		WillReturnRows(mock.NewRows([]string{"slug", "ts_sec", "state", "distance"}))
 

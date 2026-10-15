@@ -163,7 +163,7 @@ func requestEmbedding(_ context.Context, env, query string) (findEmbedResponse, 
 }
 
 // searchFrameEmbeddings runs the pgvector cosine search: the nearest frames to
-// vec, filtered to the responder's model, the corpus, and any parsed
+// vec, filtered to the responder's model, the corpus's reviewed clips, and any parsed
 // state/month facets.
 // Ports video-pipeline's search.py SQL to Go (tripbot owns the DB). Exported-ish
 // as a standalone func so it's sqlmock-testable without NATS or a real model.
@@ -181,7 +181,8 @@ func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, mode
 FROM frame_embeddings fe
 JOIN videos v ON v.id = fe.video_id
 WHERE fe.model = ?
-  AND v.corpus = ?`
+  AND v.corpus = ?
+  AND v.reviewed_at IS NOT NULL`
 	args := []any{lit, model, corpus}
 
 	if len(states) > 0 {
