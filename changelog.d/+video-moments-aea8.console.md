@@ -1,1 +1,0 @@
-Clips can carry the operator's marks on a moment: a star, or a bad GPS point. `/api/videos/{id}` reads them back and `POST /api/videos/{id}/moments` sets them, keyed to the original recording so a re-trim moves no mark.

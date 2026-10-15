@@ -9,6 +9,17 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.34.0] — 2026-10-15
+
+### Console / API
+
+- Clips can carry the operator's marks on a moment: a star, or a bad GPS point. `/api/videos/{id}` reads them back and `POST /api/videos/{id}/moments` sets them, keyed to the original recording so a re-trim moves no mark. ([#1698](https://github.com/adanalife/tripbot/pull/1698))
+- Add `GET /admin/corpus/stats`: per-corpus clip counts by pipeline stage (rows, reviewed, flagged, trusted track, embedded) for the console pipeline page. ([#1699](https://github.com/adanalife/tripbot/pull/1699))
+
+### Deploy / Infra
+
+- Stage-1 tripbot and onscreens export OpenTelemetry metrics and traces like prod does, so the console's cluster charts and the Fleet view get a stage line to compare against prod. ([#1696](https://github.com/adanalife/tripbot/pull/1696))
+
 ## [v5.33.0] — 2026-10-15
 
 ### Chatbot
