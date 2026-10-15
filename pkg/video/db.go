@@ -314,3 +314,42 @@ func CorpusRoute(ctx context.Context) []RoutePoint {
 	}
 	return out
 }
+
+// CorpusStat is how far one corpus's clips have come through the pipeline:
+// how many rows it holds, how many a person has reviewed, how many are
+// flagged, how many carry a trusted track, and how many are embedded.
+type CorpusStat struct {
+	Corpus   string `json:"corpus"`
+	Rows     int64  `json:"rows"`
+	Reviewed int64  `json:"reviewed"`
+	Flagged  int64  `json:"flagged"`
+	Tracked  int64  `json:"tracked"`
+	Embedded int64  `json:"embedded"`
+}
+
+// One GROUP BY over videos; each counter is a FILTER on the same scan. Tracked
+// is the map's trusted band (RouteBand): a confidence at or above the gate every
+// coordinate consumer applies. Embedded is an EXISTS rather than a join so a
+// clip with many frames still counts once.
+const corpusStatsQuery = `
+SELECT v.corpus,
+       COUNT(*) AS "rows",
+       COUNT(*) FILTER (WHERE v.reviewed_at IS NOT NULL) AS reviewed,
+       COUNT(*) FILTER (WHERE v.flagged) AS flagged,
+       COUNT(*) FILTER (WHERE v.coord_confidence >= @minConfidence) AS tracked,
+       COUNT(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM frame_embeddings e WHERE e.video_id = v.id)) AS embedded
+FROM videos v
+GROUP BY v.corpus
+ORDER BY v.corpus`
+
+// CorpusStats counts each corpus's clips by pipeline stage, ordered by corpus
+// name. A corpus with no rows is absent rather than zeroed; an empty table
+// yields an empty, non-nil slice.
+func CorpusStats(ctx context.Context) ([]CorpusStat, error) {
+	out := []CorpusStat{}
+	err := database.GormDB().WithContext(ctx).
+		Raw(corpusStatsQuery, sql.Named("minConfidence", minCoordConfidence)).
+		Scan(&out).Error
+	return out, err
+}
