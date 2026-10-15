@@ -1,0 +1,1 @@
+`/health/deps` on the Twitch instance reports whether the EventSub session is holding its subscriptions, so the console shows a dropped or wholly denied session as degraded ("eventsub unusable") instead of healthy.
