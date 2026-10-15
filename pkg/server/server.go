@@ -107,6 +107,8 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
 	// the full dashcam route as JSON, for the console's map overlay.
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
+	// per-corpus row counts by pipeline stage, for the console's pipeline page.
+	r.Handle("/admin/corpus/stats", tagged("/admin/corpus/stats", corpusStatsHandler)).Methods("GET")
 	// the recent breadcrumbs of each platform, so a fresh console seeds its map
 	// trail from the database rather than from what the video stream can replay.
 	r.Handle("/admin/map/recent", tagged("/admin/map/recent", mapRecentHandler)).Methods("GET")
