@@ -17,14 +17,15 @@ concurrency:
   group: pr-gates-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-# What the shared gates job reads: the checkout, the PR (title check), this
-# run's own jobs (the failing-gate reporter) and GHCR (the pinned-tag check).
-# Without a block every job here would get the repo's default token.
+# What the shared gates job reads: the checkout, the PR (title check) and GHCR
+# (the pinned-tag check); `statuses: write` is for the per-gate commit statuses
+# it posts on the PR head. Without a block every job here would get the repo's
+# default token.
 permissions:
   contents: read
   pull-requests: read
-  actions: read
   packages: read
+  statuses: write
 
 jobs:
   gates:
