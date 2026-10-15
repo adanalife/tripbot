@@ -301,6 +301,10 @@ func TestPlaybackDailyHandler_Buckets(t *testing.T) {
 	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!miles"}`, in)
 	seedEvent(t, db, "daily_bot", "command_run", `{"command":"!miles"}`, in)
 	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!miles"}`, out)
+	seedSession(t, db, "twitch", "daily_alice", earlier, 10)
+	seedSession(t, db, "twitch", "daily_alice", earlier.Add(time.Hour), 30)
+	seedSession(t, db, "twitch", "daily_bot", earlier, 500)
+	seedSession(t, db, "twitch", "daily_alice", out, 45)
 
 	rec := insightsGET(t, "/api/stats/playback/daily?days=7", playbackDailyHandler)
 	if rec.Code != http.StatusOK {
@@ -324,11 +328,13 @@ func TestPlaybackDailyHandler_Buckets(t *testing.T) {
 		sum.Timewarps += b.Timewarps
 		sum.Guesses += b.Guesses
 		sum.Commands += b.Commands
+		sum.Visits += b.Visits
+		sum.MedianMinutes += b.MedianMinutes
 		if b.Commands > 0 {
 			busy++
 		}
 	}
-	want := playbackDay{Plays: 1, Crossings: 1, Timewarps: 1, Guesses: 1, Commands: 2}
+	want := playbackDay{Plays: 1, Crossings: 1, Timewarps: 1, Guesses: 1, Commands: 2, Visits: 2, MedianMinutes: 20}
 	if sum != want {
 		t.Errorf("window totals = %+v, want %+v", sum, want)
 	}

@@ -408,6 +408,12 @@ type playbackDay struct {
 	Timewarps int64  `json:"timewarps"`
 	Guesses   int64  `json:"guesses"`
 	Commands  int64  `json:"commands"`
+	// Visits is the closed human visits that began that day, and
+	// MedianMinutes how long the middle one lasted (0 on a day with none) —
+	// the stays block's figures as a series, so "are visits getting longer?"
+	// has a trend to read.
+	Visits        int64   `json:"visits"`
+	MedianMinutes float64 `json:"median_minutes"`
 }
 
 // The daily series defaults to the whole clamp: a trend wants the long view,
@@ -417,10 +423,18 @@ const playbackDailyDefaultDays = insightsMaxDays
 // playbackDailySQL counts each kind per day and joins the counts onto a
 // generated calendar, so every day in the window is a row. `since` is the
 // first day's midnight; the same bot exclusion as playbackSQL applies to the
-// viewer-attributed kinds.
+// viewer-attributed kinds, and the visits are sessionsSQL's, by login day.
 const playbackDailySQL = `
 WITH days AS (
     SELECT generate_series(CAST(@since AS date), CAST(@since AS date) + (CAST(@days AS int) - 1), interval '1 day')::date AS day
+),
+` + visitsCTE + `,
+stays AS (
+    SELECT day,
+           COUNT(*) AS n,
+           ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes)::numeric, 1)::float8 AS median_minutes
+    FROM visits
+    GROUP BY 1
 ),
 plays AS (
     SELECT started_at::date AS day, COUNT(*) AS n
@@ -449,8 +463,11 @@ SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
        COALESCE(c.n, 0) AS crossings,
        COALESCE(t.n, 0) AS timewarps,
        COALESCE(g.n, 0) AS guesses,
-       COALESCE(m.n, 0) AS commands
+       COALESCE(m.n, 0) AS commands,
+       COALESCE(s.n, 0) AS visits,
+       COALESCE(s.median_minutes, 0) AS median_minutes
 FROM days d
+LEFT JOIN stays s     ON s.day = d.day
 LEFT JOIN plays p     ON p.day = d.day
 LEFT JOIN crossings c ON c.day = d.day
 LEFT JOIN actions t   ON t.day = d.day AND t.event = 'timewarp'
