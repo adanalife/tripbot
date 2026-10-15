@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -124,7 +126,7 @@ func TestVideoMomentsHandler(t *testing.T) {
 	for _, body := range []string{
 		`{"kind":"star","sec":30}`,
 		`{"kind":"star","sec":30,"note":"the canyon opens up"}`,
-		`{"kind":"bad_coord","sec":10}`,
+		`{"kind":"bad_coord","sec":10.1}`,
 	} {
 		if rec := momentPOST(t, "7", body); rec.Code != http.StatusOK {
 			t.Fatalf("%s: status = %d: %s", body, rec.Code, rec.Body.String())
@@ -135,16 +137,24 @@ func TestVideoMomentsHandler(t *testing.T) {
 	if src != 45 {
 		t.Errorf("stored source_ts_sec = %v, want 45", src)
 	}
-	want := []moment{{Kind: "bad_coord", Sec: 10}, {Kind: "star", Sec: 30, Note: "the canyon opens up"}}
-	if got := moments(); !reflect.DeepEqual(got, want) {
-		t.Errorf("got %+v, want %+v", got, want)
+	got := moments()
+	if len(got) != 2 || got[0].Kind != "bad_coord" || math.Abs(got[0].Sec-10.1) > 0.01 ||
+		got[1] != (moment{Kind: "star", Sec: 30, Note: "the canyon opens up"}) {
+		t.Errorf("got %+v", got)
 	}
 
-	if rec := momentPOST(t, "7", `{"kind":"star","sec":30,"remove":true}`); rec.Code != http.StatusOK {
-		t.Fatalf("remove: status = %d", rec.Code)
+	// A fractional second read back (REAL, so not exactly 10.1) still
+	// removes its mark.
+	for _, body := range []string{
+		`{"kind":"star","sec":30,"remove":true}`,
+		fmt.Sprintf(`{"kind":"bad_coord","sec":%v,"remove":true}`, got[0].Sec),
+	} {
+		if rec := momentPOST(t, "7", body); rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d", body, rec.Code)
+		}
 	}
-	if got := moments(); !reflect.DeepEqual(got, want[:1]) {
-		t.Errorf("after remove got %+v, want %+v", got, want[:1])
+	if got := moments(); len(got) != 0 {
+		t.Errorf("after remove got %+v, want none", got)
 	}
 
 	for body, code := range map[string]int{

@@ -96,8 +96,10 @@ func videoMomentsHandler(w http.ResponseWriter, r *http.Request) {
 		args := []any{sql.Named("id", id), sql.Named("kind", body.Kind),
 			sql.Named("src", *body.Sec+off), sql.Named("note", note)}
 		if body.Remove {
+			// source_ts_sec is REAL and comes back here through a float64 sum,
+			// so a fractional second only matches within a tolerance.
 			err = db.Exec(`DELETE FROM video_moments
-WHERE video_id = @id AND kind = @kind AND source_ts_sec = @src`, args...).Error
+WHERE video_id = @id AND kind = @kind AND abs(source_ts_sec - @src) < 0.01`, args...).Error
 		} else {
 			err = db.Exec(`INSERT INTO video_moments (video_id, kind, source_ts_sec, note)
 VALUES (@id, @kind, @src, @note)
