@@ -335,7 +335,7 @@ ENVS: dict[str, EnvConfig] = {
         prefer_rpi5=True,
         # Requires the obs-music-local claim, filled by `task k8s:stage:music-localize`.
         music_share=True,
-        otel=False,
+        otel=True,
         postgres_size="10Gi",
         postgres_storage_class="local-path",
         external_dns_role_arn=_STAGE_ROLE,
