@@ -92,8 +92,16 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	if !v.DateFilmed.IsZero() {
 		d.RecordedAt = v.DateFilmed.UTC().Format(time.RFC3339)
 	}
-	if v.PrevVid.Valid {
-		d.PrevID = &v.PrevVid.Int64
+	// The clip before is the one whose next_vid names this one: the chain is
+	// only ever written forward, so the prev_vid column stays empty.
+	// ponytail: next_vid is unindexed, so this scans videos — one operator
+	// click over a few thousand rows. An index on next_vid if it shows.
+	var prev []int64
+	if err := db.Model(&video.Video{}).Where("next_vid = ?", id).Limit(1).Pluck("id", &prev).Error; err != nil {
+		return videoDetail{}, err
+	}
+	if len(prev) > 0 {
+		d.PrevID = &prev[0]
 	}
 	if v.NextVid.Valid {
 		d.NextID = &v.NextVid.Int64
