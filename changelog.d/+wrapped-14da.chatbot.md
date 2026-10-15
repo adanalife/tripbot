@@ -1,0 +1,1 @@
+**`!wrapped` is your month of the guessing game in one line** — guesses, how many were right, your place on the monthly board, how many different states you called, the state that gets you most and what you keep calling it, and the hours you spent in the van. `!wrapped last` reads the previous month. Aliases `!recap`, `!mymonth`.
