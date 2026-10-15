@@ -571,6 +571,16 @@
       ]
     },
     {
+      "trigger": "!wrapped",
+      "aliases": [
+        "!recap",
+        "!mymonth"
+      ],
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!youtube",
       "aliases": [
         "!yt"
