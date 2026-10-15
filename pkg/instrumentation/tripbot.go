@@ -3,6 +3,7 @@ package instrumentation
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -257,8 +258,20 @@ func (a twitchAudienceGauges) SetFollowers(n int64) {
 
 type twitchConnectionGauge struct{ gauge metric.Int64Gauge }
 
+// twitchChatState is the last value Set wrote, for in-process readers (the
+// /health/deps check): 0 before any poll has reported, then 1 down / 2 up.
+var twitchChatState atomic.Int32
+
 func (t twitchConnectionGauge) Set(connected bool) {
 	t.gauge.Record(context.Background(), b2i(connected))
+	twitchChatState.Store(1 + int32(b2i(connected)))
+}
+
+// Connected is the last state Set recorded. reported is false until the first
+// poll has answered, which is "not judged yet" rather than "down".
+func (twitchConnectionGauge) Connected() (connected, reported bool) {
+	s := twitchChatState.Load()
+	return s == 2, s != 0
 }
 
 type twitchTokenExpiryGauge struct{ gauge metric.Int64Gauge }
