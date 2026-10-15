@@ -19,7 +19,7 @@ data:
   ONSCREENS_SERVER_HOST: onscreens-twitch:8080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=twitch
-  OTEL_SDK_DISABLED: "true"
+  OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
   PLAYOUT_HOST: playout-twitch:8080
@@ -44,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: fb45d96155
+        adanalife.dev/config-hash: 5a700baa79
       labels:
         app: tripbot-twitch
     spec:
