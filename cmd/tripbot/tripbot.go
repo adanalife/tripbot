@@ -322,8 +322,9 @@ func (t *Tripbot) Run() {
 		// console. The twitch.EmitAuthStatus cron job keeps it fresh.
 		t.emitAuthStatus(ctx)
 	}
-	t.startOBSRefreshSubscriber(ctx) // after startNATS: per-platform (each instance owns its OBS)
-	t.startFindRunSubscriber(ctx)    // after startNATS: per-platform (each instance drives its playout)
+	t.startOBSRefreshSubscriber(ctx)  // after startNATS: per-platform (each instance owns its OBS)
+	t.startFindRunSubscriber(ctx)     // after startNATS: per-platform (each instance drives its playout)
+	t.startChatDeletedSubscriber(ctx) // after startNATS: per-platform (each instance's rows carry its platform)
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
 	// the stream-health dashboards and alerts.

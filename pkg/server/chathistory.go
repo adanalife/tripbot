@@ -34,6 +34,8 @@ type chatHistoryLine struct {
 	VideoTsSec *float64 `json:"video_ts_sec,omitempty"`
 	VideoState string   `json:"video_state,omitempty"`
 	VideoCity  string   `json:"video_city,omitempty"`
+	// Deleted is a line the platform removed; the console strikes it.
+	Deleted bool `json:"deleted,omitempty"`
 }
 
 // A page: lines oldest-first, and the cursor for the page before them (0
@@ -50,7 +52,7 @@ type chatHistoryPage struct {
 // has its text.
 const chatHistorySQL = `
 SELECT m.id, m.platform, m.username, m.user_id, m.message_id, m.text, m.emitted_at,
-       m.video_id, m.video_ts_sec,
+       m.video_id, m.video_ts_sec, m.deleted_at IS NOT NULL AS deleted,
        COALESCE(v.slug, '')  AS slug,
        COALESCE(v.state, '') AS state,
        COALESCE(v.city, '')  AS city
@@ -79,6 +81,7 @@ func chatHistory(ctx context.Context, platform string, before int64, until time.
 		Slug       string
 		State      string
 		City       string
+		Deleted    bool
 	}
 	err := database.GormDB().WithContext(ctx).
 		Raw(chatHistorySQL, sql.Named("platform", platform), sql.Named("before", before), sql.Named("until", until), sql.Named("n", n)).
@@ -93,6 +96,7 @@ func chatHistory(ctx context.Context, platform string, before int64, until time.
 			ID: r.ID, Platform: r.Platform, Username: r.Username, UserID: r.UserID,
 			MessageID: r.MessageID, Text: r.Text, EmittedAt: r.EmittedAt.UTC().Format(time.RFC3339),
 			VideoID: r.VideoID, VideoTsSec: r.VideoTsSec, VideoState: r.State, VideoCity: r.City,
+			Deleted: r.Deleted,
 		}
 		if r.Slug != "" {
 			line.VideoFile = r.Slug + ".MP4"
