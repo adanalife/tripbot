@@ -16,14 +16,15 @@ import (
 // dependency is not a degraded one. Chat is checked on the Twitch instance,
 // the only one whose poller reports a chat connection (Twitch chat exists
 // off-stream; elsewhere chat exists only while live, so "not in chat" there
-// is just "offline").
+// is just "offline"). EventSub likewise: only the Twitch instance dials it.
 func (s *Server) depChecks() []httpmw.ReadyCheck {
 	checks := []httpmw.ReadyCheck{{Name: "postgres", Fn: database.Ping}}
 	if s.cfg.NatsURL != "" {
 		checks = append(checks, httpmw.ReadyCheck{Name: "nats", Fn: natsPing})
 	}
 	if s.cfg.Platform == "twitch" {
-		checks = append(checks, httpmw.ReadyCheck{Name: "chat", Fn: chatPing})
+		checks = append(checks, httpmw.ReadyCheck{Name: "chat", Fn: chatPing},
+			httpmw.ReadyCheck{Name: "eventsub", Fn: eventsubPing})
 	}
 	return checks
 }
@@ -35,6 +36,18 @@ func chatPing(context.Context) error {
 	connected, reported := instrumentation.TwitchConnection.Connected()
 	if reported && !connected {
 		return errors.New("not receiving chat")
+	}
+	return nil
+}
+
+// eventsubPing reports whether an EventSub session is holding subscriptions,
+// from the last subscribe round. A session that ended (the redial loop owns
+// bringing it back) and a round Twitch wholly denied both read as down; before
+// the first round there is nothing to judge, which is not a failure.
+func eventsubPing(context.Context) error {
+	up, reported := instrumentation.EventSubSubscriptions.Session()
+	if reported && !up {
+		return errors.New("no eventsub session")
 	}
 	return nil
 }
