@@ -9,6 +9,24 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.32.0] — 2026-10-15
+
+### Chatbot
+
+- Admin chat commands (`!shutdown`, `!skip`, `!jump`, `!audio`, `!timewarp`, `!givemiles`, …) now gate on the platform-reported broadcaster flag, which the gateway sets from the sender's user id, instead of comparing the display name to the channel name. On YouTube, Facebook and TikTok a viewer can pick any display name, so the old compare handed those commands to anyone named after the channel. ([#1679](https://github.com/adanalife/tripbot/pull/1679))
+
+### Console / API
+
+- The insight endpoints take `days=0` for all time: footage and regions can be read over the whole history, not just the last 90 days. ([#1681](https://github.com/adanalife/tripbot/pull/1681))
+- `GET /api/stats/playback/daily` serves the playback counters per day over the window, one row per calendar day, for a trend beside the totals. ([#1682](https://github.com/adanalife/tripbot/pull/1682))
+- The chat log marks a line struck when the platform removes it (a moderator delete, a timeout, a ban), and `/api/chat/history` returns it flagged `deleted`, so the console's `/history` shows it struck the way the live log does instead of pristine. ([#1683](https://github.com/adanalife/tripbot/pull/1683))
+- `/health/deps` on the Twitch instance reports whether the bot is receiving chat, so the console shows a tripbot that is up but out of chat as degraded ("chat unusable") rather than healthy. ([#1685](https://github.com/adanalife/tripbot/pull/1685))
+
+### CI / Tooling
+
+- CI workflows call the org's shared reusable workflows (adanalife/infra) instead of each carrying its own copy. ([#1674](https://github.com/adanalife/tripbot/pull/1674))
+- The per-PR gates run with a read-only token instead of the repository's default one, and the weekly lint sweep keeps ruff's pre-0.16 rule set. ([#1678](https://github.com/adanalife/tripbot/pull/1678))
+
 ## [v5.31.0] — 2026-10-13
 
 ### Console / API
