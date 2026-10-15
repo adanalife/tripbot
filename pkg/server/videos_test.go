@@ -26,8 +26,9 @@ func videoGET(t *testing.T, id string) *httptest.ResponseRecorder {
 // airing on every platform, counted.
 func TestVideoHandler(t *testing.T) {
 	db := testdb.New(t)
-	// Clip 7 and its next neighbour (8) have tracks. The previous one (6) has
-	// no row at all, so its side reads empty rather than failing the page.
+	// Clips 6 → 7 → 8 are chained by next_vid alone, as the corpus is: clip 7
+	// finds 6 as the clip whose next_vid names it. Clip 6 has no track, so its
+	// side reads empty rather than failing the page.
 	orig := clipTrack
 	t.Cleanup(func() { clipTrack = orig })
 	clipTrack = func(_ context.Context, v video.Video) []video.TrackPoint {
@@ -41,8 +42,9 @@ func TestVideoHandler(t *testing.T) {
 	}
 	ctx := context.Background()
 	for _, q := range []string{
-		`INSERT INTO videos (id, slug, state, city, city_m, lat, lng, prev_vid, next_vid, date_filmed)
-		 VALUES (7, '2018_0514_224801_013', 'Utah', 'Moab', 0, 38.57, -109.55, 6, 8, '2018-05-14 22:48:01+00')`,
+		`INSERT INTO videos (id, slug, state, lat, lng, next_vid) VALUES (6, '2018_0514_224501_012', 'Utah', 38.5, -109.5, 7)`,
+		`INSERT INTO videos (id, slug, state, city, city_m, lat, lng, next_vid, date_filmed)
+		 VALUES (7, '2018_0514_224801_013', 'Utah', 'Moab', 0, 38.57, -109.55, 8, '2018-05-14 22:48:01+00')`,
 		`INSERT INTO videos (id, slug, state, lat, lng) VALUES (8, '2018_0514_225101_014', 'Utah', 38.7, -109.7)`,
 		`INSERT INTO video_plays (platform, video_id, started_at) VALUES
 		 ('twitch', 7, '2026-10-01 00:00:00+00'), ('youtube', 7, '2026-10-02 00:00:00+00'), ('twitch', 9, now())`,
