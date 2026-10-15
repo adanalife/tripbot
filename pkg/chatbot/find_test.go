@@ -3,8 +3,11 @@ package chatbot
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/adanalife/tripbot/pkg/database"
@@ -16,6 +19,9 @@ import (
 type noopSearch struct{}
 
 func (noopSearch) Find(_ context.Context, _, _ string) ([]SearchHit, error) { return nil, nil }
+func (noopSearch) Similar(_ context.Context, _ string, _ float64, _ string) ([]SearchHit, error) {
+	return nil, nil
+}
 
 // recordingSearch returns canned hits / error and records the queries and
 // corpora it saw, so command tests can assert !find behavior without NATS or
@@ -25,11 +31,17 @@ type recordingSearch struct {
 	Err     error
 	Queries []string
 	Corpora []string
+	Anchors []string
 }
 
 func (r *recordingSearch) Find(_ context.Context, query, corpus string) ([]SearchHit, error) {
 	r.Queries = append(r.Queries, query)
 	r.Corpora = append(r.Corpora, corpus)
+	return r.Hits, r.Err
+}
+
+func (r *recordingSearch) Similar(_ context.Context, slug string, tsSec float64, corpus string) ([]SearchHit, error) {
+	r.Anchors = append(r.Anchors, fmt.Sprintf("%s@%v/%s", slug, tsSec, corpus))
 	return r.Hits, r.Err
 }
 
@@ -320,5 +332,132 @@ func TestFind_OperatorVerdicts(t *testing.T) {
 				t.Errorf("Find should say nothing in chat, got %q", got)
 			}
 		})
+	}
+}
+
+func newSimilarTestApp(t *testing.T, search Search, onScreen video.Video, elapsed time.Duration) (*App, *recordingPlayout, *recordingChat) {
+	t.Helper()
+	app, recPlayout, recChat := newFindTestApp(t, search)
+	app.Video = &recordingVideo{Vid: onScreen, Elapsed: elapsed}
+	return app, recPlayout, recChat
+}
+
+func TestSimilarCmd_JumpsToALookAlikeFromAnotherDay(t *testing.T) {
+	enablePlayback(t)
+	pinFindRandIntn(t, 0)
+	search := &recordingSearch{Hits: []SearchHit{
+		{Slug: "2018_0601_000000_001", TsSec: 40, State: "Utah", Distance: 0.05},
+		{Slug: "2018_0702_000000_009", TsSec: 8, State: "Idaho", Distance: 0.09},
+	}}
+	app, recPlayout, recChat := newSimilarTestApp(t, search,
+		video.Video{Slug: "2018_0514_224801_013", Corpus: video.CorpusS2}, 90*time.Second)
+
+	runAsAdmin(t, func() {
+		app.similarCmd(context.Background(), newAdminUser(), nil)
+	})
+
+	// The anchor is the frame on screen, searched within the corpus on screen.
+	if want := []string{"2018_0514_224801_013@90/" + video.CorpusS2}; !reflect.DeepEqual(search.Anchors, want) {
+		t.Fatalf("anchors = %v, want %v", search.Anchors, want)
+	}
+	// Lands findJumpLeadInSec ahead of the look-alike frame (40 - 12 = 28).
+	want := `PlayFileAtTimestamp("2018_0601_000000_001.MP4", 28.0)`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != want {
+		t.Errorf("expected Playout call %q, got %v", want, recPlayout.Calls)
+	}
+	if got := recChat.Output(); !strings.Contains(got, "Jumping") || strings.Contains(got, "Utah") {
+		t.Errorf("expected a jump message that omits the state, got %q", got)
+	}
+}
+
+func TestSimilarCmd_NothingAlikeIsNotAJump(t *testing.T) {
+	enablePlayback(t)
+	for name, hits := range map[string][]SearchHit{
+		"no hits":      nil,
+		"too far away": {{Slug: "2018_0601_000000_001", TsSec: 40, Distance: similarMaxDistance + 0.01}},
+	} {
+		search := &recordingSearch{Hits: hits}
+		app, recPlayout, recChat := newSimilarTestApp(t, search, video.Video{Slug: "2018_0514_224801_013"}, time.Minute)
+		runAsAdmin(t, func() {
+			app.similarCmd(context.Background(), newAdminUser(), nil)
+		})
+		if len(recPlayout.Calls) != 0 {
+			t.Errorf("%s: expected no jump, got %v", name, recPlayout.Calls)
+		}
+		if got := recChat.Output(); !strings.Contains(got, "first time here") {
+			t.Errorf("%s: expected the no-match reply, got %q", name, got)
+		}
+	}
+}
+
+func TestSimilarCmd_SearchError(t *testing.T) {
+	enablePlayback(t)
+	search := &recordingSearch{Err: errors.New("db down")}
+	app, recPlayout, recChat := newSimilarTestApp(t, search, video.Video{Slug: "2018_0514_224801_013"}, time.Minute)
+	runAsAdmin(t, func() {
+		app.similarCmd(context.Background(), newAdminUser(), nil)
+	})
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no jump, got %v", recPlayout.Calls)
+	}
+	if got := recChat.Output(); !strings.Contains(got, "isn't available") {
+		t.Errorf("expected the unavailable reply, got %q", got)
+	}
+}
+
+func TestSimilarCmd_NothingOnScreen(t *testing.T) {
+	enablePlayback(t)
+	search := &recordingSearch{}
+	app, _, recChat := newSimilarTestApp(t, search, video.Video{}, 0)
+	runAsAdmin(t, func() {
+		app.similarCmd(context.Background(), newAdminUser(), nil)
+	})
+	if len(search.Anchors) != 0 {
+		t.Errorf("expected no search with nothing on screen, got %v", search.Anchors)
+	}
+	if got := recChat.Output(); !strings.Contains(got, "Nothing's on screen") {
+		t.Errorf("expected the nothing-on-screen reply, got %q", got)
+	}
+}
+
+func TestSimilarFrameEmbeddings_AnchorsOnTheFrameOnScreen(t *testing.T) {
+	mock := installMockDB(t)
+	day := "2018-05-14"
+	mock.ExpectQuery("ORDER BY abs").
+		WithArgs("2018_0514_224801_013", 90.0).
+		WillReturnRows(mock.NewRows([]string{"embedding", "model", "day"}).
+			AddRow("[0.1,0.2,0.3]", "model-x", day))
+	mock.ExpectQuery("date_filmed::date <>").
+		WithArgs("[0.1,0.2,0.3]", "model-x", video.CorpusS1, "2018_0514_224801_013", day, "[0.1,0.2,0.3]", 5).
+		WillReturnRows(mock.NewRows([]string{"slug", "ts_sec", "state", "distance"}).
+			AddRow("2018_0601_000000_001", 40.0, "Utah", 0.05))
+
+	hits, err := similarFrameEmbeddings(context.Background(), database.GormDB(),
+		"2018_0514_224801_013", 90, video.CorpusS1, 5)
+	if err != nil {
+		t.Fatalf("similarFrameEmbeddings: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Slug != "2018_0601_000000_001" || hits[0].Distance != 0.05 {
+		t.Errorf("unexpected hits: %+v", hits)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestSimilarFrameEmbeddings_NoEmbeddedFrameIsNoHits(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery("ORDER BY abs").
+		WillReturnRows(mock.NewRows([]string{"embedding", "model", "day"}))
+
+	hits, err := similarFrameEmbeddings(context.Background(), database.GormDB(), "unembedded", 1, video.CorpusS1, 5)
+	if err != nil {
+		t.Fatalf("similarFrameEmbeddings: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Errorf("expected no hits for an unembedded clip, got %+v", hits)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
 	}
 }

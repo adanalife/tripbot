@@ -62,6 +62,13 @@ func (a *App) buildRegistry() []Command {
 			RequiresSubscriber: true,
 		},
 		{
+			Trigger:        "!similar",
+			Help:           "Jump to a moment from another day that looks like the one on screen",
+			Aliases:        []string{"!seenthis", "!lookalike", "!dejavu"},
+			Handler:        a.similarCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!skip",
 			Help:           "Skip to the next video",
 			Handler:        a.skipCmd,
