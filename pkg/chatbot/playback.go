@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +31,20 @@ const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 // an unknown key (which evaluates false) keeps the cover — it masks the video
 // gap the playhead jump causes, so losing it by accident is visible on stream.
 const timewarpNoBackgroundFlagKey = "chatbot.timewarp_no_background"
+
+// timewarpS2SneakFlagKey arms the season-2 sneak: with it on, s2SneakChance of
+// viewer !timewarps land in the s2 corpus instead of the rotation, and playout
+// plays that block to its end before coming home. Only the !timewarp command
+// rolls — a !guess win or a gift warp is a reward, not a surprise. Global
+// default only, like the no-background flag: it is the stream's behavior, not
+// a per-chatter permission. Unknown or off keeps every warp in the rotation.
+const timewarpS2SneakFlagKey = "chatbot.timewarp_s2_sneak"
+
+// s2SneakChance is the share of armed !timewarps that sneak into season 2.
+const s2SneakChance = 0.05
+
+// s2Corpus is playout's name for the season-2 real-time corpus.
+const s2Corpus = "s2"
 
 // lastTimewarpTime is used to rate-limit users so they can't
 // over-do the time-skip features (including !skip and !back)
@@ -89,6 +104,13 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 // (empty for callers with no attributable user). source names the trigger for
 // the timewarp event (the events.WarpSource* constants).
 func (a *App) timewarp(ctx context.Context, username, source string) {
+	a.timewarpRolled(ctx, username, source, rand.Float64())
+}
+
+// timewarpRolled is timewarp with its sneak roll supplied: roll in [0, 1)
+// sneaks into season 2 when it falls under s2SneakChance, the flag is on, and
+// a viewer's !timewarp triggered it.
+func (a *App) timewarpRolled(ctx context.Context, username, source string, roll float64) {
 	a.showTimewarpOverlay(ctx, username)
 
 	// capture the departing clip and playhead before the jump; the timewarp
@@ -96,8 +118,14 @@ func (a *App) timewarp(ctx context.Context, username, source string) {
 	from := a.Video.Current()
 	fromSecs := a.Video.CurrentProgress().Seconds()
 
-	// shuffle to a new video
-	err := a.Playout.PlayRandom(ctx)
+	// shuffle to a new video — or, rarely, sneak into season 2
+	corpus := ""
+	if source == events.WarpSourceCommand && roll < s2SneakChance &&
+		a.Flags.Bool(ctx, timewarpS2SneakFlagKey, feature.EvalContext{Env: a.Cfg.Environment}) {
+		corpus = s2Corpus
+		slog.InfoContext(ctx, "timewarp sneaks into season 2", "username", username)
+	}
+	err := a.Playout.PlayRandom(ctx, corpus)
 	if err != nil {
 		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 	}

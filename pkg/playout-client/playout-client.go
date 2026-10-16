@@ -153,9 +153,10 @@ func playheadFrom(ev ve.LastPlayed, now time.Time) (file string, pos time.Durati
 	return ev.File, time.Duration(ev.PositionMs)*time.Millisecond + age, true
 }
 
-// PlayRandom plays a random file from the playlist
-func (c *Client) PlayRandom(ctx context.Context) error {
-	c.publish(ctx, ve.PlayRandomSubject(c.env, c.platform), ve.Command{Envelope: ve.NewEnvelope()})
+// PlayRandom plays a random file from the playlist: from playout's current
+// mode when corpus is empty, else from the named corpus.
+func (c *Client) PlayRandom(ctx context.Context, corpus string) error {
+	c.publish(ctx, ve.PlayRandomSubject(c.env, c.platform), ve.PlayRandom{Envelope: ve.NewEnvelope(), Corpus: corpus})
 	return nil
 }
 
