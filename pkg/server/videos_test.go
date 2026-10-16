@@ -170,3 +170,48 @@ func TestVideoMomentsHandler(t *testing.T) {
 		t.Errorf("missing clip: status = %d, want 404", rec.Code)
 	}
 }
+
+func sourceGET(t *testing.T, stem string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := mux.NewRouter()
+	r.Handle("/api/sources/{stem}", http.HandlerFunc(sourceHandler)).Methods("GET")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/sources/"+stem, nil))
+	return rec
+}
+
+// One original's pieces, in offset order; a stem that differs by one digit
+// doesn't match through the LIKE wildcard, and an original with nothing
+// ingested yet is a 404.
+func TestSourceHandler(t *testing.T) {
+	db := testdb.New(t)
+	for _, q := range []string{
+		`INSERT INTO videos (id, slug, corpus) VALUES (3, '20260501120000_000123_s0120', 's2')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (2, '20260501120000_000123_s0000', 's2')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (4, '20260501120000_010123_s0000', 's2')`,
+	} {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := sourceGET(t, "20260501120000_000123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got sourceResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := sourceResponse{Stem: "20260501120000_000123", Clips: []sourceClip{
+		{2, "20260501120000_000123_s0000"}, {3, "20260501120000_000123_s0120"},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+	if rec := sourceGET(t, "20260501120000_999999"); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown stem: status = %d, want 404", rec.Code)
+	}
+	if rec := sourceGET(t, "2018_0514_224801_013"); rec.Code != http.StatusBadRequest {
+		t.Errorf("season-1 slug: status = %d, want 400", rec.Code)
+	}
+}
