@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -143,4 +145,48 @@ func videoHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(d); err != nil {
 		logQueryFailure(r.Context(), "video encode failed", err)
 	}
+}
+
+// s2Stem is a season-2 original's file stem — the camera's 14-digit clock and
+// sequence — which every piece cut from it carries as its slug's prefix.
+var s2Stem = regexp.MustCompile(`^\d{14}_\d{6}$`)
+
+// sourceClip is one piece of an original, as GET /api/sources/{stem} lists them.
+type sourceClip struct {
+	ID   int    `json:"id"`
+	Slug string `json:"slug"`
+}
+
+// sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
+// pipeline ingested from that original, in offset order.
+type sourceResponse struct {
+	Stem  string       `json:"stem"`
+	Clips []sourceClip `json:"clips"`
+}
+
+// sourceHandler serves GET /api/sources/{stem}: the clips cut from one
+// original, so the console's pipeline grid can open a source once it has
+// been ingested. 404 until the first piece lands.
+func sourceHandler(w http.ResponseWriter, r *http.Request) {
+	stem := mux.Vars(r)["stem"]
+	if !s2Stem.MatchString(stem) {
+		http.Error(w, `{"error":"bad source stem"}`, http.StatusBadRequest)
+		return
+	}
+	// The stem's own underscore is escaped so LIKE matches it literally: the
+	// same pattern the pipeline's ingest reconciles a source's rows with.
+	pattern := strings.ReplaceAll(stem, "_", `\_`) + `\_s%`
+	clips := []sourceClip{}
+	err := database.GormDB().WithContext(r.Context()).Model(&video.Video{}).
+		Where("slug LIKE ?", pattern).Order("slug").Find(&clips).Error
+	if err != nil {
+		logQueryFailure(r.Context(), "source lookup failed", err, "stem", stem)
+		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
+		return
+	}
+	if len(clips) == 0 {
+		http.Error(w, `{"error":"no clips from that source"}`, http.StatusNotFound)
+		return
+	}
+	writeInsights(w, r, sourceResponse{Stem: stem, Clips: clips})
 }
