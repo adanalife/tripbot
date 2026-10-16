@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.35.0] — 2026-10-16
+
+### Console / API
+
+- `GET /api/sources/{stem}` lists the clips ingested from one season-2 original, so the console's pipeline grid can open a source once it lands. ([#1700](https://github.com/adanalife/tripbot/pull/1700))
+
 ## [v5.34.0] — 2026-10-15
 
 ### Console / API
