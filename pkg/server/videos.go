@@ -294,9 +294,10 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 
 // footageDaySQL is the day a clip was filmed, off its slug: both cameras name
 // files by their own clock (season 2 `20260307154839_…`, season 1
-// `2018_0514_224801_…`), so this is the local day the operator reads in the
-// file name, where date_filmed is UTC and would split an evening drive at
-// midnight. NULL for a slug of neither shape.
+// `2018_0514_224801_…`), so this is the day the operator reads in the file
+// name — the same wall clock date_filmed stores, read without a zone so a
+// piece dated by its own first frame still lands on its original's day. NULL
+// for a slug of neither shape.
 const footageDaySQL = `CASE
   WHEN slug ~ '^[0-9]{14}_' THEN to_date(left(slug, 8), 'YYYYMMDD')
   WHEN slug ~ '^[0-9]{4}_[0-9]{4}_' THEN to_date(left(slug, 9), 'YYYY_MMDD')
