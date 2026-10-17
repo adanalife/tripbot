@@ -1,1 +1,0 @@
-`GET /api/footage/days` lists every filmed day with its clip count, and `GET /api/footage/days/{day}` that day's clips with their fixes and tracks, for the console's footage calendar. The day comes off the slug's camera clock, not the UTC `date_filmed`.
