@@ -1,0 +1,1 @@
+`GET /api/sources/{stem}` carries the source's corpus and its total airings across every platform, and each clip its place and filming time; `GET /api/videos/{id}` and each source clip add `recorded_at_utc`, the dashcam's wall clock read in the time zone at the clip's fix, so the console can show a clip's real UTC time.
