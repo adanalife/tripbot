@@ -14,6 +14,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/bradfitz/latlong"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
@@ -32,11 +33,12 @@ type videoDetail struct {
 	Lng     float64  `json:"lng"`
 	Flagged bool     `json:"flagged"`
 	Corpus  string   `json:"corpus"`
-	// RecordedAt is when the dashcam filmed the clip, RFC 3339; empty when
-	// the slug didn't yield a date.
-	RecordedAt string `json:"recorded_at"`
-	PrevID     *int64 `json:"prev_id"`
-	NextID     *int64 `json:"next_id"`
+	// RecordedAt and RecordedAtUTC are when the clip was filmed, RFC 3339; see
+	// filmedTimes.
+	RecordedAt    string `json:"recorded_at"`
+	RecordedAtUTC string `json:"recorded_at_utc"`
+	PrevID        *int64 `json:"prev_id"`
+	NextID        *int64 `json:"next_id"`
 	// Plays counts every airing on every platform, all time; LastPlayedAt is
 	// the latest one's start, empty when the clip has never aired.
 	Plays        int64  `json:"plays"`
@@ -49,6 +51,32 @@ type videoDetail struct {
 	NextTrack [][3]float64 `json:"next_track"`
 	// Moments are the operator's marks on the clip, in clip order.
 	Moments []moment `json:"moments"`
+}
+
+// filmedTimes is when v was filmed, RFC 3339, twice. local is date_filmed as
+// stored: the dashcam's own wall clock, as its HUD and file name show it,
+// labelled UTC. utc is the real instant: that wall clock read in the time zone
+// at the clip's fix. Both are "" when the clip has no date; utc is also ""
+// when there is no fix or it falls in no zone.
+func filmedTimes(v video.Video) (local, utc string) {
+	if v.DateFilmed.IsZero() {
+		return "", ""
+	}
+	t := v.DateFilmed.UTC()
+	local = t.Format(time.RFC3339)
+	if v.Lat == 0 && v.Lng == 0 {
+		return local, ""
+	}
+	zone := latlong.LookupZoneName(v.Lat, v.Lng)
+	if zone == "" {
+		return local, ""
+	}
+	loc, err := time.LoadLocation(zone)
+	if err != nil {
+		return local, ""
+	}
+	return local, time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, loc).
+		UTC().Format(time.RFC3339)
 }
 
 // trackOf is vid's track as triples, never nil, so it encodes as [].
@@ -94,9 +122,7 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 		Place: v.Place(), Lat: v.Lat, Lng: v.Lng, Flagged: v.Flagged, Corpus: v.Corpus,
 		Plays: plays.Plays, Track: trackOf(ctx, v),
 	}
-	if !v.DateFilmed.IsZero() {
-		d.RecordedAt = v.DateFilmed.UTC().Format(time.RFC3339)
-	}
+	d.RecordedAt, d.RecordedAtUTC = filmedTimes(v)
 	// The clip before is the one whose next_vid names this one: the chain is
 	// only ever written forward, so the prev_vid column stays empty.
 	// ponytail: next_vid is unindexed, so this scans videos — one operator
@@ -153,36 +179,49 @@ func videoHandler(w http.ResponseWriter, r *http.Request) {
 var s2Stem = regexp.MustCompile(`^\d{14}_\d{6}$`)
 
 // sourceClip is one piece of an original, as GET /api/sources/{stem} lists
-// them: its fix and its track ([sec, lat, lng] like a clip's), so a page can
-// draw the whole original's route without asking per clip.
+// them: its fix, place, filming times (as videoDetail's) and track ([sec,
+// lat, lng] like a clip's), so a page can draw the whole original's route
+// without asking per clip.
 type sourceClip struct {
-	ID    int          `json:"id"`
-	Slug  string       `json:"slug"`
-	Lat   float64      `json:"lat"`
-	Lng   float64      `json:"lng"`
-	Track [][3]float64 `json:"track"`
+	ID            int          `json:"id"`
+	Slug          string       `json:"slug"`
+	Lat           float64      `json:"lat"`
+	Lng           float64      `json:"lng"`
+	Place         string       `json:"place"`
+	RecordedAt    string       `json:"recorded_at"`
+	RecordedAtUTC string       `json:"recorded_at_utc"`
+	Track         [][3]float64 `json:"track"`
 }
 
 // withTracks lists clips in the order given, each with its fix and track.
 func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
 	clips := make([]sourceClip, 0, len(vids))
 	for _, v := range vids {
-		clips = append(clips, sourceClip{
-			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Track: trackOf(ctx, v),
-		})
+		c := sourceClip{
+			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Place: v.Place(), Track: trackOf(ctx, v),
+		}
+		c.RecordedAt, c.RecordedAtUTC = filmedTimes(v)
+		clips = append(clips, c)
 	}
 	return clips
 }
 
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
-// pipeline ingested from that original, in offset order, and the ingested
-// originals either side of it in film order ("" at either end).
+// pipeline ingested from that original, in offset order, the ingested
+// originals either side of it in film order ("" at either end), the corpus
+// its clips share, and every airing of any of them on any platform.
 type sourceResponse struct {
-	Stem  string       `json:"stem"`
-	Clips []sourceClip `json:"clips"`
-	Prev  string       `json:"prev"`
-	Next  string       `json:"next"`
+	Stem   string       `json:"stem"`
+	Corpus string       `json:"corpus"`
+	Clips  []sourceClip `json:"clips"`
+	Plays  int64        `json:"plays"`
+	Prev   string       `json:"prev"`
+	Next   string       `json:"next"`
 }
+
+// ponytail: like videoPlaysSQL, a scan of video_plays — one page view, not a
+// hot path. An index on video_id if it shows.
+const sourcePlaysSQL = `SELECT COUNT(*) FROM video_plays WHERE video_id IN @ids`
 
 // neighbourSourceSQL finds the nearest other ingested original before or after
 // a stem. A stem leads with the camera's clock, so slug order is film order;
@@ -232,12 +271,21 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"no clips from that source"}`, http.StatusNotFound)
 		return
 	}
-	resp := sourceResponse{Stem: stem, Clips: clips}
-	if resp.Prev, err = neighbourSource(r.Context(), stem, false); err == nil {
+	resp := sourceResponse{Stem: stem, Corpus: vids[0].Corpus, Clips: clips}
+	ids := make([]int, len(vids))
+	for i, v := range vids {
+		ids[i] = v.ID
+	}
+	err = database.GormDB().WithContext(r.Context()).
+		Raw(sourcePlaysSQL, sql.Named("ids", ids)).Scan(&resp.Plays).Error
+	if err == nil {
+		resp.Prev, err = neighbourSource(r.Context(), stem, false)
+	}
+	if err == nil {
 		resp.Next, err = neighbourSource(r.Context(), stem, true)
 	}
 	if err != nil {
-		logQueryFailure(r.Context(), "source neighbours failed", err, "stem", stem)
+		logQueryFailure(r.Context(), "source plays or neighbours failed", err, "stem", stem)
 		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
 		return
 	}
@@ -246,9 +294,10 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 
 // footageDaySQL is the day a clip was filmed, off its slug: both cameras name
 // files by their own clock (season 2 `20260307154839_…`, season 1
-// `2018_0514_224801_…`), so this is the local day the operator reads in the
-// file name, where date_filmed is UTC and would split an evening drive at
-// midnight. NULL for a slug of neither shape.
+// `2018_0514_224801_…`), so this is the day the operator reads in the file
+// name — the same wall clock date_filmed stores, read without a zone so a
+// piece dated by its own first frame still lands on its original's day. NULL
+// for a slug of neither shape.
 const footageDaySQL = `CASE
   WHEN slug ~ '^[0-9]{14}_' THEN to_date(left(slug, 8), 'YYYYMMDD')
   WHEN slug ~ '^[0-9]{4}_[0-9]{4}_' THEN to_date(left(slug, 9), 'YYYY_MMDD')

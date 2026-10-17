@@ -25,8 +25,9 @@ func videoGET(t *testing.T, id string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// One clip's record: its place, its neighbours and their tracks, and every
-// airing on every platform, counted.
+// One clip's record: its place, its neighbours and their tracks, every airing
+// on every platform, counted, and its filming time both as the dashcam's clock
+// read it and as the real UTC instant — 22:48 in Moab in May is MDT, UTC-6.
 func TestVideoHandler(t *testing.T) {
 	db := testdb.New(t)
 	// Clips 6 → 7 → 8 are chained by next_vid alone, as the corpus is: clip 7
@@ -69,7 +70,8 @@ func TestVideoHandler(t *testing.T) {
 	want := videoDetail{
 		ID: 7, File: "2018_0514_224801_013.MP4", State: "Utah", City: "Moab", CityM: &zero,
 		Place: "Moab, Utah", Lat: 38.57, Lng: -109.55, Corpus: "s1",
-		RecordedAt: "2018-05-14T22:48:01Z", PrevID: &prev, NextID: &next,
+		RecordedAt: "2018-05-14T22:48:01Z", RecordedAtUTC: "2018-05-15T04:48:01Z",
+		PrevID: &prev, NextID: &next,
 		Plays: 2, LastPlayedAt: "2026-10-02T00:00:00Z",
 		Track:     [][3]float64{{0, 38.5, -109.5}, {30, 38.6, -109.6}},
 		PrevTrack: [][3]float64{},
@@ -182,7 +184,9 @@ func sourceGET(t *testing.T, stem string) *httptest.ResponseRecorder {
 
 // One original's pieces, in offset order, with the ingested originals either
 // side in film order; a stem that differs by one digit doesn't match through
-// the LIKE wildcard, and an original with nothing ingested yet is a 404.
+// the LIKE wildcard, and an original with nothing ingested yet is a 404. The
+// source carries its corpus and every airing of its own clips; each clip its
+// place and filming times, where a clip with no fix has no real-UTC time.
 func TestSourceHandler(t *testing.T) {
 	db := testdb.New(t)
 	orig := clipTrack
@@ -194,12 +198,15 @@ func TestSourceHandler(t *testing.T) {
 		return nil
 	}
 	for _, q := range []string{
-		`INSERT INTO videos (id, slug, corpus, lat, lng) VALUES (3, '20260501120000_000123_s0120', 's2', 35.1, -106.6)`,
-		`INSERT INTO videos (id, slug, corpus) VALUES (2, '20260501120000_000123_s0000', 's2')`,
+		`INSERT INTO videos (id, slug, corpus, lat, lng, state, city, city_m, date_filmed)
+		 VALUES (3, '20260501120000_000123_s0120', 's2', 35.1, -106.6, 'New Mexico', 'Albuquerque', 0, '2026-05-01 12:02:00+00')`,
+		`INSERT INTO videos (id, slug, corpus, date_filmed) VALUES (2, '20260501120000_000123_s0000', 's2', '2026-05-01 12:00:00+00')`,
 		`INSERT INTO videos (id, slug, corpus) VALUES (4, '20260501120000_010123_s0000', 's2')`,
 		`INSERT INTO videos (id, slug, corpus) VALUES (5, '20260430090000_000001_s0300', 's2fast')`,
 		`INSERT INTO videos (id, slug, corpus) VALUES (6, '20260430090000_000001_s0000', 's2fast')`,
 		`INSERT INTO videos (id, slug, corpus) VALUES (7, '2018_0514_224801_013', 's1')`,
+		`INSERT INTO video_plays (platform, video_id, started_at) VALUES
+		 ('twitch', 2, now()), ('twitch', 3, now()), ('youtube', 3, now()), ('twitch', 4, now())`,
 	} {
 		if err := db.Exec(q).Error; err != nil {
 			t.Fatal(err)
@@ -213,11 +220,12 @@ func TestSourceHandler(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	want := sourceResponse{Stem: "20260501120000_000123", Clips: []sourceClip{
-		{ID: 2, Slug: "20260501120000_000123_s0000", Track: [][3]float64{}},
+	want := sourceResponse{Stem: "20260501120000_000123", Corpus: "s2", Clips: []sourceClip{
+		{ID: 2, Slug: "20260501120000_000123_s0000", RecordedAt: "2026-05-01T12:00:00Z", Track: [][3]float64{}},
 		{ID: 3, Slug: "20260501120000_000123_s0120", Lat: 35.1, Lng: -106.6,
+			Place: "Albuquerque, New Mexico", RecordedAt: "2026-05-01T12:02:00Z", RecordedAtUTC: "2026-05-01T18:02:00Z",
 			Track: [][3]float64{{0, 35.1, -106.6}, {20, 35.2, -106.7}}},
-	}, Prev: "20260430090000_000001", Next: "20260501120000_010123"}
+	}, Plays: 3, Prev: "20260430090000_000001", Next: "20260501120000_010123"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
 	}
