@@ -152,10 +152,15 @@ func videoHandler(w http.ResponseWriter, r *http.Request) {
 // sequence — which every piece cut from it carries as its slug's prefix.
 var s2Stem = regexp.MustCompile(`^\d{14}_\d{6}$`)
 
-// sourceClip is one piece of an original, as GET /api/sources/{stem} lists them.
+// sourceClip is one piece of an original, as GET /api/sources/{stem} lists
+// them: its fix and its track ([sec, lat, lng] like a clip's), so a page can
+// draw the whole original's route without asking per clip.
 type sourceClip struct {
-	ID   int    `json:"id"`
-	Slug string `json:"slug"`
+	ID    int          `json:"id"`
+	Slug  string       `json:"slug"`
+	Lat   float64      `json:"lat"`
+	Lng   float64      `json:"lng"`
+	Track [][3]float64 `json:"track"`
 }
 
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
@@ -203,9 +208,15 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	// The stem's own underscore is escaped so LIKE matches it literally: the
 	// same pattern the pipeline's ingest reconciles a source's rows with.
 	pattern := strings.ReplaceAll(stem, "_", `\_`) + `\_s%`
-	clips := []sourceClip{}
-	err := database.GormDB().WithContext(r.Context()).Model(&video.Video{}).
-		Where("slug LIKE ?", pattern).Order("slug").Find(&clips).Error
+	var vids []video.Video
+	err := database.GormDB().WithContext(r.Context()).
+		Where("slug LIKE ?", pattern).Order("slug").Find(&vids).Error
+	clips := make([]sourceClip, 0, len(vids))
+	for _, v := range vids {
+		clips = append(clips, sourceClip{
+			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Track: trackOf(r.Context(), v),
+		})
+	}
 	if err != nil {
 		logQueryFailure(r.Context(), "source lookup failed", err, "stem", stem)
 		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
