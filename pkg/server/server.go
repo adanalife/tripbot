@@ -141,6 +141,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// the operator's marks on a moment of a clip: a star, or a bad GPS point.
 	r.Handle("/api/videos/{id}/moments", tagged("/api/videos/{id}/moments", videoMomentsHandler)).Methods("POST")
 	r.Handle("/api/sources/{stem}", tagged("/api/sources/{stem}", sourceHandler)).Methods("GET")
+	// the footage calendar: every filmed day, and one day's clips.
+	r.Handle("/api/footage/days", tagged("/api/footage/days", footageDaysHandler)).Methods("GET")
+	r.Handle("/api/footage/days/{day}", tagged("/api/footage/days/{day}", footageDayHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
