@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.36.0] — 2026-10-17
+
+### Console / API
+
+- `GET /api/sources/{stem}` names the ingested originals either side in film order as `prev` and `next`, and carries each clip's fix and track so the whole original's route draws in one read. ([#1702](https://github.com/adanalife/tripbot/pull/1702))
+- `GET /api/footage/days` lists every filmed day with its clip count, and `GET /api/footage/days/{day}` that day's clips with their fixes and tracks, for the console's footage calendar. The day comes off the slug's camera clock, not the UTC `date_filmed`. ([#1704](https://github.com/adanalife/tripbot/pull/1704))
+
 ## [v5.35.0] — 2026-10-16
 
 ### Console / API
