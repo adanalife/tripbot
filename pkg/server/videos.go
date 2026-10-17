@@ -163,6 +163,17 @@ type sourceClip struct {
 	Track [][3]float64 `json:"track"`
 }
 
+// withTracks lists clips in the order given, each with its fix and track.
+func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
+	clips := make([]sourceClip, 0, len(vids))
+	for _, v := range vids {
+		clips = append(clips, sourceClip{
+			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Track: trackOf(ctx, v),
+		})
+	}
+	return clips
+}
+
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
 // pipeline ingested from that original, in offset order, and the ingested
 // originals either side of it in film order ("" at either end).
@@ -211,12 +222,7 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	var vids []video.Video
 	err := database.GormDB().WithContext(r.Context()).
 		Where("slug LIKE ?", pattern).Order("slug").Find(&vids).Error
-	clips := make([]sourceClip, 0, len(vids))
-	for _, v := range vids {
-		clips = append(clips, sourceClip{
-			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Track: trackOf(r.Context(), v),
-		})
-	}
+	clips := withTracks(r.Context(), vids)
 	if err != nil {
 		logQueryFailure(r.Context(), "source lookup failed", err, "stem", stem)
 		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
@@ -236,4 +242,65 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeInsights(w, r, resp)
+}
+
+// footageDaySQL is the day a clip was filmed, off its slug: both cameras name
+// files by their own clock (season 2 `20260307154839_…`, season 1
+// `2018_0514_224801_…`), so this is the local day the operator reads in the
+// file name, where date_filmed is UTC and would split an evening drive at
+// midnight. NULL for a slug of neither shape.
+const footageDaySQL = `CASE
+  WHEN slug ~ '^[0-9]{14}_' THEN to_date(left(slug, 8), 'YYYYMMDD')
+  WHEN slug ~ '^[0-9]{4}_[0-9]{4}_' THEN to_date(left(slug, 9), 'YYYY_MMDD')
+END`
+
+// footageDay is one filmed day and how many clips it holds.
+type footageDay struct {
+	Day   string `json:"day"`
+	Clips int    `json:"clips"`
+}
+
+// footageDaysHandler serves GET /api/footage/days: every day with footage,
+// oldest first, for the console's calendar.
+// ponytail: a scan of videos per call, a few thousand rows.
+func footageDaysHandler(w http.ResponseWriter, r *http.Request) {
+	days := []footageDay{}
+	err := database.GormDB().WithContext(r.Context()).Raw(`SELECT to_char(day, 'YYYY-MM-DD') AS day, count(*) AS clips
+FROM (SELECT ` + footageDaySQL + ` AS day FROM videos) d
+WHERE day IS NOT NULL GROUP BY day ORDER BY day`).Scan(&days).Error
+	if err != nil {
+		logQueryFailure(r.Context(), "footage days failed", err)
+		http.Error(w, `{"error":"couldn't read footage days"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, days)
+}
+
+// footageDayResponse is the wire shape of GET /api/footage/days/{day}.
+type footageDayResponse struct {
+	Day   string       `json:"day"`
+	Clips []sourceClip `json:"clips"`
+}
+
+// footageDayHandler serves GET /api/footage/days/{day}: the clips filmed that
+// day in film order, each with its fix and track. 404 for a day with none.
+func footageDayHandler(w http.ResponseWriter, r *http.Request) {
+	day := mux.Vars(r)["day"]
+	if _, err := time.Parse(time.DateOnly, day); err != nil {
+		http.Error(w, `{"error":"bad day"}`, http.StatusBadRequest)
+		return
+	}
+	var vids []video.Video
+	err := database.GormDB().WithContext(r.Context()).
+		Where(footageDaySQL+" = ?::date", day).Order("slug").Find(&vids).Error
+	if err != nil {
+		logQueryFailure(r.Context(), "footage day failed", err, "day", day)
+		http.Error(w, `{"error":"couldn't read footage day"}`, http.StatusInternalServerError)
+		return
+	}
+	if len(vids) == 0 {
+		http.Error(w, `{"error":"no footage that day"}`, http.StatusNotFound)
+		return
+	}
+	writeInsights(w, r, footageDayResponse{Day: day, Clips: withTracks(r.Context(), vids)})
 }

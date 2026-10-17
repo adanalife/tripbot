@@ -237,3 +237,56 @@ func TestSourceHandler(t *testing.T) {
 		t.Errorf("season-1 slug: status = %d, want 400", rec.Code)
 	}
 }
+
+func footageGET(t *testing.T, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := mux.NewRouter()
+	r.Handle("/api/footage/days", http.HandlerFunc(footageDaysHandler)).Methods("GET")
+	r.Handle("/api/footage/days/{day}", http.HandlerFunc(footageDayHandler)).Methods("GET")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	return rec
+}
+
+// Days come off the slug's own clock for both cameras, so a season-2 clip at
+// 23:30 on the camera stays on its day whatever date_filmed says in UTC; a
+// slug of neither shape is on no day.
+func TestFootageDays(t *testing.T) {
+	db := testdb.New(t)
+	for _, q := range []string{
+		`INSERT INTO videos (id, slug, corpus, date_filmed) VALUES (2, '20260307233000_000009_s0120', 's2', '2026-03-08 06:30:00+00')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (1, '20260307154839_000001_s0000', 's2')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (3, '2018_0514_224801_013', 's1')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (4, 'odd-name', 's1')`,
+	} {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := footageGET(t, "/api/footage/days")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var days []footageDay
+	if err := json.Unmarshal(rec.Body.Bytes(), &days); err != nil {
+		t.Fatal(err)
+	}
+	if want := []footageDay{{"2018-05-14", 1}, {"2026-03-07", 2}}; !reflect.DeepEqual(days, want) {
+		t.Errorf("days = %+v, want %+v", days, want)
+	}
+
+	rec = footageGET(t, "/api/footage/days/2026-03-07")
+	var day footageDayResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &day); err != nil {
+		t.Fatal(err)
+	}
+	if len(day.Clips) != 2 || day.Clips[0].ID != 1 || day.Clips[1].ID != 2 {
+		t.Errorf("day clips = %+v, want ids 1 then 2", day.Clips)
+	}
+	if rec := footageGET(t, "/api/footage/days/2026-03-09"); rec.Code != http.StatusNotFound {
+		t.Errorf("empty day: status = %d, want 404", rec.Code)
+	}
+	if rec := footageGET(t, "/api/footage/days/march"); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad day: status = %d, want 400", rec.Code)
+	}
+}
