@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -158,10 +159,36 @@ type sourceClip struct {
 }
 
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
-// pipeline ingested from that original, in offset order.
+// pipeline ingested from that original, in offset order, and the ingested
+// originals either side of it in film order ("" at either end).
 type sourceResponse struct {
 	Stem  string       `json:"stem"`
 	Clips []sourceClip `json:"clips"`
+	Prev  string       `json:"prev"`
+	Next  string       `json:"next"`
+}
+
+// neighbourSourceSQL finds the nearest other ingested original before or after
+// a stem. A stem leads with the camera's clock, so slug order is film order;
+// left(slug, 21) is a piece's stem. ponytail: a scan of videos per page view,
+// a few thousand rows; an expression index on left(slug, 21) if it shows.
+const neighbourSourceSQL = `SELECT left(slug, 21) FROM videos
+WHERE slug ~ '^[0-9]{14}_[0-9]{6}_s' AND left(slug, 21) %s @stem
+ORDER BY slug %s LIMIT 1`
+
+func neighbourSource(ctx context.Context, stem string, after bool) (string, error) {
+	op, dir := "<", "DESC"
+	if after {
+		op, dir = ">", "ASC"
+	}
+	var out []string
+	err := database.GormDB().WithContext(ctx).
+		Raw(fmt.Sprintf(neighbourSourceSQL, op, dir), sql.Named("stem", stem)).
+		Scan(&out).Error
+	if err != nil || len(out) == 0 {
+		return "", err
+	}
+	return out[0], nil
 }
 
 // sourceHandler serves GET /api/sources/{stem}: the clips cut from one
@@ -188,5 +215,14 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"no clips from that source"}`, http.StatusNotFound)
 		return
 	}
-	writeInsights(w, r, sourceResponse{Stem: stem, Clips: clips})
+	resp := sourceResponse{Stem: stem, Clips: clips}
+	if resp.Prev, err = neighbourSource(r.Context(), stem, false); err == nil {
+		resp.Next, err = neighbourSource(r.Context(), stem, true)
+	}
+	if err != nil {
+		logQueryFailure(r.Context(), "source neighbours failed", err, "stem", stem)
+		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, resp)
 }

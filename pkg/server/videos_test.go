@@ -180,15 +180,18 @@ func sourceGET(t *testing.T, stem string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// One original's pieces, in offset order; a stem that differs by one digit
-// doesn't match through the LIKE wildcard, and an original with nothing
-// ingested yet is a 404.
+// One original's pieces, in offset order, with the ingested originals either
+// side in film order; a stem that differs by one digit doesn't match through
+// the LIKE wildcard, and an original with nothing ingested yet is a 404.
 func TestSourceHandler(t *testing.T) {
 	db := testdb.New(t)
 	for _, q := range []string{
 		`INSERT INTO videos (id, slug, corpus) VALUES (3, '20260501120000_000123_s0120', 's2')`,
 		`INSERT INTO videos (id, slug, corpus) VALUES (2, '20260501120000_000123_s0000', 's2')`,
 		`INSERT INTO videos (id, slug, corpus) VALUES (4, '20260501120000_010123_s0000', 's2')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (5, '20260430090000_000001_s0300', 's2fast')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (6, '20260430090000_000001_s0000', 's2fast')`,
+		`INSERT INTO videos (id, slug, corpus) VALUES (7, '2018_0514_224801_013', 's1')`,
 	} {
 		if err := db.Exec(q).Error; err != nil {
 			t.Fatal(err)
@@ -204,9 +207,18 @@ func TestSourceHandler(t *testing.T) {
 	}
 	want := sourceResponse{Stem: "20260501120000_000123", Clips: []sourceClip{
 		{2, "20260501120000_000123_s0000"}, {3, "20260501120000_000123_s0120"},
-	}}
+	}, Prev: "20260430090000_000001", Next: "20260501120000_010123"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+	// The first original has nothing before it; season 1 is never a neighbour.
+	rec = sourceGET(t, "20260430090000_000001")
+	got = sourceResponse{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Prev != "" || got.Next != "20260501120000_000123" {
+		t.Errorf("first source: prev %q next %q", got.Prev, got.Next)
 	}
 	if rec := sourceGET(t, "20260501120000_999999"); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown stem: status = %d, want 404", rec.Code)
