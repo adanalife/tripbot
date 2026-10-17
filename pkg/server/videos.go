@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -151,17 +152,48 @@ func videoHandler(w http.ResponseWriter, r *http.Request) {
 // sequence — which every piece cut from it carries as its slug's prefix.
 var s2Stem = regexp.MustCompile(`^\d{14}_\d{6}$`)
 
-// sourceClip is one piece of an original, as GET /api/sources/{stem} lists them.
+// sourceClip is one piece of an original, as GET /api/sources/{stem} lists
+// them: its fix and its track ([sec, lat, lng] like a clip's), so a page can
+// draw the whole original's route without asking per clip.
 type sourceClip struct {
-	ID   int    `json:"id"`
-	Slug string `json:"slug"`
+	ID    int          `json:"id"`
+	Slug  string       `json:"slug"`
+	Lat   float64      `json:"lat"`
+	Lng   float64      `json:"lng"`
+	Track [][3]float64 `json:"track"`
 }
 
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
-// pipeline ingested from that original, in offset order.
+// pipeline ingested from that original, in offset order, and the ingested
+// originals either side of it in film order ("" at either end).
 type sourceResponse struct {
 	Stem  string       `json:"stem"`
 	Clips []sourceClip `json:"clips"`
+	Prev  string       `json:"prev"`
+	Next  string       `json:"next"`
+}
+
+// neighbourSourceSQL finds the nearest other ingested original before or after
+// a stem. A stem leads with the camera's clock, so slug order is film order;
+// left(slug, 21) is a piece's stem. ponytail: a scan of videos per page view,
+// a few thousand rows; an expression index on left(slug, 21) if it shows.
+const neighbourSourceSQL = `SELECT left(slug, 21) FROM videos
+WHERE slug ~ '^[0-9]{14}_[0-9]{6}_s' AND left(slug, 21) %s @stem
+ORDER BY slug %s LIMIT 1`
+
+func neighbourSource(ctx context.Context, stem string, after bool) (string, error) {
+	op, dir := "<", "DESC"
+	if after {
+		op, dir = ">", "ASC"
+	}
+	var out []string
+	err := database.GormDB().WithContext(ctx).
+		Raw(fmt.Sprintf(neighbourSourceSQL, op, dir), sql.Named("stem", stem)).
+		Scan(&out).Error
+	if err != nil || len(out) == 0 {
+		return "", err
+	}
+	return out[0], nil
 }
 
 // sourceHandler serves GET /api/sources/{stem}: the clips cut from one
@@ -176,9 +208,15 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	// The stem's own underscore is escaped so LIKE matches it literally: the
 	// same pattern the pipeline's ingest reconciles a source's rows with.
 	pattern := strings.ReplaceAll(stem, "_", `\_`) + `\_s%`
-	clips := []sourceClip{}
-	err := database.GormDB().WithContext(r.Context()).Model(&video.Video{}).
-		Where("slug LIKE ?", pattern).Order("slug").Find(&clips).Error
+	var vids []video.Video
+	err := database.GormDB().WithContext(r.Context()).
+		Where("slug LIKE ?", pattern).Order("slug").Find(&vids).Error
+	clips := make([]sourceClip, 0, len(vids))
+	for _, v := range vids {
+		clips = append(clips, sourceClip{
+			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Track: trackOf(r.Context(), v),
+		})
+	}
 	if err != nil {
 		logQueryFailure(r.Context(), "source lookup failed", err, "stem", stem)
 		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
@@ -188,5 +226,14 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"no clips from that source"}`, http.StatusNotFound)
 		return
 	}
-	writeInsights(w, r, sourceResponse{Stem: stem, Clips: clips})
+	resp := sourceResponse{Stem: stem, Clips: clips}
+	if resp.Prev, err = neighbourSource(r.Context(), stem, false); err == nil {
+		resp.Next, err = neighbourSource(r.Context(), stem, true)
+	}
+	if err != nil {
+		logQueryFailure(r.Context(), "source neighbours failed", err, "stem", stem)
+		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, resp)
 }
