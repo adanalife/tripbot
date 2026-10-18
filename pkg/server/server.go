@@ -144,6 +144,8 @@ func (s *Server) Start(ctx context.Context) error {
 	// the footage calendar: every filmed day, and one day's clips.
 	r.Handle("/api/footage/days", tagged("/api/footage/days", footageDaysHandler)).Methods("GET")
 	r.Handle("/api/footage/days/{day}", tagged("/api/footage/days/{day}", footageDayHandler)).Methods("GET")
+	// every season-2 piece auto-trim or a reviewer dropped whole.
+	r.Handle("/api/footage/dropped", tagged("/api/footage/dropped", footageDroppedHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
