@@ -330,6 +330,38 @@ type footageDay struct {
 	Clips int    `json:"clips"`
 }
 
+// droppedCut is one piece dropped whole, as GET /api/footage/dropped lists
+// them: its cut row, and the clip it aired as (0 when it never did — a piece a
+// reviewer kept after auto-trim proposed the drop has one).
+type droppedCut struct {
+	Slug     string          `json:"slug"`
+	Proposal json.RawMessage `json:"proposal"`
+	Ruling   json.RawMessage `json:"ruling"`
+	VideoID  int             `json:"video_id"`
+}
+
+// droppedSQL lists the pieces either auto-trim or a reviewer ruled out whole,
+// newest footage first (a slug leads with the camera's clock).
+// ponytail: a scan of video_cuts per call, a row per season-2 piece; an
+// expression index on the verdicts if it shows.
+const droppedSQL = `SELECT c.slug, c.proposal, c.ruling, COALESCE(v.id, 0) AS video_id
+FROM video_cuts c LEFT JOIN videos v ON v.slug = c.slug
+WHERE c.proposal->>'verdict' = 'drop' OR c.ruling->>'verdict' = 'drop'
+ORDER BY c.slug DESC`
+
+// footageDroppedHandler serves GET /api/footage/dropped: every season-2 piece
+// dropped whole by auto-trim's proposal or a reviewer's ruling, for the
+// console's dropped-clips page.
+func footageDroppedHandler(w http.ResponseWriter, r *http.Request) {
+	cuts := []droppedCut{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(droppedSQL).Scan(&cuts).Error; err != nil {
+		logQueryFailure(r.Context(), "dropped pieces failed", err)
+		http.Error(w, `{"error":"couldn't read dropped pieces"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, cuts)
+}
+
 // footageDaysHandler serves GET /api/footage/days: every day with footage,
 // oldest first, for the console's calendar.
 // ponytail: a scan of videos per call, a few thousand rows.

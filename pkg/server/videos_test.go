@@ -269,6 +269,7 @@ func footageGET(t *testing.T, path string) *httptest.ResponseRecorder {
 	r := mux.NewRouter()
 	r.Handle("/api/footage/days", http.HandlerFunc(footageDaysHandler)).Methods("GET")
 	r.Handle("/api/footage/days/{day}", http.HandlerFunc(footageDayHandler)).Methods("GET")
+	r.Handle("/api/footage/dropped", http.HandlerFunc(footageDroppedHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
@@ -314,5 +315,42 @@ func TestFootageDays(t *testing.T) {
 	}
 	if rec := footageGET(t, "/api/footage/days/march"); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad day: status = %d, want 400", rec.Code)
+	}
+}
+
+// A piece is listed when either auto-trim or a reviewer dropped it whole,
+// newest footage first, with the clip it aired as when a reviewer kept it.
+func TestFootageDropped(t *testing.T) {
+	db := testdb.New(t)
+	for _, q := range []string{
+		`INSERT INTO videos (id, slug, corpus) VALUES (9, '20260502080000_000124_s0180', 's2')`,
+		`INSERT INTO video_cuts (slug, proposal, ruling) VALUES
+		 ('20260501120000_000123_s0000', '{"verdict":"drop"}', NULL),
+		 ('20260501120000_000123_s0180', '{"verdict":"trim"}', NULL),
+		 ('20260502080000_000124_s0000', '{"verdict":"keep"}', '{"verdict":"drop"}'),
+		 ('20260502080000_000124_s0180', '{"verdict":"drop"}', '{"verdict":"keep"}')`,
+	} {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := footageGET(t, "/api/footage/dropped")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got []droppedCut
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	var slugs []string
+	for _, c := range got {
+		slugs = append(slugs, c.Slug)
+	}
+	want := []string{"20260502080000_000124_s0180", "20260502080000_000124_s0000", "20260501120000_000123_s0000"}
+	if !reflect.DeepEqual(slugs, want) {
+		t.Fatalf("slugs = %v, want %v", slugs, want)
+	}
+	if got[0].VideoID != 9 || got[1].VideoID != 0 || !strings.Contains(string(got[1].Ruling), "drop") {
+		t.Errorf("got %+v", got)
 	}
 }
