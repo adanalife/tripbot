@@ -206,10 +206,20 @@ func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
 	return clips
 }
 
+// sourceCut is one piece of an original as auto-trim proposed it and, once
+// someone has, as the reviewer ruled it — video_cuts' row, passed through as
+// the pipeline wrote it (the proposal and ruling shapes are video-pipeline's).
+type sourceCut struct {
+	Slug     string          `json:"slug"`
+	Proposal json.RawMessage `json:"proposal"`
+	Ruling   json.RawMessage `json:"ruling"`
+}
+
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
 // pipeline ingested from that original, in offset order, the ingested
 // originals either side of it in film order ("" at either end), the corpus
-// its clips share, and every airing of any of them on any platform.
+// its clips share, every airing of any of them on any platform, and every
+// piece's proposed cuts, dropped pieces included.
 type sourceResponse struct {
 	Stem   string       `json:"stem"`
 	Corpus string       `json:"corpus"`
@@ -217,6 +227,7 @@ type sourceResponse struct {
 	Plays  int64        `json:"plays"`
 	Prev   string       `json:"prev"`
 	Next   string       `json:"next"`
+	Cuts   []sourceCut  `json:"cuts"`
 }
 
 // ponytail: like videoPlaysSQL, a scan of video_plays — one page view, not a
@@ -247,8 +258,9 @@ func neighbourSource(ctx context.Context, stem string, after bool) (string, erro
 }
 
 // sourceHandler serves GET /api/sources/{stem}: the clips cut from one
-// original, so the console's pipeline grid can open a source once it has
-// been ingested. 404 until the first piece lands.
+// original and its pieces' proposed cuts, so the console's pipeline grid can
+// open a source once it has been ingested. 404 until the first piece lands or
+// the pipeline records its cuts.
 func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	stem := mux.Vars(r)["stem"]
 	if !s2Stem.MatchString(stem) {
@@ -262,16 +274,25 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	err := database.GormDB().WithContext(r.Context()).
 		Where("slug LIKE ?", pattern).Order("slug").Find(&vids).Error
 	clips := withTracks(r.Context(), vids)
+	cuts := []sourceCut{}
+	if err == nil {
+		err = database.GormDB().WithContext(r.Context()).
+			Raw(`SELECT slug, proposal, ruling FROM video_cuts WHERE slug LIKE ? ORDER BY slug`, pattern).
+			Scan(&cuts).Error
+	}
 	if err != nil {
 		logQueryFailure(r.Context(), "source lookup failed", err, "stem", stem)
 		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
 		return
 	}
-	if len(clips) == 0 {
+	if len(clips) == 0 && len(cuts) == 0 {
 		http.Error(w, `{"error":"no clips from that source"}`, http.StatusNotFound)
 		return
 	}
-	resp := sourceResponse{Stem: stem, Corpus: vids[0].Corpus, Clips: clips}
+	resp := sourceResponse{Stem: stem, Clips: clips, Cuts: cuts}
+	if len(vids) > 0 {
+		resp.Corpus = vids[0].Corpus
+	}
 	ids := make([]int, len(vids))
 	for i, v := range vids {
 		ids[i] = v.ID
