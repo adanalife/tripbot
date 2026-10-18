@@ -207,6 +207,10 @@ func TestSourceHandler(t *testing.T) {
 		`INSERT INTO videos (id, slug, corpus) VALUES (7, '2018_0514_224801_013', 's1')`,
 		`INSERT INTO video_plays (platform, video_id, started_at) VALUES
 		 ('twitch', 2, now()), ('twitch', 3, now()), ('youtube', 3, now()), ('twitch', 4, now())`,
+		`INSERT INTO video_cuts (slug, proposal, ruling) VALUES
+		 ('20260501120000_000123_s0000', '{"verdict":"keep"}', NULL),
+		 ('20260501120000_000123_s0300', '{"verdict":"drop"}', '{"verdict":"drop"}'),
+		 ('20260502080000_000124_s0000', '{"verdict":"drop"}', NULL)`,
 	} {
 		if err := db.Exec(q).Error; err != nil {
 			t.Fatal(err)
@@ -226,8 +230,22 @@ func TestSourceHandler(t *testing.T) {
 			Place: "Albuquerque, New Mexico", RecordedAt: "2026-05-01T12:02:00Z", RecordedAtUTC: "2026-05-01T18:02:00Z",
 			Track: [][3]float64{{0, 35.1, -106.6}, {20, 35.2, -106.7}}},
 	}, Plays: 3, Prev: "20260430090000_000001", Next: "20260501120000_010123"}
+	// A dropped piece has a cut row and no clip; the cuts are checked apart
+	// because jsonb hands back its own spacing.
+	cuts := got.Cuts
+	got.Cuts = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+	if len(cuts) != 2 || cuts[0].Slug != "20260501120000_000123_s0000" || cuts[1].Slug != "20260501120000_000123_s0300" {
+		t.Fatalf("cuts = %+v", cuts)
+	}
+	if string(cuts[0].Ruling) != "null" || !strings.Contains(string(cuts[1].Ruling), `"drop"`) {
+		t.Errorf("rulings = %s, %s", cuts[0].Ruling, cuts[1].Ruling)
+	}
+	// Every piece of a source dropped: no clips, still its cuts.
+	if rec := sourceGET(t, "20260502080000_000124"); rec.Code != http.StatusOK {
+		t.Errorf("all-dropped source: status = %d, want 200", rec.Code)
 	}
 	// The first original has nothing before it; season 1 is never a neighbour.
 	rec = sourceGET(t, "20260430090000_000001")
