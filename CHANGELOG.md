@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.37.0] — 2026-10-18
+
+### Console / API
+
+- Add your info here ([#1706](https://github.com/adanalife/tripbot/pull/1706))
+- GET /api/footage/dropped lists every season-2 piece auto-trim or a reviewer dropped whole, newest first, with the clip it aired as when a reviewer kept it. ([#1708](https://github.com/adanalife/tripbot/pull/1708))
+
 ## [v5.36.0] — 2026-10-17
 
 ### Console / API
