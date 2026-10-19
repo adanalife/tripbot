@@ -1755,7 +1755,7 @@ func TestLastMonthCmd_FlagOff_SkipsGuessr(t *testing.T) {
 }
 
 func TestTimeCmd_ReadsThePlayheadAtTheClipsSpeed(t *testing.T) {
-	// 18:30 UTC start; 10 clip-minutes into a 6x clip is an hour of road.
+	// 18:30 on the camera; 10 clip-minutes into a 6x clip is an hour of road.
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Date(2026, 6, 15, 18, 30, 0, 0, time.UTC))
 	vid.Speed = 6
 	app := newTestApp(vid)
@@ -1764,8 +1764,9 @@ func TestTimeCmd_ReadsThePlayheadAtTheClipsSpeed(t *testing.T) {
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
-	// Colorado is UTC-6 in June: 19:30 UTC reads 1:30pm.
-	if !strings.Contains(out(), "1:30pm") {
-		t.Errorf("expected the playhead's 1:30pm, got %q", out())
+	// date_filmed is the camera's wall clock, so the hour later reads 7:30pm
+	// local — not 1:30pm, which is that clock misread as UTC.
+	if got := out(); !strings.Contains(got, "7:30pm") {
+		t.Errorf("expected the playhead's 7:30pm, got %q", got)
 	}
 }

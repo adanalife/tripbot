@@ -1,0 +1,1 @@
+`!time`, `!sunset`, `!daytime` and the location rotator's date, sunset and weather now read a clip's filmed time as the dashcam's own clock in the zone where it was filmed. They were treating that clock as UTC, so every answer was off by the zone offset — a 7:30pm clip in Colorado read as 1:30pm.
