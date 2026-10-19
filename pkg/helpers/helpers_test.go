@@ -62,35 +62,60 @@ func TestStripAtSign(t *testing.T) {
 }
 
 func TestActualDate(t *testing.T) {
-	utc := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
-	got := ActualDate(utc, 40.7128, -74.0060)
+	// date_filmed holds the dashcam's wall clock labelled UTC: noon on the
+	// camera in New York is 12:00 EDT, which is 16:00Z.
+	filmed := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	got := ActualDate(filmed, 40.7128, -74.0060)
 	if got.Location().String() != "America/New_York" {
 		t.Fatalf("expected America/New_York timezone, got %s", got.Location().String())
 	}
-	if !got.Equal(utc) {
-		t.Fatalf("instant changed: got %v, want %v", got, utc)
+	if h, m, _ := got.Clock(); h != 12 || m != 0 {
+		t.Errorf("clock = %02d:%02d, want the camera's 12:00", h, m)
+	}
+	if want := time.Date(2024, 6, 15, 16, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Errorf("instant = %v, want %v", got.UTC(), want)
+	}
+}
+
+func TestActualDateOutsideAnyZone(t *testing.T) {
+	filmed := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	if got := ActualDate(filmed, 0, -140); !got.Equal(filmed) {
+		t.Errorf("open ocean: got %v, want the stored clock as UTC", got)
 	}
 }
 
 func TestIsDaytime(t *testing.T) {
-	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
+	lat, lon := 40.7128, -74.0060 // New York
 
-	// 12:00 UTC on July 4 is 08:00 EDT — well after sunrise, well before sunset.
-	if !IsDaytime(time.Date(2024, 7, 4, 12, 0, 0, 0, time.UTC), lat, lon) {
-		t.Error("expected 08:00 EDT to be daytime")
+	// The camera's clocks, local to New York.
+	if !IsDaytime(time.Date(2024, 7, 4, 8, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 08:00 to be daytime")
 	}
-	// 02:00 UTC on July 5 is 22:00 EDT on July 4 — after sunset.
-	if IsDaytime(time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), lat, lon) {
-		t.Error("expected 22:00 EDT to be nighttime")
+	if IsDaytime(time.Date(2024, 7, 4, 22, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 22:00 to be nighttime")
+	}
+	// 19:00 in July is before New York's ~20:30 sunset. Read as a UTC instant
+	// it would be 15:00 local — daytime either way — so check the evening the
+	// old reading got wrong: 21:30 is dark locally but was 17:30 as UTC.
+	if IsDaytime(time.Date(2024, 7, 4, 21, 30, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 21:30 to be nighttime (after sunset)")
+	}
+	// And the morning: 05:00 is before the ~05:30 sunrise, but was 01:00 the
+	// previous night as UTC.
+	if IsDaytime(time.Date(2024, 7, 4, 5, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 05:00 to be before sunrise")
+	}
+	if !IsDaytime(time.Date(2024, 7, 4, 19, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 19:00 to be daytime")
 	}
 }
 
 func TestLocalDate(t *testing.T) {
-	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
+	lat, lon := 40.7128, -74.0060 // New York
 
-	// 02:00 UTC on July 5 is 22:00 EDT on July 4 — the local calendar day is
-	// the 4th, not the 5th the UTC instant falls on.
-	got := LocalDate(time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), lat, lon)
+	// 22:00 on the camera on July 4 is July 4 locally, even though the real
+	// instant (02:00Z) falls on the 5th.
+	got := LocalDate(time.Date(2024, 7, 4, 22, 0, 0, 0, time.UTC), lat, lon)
 	if y, m, d := got.Date(); y != 2024 || m != time.July || d != 4 {
 		t.Errorf("LocalDate = %04d-%02d-%02d, want 2024-07-04", y, m, d)
 	}
@@ -102,16 +127,26 @@ func TestLocalDate(t *testing.T) {
 func TestSunsetStrFutureAndPast(t *testing.T) {
 	lat, lon := 40.7128, -74.0060
 
-	morningUTC := time.Date(2024, 7, 4, 12, 0, 0, 0, time.UTC)
-	got := SunsetStr(morningUTC, lat, lon)
+	got := SunsetStr(time.Date(2024, 7, 4, 8, 0, 0, 0, time.UTC), lat, lon)
 	if !strings.HasPrefix(got, "Sunset on this day is in") {
 		t.Fatalf("expected future-tense sunset, got %q", got)
 	}
 
-	nightUTC := time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC)
-	got = SunsetStr(nightUTC, lat, lon)
+	got = SunsetStr(time.Date(2024, 7, 4, 22, 0, 0, 0, time.UTC), lat, lon)
 	if !strings.HasPrefix(got, "Sunset on this day was") || !strings.HasSuffix(got, "ago") {
 		t.Fatalf("expected past-tense sunset, got %q", got)
+	}
+}
+
+func TestSunsetAtIsLocalEvening(t *testing.T) {
+	// New York's sunset on July 4 is ~20:31 EDT; formatted, it must read as an
+	// evening clock time in the filming zone, not a UTC one.
+	got := SunsetAt(time.Date(2024, 7, 4, 12, 0, 0, 0, time.UTC), 40.7128, -74.0060)
+	if got.Location().String() != "America/New_York" {
+		t.Fatalf("zone = %s, want America/New_York", got.Location())
+	}
+	if h := got.Hour(); h != 20 {
+		t.Errorf("sunset hour = %d, want 20 (local)", h)
 	}
 }
 

@@ -38,17 +38,27 @@ func GoogleMapsURL(lat, long float64) string {
 	return fmt.Sprintf("https://maps.google.com/?q=%.5f%%2C%.5f&ll=%.5f%%2C%.5f&z=5", lat, long, lat, long)
 }
 
-func ActualDate(utcDate time.Time, lat, long float64) time.Time {
-	timezone := latlong.LookupZoneName(lat, long)
-	location, err := time.LoadLocation(timezone)
+// ActualDate turns a stored date_filmed into the real moment it was filmed.
+// date_filmed carries the dashcam's wall clock with a UTC label and no zone
+// conversion, so its clock fields are read as local time in the zone at
+// lat/long; the result keeps that zone, so formatting it shows the clock the
+// footage itself shows. A point in no zone (open ocean) reads as UTC.
+func ActualDate(filmed time.Time, lat, long float64) time.Time {
+	return time.Date(filmed.Year(), filmed.Month(), filmed.Day(),
+		filmed.Hour(), filmed.Minute(), filmed.Second(), filmed.Nanosecond(),
+		zoneAt(lat, long))
+}
+
+func zoneAt(lat, long float64) *time.Location {
+	location, err := time.LoadLocation(latlong.LookupZoneName(lat, long))
 	if err != nil {
 		panic(err)
 	}
-	return utcDate.In(location)
+	return location
 }
 
-func SunsetStr(utcDate time.Time, lat, lon float64) string {
-	realDate := ActualDate(utcDate, lat, lon)
+func SunsetStr(filmed time.Time, lat, lon float64) string {
+	realDate := ActualDate(filmed, lat, lon)
 	_, sunset := sunriseSunset(realDate, lat, lon)
 	dateDiff := sunset.Sub(realDate)
 	if dateDiff < 0 {
@@ -97,38 +107,42 @@ func pluralize(n int, unit string) string {
 	return fmt.Sprintf("%d %ss", n, unit)
 }
 
-// SunsetAt returns the moment the sun set on the day utcDate was filmed, in the
+// SunsetAt returns the moment the sun set on the day filmed was filmed, in the
 // timezone of the filming location — so formatting it yields a clock time a
 // viewer of that footage would recognise. Backs the rotators' $sunset variable,
 // where a clock time reads better than SunsetStr's relative phrasing.
-func SunsetAt(utcDate time.Time, lat, lon float64) time.Time {
-	_, sunset := sunriseSunset(ActualDate(utcDate, lat, lon), lat, lon)
+func SunsetAt(filmed time.Time, lat, lon float64) time.Time {
+	_, sunset := sunriseSunset(ActualDate(filmed, lat, lon), lat, lon)
 	return sunset
 }
 
-// IsDaytime reports whether the moment utcDate, filmed at lat/long, fell
+// IsDaytime reports whether the moment filmed, at lat/long, fell
 // between that day's sunrise and sunset there — i.e. it's daylight footage.
 // Backs the !daytime "skip to the next morning" jump.
-func IsDaytime(utcDate time.Time, lat, long float64) bool {
-	realDate := ActualDate(utcDate, lat, long)
+func IsDaytime(filmed time.Time, lat, long float64) bool {
+	realDate := ActualDate(filmed, lat, long)
 	rise, set := sunriseSunset(realDate, lat, long)
 	return realDate.After(rise) && realDate.Before(set)
 }
 
-// LocalDate returns utcDate localized to lat/long and truncated to midnight —
+// LocalDate returns filmed localized to lat/long and truncated to midnight —
 // the calendar day the footage belongs to at its filming location. !daytime
 // uses it to tell "the following day" from the current clip's day.
-func LocalDate(utcDate time.Time, lat, long float64) time.Time {
-	d := ActualDate(utcDate, lat, long)
+func LocalDate(filmed time.Time, lat, long float64) time.Time {
+	d := ActualDate(filmed, lat, long)
 	return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 }
 
-func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
+// sunriseSunset returns sunrise and sunset on local's calendar day at lat/long,
+// in the zone there. The sunrise package answers with real UTC instants, so
+// they're moved into the zone rather than read as a wall clock.
+func sunriseSunset(local time.Time, lat, long float64) (time.Time, time.Time) {
 	rise, set := sunrise.SunriseSunset(
 		lat, long,
-		utcDate.Year(), utcDate.Month(), utcDate.Day(),
+		local.Year(), local.Month(), local.Day(),
 	)
-	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
+	zone := zoneAt(lat, long)
+	return rise.In(zone), set.In(zone)
 }
 
 // TODO: remove this and all darwin-only support
