@@ -72,16 +72,18 @@ var defaultLeftMessages = []Message{
 var defaultPromoLeftMessages = []Message{
 	{Text: "🎁 Send a gift → warp us to a random moment", Platforms: []string{PlatformTikTok}, Weight: 3},
 	{Text: "Gift the stream, change what's on screen", Platforms: []string{PlatformTikTok}, Weight: 2},
-	{Text: "Interactive chat is coming to YouTube soon", Platforms: []string{PlatformYouTube}},
 	{Text: "Somewhere on a road across America"},
 	{Text: "Every mile of this was actually driven"},
 }
 
 // defaultRightMessages are the command-hint lines for the right corner. All are
-// platform-neutral (!location and !timewarp are both in the YouTube allowlist).
-// Weight 2 makes the follow and !location hints twice as likely as the rest.
+// platform-neutral (!location and !timewarp are both in the YouTube allowlist)
+// except the own-platform call to action, worded in each platform's verb as in
+// defaultPromoRightMessages. Weight 2 makes that and the !location hint twice as
+// likely as the rest.
 var defaultRightMessages = []Message{
-	{Text: "Don't forget to follow :)", Weight: 2},
+	{Text: "Don't forget to follow :)", Platforms: []string{PlatformTwitch, PlatformFacebook, PlatformTikTok, PlatformInstagram}, Weight: 2},
+	{Text: "Don't forget to subscribe :)", Platforms: []string{PlatformYouTube}, Weight: 2},
 	{Text: "Try running `!location`", Weight: 2},
 	{Text: "Try running `!timewarp`"},
 	{Text: "Streaming 24 hours a day"},

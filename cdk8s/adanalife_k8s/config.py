@@ -183,11 +183,10 @@ class EnvConfig:
     # YOUTUBE_INBOUND_ENABLED + onscreens' rotator copy). False = bot-less
     # YouTube: outbound rotators + background jobs run, but nothing reads chat
     # (no command responds) and the rotators advertise promo copy pointing at
-    # Twitch instead of commands. Prod launches bot-less while the YouTube Data
-    # API quota extension is pending — prod's 2s poll floor would blow the
-    # default 10k/day quota. Flip to True the day the extension lands. Stage
-    # stays True: its 10s floor fits the default quota, so it runs the full bot
-    # for testing. Only meaningful on a youtube instance.
+    # Twitch instead of commands. The lever for when the project's Data API
+    # quota can't carry the poll: prod's 2s floor projects ~43k units/day on a
+    # chat-busy day, against a default quota of 10k. Only meaningful on a
+    # youtube instance.
     youtube_inbound_enabled: bool = True
 
     def tag_for(self, component: str) -> str:
@@ -279,8 +278,8 @@ ENVS: dict[str, EnvConfig] = {
         # Every platform's app stack (tripbot / onscreens) is emitted and Argo
         # manages it, but births parked at replicas:0 — a console scale-up brings
         # one live (Argo ignores .spec.replicas, so the scale sticks). Only twitch
-        # runs today; youtube waits on the pending Data API quota extension
-        # (youtube_inbound_enabled below), and facebook streams to the real ADL
+        # runs today; youtube runs whenever it holds the second encoder slot,
+        # and facebook streams to the real ADL
         # Page once scaled up (gateway-facebook holds the Page token). Manifests
         # render while parked — e.g. the tripbot-youtube-creds ExternalSecret
         # (prod-account SM k8s/tripbot/youtube-creds) keeps syncing, which
@@ -288,10 +287,6 @@ ENVS: dict[str, EnvConfig] = {
         # (born parked); they wait on the 9:16 vertical scene + stream keys before
         # a console scale-up can bring them live.
         platforms=SUPPORTED_PLATFORMS,
-        # prod youtube launches bot-less: inbound chat poll off (quota extension
-        # pending), so rotators serve promo copy and no command responds. Flip to
-        # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
-        youtube_inbound_enabled=False,
         # Route prod tripbot-youtube's outbound chat sends through the in-namespace
         # gateway-youtube (the gateway owns the YouTube token). Mirrors stage.
         # Sends fail if the prod gateway is missing its YouTube token.

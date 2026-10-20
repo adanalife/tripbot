@@ -85,8 +85,7 @@ type TripbotConfig struct {
 	// running, but nothing reads chat, so no command can respond. When false the
 	// chatbot also swaps its rotating Chatter/!help copy from command ads to
 	// promotional lines (see pkg/chatbot enabledHelpMessages) — advertising a
-	// command nobody can run reads as a broken bot. Flip to true the day the
-	// YouTube Data API quota extension lands. No effect on Twitch.
+	// command nobody can run reads as a broken bot. No effect on Twitch.
 	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
 
 	// FacebookAPIURL points a PLATFORM=facebook instance at the platform-gateway
