@@ -64,11 +64,16 @@ func NewPlayer(cfg *c.TripbotConfig, onscreens onscreens, playout *playoutClient
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
 
+	// figure out what's currently playing; a failed poll keeps the previous
+	// video rather than reading as a switch to nothing
+	vid, err := p.playout.CurrentlyPlaying(ctx)
+	if err != nil {
+		return
+	}
+
 	// save the video we used last time
 	p.preVid = p.curVid
-
-	// figure out what's currently playing
-	p.curVid = p.playout.CurrentlyPlaying(ctx)
+	p.curVid = vid
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {

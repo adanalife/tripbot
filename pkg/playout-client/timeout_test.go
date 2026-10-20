@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -42,5 +43,20 @@ func TestGetTimesOutOnHangingServer(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("get blocked past the client timeout")
+	}
+}
+
+// A non-200 answer is an error page, not a filename: it must come back as a
+// failed poll rather than a clip called "Internal Server Error".
+func TestCurrentlyPlayingNon200IsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := New(strings.TrimPrefix(srv.URL, "http://"), nil, "test", "twitch")
+	got, err := c.CurrentlyPlaying(context.Background())
+	if err == nil {
+		t.Fatalf("CurrentlyPlaying on a 500 = (%q, nil), want an error", got)
 	}
 }
