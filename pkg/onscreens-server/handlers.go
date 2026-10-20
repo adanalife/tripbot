@@ -16,14 +16,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-// catchAllHandler 404s unknown routes for visibility.
+// catchAllHandler 404s unknown routes for visibility, whatever the method.
 func catchAllHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		http.Error(w, "404 not found", http.StatusNotFound)
-		slog.InfoContext(r.Context(), "404 GET", "path", r.URL.Path)
-		return
-	default:
-		fmt.Fprintf(w, "Only GET methods are supported.\n")
-	}
+	http.Error(w, "404 not found", http.StatusNotFound)
+	slog.InfoContext(r.Context(), "404 "+r.Method, "path", r.URL.Path)
 }
