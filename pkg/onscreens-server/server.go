@@ -15,7 +15,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
@@ -170,7 +169,7 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
-	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
+	app.Use(httpmw.NewSentry())
 
 	app.UseHandler(r)
 
