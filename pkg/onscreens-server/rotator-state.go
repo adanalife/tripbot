@@ -26,6 +26,17 @@ func EnsureRotatorConfigStream(ctx context.Context, js jetstream.JetStream, env 
 		[]string{oe.RotatorConfigWildcard(env)})
 }
 
+// EnsureStreams declares the JetStream streams this server persists overlay
+// state to. Run on every NATS (re)connect: a restart that wiped NATS storage
+// would otherwise leave every later persist captured by no stream.
+func (s *Server) EnsureStreams(ctx context.Context) error {
+	js := natsclient.JetStream()
+	if err := EnsureMiddleStateStream(ctx, js, s.cfg.Environment); err != nil {
+		return err
+	}
+	return EnsureRotatorConfigStream(ctx, js, s.cfg.Environment)
+}
+
 // handleRotatorConfig applies copy pushed from tripbot when the console saves.
 // Strict about decoding (a malformed body is a publisher bug, not an intent) but
 // lenient about content: an empty pool is a legitimate edit for a platform that

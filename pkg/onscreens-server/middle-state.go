@@ -21,7 +21,8 @@ import (
 const middleStateStreamName = "TRIPBOT_ONSCREENS_MIDDLE"
 
 // EnsureMiddleStateStream idempotently declares the middle-text state stream.
-// Call it once at startup before the first show/hide is handled — a core
+// Call it at startup before the first show/hide is handled, and after every
+// NATS reconnect (a restart can wipe the stream) — a core
 // publish to a subject no stream covers is silently uncaptured, so the stream
 // has to exist before the first command for restore-on-restart to have
 // anything to read. No-op when js is nil (NATS off / JetStream unavailable);

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -41,4 +42,40 @@ func EnsureLastValueStream(ctx context.Context, js jetstream.JetStream, name, de
 	}
 	slog.InfoContext(ctx, "jetstream stream ensured", "stream", name)
 	return nil
+}
+
+// Stream declares are retried this many times, the wait doubling from
+// declareRetryBase: about 30s in all, which covers JetStream still recovering
+// its store right after a NATS restart without pinning a callback goroutine
+// for long.
+const (
+	declareAttempts  = 6
+	declareRetryBase = time.Second
+)
+
+// RetryDeclare runs a stream declare until it succeeds, giving up after a
+// bounded backoff or when ctx ends, and returns the last error. Meant for the
+// on-connect callbacks, where a declare fails while JetStream is still coming
+// up and the next chance would otherwise be the next reconnect.
+func RetryDeclare(ctx context.Context, declare func(context.Context) error) error {
+	return retry(ctx, declareAttempts, declareRetryBase, declare)
+}
+
+func retry(ctx context.Context, attempts int, wait time.Duration, fn func(context.Context) error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = fn(ctx); err == nil {
+			return nil
+		}
+		if i == attempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(wait):
+		}
+		wait *= 2
+	}
+	return err
 }
