@@ -3,6 +3,7 @@ package watchdog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -359,6 +360,89 @@ func TestRestartBroadcastStopFailureSkipsTheStart(t *testing.T) {
 		}
 		if got := c.sequence(); got != "stop" {
 			t.Fatalf("OBS calls = %q, want stop only", got)
+		}
+	})
+}
+
+// unconfirmedStop is what stopOBSOutput returns when OBS accepted the stop but
+// the output was never seen going down.
+func unconfirmedStop(cause error) error {
+	return fmt.Errorf("%w: %w", errStopUnconfirmed, cause)
+}
+
+// A stop OBS accepted but never finished still gets a start: the watchdog reads
+// a stopped output as the operator's and stands down, so ending the restart
+// there would leave the stream dark.
+func TestRestartOBSOutputStartsAfterAnUnconfirmedStop(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := fakeOBS(t, unconfirmedStop(errors.New("obs output still active 30s after StopStream")))
+		if err := RestartOBSOutput(t.Context()); err != nil {
+			t.Fatalf("RestartOBSOutput = %v, want nil", err)
+		}
+		if got := c.sequence(); got != "stop,start" {
+			t.Fatalf("OBS calls = %q, want stop,start", got)
+		}
+	})
+}
+
+// A caller cancelled mid-restart still gets the output back, on a context of
+// its own that startTimeout bounds.
+func TestRestartOBSOutputStartsAfterTheCallerCancels(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		c := fakeOBS(t, unconfirmedStop(ctx.Err()))
+		if err := RestartOBSOutput(ctx); err != nil {
+			t.Fatalf("RestartOBSOutput = %v, want nil", err)
+		}
+		if got := c.sequence(); got != "stop,start" {
+			t.Fatalf("OBS calls = %q, want stop,start", got)
+		}
+		if _, ok := c.startCtx.Deadline(); !ok {
+			t.Fatal("start ran with no deadline, want startTimeout bounding it")
+		}
+	})
+}
+
+// A stop OBS never accepted means the output is still up: nothing to start.
+func TestRestartOBSOutputStopFailureSkipsTheStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopErr := errors.New("obs: connection refused")
+		c := fakeOBS(t, stopErr)
+		if err := RestartOBSOutput(t.Context()); !errors.Is(err, stopErr) {
+			t.Fatalf("RestartOBSOutput = %v, want it to wrap %v", err, stopErr)
+		}
+		if got := c.sequence(); got != "stop" {
+			t.Fatalf("OBS calls = %q, want stop only", got)
+		}
+	})
+}
+
+// A broadcast restart whose stop was never confirmed starts the output without
+// waiting on the platform, and reports both failures if the start fails too.
+func TestRestartBroadcastStartsAfterAnUnconfirmedStop(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		stopErr := unconfirmedStop(ctx.Err())
+		c := fakeOBS(t, stopErr)
+		live := func(context.Context) (bool, error) {
+			t.Fatal("live-check ran after an unconfirmed stop")
+			return false, nil
+		}
+		if err := RestartBroadcast(ctx, live); err != nil {
+			t.Fatalf("RestartBroadcast = %v, want nil", err)
+		}
+		if got := c.sequence(); got != "stop,start" {
+			t.Fatalf("OBS calls = %q, want stop,start", got)
+		}
+
+		startErr := errors.New("obs: OutputRunning")
+		fakeOBS(t, stopErr)
+		startOBSOutput = func(context.Context) error { return startErr }
+		err := RestartBroadcast(ctx, live)
+		if !errors.Is(err, errStopUnconfirmed) || !errors.Is(err, startErr) {
+			t.Fatalf("RestartBroadcast = %v, want it to carry both the stop and start errors", err)
 		}
 	})
 }

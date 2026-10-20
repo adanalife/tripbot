@@ -12,6 +12,7 @@ package watchdog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -77,34 +78,21 @@ func DefaultWatchdogDeps() WatchdogDeps {
 // platform whose recovery replaces Restart still needs the push itself
 // re-established afterwards.
 //
-// One connection is held across stop, poll and start: the poll asks every
-// stopPoll for up to stopTimeout, so a per-call dial would mean up to 60
-// WebSocket connect+auth handshakes against an OBS that is already wedged —
-// which is the whole reason this runs. A connection that drops mid-restart
-// fails the restart; the watchdog's next tick starts over.
+// One connection is held across the stop and the poll that waits it out: the
+// poll asks every stopPoll for up to stopTimeout, so a per-call dial would mean
+// up to 60 WebSocket connect+auth handshakes against an OBS that is already
+// wedged — which is the whole reason this runs.
+//
+// Once OBS has accepted the stop, the start always runs, even when the stop is
+// never seen to finish or ctx is cancelled: the watchdog reads a stopped output
+// as one the operator stopped and stands down, so a restart that ended there
+// would leave the stream dark with nothing left to start it.
 func RestartOBSOutput(ctx context.Context) error {
-	client, err := obs.Dial(ctx)
-	if err != nil {
-		return err
+	stopErr := stopOBSOutput(ctx)
+	if stopErr != nil && !errors.Is(stopErr, errStopUnconfirmed) {
+		return stopErr
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
-	if err := obs.StopStreamOn(client); err != nil {
-		return err
-	}
-	active := func(context.Context) (bool, error) { return obs.StreamActiveOn(client) }
-	if err := awaitOutputStopped(ctx, active); err != nil {
-		return err
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(teardownSettle):
-	}
-	return obs.StartStreamOn(client)
+	return startAfterStop(ctx, stopErr, teardownSettle)
 }
 
 // How long to wait for OBS to report the output stopped, how often to ask, and

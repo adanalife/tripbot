@@ -117,22 +117,30 @@ const (
 // fixes a half-open socket, but a platform can resume a broadcast across a
 // gap that short.
 //
-// Once the output is stopped, the start runs even if ctx is cancelled. A pod
-// shutting down mid-restart must not leave OBS stopped, because nothing else
-// starts it again.
+// Once OBS has accepted the stop, the start runs even if ctx is cancelled or
+// the stop is never seen to finish. A pod shutting down mid-restart must not
+// leave OBS stopped, because nothing else starts it again.
 func RestartBroadcast(ctx context.Context, live func(context.Context) (bool, error)) error {
-	if err := stopOBSOutput(ctx); err != nil {
-		return fmt.Errorf("stop: %w", err)
+	stopErr := stopOBSOutput(ctx)
+	if stopErr != nil && !errors.Is(stopErr, errStopUnconfirmed) {
+		return fmt.Errorf("stop: %w", stopErr)
 	}
-	if err := awaitOffline(ctx, live, offlineTimeout, offlinePoll); err != nil {
-		slog.WarnContext(ctx, "broadcast restart: starting the output without an offline reading", "err", err)
+	if stopErr == nil {
+		if err := awaitOffline(ctx, live, offlineTimeout, offlinePoll); err != nil {
+			slog.WarnContext(ctx, "broadcast restart: starting the output without an offline reading", "err", err)
+		}
 	}
-	startCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startTimeout)
-	defer cancel()
-	return retryStart(startCtx, startOBSOutput, startAttempts, startRetry)
+	return startAfterStop(ctx, stopErr, 0)
 }
 
+// errStopUnconfirmed marks a stop OBS accepted whose completion was never
+// seen. The output may be down or on its way down, so the caller still owes it
+// a start.
+var errStopUnconfirmed = errors.New("obs accepted the stop but the output was not seen stopping")
+
 // stopOBSOutput and startOBSOutput are vars so a test can stand in for OBS.
+// stopOBSOutput wraps errStopUnconfirmed around any failure after OBS has
+// accepted the stop; any other error means the output was never stopped.
 var stopOBSOutput = func(ctx context.Context) error {
 	client, err := obs.Dial(ctx)
 	if err != nil {
@@ -147,7 +155,30 @@ var stopOBSOutput = func(ctx context.Context) error {
 		return err
 	}
 	active := func(context.Context) (bool, error) { return obs.StreamActiveOn(client) }
-	return awaitOutputStopped(ctx, active)
+	if err := awaitOutputStopped(ctx, active); err != nil {
+		return fmt.Errorf("%w: %w", errStopUnconfirmed, err)
+	}
+	return nil
+}
+
+// startAfterStop pauses settle, then starts the output with retries, on a
+// context that outlives ctx's cancellation but is bounded by startTimeout.
+// stopErr is the unconfirmed stop it follows, if any: it is logged, and joined
+// into the result only when the start fails too.
+func startAfterStop(ctx context.Context, stopErr error, settle time.Duration) error {
+	if stopErr != nil {
+		slog.WarnContext(ctx, "obs restart: starting the output without a confirmed stop", "err", stopErr)
+	}
+	startCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startTimeout)
+	defer cancel()
+	select {
+	case <-startCtx.Done():
+	case <-time.After(settle):
+	}
+	if err := retryStart(startCtx, startOBSOutput, startAttempts, startRetry); err != nil {
+		return errors.Join(stopErr, err)
+	}
+	return nil
 }
 
 var startOBSOutput = obs.StartStream
