@@ -9,6 +9,29 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.38.0] — 2026-10-20
+
+### Chatbot
+
+- YouTube chat gets the periodic help message once a day. Other platforms still get it about every three hours. ([#1713](https://github.com/adanalife/tripbot/pull/1713))
+
+### Onscreens
+
+- The default rotator copy asks YouTube viewers to subscribe rather than follow, and drops the "interactive chat is coming to YouTube soon" line. ([#1713](https://github.com/adanalife/tripbot/pull/1713))
+
+### Fixes
+
+- `!time`, `!sunset`, `!daytime` and the location rotator's date, sunset and weather now read a clip's filmed time as the dashcam's own clock in the zone where it was filmed. They were treating that clock as UTC, so every answer was off by the zone offset — a 7:30pm clip in Colorado read as 1:30pm. ([#1710](https://github.com/adanalife/tripbot/pull/1710))
+- Add your info here ([#1714](https://github.com/adanalife/tripbot/pull/1714))
+
+### Deploy / Infra
+
+- Prod YouTube now reads chat: the bot answers commands there and the overlays show command hints instead of promo copy, now that the YouTube Data API quota covers the 2s chat poll. ([#1713](https://github.com/adanalife/tripbot/pull/1713))
+
+### CI / Tooling
+
+- Run the changelog fragment-numbering self-test on every PR, so a break shows up in review rather than on the next release PR. ([#1709](https://github.com/adanalife/tripbot/pull/1709))
+
 ## [v5.37.0] — 2026-10-18
 
 ### Console / API

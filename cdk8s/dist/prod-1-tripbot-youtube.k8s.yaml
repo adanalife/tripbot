@@ -28,7 +28,6 @@ data:
   STREAM_PLATFORM: youtube
   TRIPBOT_SERVER_PORT: "8080"
   YOUTUBE_API_URL: http://gateway-youtube.prod-1.svc.cluster.local:8080
-  YOUTUBE_INBOUND_ENABLED: "false"
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -66,7 +65,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 05f326b9a0
+        adanalife.dev/config-hash: aa460a5746
       labels:
         app: tripbot-youtube
     spec:
@@ -92,7 +91,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:5.37.0
+          image: adanalife/tripbot:5.38.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -140,7 +139,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.37.0
+          image: adanalife/tripbot:5.38.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -190,7 +189,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.37.0
+            - adanalife/tripbot:5.38.0
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
