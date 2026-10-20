@@ -1404,9 +1404,9 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 // --- makeBotCmd / unBotCmd ---
 
 func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
-	// missing amount, then non-numeric amount — both must bail before touching
+	// missing amount, then non-numeric amounts (NaN and ±Inf included) — both must bail before touching
 	// Sessions (Find/CorrectMiles), so no correction is applied.
-	for _, params := range [][]string{{"target"}, {"target", "notanumber"}} {
+	for _, params := range [][]string{{"target"}, {"target", "notanumber"}, {"target", "nan"}, {"target", "inf"}, {"target", "-Infinity"}} {
 		app := newTestApp(video.Video{})
 		rec := &recordingSessions{}
 		app.Sessions = rec

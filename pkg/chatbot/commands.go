@@ -898,7 +898,9 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 	}
 	target := targetUsername(params[0])
 	delta, err := strconv.ParseFloat(params[1], 32)
-	if err != nil {
+	// ParseFloat accepts "nan" and "inf", which would land in the miles totals
+	// and the append-only events table.
+	if err != nil || math.IsNaN(delta) || math.IsInf(delta, 0) {
 		a.Reply(ctx, "that amount isn't a number I understand")
 		return
 	}
