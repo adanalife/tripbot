@@ -31,21 +31,19 @@ var defaultOBSWebsocketAddr = fmt.Sprintf("%s:%d", contract.ServiceOBSTwitch, co
 // connection can add goobs.WithEventSubscriptions without duplicating the
 // addr/password resolution.
 func Dial(_ context.Context, opts ...goobs.Option) (*goobs.Client, error) {
-	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
-	if addr == "" {
-		addr = defaultOBSWebsocketAddr
-	}
 	passwd := os.Getenv("OBS_WEBSOCKET_PASSWD")
 	if passwd == "" {
 		passwd = "adanalife"
 	}
-	return goobs.New(addr, append([]goobs.Option{goobs.WithPassword(passwd)}, opts...)...)
+	return goobs.New(websocketAddr(), append([]goobs.Option{goobs.WithPassword(passwd)}, opts...)...)
 }
 
-// dial opens a fresh OBS WebSocket connection with no extra options — the
-// per-call form used by the Start/Stop/Get helpers below.
-func dial(ctx context.Context) (*goobs.Client, error) {
-	return Dial(ctx)
+// websocketAddr is the OBS WebSocket address Dial connects to.
+func websocketAddr() string {
+	if addr := os.Getenv("OBS_WEBSOCKET_ADDR"); addr != "" {
+		return addr
+	}
+	return defaultOBSWebsocketAddr
 }
 
 // StartStreamOn tells OBS to begin streaming over an existing connection.
@@ -77,7 +75,7 @@ func StreamActiveOn(client *goobs.Client) (bool, error) {
 // the coordination cost. A caller issuing several requests in a row holds one
 // connection and uses the *On helpers instead.
 func StartStream(ctx context.Context) error {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return err
 	}
@@ -87,7 +85,7 @@ func StartStream(ctx context.Context) error {
 
 // StopStream tells OBS to stop streaming. Symmetric to StartStream.
 func StopStream(ctx context.Context) error {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return err
 	}
@@ -113,7 +111,7 @@ var ErrUnreachable = errors.New("obs websocket unreachable")
 // can't be reached, so the admin panel can render "OBS unreachable"
 // rather than a misleading "not streaming."
 func GetStreamStatus(ctx context.Context) (bool, error) {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return false, errors.Join(ErrUnreachable, err)
 	}

@@ -33,7 +33,7 @@ const browserReloadGap = 600 * time.Millisecond
 // per-source failure is logged and skipped so one bad source doesn't strand the
 // rest.
 func RefreshBrowserSources(ctx context.Context) (int, error) {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -116,7 +116,7 @@ func SetInputLocalFileMode(ctx context.Context, inputName, file string, loop boo
 // at startup to work out which background-audio bed the OBS container booted
 // on, so the console reports what's actually playing rather than a guess.
 func GetInputSettings(ctx context.Context, inputName string) (map[string]any, error) {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func SetInputNetworkMode(ctx context.Context, inputName, url string) error {
 // mode-swap helpers: open a fresh connection, merge the given settings onto the
 // named input, disconnect.
 func setInputSettings(ctx context.Context, inputName string, settings map[string]any) error {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return err
 	}
