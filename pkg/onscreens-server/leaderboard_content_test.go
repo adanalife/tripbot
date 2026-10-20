@@ -105,3 +105,14 @@ func TestRenderLeaderboardEscapesHTML(t *testing.T) {
 		t.Fatalf("expected &lt;script&gt; escape, got %q", got)
 	}
 }
+
+// A row missing its score is skipped rather than panicking the NATS callback.
+func TestRenderLeaderboardSkipsShortRow(t *testing.T) {
+	got := renderLeaderboard("top", [][]string{{"alice"}, {}, {"bob", "50"}})
+	if strings.Contains(got, "alice") {
+		t.Fatalf("expected the short row skipped, got %q", got)
+	}
+	if !strings.Contains(got, `<span class="lb-score">50</span><span class="lb-user">bob</span>`) {
+		t.Fatalf("expected the full row rendered, got %q", got)
+	}
+}
