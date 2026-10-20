@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"sync"
 	"time"
 
@@ -26,15 +25,6 @@ import (
 // which is how a consumer learns this without opening an OBS connection of its
 // own.
 func PollStreamingActive(ctx context.Context, env, platform string, interval time.Duration) {
-	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
-	if addr == "" {
-		addr = defaultOBSWebsocketAddr
-	}
-	passwd := os.Getenv("OBS_WEBSOCKET_PASSWD")
-	if passwd == "" {
-		passwd = "adanalife"
-	}
-
 	obsStats := instrumentation.NewOBSStats(platform)
 	// failures counts consecutive dial failures, and is what backs the retry
 	// off. A reached OBS resets it, so a genuine blip still reconnects in 10s.
@@ -43,7 +33,7 @@ func PollStreamingActive(ctx context.Context, env, platform string, interval tim
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		if poll(ctx, env, platform, obsStats, addr, passwd, interval, failures) {
+		if poll(ctx, env, platform, obsStats, interval, failures) {
 			failures = 0
 		} else {
 			failures++
@@ -165,10 +155,8 @@ func streamStateFromEvent(ev any) (active, isStreamState bool) {
 // the interval tick. failures is how many consecutive dials have already
 // failed, which decides how loudly another failure is logged. It reports
 // whether the connection was established.
-func poll(ctx context.Context, env, platform string, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration, failures int) bool {
-	client, err := goobs.New(addr,
-		goobs.WithPassword(passwd),
-		goobs.WithEventSubscriptions(subscriptions.Outputs))
+func poll(ctx context.Context, env, platform string, obsStats instrumentation.OBSStats, interval time.Duration, failures int) bool {
+	client, err := Dial(ctx, goobs.WithEventSubscriptions(subscriptions.Outputs))
 	if err != nil {
 		// A platform whose OBS deployment is scaled to zero fails here every
 		// retry, forever. obs_streaming_active is the alertable signal — keep
@@ -178,7 +166,7 @@ func poll(ctx context.Context, env, platform string, obsStats instrumentation.OB
 		if failures > 0 {
 			level = slog.LevelDebug
 		}
-		slog.Log(ctx, level, "obs websocket connect failed", "addr", addr, "err", err)
+		slog.Log(ctx, level, "obs websocket connect failed", "addr", websocketAddr(), "err", err)
 		obsStats.SetStreaming(false)
 		lastStreamState.forget()
 		eventbus.EmitOBSStream(ctx, env, platform, "", false)
@@ -192,7 +180,7 @@ func poll(ctx context.Context, env, platform string, obsStats instrumentation.OB
 		disconnect(ctx, client)
 	}()
 
-	slog.InfoContext(ctx, "obs websocket connected", "addr", addr)
+	slog.InfoContext(ctx, "obs websocket connected", "addr", websocketAddr())
 
 	// The tick stays load-bearing alongside the event stream: a state change
 	// that lands while the connection is down is never replayed, and

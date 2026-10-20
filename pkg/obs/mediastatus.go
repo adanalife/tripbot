@@ -23,7 +23,7 @@ const (
 // error when OBS itself can't be reached, so callers can tell "OBS is down"
 // apart from "the source isn't playing."
 func GetMediaInputState(ctx context.Context, inputName string) (string, error) {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return "", errors.Join(ErrUnreachable, err)
 	}

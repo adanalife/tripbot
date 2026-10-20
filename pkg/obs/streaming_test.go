@@ -39,7 +39,8 @@ func TestPollConnectFailureStaysBelowError(t *testing.T) {
 	defer slog.SetDefault(prev)
 
 	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
-	if poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0) {
+	t.Setenv("OBS_WEBSOCKET_ADDR", "127.0.0.1:1")
+	if poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), time.Second, 0) {
 		t.Fatal("poll reported a connection to a refused port")
 	}
 
@@ -110,7 +111,8 @@ func TestPollRepeatConnectFailureIsQuiet(t *testing.T) {
 	slog.SetDefault(slog.New(rec))
 	defer slog.SetDefault(prev)
 
-	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 3)
+	t.Setenv("OBS_WEBSOCKET_ADDR", "127.0.0.1:1")
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), time.Second, 3)
 
 	if rec.max >= slog.LevelWarn {
 		t.Fatalf("repeat connect failure logged at %v; expected below WARN", rec.max)
@@ -176,7 +178,8 @@ func TestPollAnnouncesAnUnreachableOBS(t *testing.T) {
 	defer eventbus.SetPublisher(prev)
 
 	// Port 1 on loopback refuses immediately — no listener, no timeout wait.
-	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), "127.0.0.1:1", "pw", time.Second, 0)
+	t.Setenv("OBS_WEBSOCKET_ADDR", "127.0.0.1:1")
+	poll(context.Background(), "test", "twitch", instrumentation.NewOBSStats("test"), time.Second, 0)
 
 	if len(rec.publishes) != 1 {
 		t.Fatalf("published %d messages, want 1", len(rec.publishes))
