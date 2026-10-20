@@ -840,8 +840,11 @@ func postReportToDiscord(webhookURL, username, message string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	payload, err := json.Marshal(map[string]string{
+	payload, err := json.Marshal(map[string]any{
 		"content": fmt.Sprintf("**!report** from @%s: %s", username, message),
+		// The message is viewer text, so it must not ping @everyone, @here,
+		// a role, or a user.
+		"allowed_mentions": map[string][]string{"parse": {}},
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "discord webhook payload marshal", "err", err)
