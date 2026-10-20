@@ -475,3 +475,67 @@ func TestUpdateSession_OnlyLogsInNewChatters(t *testing.T) {
 		t.Errorf("visits = %d, want 7 (a second login would have counted another)", regular.NumVisits)
 	}
 }
+
+// logout works from the live session entry, not the caller's copy: the
+// UpdateSession tick and Shutdown hand it a snapshot that a checkpoint (or a
+// correction) can overtake before logout runs, and saving the snapshot's miles
+// would overwrite what the checkpoint banked.
+func TestLogout_StaleSnapshotDoesNotUndoACheckpoint(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "overtaken")
+	s.mu.Lock()
+	s.loggedIn["overtaken"].LoggedIn = time.Now().Add(-10 * time.Hour)
+	s.mu.Unlock()
+
+	stale, _ := s.get("overtaken")
+	s.CheckpointMiles(ctx)
+	banked, err := Find(ctx, testConf.Platform, "overtaken")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+
+	s.logout(ctx, stale.Username)
+
+	final, err := Find(ctx, testConf.Platform, "overtaken")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if banked.Miles < 15 || banked.Miles-final.Miles > 0.1 {
+		t.Errorf("logout undid the checkpoint: banked %v, saved %v", banked.Miles, final.Miles)
+	}
+}
+
+// Two logouts racing for one session (Shutdown against a reconcile tick) close
+// it once: one logout event, one addition to the monthly board.
+func TestLogout_TwiceClosesTheSessionOnce(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "twice")
+	s.mu.Lock()
+	s.loggedIn["twice"].LoggedIn = time.Now().Add(-10 * time.Hour)
+	s.mu.Unlock()
+
+	stale, _ := s.get("twice")
+	s.logout(ctx, stale.Username)
+	s.logout(ctx, stale.Username)
+
+	var logoutEvents []events.Event
+	if err := db.Where("username = ? AND event = ?", "twice", "logout").Find(&logoutEvents).Error; err != nil {
+		t.Fatalf("reading events: %v", err)
+	}
+	if len(logoutEvents) != 1 {
+		t.Errorf("expected 1 logout event, got %d", len(logoutEvents))
+	}
+	stored, err := Find(ctx, testConf.Platform, "twice")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if score := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); score < 15 || score > 25 {
+		t.Errorf("expected ~20 miles on the monthly board once, got %v", score)
+	}
+}

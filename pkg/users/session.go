@@ -128,7 +128,7 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 			continue
 		}
 		// they're logged in and NOT a current chatter, so log them out
-		s.logout(ctx, user)
+		s.logout(ctx, user.Username)
 	}
 
 	// log in the chatters missing from the session, so the work scales with
@@ -169,9 +169,7 @@ func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUse
 
 // LogoutIfNecessary will log out the user if it finds them in the session
 func (s *Sessions) LogoutIfNecessary(ctx context.Context, username string) {
-	if user, ok := s.get(username); ok {
-		s.logout(ctx, user)
-	}
+	s.logout(ctx, username)
 }
 
 // get returns a copy of the logged-in User for username, if present. It takes
@@ -250,9 +248,27 @@ func (s *Sessions) login(ctx context.Context, username string) User {
 }
 
 // logout removes the user from the list of currently-logged in users,
-// and updates the DB with their most up-to-date values
-func (s *Sessions) logout(ctx context.Context, u User) {
-	sessionMiles := s.sessionMiles(ctx, u)
+// and updates the DB with their most up-to-date values. It is a no-op for
+// anyone not logged in.
+//
+// The session entry is claimed (copied and deleted under mu) before anything
+// is computed, which makes logout safe against what runs beside it: miles a
+// checkpoint, gift or correction added before the claim are in the copy, ones
+// after it find no entry, and of two logouts racing for one session (Shutdown
+// against a reconcile tick) only the first closes it.
+func (s *Sessions) logout(ctx context.Context, username string) {
+	s.mu.Lock()
+	live, ok := s.loggedIn[username]
+	var u User
+	if ok {
+		u = *live
+		delete(s.loggedIn, username)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	sessionMiles := s.inFlightMiles(u)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -265,7 +281,7 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 	}
 
 	// update miles
-	u.Miles = s.CurrentMiles(ctx, u)
+	u.Miles += sessionMiles
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -280,7 +296,7 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 	// source; left NULL when zero (most sessions).
 	extra := float64(u.sessionExtraMiles)
 	if s.IsSubscriber(u) {
-		extra += float64(s.BonusMiles(u))
+		extra += float64(s.sessionBonus(u))
 	}
 	var extraMiles *float64
 	if extra > 0 {
@@ -289,11 +305,6 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
-
-	// remove them from the session
-	s.mu.Lock()
-	delete(s.loggedIn, u.Username)
-	s.mu.Unlock()
 }
 
 // CheckpointMiles banks every logged-in user's in-flight session miles — into
@@ -334,18 +345,6 @@ func (s *Sessions) CheckpointMiles(ctx context.Context) {
 	}
 }
 
-// milesCheckpointed reports how much of username's session accrual is already
-// banked in the DB, or 0 for anyone not in the session. Takes mu; callers must
-// not already hold it.
-func (s *Sessions) milesCheckpointed(username string) float32 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if live, ok := s.loggedIn[username]; ok {
-		return live.milesCheckpointed
-	}
-	return 0.0
-}
-
 // isLoggedIn checks if the user is currently logged in
 func (s *Sessions) isLoggedIn(username string) bool {
 	_, ok := s.get(username)
@@ -355,8 +354,8 @@ func (s *Sessions) isLoggedIn(username string) bool {
 // Shutdown loops through all of the logged-in users and logs them out
 func (s *Sessions) Shutdown(ctx context.Context) {
 	snapshot := s.sessionSnapshot()
-	for _, user := range snapshot {
-		s.logout(ctx, user)
+	for username := range snapshot {
+		s.logout(ctx, username)
 	}
 }
 
