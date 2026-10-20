@@ -19,18 +19,22 @@ func (s *Server) SetVersion(v string) {
 }
 
 // SetFlags injects the feature-flag client backing the console's /api/flags
-// endpoints. Called from cmd/tripbot's startFeatureFlags, before Start runs
-// the HTTP server (so there's no race on the field). Left nil when the
-// Postgres client fails to load — /api/flags then reports ok=false.
+// endpoints. Called from cmd/tripbot's startFeatureFlags, after Start has the
+// HTTP server answering, so it takes lateMu. Left nil when the Postgres client
+// fails to load — /api/flags then reports ok=false.
 func (s *Server) SetFlags(fc feature.FlagClient) {
+	s.lateMu.Lock()
+	defer s.lateMu.Unlock()
 	s.flags = fc
 }
 
 // SetBeds injects the background-audio bed store backing /api/audio. Called
-// from cmd/tripbot before Start runs the HTTP server (so there's no race on
-// the field). Left nil on a tripbot with no OBS pairing — /api/audio then
-// reports ok=false and the console shows the panel unavailable.
+// from cmd/tripbot after Start has the HTTP server answering, so it takes
+// lateMu. Left nil on a tripbot with no OBS pairing — /api/audio then reports
+// ok=false and the console shows the panel unavailable.
 func (s *Server) SetBeds(b BedStore) {
+	s.lateMu.Lock()
+	defer s.lateMu.Unlock()
 	s.beds = b
 }
 

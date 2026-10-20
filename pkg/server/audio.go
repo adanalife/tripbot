@@ -38,6 +38,7 @@ type BedStore interface {
 // "unavailable" rather than an error.
 func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	store := s.bedStore()
 	options := make([]string, 0, len(beds.All))
 	for _, b := range beds.All {
 		options = append(options, string(b))
@@ -49,9 +50,9 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	// baked into the OBS image this tripbot is paired with, so the picker is
 	// built from what will actually play rather than a list the console repeats.
 	body := map[string]any{"ok": false, "beds": options, "stations": beds.Stations, "voicings": beds.Voicings}
-	if s.beds != nil {
-		bed, _ := s.beds.Current()
-		playing, track := s.beds.Playing()
+	if store != nil {
+		bed, _ := store.Current()
+		playing, track := store.Playing()
 		body["ok"] = true
 		body["bed"] = string(bed)
 		// The picker highlights the selected bed, but the now-playing line has to
@@ -60,14 +61,14 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		// is hearing.
 		body["on_fallback"] = playing != bed
 		body["track"] = s.track(r.Context(), playing, track)
-		body["station"] = s.beds.Station()
-		body["voicing"] = s.beds.Voicing()
+		body["station"] = store.Station()
+		body["voicing"] = store.Voicing()
 		// The album list ships for the same reason the stations do, but it comes
 		// off the album library rather than a constant: new music appears there
 		// without a deploy, so a picker built from a compiled-in list would be
 		// wrong the first time Dana drops an album on the NAS.
-		body["album"] = s.beds.Album()
-		albums := s.beds.Albums()
+		body["album"] = store.Album()
+		albums := store.Albums()
 		body["albums"] = albums
 		// Groups are prefixes covering several albums ("streambeats-lofi"). They
 		// travel beside the albums because the picker offers both, and both are
@@ -77,13 +78,13 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		// On a group selection the chosen name isn't what's on air, so the album
 		// the current track sits in ships too — that's the one the console shows
 		// and the one you'd act on to drop something from the rotation.
-		body["playing_album"] = s.beds.PlayingAlbum()
-		body["shuffle"] = s.beds.Shuffle()
+		body["playing_album"] = store.PlayingAlbum()
+		body["shuffle"] = store.Shuffle()
 		// A switch waits a few seconds before it reaches OBS, so the fields above
 		// still describe the audio while a click is in flight. Ship the waiting one
 		// separately: without it the console shows the old state and reads as a
 		// button that did nothing. Absent when nothing is waiting.
-		if sw, ok := s.beds.Pending(); ok {
+		if sw, ok := store.Pending(); ok {
 			body["pending"] = map[string]any{
 				"bed":     string(sw.Bed),
 				"station": sw.Station,
@@ -111,7 +112,7 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 	if bed != beds.SomaFM {
 		return beds.TrackTitle(albumTrack)
 	}
-	artist, title, err := s.beds.SomaFMTrack(ctx)
+	artist, title, err := s.bedStore().SomaFMTrack(ctx)
 	if err != nil {
 		slog.DebugContext(ctx, "background audio: somafm now-playing unavailable", "err", err)
 		return ""
@@ -133,7 +134,8 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 // — either way the previous bed keeps playing and the re-read reports it, so a
 // failed switch is visible in the UI rather than silently ignored.
 func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
-	if s.beds == nil {
+	store := s.bedStore()
+	if store == nil {
 		http.Error(w, "background audio unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -161,27 +163,27 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unknown somafm station", http.StatusBadRequest)
 			return
 		}
-		err = s.beds.SetStation(r.Context(), body.Station)
+		err = store.SetStation(r.Context(), body.Station)
 	case body.Voicing != "":
 		if !beds.ValidVoicing(body.Voicing) {
 			http.Error(w, "unknown car-hum voicing", http.StatusBadRequest)
 			return
 		}
-		err = s.beds.SetVoicing(r.Context(), body.Voicing)
+		err = store.SetVoicing(r.Context(), body.Voicing)
 	case body.Album != nil:
 		// Asked of the store rather than a list this handler re-derives: the store
 		// owns the share, so its answer is the one that will load tracks. Checking
 		// here anyway is what separates "no such album" (400, the console sent a
 		// stale name) from "the share went away" (502).
-		if *body.Album != "" && !s.beds.ValidAlbum(*body.Album) {
+		if *body.Album != "" && !store.ValidAlbum(*body.Album) {
 			http.Error(w, "unknown album", http.StatusBadRequest)
 			return
 		}
-		err = s.beds.SetAlbum(r.Context(), *body.Album)
+		err = store.SetAlbum(r.Context(), *body.Album)
 	case body.Shuffle != nil:
-		err = s.beds.SetShuffle(r.Context(), *body.Shuffle)
+		err = store.SetShuffle(r.Context(), *body.Shuffle)
 	case beds.Valid(beds.Bed(body.Bed)):
-		err = s.beds.Set(r.Context(), beds.Bed(body.Bed))
+		err = store.Set(r.Context(), beds.Bed(body.Bed))
 	default:
 		http.Error(w, "unknown background-audio bed", http.StatusBadRequest)
 		return
@@ -193,20 +195,20 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	current, _ := s.beds.Current()
-	playing, track := s.beds.Playing()
+	current, _ := store.Current()
+	playing, track := store.Playing()
 	slog.InfoContext(r.Context(), "background audio switched via console",
-		"bed", current, "station", s.beds.Station(), "album", s.beds.Album(),
-		"voicing", s.beds.Voicing())
+		"bed", current, "station", store.Station(), "album", store.Album(),
+		"voicing", store.Voicing())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":            true,
 		"bed":           string(current),
 		"track":         s.track(r.Context(), playing, track),
-		"station":       s.beds.Station(),
-		"voicing":       s.beds.Voicing(),
-		"album":         s.beds.Album(),
-		"playing_album": s.beds.PlayingAlbum(),
-		"shuffle":       s.beds.Shuffle(),
+		"station":       store.Station(),
+		"voicing":       store.Voicing(),
+		"album":         store.Album(),
+		"playing_album": store.PlayingAlbum(),
+		"shuffle":       store.Shuffle(),
 	})
 }

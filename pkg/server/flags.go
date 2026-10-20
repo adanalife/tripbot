@@ -40,11 +40,12 @@ func FeatureFlags(snap []feature.Flag) []eventbus.FeatureFlag {
 // window before the Postgres-backed client loads.
 func (s *Server) flagsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if s.flags == nil {
+	flags := s.flagClient()
+	if flags == nil {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "flags": []eventbus.FeatureFlag{}})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "flags": FeatureFlags(s.flags.Snapshot(r.Context()))})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "flags": FeatureFlags(flags.Snapshot(r.Context()))})
 }
 
 // flagToggleHandler flips a flag's global-default enabled state. The console
@@ -55,7 +56,7 @@ func (s *Server) flagsHandler(w http.ResponseWriter, r *http.Request) {
 // the /api surface — the console reaches it over the in-namespace Service.
 func (s *Server) flagToggleHandler(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
-	toggler, ok := s.flags.(feature.FlagToggler)
+	toggler, ok := s.flagClient().(feature.FlagToggler)
 	if !ok {
 		http.Error(w, "flag toggling unavailable", http.StatusServiceUnavailable)
 		return

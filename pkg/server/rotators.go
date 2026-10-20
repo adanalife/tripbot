@@ -30,6 +30,8 @@ type RotatorPublisher interface {
 // /api/rotators endpoints use. Without it the endpoints report 503 rather than
 // panicking, matching how the flag endpoints degrade before their client loads.
 func (s *Server) SetRotators(store RotatorStore, pub RotatorPublisher) {
+	s.lateMu.Lock()
+	defer s.lateMu.Unlock()
 	s.rotators = store
 	s.rotatorPub = pub
 }
@@ -89,21 +91,23 @@ func knownPlatform(platform string) bool {
 	}
 }
 
-// rotatorsReady reports whether the store + publisher are wired, writing the
-// 503 when they aren't.
-func (s *Server) rotatorsReady(w http.ResponseWriter) bool {
-	if s.rotators == nil || s.rotatorPub == nil {
+// rotatorsReady returns the wired store + publisher, writing the 503 and
+// reporting false when they aren't.
+func (s *Server) rotatorsReady(w http.ResponseWriter) (RotatorStore, RotatorPublisher, bool) {
+	store, pub := s.rotatorDeps()
+	if store == nil || pub == nil {
 		http.Error(w, "rotator editing unavailable", http.StatusServiceUnavailable)
-		return false
+		return nil, nil, false
 	}
-	return true
+	return store, pub, true
 }
 
 // rotatorsGetHandler serves one platform's rotator copy — the stored document,
 // or the compiled-in defaults filtered to that platform when it's never been
 // edited. GET /api/rotators/{platform}.
 func (s *Server) rotatorsGetHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.rotatorsReady(w) {
+	store, _, ok := s.rotatorsReady(w)
+	if !ok {
 		return
 	}
 	platform := mux.Vars(r)["platform"]
@@ -111,7 +115,7 @@ func (s *Server) rotatorsGetHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown platform", http.StatusNotFound)
 		return
 	}
-	cfg, stored, err := s.rotators.GetOrDefault(r.Context(), platform)
+	cfg, stored, err := store.GetOrDefault(r.Context(), platform)
 	if err != nil {
 		// GetOrDefault still returns usable defaults on error, so serve them and
 		// log rather than failing the console's page load.
@@ -131,7 +135,8 @@ func (s *Server) rotatorsGetHandler(w http.ResponseWriter, r *http.Request) {
 // (onscreens-server picks it up on its next restart or republish), whereas
 // publishing first could put copy on screen that no restart would restore.
 func (s *Server) rotatorsPutHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.rotatorsReady(w) {
+	store, pub, ok := s.rotatorsReady(w)
+	if !ok {
 		return
 	}
 	platform := mux.Vars(r)["platform"]
@@ -154,12 +159,12 @@ func (s *Server) rotatorsPutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
-	if err := s.rotators.Put(r.Context(), platform, cfg); err != nil {
+	if err := store.Put(r.Context(), platform, cfg); err != nil {
 		slog.ErrorContext(r.Context(), "rotator config save failed", "err", err, "platform", platform)
 		http.Error(w, "couldn't save rotator config", http.StatusInternalServerError)
 		return
 	}
-	if err := s.rotatorPub.PublishRotatorConfig(r.Context(), platform, cfg); err != nil {
+	if err := pub.PublishRotatorConfig(r.Context(), platform, cfg); err != nil {
 		slog.ErrorContext(r.Context(), "rotator config publish failed", "err", err, "platform", platform)
 	}
 	slog.InfoContext(r.Context(), "rotator config saved via console",
@@ -175,7 +180,8 @@ func (s *Server) rotatorsPutHandler(w http.ResponseWriter, r *http.Request) {
 // defaults compiled into onscreens-server, and pushes those defaults live so the
 // overlays don't wait for a restart. DELETE /api/rotators/{platform}.
 func (s *Server) rotatorsResetHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.rotatorsReady(w) {
+	store, pub, ok := s.rotatorsReady(w)
+	if !ok {
 		return
 	}
 	platform := mux.Vars(r)["platform"]
@@ -183,13 +189,13 @@ func (s *Server) rotatorsResetHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown platform", http.StatusNotFound)
 		return
 	}
-	if err := s.rotators.Delete(r.Context(), platform); err != nil {
+	if err := store.Delete(r.Context(), platform); err != nil {
 		slog.ErrorContext(r.Context(), "rotator config reset failed", "err", err, "platform", platform)
 		http.Error(w, "couldn't reset rotator config", http.StatusInternalServerError)
 		return
 	}
 	cfg := rot.DefaultConfigFor(platform)
-	if err := s.rotatorPub.PublishRotatorConfig(r.Context(), platform, cfg); err != nil {
+	if err := pub.PublishRotatorConfig(r.Context(), platform, cfg); err != nil {
 		slog.ErrorContext(r.Context(), "rotator config publish failed", "err", err, "platform", platform)
 	}
 	slog.InfoContext(r.Context(), "rotator config reset to defaults via console", "platform", platform)
