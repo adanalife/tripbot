@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -74,20 +73,10 @@ func faviconHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "assets/favicon.ico")
 }
 
+// catchAllHandler is the router's NotFoundHandler: every request reaching it
+// named a path no route serves, whatever its method (a known path with the
+// wrong method gets mux's own 405), so it answers 404.
 func catchAllHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		http.Error(w, "404 not found", http.StatusNotFound)
-		slog.InfoContext(r.Context(), "404 GET", "path", r.URL.Path)
-		return
-
-	case "POST":
-		// someone tried to make a post and we dont know what to do with it
-		http.Error(w, "404 not found", http.StatusNotFound)
-		slog.InfoContext(r.Context(), "404 POST", "path", r.URL.Path)
-		return
-	// someone tried a PUT or a DELETE or something
-	default:
-		fmt.Fprintf(w, "Only GET/POST methods are supported.\n")
-	}
+	http.Error(w, "404 not found", http.StatusNotFound)
+	slog.InfoContext(r.Context(), "404 "+r.Method, "path", r.URL.Path)
 }

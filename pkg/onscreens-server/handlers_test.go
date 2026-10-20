@@ -173,3 +173,15 @@ func TestRenderRotatorsCarryTheirBudgets(t *testing.T) {
 		})
 	}
 }
+
+// An unknown route 404s whatever the method, rather than answering a
+// non-GET with a 200.
+func TestCatchAllHandler404sEveryMethod(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut} {
+		rec := httptest.NewRecorder()
+		catchAllHandler(rec, httptest.NewRequest(method, "/", nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: got status %d, want 404", method, rec.Code)
+		}
+	}
+}

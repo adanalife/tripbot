@@ -57,3 +57,14 @@ func TestCatchAllHandlerPost404(t *testing.T) {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
+
+func TestCatchAllHandlerOtherMethod404(t *testing.T) {
+	req := httptest.NewRequest(http.MethodDelete, "/missing", nil)
+	rec := httptest.NewRecorder()
+
+	catchAllHandler(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
