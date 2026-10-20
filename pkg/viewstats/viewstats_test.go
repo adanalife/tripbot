@@ -505,6 +505,25 @@ func TestRecordSample_SeedsThePeakFromTheSeries(t *testing.T) {
 	}
 }
 
+func TestRecordSample_FailedPeakReadLeavesTheBarUnset(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 40)
+	resetPeaks()
+
+	// A DB blip on the tick that would seed the bar: a cancelled context is
+	// the cheapest real query failure. The reading can't be judged, so it
+	// must not become the bar either.
+	failing, cancel := context.WithCancel(context.Background())
+	cancel()
+	RecordSample(failing, testConf, 5, Audience{Count: 5, Live: true, Reported: true}, 0, nil)
+
+	sample(t, 6) // still under the stored 40
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("a reading under the stored high is not a record, got %v", got)
+	}
+}
+
 func TestRecordSample_ReadOnlyRecordsNothing(t *testing.T) {
 	db := setup(t)
 	ro := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}

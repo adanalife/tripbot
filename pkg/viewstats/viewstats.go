@@ -227,19 +227,13 @@ var (
 
 // storedPeak reads the platform's highest recorded concurrent-viewer count.
 // 0 when the series holds none — an empty table, or a platform that has never
-// had a number reported. Errors read as 0 and log, which costs at most one
-// missed record announcement rather than a wrong one, because the very next
-// tick reseeds.
-func storedPeak(ctx context.Context, platform string) int {
+// had a number reported.
+func storedPeak(ctx context.Context, platform string) (int, error) {
 	var peak int
 	err := database.GormDB().WithContext(ctx).Model(&ViewerSample{}).
 		Where("platform = ?", platform).
 		Select("COALESCE(MAX(viewers), 0)").Scan(&peak).Error
-	if err != nil {
-		slog.ErrorContext(ctx, "error reading peak viewer count", "err", err, "platform", platform)
-		return 0
-	}
-	return peak
+	return peak, err
 }
 
 // checkPeak emits a viewer_record event when this tick's audience beats the
@@ -257,7 +251,17 @@ func checkPeak(ctx context.Context, cfg *c.TripbotConfig, audience Audience) {
 	peakMu.Lock()
 	previous, seeded := peaks[cfg.Platform]
 	if !seeded {
-		previous = storedPeak(ctx, cfg.Platform)
+		var err error
+		previous, err = storedPeak(ctx, cfg.Platform)
+		if err != nil {
+			// Leave the platform unseeded so the next tick retries the read.
+			// This costs at most one missed record announcement; seeding from
+			// the failed read would set the bar at this tick's count and
+			// announce false records against it.
+			peakMu.Unlock()
+			slog.ErrorContext(ctx, "error reading peak viewer count", "err", err, "platform", cfg.Platform)
+			return
+		}
 	}
 	beaten := audience.Count > previous
 	if beaten || !seeded {
