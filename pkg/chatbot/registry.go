@@ -366,8 +366,7 @@ func (a *App) buildRegistry() []Command {
 }
 
 // Platform names for App.Platform. Add a constant here when a new streaming
-// platform (Kick, …) comes online; platform-specific commands then reference
-// it via Command.Platforms.
+// platform (Kick, …) comes online.
 const (
 	platformTwitch    = "twitch"
 	platformYouTube   = "youtube"
@@ -475,21 +474,12 @@ var platformHasSubscribers = map[string]bool{
 }
 
 // commandEnabled reports whether cmd should be indexed for dispatch on this
-// App's platform. Two orthogonal concerns, in order:
-//
-//  1. Platform-specific commands declare their scope via Command.Platforms. A
-//     command with a non-nil Platforms is governed solely by it — indexed on
-//     exactly the listed platforms, on every platform. This is symmetric: no
-//     platform is special, and a new Kick/TikTok-only command just lists itself.
-//  2. Cross-platform commands (Platforms == nil) are gated by the platform's
-//     declared commandScope: a scopeFull platform (Twitch today) runs them all;
-//     every other platform runs only the vetted v1Commands allowlist. The
-//     conservative default (scopeV1 for any undeclared platform) means a new
-//     platform is restricted to the allowlist, never handed the full surface.
+// App's platform, gated by the platform's declared commandScope: a scopeFull
+// platform (Twitch today) runs them all; every other platform runs only the
+// vetted v1Commands allowlist. The conservative default (scopeV1 for any
+// undeclared platform) means a new platform is restricted to the allowlist,
+// never handed the full surface.
 func (a *App) commandEnabled(cmd *Command) bool {
-	if len(cmd.Platforms) > 0 {
-		return slices.Contains(cmd.Platforms, a.platform())
-	}
 	if platformCommandScope[a.platform()] == scopeFull {
 		return true
 	}
