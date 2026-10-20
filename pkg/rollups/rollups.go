@@ -28,10 +28,13 @@ import (
 const watermarkName = "user_rollups"
 
 // reconcileSQL fully recomputes aggregates for every (platform, username)
-// that has new events since the watermark. The pairing CTE is the same
-// algorithm as cmd/backfill-miles: the N-th login pairs with the N-th logout
-// (robust to historical rows with NULL session_id), sessions over 24h are
-// dropped as missed logouts, and miles = 0.1 per 3 minutes.
+// that has new events since the watermark. A login pairs with the logout that
+// carries its session_id, so a login that never got a logout (a crash) pairs
+// with nothing rather than shifting every later pair. Legacy rows from before
+// session_id existed (NULL, or the zero UUID) fall back to the
+// cmd/backfill-miles algorithm: the N-th legacy login pairs with the N-th
+// legacy logout. Sessions over 24h are dropped as missed logouts, and miles =
+// 0.1 per 3 minutes.
 //
 // Full recompute (not incremental addition) is what makes the tick idempotent
 // and self-healing: re-running with any watermark produces the same rows.
@@ -52,20 +55,38 @@ login_rn AS (
            ROW_NUMBER() OVER (PARTITION BY e.platform, e.username ORDER BY e.date_created) AS rn
     FROM events e JOIN dirty d ON d.platform = e.platform AND d.username = e.username
     WHERE e.event = 'login'
+      AND COALESCE(e.session_id, '00000000-0000-0000-0000-000000000000') = '00000000-0000-0000-0000-000000000000'
 ),
 logout_rn AS (
     SELECT e.platform, e.username, e.date_created AS logout_time,
            ROW_NUMBER() OVER (PARTITION BY e.platform, e.username ORDER BY e.date_created) AS rn
     FROM events e JOIN dirty d ON d.platform = e.platform AND d.username = e.username
     WHERE e.event = 'logout'
+      AND COALESCE(e.session_id, '00000000-0000-0000-0000-000000000000') = '00000000-0000-0000-0000-000000000000'
 ),
-sessions AS (
-    SELECT l.platform, l.username,
-           EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 60.0 AS minutes
+-- MIN collapses a session_id that was logged out twice into one session.
+keyed AS (
+    SELECT e.platform, e.username, e.session_id,
+           MIN(e.date_created) FILTER (WHERE e.event = 'login') AS login_time,
+           MIN(e.date_created) FILTER (WHERE e.event = 'logout') AS logout_time
+    FROM events e JOIN dirty d ON d.platform = e.platform AND d.username = e.username
+    WHERE e.event IN ('login', 'logout')
+      AND e.session_id <> '00000000-0000-0000-0000-000000000000'
+    GROUP BY e.platform, e.username, e.session_id
+),
+pairs AS (
+    SELECT l.platform, l.username, l.login_time, lo.logout_time
     FROM login_rn l
     JOIN logout_rn lo ON lo.platform = l.platform AND lo.username = l.username AND lo.rn = l.rn
-    WHERE lo.logout_time > l.login_time
-      AND EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 3600.0 < 24
+    UNION ALL
+    SELECT platform, username, login_time, logout_time FROM keyed
+),
+sessions AS (
+    SELECT platform, username,
+           EXTRACT(EPOCH FROM (logout_time - login_time)) / 60.0 AS minutes
+    FROM pairs
+    WHERE logout_time > login_time
+      AND EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600.0 < 24
 ),
 miles AS (
     SELECT platform, username, SUM(0.1 * minutes / 3.0)::real AS events_miles
