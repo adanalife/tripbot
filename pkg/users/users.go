@@ -85,31 +85,28 @@ var guessCooldown = 3 * time.Minute
 // source. They take the User as a parameter so the session state and the
 // per-user data stay explicitly separate.
 
-func (s *Sessions) loggedInDur(u User) time.Duration {
-	// lookup the user in the session so the LoggedIn value is current
+func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
+	// Read the live session copy, not u: an other-user lookup passes a fresh
+	// DB row, whose zero milesCheckpointed would re-count the banked miles.
 	live, ok := s.get(u.Username)
 	if !ok {
-		return 0 * time.Second
-	}
-	return time.Since(live.LoggedIn)
-}
-
-func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
-	// exit early if they're not logged in
-	if !s.isLoggedIn(u.Username) {
 		return 0.0
 	}
-	loggedInDur := s.loggedInDur(u)
-	sessionMiles := helpers.DurationToMiles(loggedInDur)
+	return s.inFlightMiles(live)
+}
+
+// inFlightMiles is the accrual of a session entry not yet banked in the DB.
+// It reads nothing from the session map, so logout can apply it to the entry
+// it has already claimed.
+func (s *Sessions) inFlightMiles(live User) float32 {
+	sessionMiles := helpers.DurationToMiles(time.Since(live.LoggedIn))
 	// give subscribers a miles bonus
-	if s.IsSubscriber(u) {
-		sessionMiles += s.BonusMiles(u)
+	if s.IsSubscriber(live) {
+		sessionMiles += s.sessionBonus(live)
 	}
 	// Whatever CheckpointMiles already banked is counted in the DB figures
-	// callers add this to, so only the remainder is still in flight. Read from
-	// the live session copy, not u: an other-user lookup passes a fresh DB row,
-	// whose zero value would re-count the banked miles.
-	inFlight := sessionMiles - s.milesCheckpointed(u.Username)
+	// callers add this to, so only the remainder is still in flight.
+	inFlight := sessionMiles - live.milesCheckpointed
 	// A subscription lapsing mid-session drops the bonus out of sessionMiles
 	// while the banked figure keeps it, which would otherwise show up as a
 	// total that ticks backwards.
@@ -128,16 +125,21 @@ func (s *Sessions) CurrentMiles(ctx context.Context, u User) float32 {
 // Non-subscribers get the tier-1 rate — !bonusmiles reports the would-be bonus
 // for anyone, and only sessionMiles' IsSubscriber gate decides who is awarded.
 func (s *Sessions) BonusMiles(u User) float32 {
-	if s.isLoggedIn(u.Username) {
-		loggedInDur := s.loggedInDur(u)
-		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		tier := s.source.SubscriberTier(u.Username)
-		if tier < 1 {
-			tier = 1
-		}
-		return sessionMiles * 0.05 * float32(tier)
+	live, ok := s.get(u.Username)
+	if !ok {
+		return 0.0
 	}
-	return 0.0
+	return s.sessionBonus(live)
+}
+
+// sessionBonus is BonusMiles for a session entry the caller already holds.
+func (s *Sessions) sessionBonus(live User) float32 {
+	sessionMiles := helpers.DurationToMiles(time.Since(live.LoggedIn))
+	tier := s.source.SubscriberTier(live.Username)
+	if tier < 1 {
+		tier = 1
+	}
+	return sessionMiles * 0.05 * float32(tier)
 }
 
 func (s *Sessions) CurrentMonthlyMiles(ctx context.Context, u User) float32 {
