@@ -69,7 +69,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.38.0
+          image: adanalife/tripbot:5.39.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -117,7 +117,7 @@ spec:
                 name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.38.0
+          image: adanalife/tripbot:5.39.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -167,7 +167,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.38.0
+            - adanalife/tripbot:5.39.0
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
@@ -207,3 +207,29 @@ spec:
   selector:
     app: tripbot-facebook
   type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-facebook
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-facebook
+  namespace: prod-1
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: prod-1
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: tripbot-facebook
+  policyTypes:
+    - Ingress

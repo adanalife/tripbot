@@ -1,1 +1,0 @@
-A viewer whose session ended without a logout (a crash or restart) no longer has every later session in the audit rollups stretched to the next session's logout: logins and logouts are paired by their session ID, with the old in-order pairing kept only for events recorded before session IDs existed.

@@ -9,6 +9,46 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.39.0] — 2026-10-20
+
+### Onscreens
+
+- onscreens-server skips a leaderboard row that is missing its score instead of crashing on it. ([#1725](https://github.com/adanalife/tripbot/pull/1725))
+
+### Console / API
+
+- The console's community scoreboards show only the instance's own platform, instead of interleaving every platform's rankings so that each rank listed two players. ([#1733](https://github.com/adanalife/tripbot/pull/1733))
+
+### Fixes
+
+- A panicking HTTP handler in tripbot or onscreens-server answers 500 and counts toward the HTTP panic metric, instead of being swallowed by the Sentry middleware and returning an empty 200. ([#1716](https://github.com/adanalife/tripbot/pull/1716))
+- A viewer's `!report` text can no longer ping `@everyone`, `@here`, roles or users when it is forwarded to Discord. ([#1717](https://github.com/adanalife/tripbot/pull/1717))
+- **A forced OBS restart no longer leaves the stream dark.** Once OBS accepts the stop, the restart always starts the output again (with retries, on a context that outlives a shutdown), even when the output is never seen to finish stopping or the caller is cancelled. Before, the silent-disconnect watchdog then read the stopped output as an operator stop and stood down, and the broadcast-cap restart had the same gap. ([#1718](https://github.com/adanalife/tripbot/pull/1718))
+- `!givemiles` refuses `nan` and `inf` as an amount instead of writing them into a viewer's miles. ([#1720](https://github.com/adanalife/tripbot/pull/1720))
+- tripbot and onscreens-server answer 404 to a request for an unknown route whatever its method, instead of a 200 for anything other than GET or POST. ([#1723](https://github.com/adanalife/tripbot/pull/1723))
+- `!state` says it doesn't know which state this is, rather than replying "We're in" with no state, when a clip has no state on record. ([#1724](https://github.com/adanalife/tripbot/pull/1724))
+- A viewer who left chat while a 5-minute miles checkpoint or a moderator's miles correction was being saved could lose those miles from their lifetime total, and a viewer logged out twice at once (a shutdown overlapping the regular chatter check) had their session counted twice on the monthly board. Logging out now takes the viewer's live session first, so neither can happen. ([#1726](https://github.com/adanalife/tripbot/pull/1726))
+- A failed poll of playout no longer counts as a clip change: the current play stays open, no empty video is recorded or announced, and the clip keeps its stopwatch instead of coming back labelled as a resume. ([#1728](https://github.com/adanalife/tripbot/pull/1728))
+- tripbot's HTTP server rejects request bodies over 1 MiB with a 400 instead of reading whatever a caller sends; the largest valid rotator config still fits. ([#1729](https://github.com/adanalife/tripbot/pull/1729))
+- tripbot and onscreens-server re-declare their JetStream streams after every NATS reconnect, retrying while JetStream recovers, so a NATS restart that wipes its storage no longer leaves the console history and overlay state unrecorded until the bot restarts. ([#1730](https://github.com/adanalife/tripbot/pull/1730))
+- A viewer whose session ended without a logout (a crash or restart) no longer has every later session in the audit rollups stretched to the next session's logout: logins and logouts are paired by their session ID, with the old in-order pairing kept only for events recorded before session IDs existed. ([#1732](https://github.com/adanalife/tripbot/pull/1732))
+- A database hiccup while tripbot first looked up the all-time viewer high no longer makes that moment's viewer count the high, which could announce a false viewer record on the next tick. Tripbot retries the lookup on the next tick instead. ([#1734](https://github.com/adanalife/tripbot/pull/1734))
+- tripbot's console API reads the feature-flag client, background-audio store and rotator editor safely while they are still being wired up at boot, instead of racing the boot sequence that installs them. ([#1735](https://github.com/adanalife/tripbot/pull/1735))
+
+### Deploy / Infra
+
+- tripbot and onscreens-server only accept HTTP connections from their own namespace and the monitoring namespace, so nothing else in the shared cluster can reach the unauthenticated API routes that change the live stream. ([#1722](https://github.com/adanalife/tripbot/pull/1722))
+
+### CI / Tooling
+
+- `task changelog:add` takes the entry as a required `MSG="…"` and writes the fragment whole, rather than opening an editor or leaving towncrier's placeholder to fill in. ([#1690](https://github.com/adanalife/tripbot/pull/1690))
+- Release announcements and failure alerts post to Discord again — the notification steps call the webhook with `curl` instead of the unmaintained `action-discord`. ([#1715](https://github.com/adanalife/tripbot/pull/1715))
+
+### Cleanup
+
+- **One place resolves the OBS WebSocket address and password.** The streaming poller connects through the same `Dial` as every other OBS call, so the `OBS_WEBSOCKET_ADDR`/`OBS_WEBSOCKET_PASSWD` defaults live in one spot. No behavior change. ([#1721](https://github.com/adanalife/tripbot/pull/1721))
+- `!time` and `!date` share one implementation; what they say in chat is unchanged. ([#1727](https://github.com/adanalife/tripbot/pull/1727))
+
 ## [v5.38.0] — 2026-10-20
 
 ### Chatbot

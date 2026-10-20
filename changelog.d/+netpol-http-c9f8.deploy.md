@@ -1,1 +1,0 @@
-tripbot and onscreens-server only accept HTTP connections from their own namespace and the monitoring namespace, so nothing else in the shared cluster can reach the unauthenticated API routes that change the live stream.
