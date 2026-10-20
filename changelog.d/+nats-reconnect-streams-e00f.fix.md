@@ -1,0 +1,1 @@
+tripbot and onscreens-server re-declare their JetStream streams after every NATS reconnect, retrying while JetStream recovers, so a NATS restart that wipes its storage no longer leaves the console history and overlay state unrecorded until the bot restarts.

@@ -523,7 +523,9 @@ func (t *Tripbot) startRotatorEditing() {
 
 // ensureRotatorCopyPublished declares the rotator-copy last-value stream and
 // republishes every stored platform's copy onto it. Runs from the NATS
-// on-connect callback so it executes against a live server.
+// on-connect callback — at boot and after every reconnect — so it executes
+// against a live server. Repeating it is safe: the copy comes from the
+// Postgres record of truth, which a console save writes before it publishes.
 //
 // The republish is the repair path for that cache: it rides a local-path PVC
 // that `talosctl upgrade` wipes even with --preserve, so refilling it from the
@@ -531,7 +533,9 @@ func (t *Tripbot) startRotatorEditing() {
 // Best-effort per platform — a failure logs, and the next restart or console
 // save covers it.
 func (t *Tripbot) ensureRotatorCopyPublished(ctx context.Context) {
-	if err := onscreensClient.EnsureRotatorConfigStream(ctx, natsclient.JetStream(), t.cfg.Environment); err != nil {
+	if err := natsclient.RetryDeclare(ctx, func(ctx context.Context) error {
+		return onscreensClient.EnsureRotatorConfigStream(ctx, natsclient.JetStream(), t.cfg.Environment)
+	}); err != nil {
 		slog.WarnContext(ctx, "rotator config stream setup failed; edits won't survive an onscreens restart",
 			"err", err)
 	}
@@ -567,13 +571,17 @@ func (t *Tripbot) ensureRotatorCopyPublished(ctx context.Context) {
 // EnsureStreams declares the JetStream streams the standalone tripbot-console
 // consumes (chat + video history), so they exist before the publishers emit.
 // It runs in the on-connect callback so it executes against a live server
-// even when the first dial loses the boot race and the client connects late.
-// It no-ops when JetStream is unavailable (a server without JetStream) —
-// publishes then fall back to live-only core subjects, so a stream-declare
-// failure must not be fatal.
+// even when the first dial loses the boot race and the client connects late,
+// and again after every reconnect so a NATS restart that wiped its storage
+// gets its streams back. A declare that fails while JetStream is still
+// recovering is retried with a bounded backoff. It no-ops when JetStream is
+// unavailable (a server without JetStream) — publishes then fall back to
+// live-only core subjects, so a stream-declare failure must not be fatal.
 func (t *Tripbot) startNATS(ctx context.Context) {
 	natsclient.Connect(t.cfg.NatsURL, "tripbot", func(*nats.Conn) {
-		if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), t.cfg.Environment); err != nil {
+		if err := natsclient.RetryDeclare(ctx, func(ctx context.Context) error {
+			return eventbus.EnsureStreams(ctx, natsclient.JetStream(), t.cfg.Environment)
+		}); err != nil {
 			slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
 				"err", err)
 		}
