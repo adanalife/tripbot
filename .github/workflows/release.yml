@@ -73,14 +73,16 @@ jobs:
         # A rotated or deleted webhook returns 404 and must not fail a release
         # that already shipped; the notification is best-effort.
         continue-on-error: true
-        uses: Ilshidur/action-discord@0.4.0
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          VERSION_TAG: ${{ github.ref_name }}
-        with:
-          # Link the tagged CHANGELOG.md, not a payload `compare` URL: one wording
+          # Link the tagged CHANGELOG.md, not a `compare` URL: one wording
           # fleet-wide, so a release reads the same whichever repo it came from.
-          args: 'New release for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.repository.html_url }}/blob/{{ VERSION_TAG }}/CHANGELOG.md)'
+          CONTENT: 'New release for [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}): [${{ github.ref_name }}](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md)'
+        # Plain curl rather than a Discord action: -f fails the step with the
+        # real HTTP or TLS error in the log instead of an opaque stack trace.
+        run: |
+          jq -n --arg c "$CONTENT" '{content:$c}' |
+            curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK"
 
   # Nothing else says a release went red. The release PR merged green long
   # before the tag ran, so the only record is this run's own entry in a run
@@ -101,12 +103,11 @@ jobs:
     steps:
       - name: Alert Discord on failure
         continue-on-error: true
-        uses: Ilshidur/action-discord@0.4.0
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_ALERTS }}
-          VERSION_TAG: ${{ github.ref_name }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
           # Points at the log rather than naming what failed: any job above can
           # be the one, and naming it would go stale as the jobs change.
-          args: 'Release failed for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}) at {{ VERSION_TAG }}: [run log]({{ RUN_URL }})'
+          CONTENT: 'Release failed for [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}) at ${{ github.ref_name }}: [run log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})'
+        run: |
+          jq -n --arg c "$CONTENT" '{content:$c}' |
+            curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK"
