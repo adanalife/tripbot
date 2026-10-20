@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -134,6 +135,32 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 	if !strings.Contains(rec.Says[0], "Thank you") {
 		t.Errorf("expected ack message via IRC, got %q", rec.Says[0])
+	}
+}
+
+// A report's text is the viewer's, so the Discord post must not let it ping
+// the server: "!report @everyone stream dead" reaches Discord as plain text.
+func TestPostReportToDiscord_SuppressesMentions(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode webhook body: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	postReportToDiscord(srv.URL, "viewer1", "@everyone stream dead")
+
+	if !strings.Contains(fmt.Sprint(body["content"]), "@everyone stream dead") {
+		t.Errorf("content = %v, want the report text", body["content"])
+	}
+	am, ok := body["allowed_mentions"].(map[string]any)
+	if !ok {
+		t.Fatalf("allowed_mentions missing from payload: %v", body)
+	}
+	if parse, ok := am["parse"].([]any); !ok || len(parse) != 0 {
+		t.Errorf("allowed_mentions.parse = %v, want an empty list", am["parse"])
 	}
 }
 
