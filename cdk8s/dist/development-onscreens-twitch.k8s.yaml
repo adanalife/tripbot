@@ -101,3 +101,29 @@ spec:
   selector:
     app: onscreens-twitch
   type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: onscreens-twitch
+    app.kubernetes.io/part-of: tripbot
+  name: onscreens-twitch
+  namespace: development
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: development
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: onscreens-twitch
+  policyTypes:
+    - Ingress

@@ -45,6 +45,7 @@ from adanalife_k8s.contract import load_contract
 from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.eso import ESData
 from adanalife_k8s.naming import app_name, meta_labels, selector
+from adanalife_k8s.network_policy import emit_http_ingress_policy
 
 IMAGE = "adanalife/tripbot"
 DB_SECRET_NAME = "tripbot-database-creds"  # ESO-materialized DB creds (eso envs)
@@ -471,6 +472,15 @@ class Tripbot(Construct):
                     )
                 ],
             ),
+        )
+
+        emit_http_ingress_policy(
+            self,
+            name=name,
+            namespace=env.namespace,
+            labels=labels,
+            selector=sel,
+            port=_PORTS.port("tripbot_http"),
         )
 
 
