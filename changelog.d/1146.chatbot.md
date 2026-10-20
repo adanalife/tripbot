@@ -1,0 +1,1 @@
+Each clip now knows the real road distance the van covered during it (`videos.miles_driven`, computed from consecutive GPS fixes by the new `cmd/backfill-miles-driven`) — the primitive behind real-odometer viewer miles.
