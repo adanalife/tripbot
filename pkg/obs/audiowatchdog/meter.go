@@ -152,9 +152,9 @@ func (m *VolumeMeter) heldClient() (*goobs.Client, error) {
 }
 
 // MediaInputState returns the OBS media state string for a media-source input
-// (e.g. "OBS_MEDIA_STATE_PLAYING") over the meter's held connection. The
-// same answer obs.GetMediaInputState gives, without a connection of its own —
-// which matters because the watchdog asks every tick, all day.
+// (e.g. "OBS_MEDIA_STATE_PLAYING") over the meter's held connection rather
+// than dialing per call, which matters because the watchdog asks every tick,
+// all day.
 func (m *VolumeMeter) MediaInputState(_ context.Context, inputName string) (string, error) {
 	client, err := m.heldClient()
 	if err != nil {
