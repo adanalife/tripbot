@@ -765,7 +765,13 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, params []string) {
 	if !ok {
 		return
 	}
-	msg := fmt.Sprintf("We're in %s", a.state(ctx, s))
+	state := a.state(ctx, s)
+	// A clip whose geocode came back empty has no state to name.
+	if state == "" {
+		a.Reply(ctx, "I don't know what state this is, sorry!")
+		return
+	}
+	msg := fmt.Sprintf("We're in %s", state)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.Reply(ctx, msg)

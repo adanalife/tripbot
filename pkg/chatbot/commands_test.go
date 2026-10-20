@@ -625,6 +625,21 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	}
 }
 
+func TestStateCmd_UnknownStateSaysSo(t *testing.T) {
+	vid := newTestVideo("", 39.5, -105.0, time.Now())
+	app := newTestApp(vid)
+	out, says := captureSay(t, app)
+
+	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if got := out(); got != "I don't know what state this is, sorry!" {
+		t.Errorf("expected the don't-know reply, got %q", got)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
 // --- dateCmd ---
 
 func TestDateCmd_SaysThisMomentWas(t *testing.T) {
