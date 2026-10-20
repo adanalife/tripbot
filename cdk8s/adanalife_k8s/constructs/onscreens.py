@@ -26,6 +26,7 @@ from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.contract import load_contract
 from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.naming import app_name, meta_labels, selector
+from adanalife_k8s.network_policy import emit_http_ingress_policy
 
 
 # The contract's ports, so a rename in pkg/contract reaches the manifests
@@ -202,4 +203,13 @@ class OnscreensServer(Construct):
                     )
                 ],
             ),
+        )
+
+        emit_http_ingress_policy(
+            self,
+            name=name,
+            namespace=env.namespace,
+            labels=labels,
+            selector=sel,
+            port=_PORTS.port("onscreens_http"),
         )
