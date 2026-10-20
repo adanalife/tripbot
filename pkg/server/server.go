@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -28,17 +29,44 @@ import (
 // Server holds the web server's runtime state: its config, the build version
 // tag the /version endpoint reports, the feature-flag client the console's
 // /api/flags endpoints read/toggle, and the store + publisher behind
-// /api/rotators. cmd/tripbot constructs one via New and installs them
-// (SetVersion, SetFlags, SetRotators) before Start runs.
+// /api/rotators. cmd/tripbot constructs one via New and installs the version,
+// user flags and playhead before Start runs. The flag client, bed store and
+// rotator store + publisher come up later in its boot, while the server is
+// already answering — so those four are guarded by lateMu and read through
+// their accessors (flagClient, bedStore, rotatorDeps).
 type Server struct {
 	cfg        *c.TripbotConfig
 	versionTag string
+	userFlags  UserFlagger
+	playhead   Playhead
+
+	lateMu     sync.RWMutex
 	flags      feature.FlagClient
 	beds       BedStore
 	rotators   RotatorStore
 	rotatorPub RotatorPublisher
-	userFlags  UserFlagger
-	playhead   Playhead
+}
+
+// flagClient is the installed feature-flag client, nil until SetFlags runs.
+func (s *Server) flagClient() feature.FlagClient {
+	s.lateMu.RLock()
+	defer s.lateMu.RUnlock()
+	return s.flags
+}
+
+// bedStore is the installed background-audio store, nil until SetBeds runs.
+func (s *Server) bedStore() BedStore {
+	s.lateMu.RLock()
+	defer s.lateMu.RUnlock()
+	return s.beds
+}
+
+// rotatorDeps is the installed rotator store and publisher, nil until
+// SetRotators runs.
+func (s *Server) rotatorDeps() (RotatorStore, RotatorPublisher) {
+	s.lateMu.RLock()
+	defer s.lateMu.RUnlock()
+	return s.rotators, s.rotatorPub
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
