@@ -53,6 +53,13 @@ func New(cfg *c.TripbotConfig) *Server {
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
+// maxRequestBody caps every request body. The largest legitimate one is a
+// rotator config at its validation limits (TestMaxRequestBodyFitsRotatorConfig);
+// 1 MiB holds that even when every rune is an emoji the console's JSON encoder
+// escapes as a 12-byte surrogate pair, and stops a caller streaming an
+// unbounded body into a decode.
+const maxRequestBody = 1 << 20
+
 // Start starts the web server, returning the listener error if it fails to
 // come up. When ctx is canceled (e.g. SIGINT/SIGTERM via
 // signal.NotifyContext) the server stops accepting new connections, waits up
@@ -181,6 +188,7 @@ func (s *Server) Start(ctx context.Context) error {
 	app := negroni.New(
 		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
 		httpmw.NewSlogLogger(),
+		httpmw.MaxBody(maxRequestBody),
 	)
 
 	// attach http-metrics (prometheus) middleware
