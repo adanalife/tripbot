@@ -77,7 +77,6 @@ func newTestApp(vid video.Video) *App {
 		Chat:        noopChat{},
 		Sessions:    noopSessions{},
 		Flags:       noopFlags{},
-		NATS:        noopNATS{},
 		Cron:        noopCron{},
 		Geocoder:    noopGeocoder{},
 		Weather:     noopWeather{},

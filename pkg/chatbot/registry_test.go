@@ -35,8 +35,8 @@ func TestNoDuplicateTriggersOrAliases(t *testing.T) {
 
 func TestLookupMapsContainAllTriggers(t *testing.T) {
 	for _, cmd := range builtTestApp.commands {
-		// builtTestApp is a Twitch App; commands scoped to other platforms via
-		// Command.Platforms aren't indexed here.
+		// builtTestApp is a Twitch App; commands its gate disables aren't
+		// indexed here.
 		if !builtTestApp.commandEnabled(&cmd) {
 			continue
 		}
@@ -58,8 +58,8 @@ func TestLookupMapsContainAllTriggers(t *testing.T) {
 func TestLookupMapsPointToCorrectCommand(t *testing.T) {
 	for i := range builtTestApp.commands {
 		cmd := &builtTestApp.commands[i]
-		// Skip commands scoped to other platforms via Command.Platforms — they
-		// aren't in builtTestApp's (Twitch) lookup maps by design.
+		// Skip commands the gate disables — they aren't in builtTestApp's
+		// (Twitch) lookup maps by design.
 		if !builtTestApp.commandEnabled(cmd) {
 			continue
 		}

@@ -119,7 +119,7 @@ var errSearchUnavailable = errors.New("search unavailable: NATS not connected")
 
 // realSearch is the production Search adapter. Beyond the env its NATS
 // subjects are namespaced by, it holds no state: the embed request goes
-// through the pkg/natsclient singleton (like realNATS) and the pgvector
+// through the pkg/natsclient singleton and the pgvector
 // query through the process-wide DB (like realSessions).
 type realSearch struct {
 	env string

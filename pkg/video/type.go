@@ -93,19 +93,6 @@ func (v Video) String() string {
 	return v.Slug
 }
 
-// a DashStr is the string we get from the dashcam
-// an example file: 2018_0514_224801_013.MP4
-// an example dashstr: 2018_0514_224801_013
-// ex: 2018_0514_224801_013
-func (v Video) DashStr() string {
-	// slugs shorter than 20 chars are malformed; return "" rather than
-	// panic on the slice below
-	if len(v.Slug) < 20 {
-		return ""
-	}
-	return v.Slug[:20]
-}
-
 // ex: 2018_0514_224801_013.MP4
 func (v Video) File() string {
 	return fmt.Sprintf("%s.MP4", v.Slug)
