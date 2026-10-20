@@ -438,7 +438,7 @@ func TestRestartBroadcastStartsAfterAnUnconfirmedStop(t *testing.T) {
 		}
 
 		startErr := errors.New("obs: OutputRunning")
-		c = fakeOBS(t, stopErr)
+		fakeOBS(t, stopErr)
 		startOBSOutput = func(context.Context) error { return startErr }
 		err := RestartBroadcast(ctx, live)
 		if !errors.Is(err, errStopUnconfirmed) || !errors.Is(err, startErr) {
