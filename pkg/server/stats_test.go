@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"gorm.io/gorm"
 )
@@ -103,7 +105,7 @@ func TestPlaybackStatsHandler_EmptyDataShape(t *testing.T) {
 
 func TestCommunityStatsHandler_EmptyDataShape(t *testing.T) {
 	testdb.New(t)
-	rec := insightsGET(t, "/api/stats/community", communityStatsHandler)
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -125,7 +127,7 @@ func TestStatsHandlers_ClampDays(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"days":90`) {
 		t.Errorf("playback days=500 should clamp to 90: %s", rec.Body.String())
 	}
-	rec = insightsGET(t, "/api/stats/community?days=0", communityStatsHandler)
+	rec = insightsGET(t, "/api/stats/community?days=0", communityServer.communityStatsHandler)
 	if !strings.Contains(rec.Body.String(), `"days":1`) {
 		t.Errorf("community days=0 should clamp to 1: %s", rec.Body.String())
 	}
@@ -356,8 +358,13 @@ func seedMilesUser(t *testing.T, db *gorm.DB, username string, miles float64, is
 
 func seedSnapshot(t *testing.T, db *gorm.DB, board string, rank int, username string, value float64) {
 	t.Helper()
+	seedSnapshotOn(t, db, "twitch", board, rank, username, value)
+}
+
+func seedSnapshotOn(t *testing.T, db *gorm.DB, platform, board string, rank int, username string, value float64) {
+	t.Helper()
 	err := db.Exec(`INSERT INTO scoreboard_snapshots (scoreboard_name, platform, rank, username, value)
-	                VALUES (?, 'twitch', ?, ?, ?)`, board, rank, username, value).Error
+	                VALUES (?, ?, ?, ?, ?)`, board, platform, rank, username, value).Error
 	if err != nil {
 		t.Fatalf("insert snapshot %s rank %d: %v", board, rank, err)
 	}
@@ -391,7 +398,7 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	seedSnapshot(t, db, "guess_state_2026_07", 1, "comm_bob", 12)
 	seedSnapshot(t, db, "guess_state_2026_07", 2, "comm_alice", 3)
 
-	rec := insightsGET(t, "/api/stats/community", communityStatsHandler)
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -433,6 +440,33 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	}
 	if miles.Rows[4].Rank != 5 || miles.Rows[4].Username != "g5" {
 		t.Errorf("miles rows[4] = %+v, want rank 5 g5", miles.Rows[4])
+	}
+}
+
+// communityServer answers /api/stats/community as the twitch instance.
+var communityServer = New(&c.TripbotConfig{Environment: "testing", Platform: "twitch"})
+
+// Snapshots rank each platform separately, so the boards carry only the
+// asking instance's platform: one player per rank, and a newer month frozen
+// on another platform doesn't hide this one's latest.
+func TestCommunityStatsHandler_BoardsAreThisPlatforms(t *testing.T) {
+	db := testdb.New(t)
+	seedSnapshotOn(t, db, "twitch", "miles_2026_07", 1, "alice", 70)
+	seedSnapshotOn(t, db, "twitch", "miles_2026_07", 2, "carol", 50)
+	seedSnapshotOn(t, db, "kick", "miles_2026_07", 1, "bob", 90)
+	seedSnapshotOn(t, db, "kick", "miles_2026_08", 1, "dave", 10)
+
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got communityStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	want := []boardRow{{Rank: 1, Username: "alice", Value: 70}, {Rank: 2, Username: "carol", Value: 50}}
+	if len(got.Boards) != 1 || got.Boards[0].Board != "miles_2026_07" || !slices.Equal(got.Boards[0].Rows, want) {
+		t.Fatalf("boards = %+v, want only twitch's miles_2026_07 rows %+v", got.Boards, want)
 	}
 }
 

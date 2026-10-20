@@ -297,8 +297,11 @@ WHERE is_bot = false AND exclude_from_leaderboard = false
 ORDER BY miles DESC, username
 LIMIT 10`
 
-// latestBoardsSQL reads the most recent snapshotted month's boards, top 5
-// placements each. Board names embed their month as a _YYYY_MM suffix
+// latestBoardsSQL reads one platform's most recent snapshotted month's
+// boards, top 5 placements each. Snapshots rank each platform separately
+// (UNIQUE(scoreboard_name, platform, rank)), so the boards are read for the
+// asking instance's platform, like /api/leaderboards — mixing them would list
+// two players at every rank. Board names embed their month as a _YYYY_MM suffix
 // (miles_2026_07, guess_state_2026_07), which is what "most recent" keys on —
 // snapshot rows are written once at rollover, so date_created would work too,
 // but the name is the identity the boards are queried by everywhere else.
@@ -308,6 +311,7 @@ const latestBoardsSQL = `
 WITH latest AS (
     SELECT MAX(substring(scoreboard_name FROM '[0-9]{4}_[0-9]{2}$')) AS month
     FROM scoreboard_snapshots
+    WHERE platform = @platform
 )
 SELECT s.scoreboard_name AS board,
        s.rank,
@@ -315,10 +319,11 @@ SELECT s.scoreboard_name AS board,
        ROUND(s.value::numeric, 1)::float8 AS value
 FROM scoreboard_snapshots s, latest
 WHERE substring(s.scoreboard_name FROM '[0-9]{4}_[0-9]{2}$') = latest.month
+  AND s.platform = @platform
   AND s.rank <= 5
-ORDER BY s.scoreboard_name, s.rank, s.platform`
+ORDER BY s.scoreboard_name, s.rank`
 
-func gatherCommunityStats(ctx context.Context, days int) (communityStatsResponse, error) {
+func gatherCommunityStats(ctx context.Context, days int, platform string) (communityStatsResponse, error) {
 	out := communityStatsResponse{
 		Days:     days,
 		TopMiles: []topMilesEntry{},
@@ -347,7 +352,7 @@ func gatherCommunityStats(ctx context.Context, days int) (communityStatsResponse
 		Username string
 		Value    float64
 	}
-	if err := db.Raw(latestBoardsSQL).Scan(&rows).Error; err != nil {
+	if err := db.Raw(latestBoardsSQL, sql.Named("platform", platform)).Scan(&rows).Error; err != nil {
 		return out, fmt.Errorf("boards: %w", err)
 	}
 	// Rows arrive grouped by board name; fold consecutive rows into one
@@ -510,10 +515,10 @@ func playbackDailyHandler(w http.ResponseWriter, r *http.Request) {
 
 // communityStatsHandler serves GET /api/stats/community: subscription and
 // correction counts over the ?days window, the lifetime miles top 10, and
-// the latest month's frozen scoreboards.
-func communityStatsHandler(w http.ResponseWriter, r *http.Request) {
+// the latest month's frozen scoreboards for this instance's platform.
+func (s *Server) communityStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, communityStatsDefaultDays)
-	payload, err := gatherCommunityStats(r.Context(), days)
+	payload, err := gatherCommunityStats(r.Context(), days, s.cfg.Platform)
 	if err != nil {
 		logQueryFailure(r.Context(), "community stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather community stats")
