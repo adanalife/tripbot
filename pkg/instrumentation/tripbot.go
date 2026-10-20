@@ -355,6 +355,26 @@ func (e eventsubSubscriptionsGauge) Set(held, denied int) {
 	e.record("denied", denied)
 }
 
+// eventsubSessionState is the last session state Run reported, for in-process
+// readers (the /health/deps check): 0 before the first welcome, then 1 down /
+// 2 up. Set only by a finished subscribe round and by the session ending, never
+// by the boot-time gauge publish, so a pod that hasn't dialed yet is "not judged".
+var eventsubSessionState atomic.Int32
+
+// SetSession records whether an EventSub session is up: true after a subscribe
+// round that held at least one subscription, false once the session ends or a
+// round was wholly denied.
+func (eventsubSubscriptionsGauge) SetSession(up bool) {
+	eventsubSessionState.Store(1 + int32(b2i(up)))
+}
+
+// Session is the last state SetSession recorded. reported is false until the
+// first round has finished, which is "not judged yet" rather than "down".
+func (eventsubSubscriptionsGauge) Session() (up, reported bool) {
+	s := eventsubSessionState.Load()
+	return s == 2, s != 0
+}
+
 func (e eventsubSubscriptionsGauge) record(result string, n int) {
 	e.gauge.Record(context.Background(), int64(n),
 		platformAttr("twitch"),

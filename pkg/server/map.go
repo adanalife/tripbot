@@ -106,6 +106,30 @@ func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// corpusStats is the data seam the per-corpus stats endpoint reads through,
+// overridable in tests.
+var corpusStats = video.CorpusStats
+
+// corpusStatsResponse is the wire shape of GET /admin/corpus/stats. Corpora is
+// always an array, ordered by corpus name.
+type corpusStatsResponse struct {
+	Corpora []video.CorpusStat `json:"corpora"`
+}
+
+// corpusStatsHandler serves GET /admin/corpus/stats: per-corpus row counts by
+// pipeline stage, for the console's pipeline page. Parked rows of a corpus
+// that isn't airing yet are counted under their own name, so the page can
+// read how far each one has come without them inflating the one on air.
+func corpusStatsHandler(w http.ResponseWriter, r *http.Request) {
+	stats, err := corpusStats(r.Context())
+	if err != nil {
+		logQueryFailure(r.Context(), "corpus stats query failed", err)
+		insightsError(w, "couldn't count the corpora")
+		return
+	}
+	writeInsights(w, r, corpusStatsResponse{Corpora: stats})
+}
+
 // routeSegment is one drawable run of the route: points that are contiguous in
 // space and share a band, so the whole thing renders as one coloured polyline.
 type routeSegment struct {

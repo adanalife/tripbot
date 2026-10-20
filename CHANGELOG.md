@@ -9,6 +9,94 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.38.0] — 2026-10-20
+
+### Chatbot
+
+- YouTube chat gets the periodic help message once a day. Other platforms still get it about every three hours. ([#1713](https://github.com/adanalife/tripbot/pull/1713))
+
+### Onscreens
+
+- The default rotator copy asks YouTube viewers to subscribe rather than follow, and drops the "interactive chat is coming to YouTube soon" line. ([#1713](https://github.com/adanalife/tripbot/pull/1713))
+
+### Fixes
+
+- `!time`, `!sunset`, `!daytime` and the location rotator's date, sunset and weather now read a clip's filmed time as the dashcam's own clock in the zone where it was filmed. They were treating that clock as UTC, so every answer was off by the zone offset — a 7:30pm clip in Colorado read as 1:30pm. ([#1710](https://github.com/adanalife/tripbot/pull/1710))
+- Add your info here ([#1714](https://github.com/adanalife/tripbot/pull/1714))
+
+### Deploy / Infra
+
+- Prod YouTube now reads chat: the bot answers commands there and the overlays show command hints instead of promo copy, now that the YouTube Data API quota covers the 2s chat poll. ([#1713](https://github.com/adanalife/tripbot/pull/1713))
+
+### CI / Tooling
+
+- Run the changelog fragment-numbering self-test on every PR, so a break shows up in review rather than on the next release PR. ([#1709](https://github.com/adanalife/tripbot/pull/1709))
+
+## [v5.37.0] — 2026-10-18
+
+### Console / API
+
+- Add your info here ([#1706](https://github.com/adanalife/tripbot/pull/1706))
+- GET /api/footage/dropped lists every season-2 piece auto-trim or a reviewer dropped whole, newest first, with the clip it aired as when a reviewer kept it. ([#1708](https://github.com/adanalife/tripbot/pull/1708))
+
+## [v5.36.0] — 2026-10-17
+
+### Console / API
+
+- `GET /api/sources/{stem}` names the ingested originals either side in film order as `prev` and `next`, and carries each clip's fix and track so the whole original's route draws in one read. ([#1702](https://github.com/adanalife/tripbot/pull/1702))
+- `GET /api/footage/days` lists every filmed day with its clip count, and `GET /api/footage/days/{day}` that day's clips with their fixes and tracks, for the console's footage calendar. The day comes off the slug's camera clock, not the UTC `date_filmed`. ([#1704](https://github.com/adanalife/tripbot/pull/1704))
+- `GET /api/sources/{stem}` carries the source's corpus and its total airings across every platform, and each clip its place and filming time; `GET /api/videos/{id}` and each source clip add `recorded_at_utc`, the dashcam's wall clock read in the time zone at the clip's fix, so the console can show a clip's real UTC time. ([#1705](https://github.com/adanalife/tripbot/pull/1705))
+
+## [v5.35.0] — 2026-10-16
+
+### Console / API
+
+- `GET /api/sources/{stem}` lists the clips ingested from one season-2 original, so the console's pipeline grid can open a source once it lands. ([#1700](https://github.com/adanalife/tripbot/pull/1700))
+
+## [v5.34.0] — 2026-10-15
+
+### Console / API
+
+- Clips can carry the operator's marks on a moment: a star, or a bad GPS point. `/api/videos/{id}` reads them back and `POST /api/videos/{id}/moments` sets them, keyed to the original recording so a re-trim moves no mark. ([#1698](https://github.com/adanalife/tripbot/pull/1698))
+- Add `GET /admin/corpus/stats`: per-corpus clip counts by pipeline stage (rows, reviewed, flagged, trusted track, embedded) for the console pipeline page. ([#1699](https://github.com/adanalife/tripbot/pull/1699))
+
+### Deploy / Infra
+
+- Stage-1 tripbot and onscreens export OpenTelemetry metrics and traces like prod does, so the console's cluster charts and the Fleet view get a stage line to compare against prod. ([#1696](https://github.com/adanalife/tripbot/pull/1696))
+
+## [v5.33.0] — 2026-10-15
+
+### Chatbot
+
+- `!state`, `!daytime` and `!find` only jump to clips someone has reviewed, so footage fresh out of the video pipeline stays off the air until it is watched. ([#1695](https://github.com/adanalife/tripbot/pull/1695))
+
+### Console / API
+
+- `/health/deps` on the Twitch instance reports whether the EventSub session is holding its subscriptions, so the console shows a dropped or wholly denied session as degraded ("eventsub unusable") instead of healthy. ([#1686](https://github.com/adanalife/tripbot/pull/1686))
+- `/api/stats/playback/daily` carries the closed human visits that began each day and their median length, so the console can draw a trend under the stays block. ([#1687](https://github.com/adanalife/tripbot/pull/1687))
+
+### Fixes
+
+- The video API names a clip's previous neighbour and its track, so the console's clip page draws the road in as well as the road out. ([#1691](https://github.com/adanalife/tripbot/pull/1691))
+
+## [v5.32.0] — 2026-10-15
+
+### Chatbot
+
+- Admin chat commands (`!shutdown`, `!skip`, `!jump`, `!audio`, `!timewarp`, `!givemiles`, …) now gate on the platform-reported broadcaster flag, which the gateway sets from the sender's user id, instead of comparing the display name to the channel name. On YouTube, Facebook and TikTok a viewer can pick any display name, so the old compare handed those commands to anyone named after the channel. ([#1679](https://github.com/adanalife/tripbot/pull/1679))
+
+### Console / API
+
+- The insight endpoints take `days=0` for all time: footage and regions can be read over the whole history, not just the last 90 days. ([#1681](https://github.com/adanalife/tripbot/pull/1681))
+- `GET /api/stats/playback/daily` serves the playback counters per day over the window, one row per calendar day, for a trend beside the totals. ([#1682](https://github.com/adanalife/tripbot/pull/1682))
+- The chat log marks a line struck when the platform removes it (a moderator delete, a timeout, a ban), and `/api/chat/history` returns it flagged `deleted`, so the console's `/history` shows it struck the way the live log does instead of pristine. ([#1683](https://github.com/adanalife/tripbot/pull/1683))
+- `/health/deps` on the Twitch instance reports whether the bot is receiving chat, so the console shows a tripbot that is up but out of chat as degraded ("chat unusable") rather than healthy. ([#1685](https://github.com/adanalife/tripbot/pull/1685))
+
+### CI / Tooling
+
+- CI workflows call the org's shared reusable workflows (adanalife/infra) instead of each carrying its own copy. ([#1674](https://github.com/adanalife/tripbot/pull/1674))
+- The per-PR gates run with a read-only token instead of the repository's default one, and the weekly lint sweep keeps ruff's pre-0.16 rule set. ([#1678](https://github.com/adanalife/tripbot/pull/1678))
+
 ## [v5.31.0] — 2026-10-13
 
 ### Console / API

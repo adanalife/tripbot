@@ -249,13 +249,35 @@ func TestFindRandomByState_StaysInTheAiringCorpus(t *testing.T) {
 	}
 }
 
+// An unreviewed clip is never picked, and a state with only unreviewed
+// footage has none to offer.
+func TestFindRandomByState_SkipsUnreviewedClips(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	want := insertVideo(t, db, Video{Slug: "2018_0514_224801_080", State: "Idaho"})
+	unreview(t, db, insertVideo(t, db, Video{Slug: "2018_0514_224801_081", State: "Idaho"}))
+	unreview(t, db, insertVideo(t, db, Video{Slug: "2018_0514_224801_082", State: "Montana"}))
+
+	for range 10 {
+		got, err := FindRandomByState(ctx, "ID", Video{})
+		if err != nil || got.ID != want.ID {
+			t.Fatalf("FindRandomByState(\"ID\") = id %d, %v; want the reviewed clip %d", got.ID, err, want.ID)
+		}
+	}
+	if _, err := FindRandomByState(ctx, "MT", Video{}); !errors.Is(err, terrors.ErrNoFootageForState) {
+		t.Errorf("FindRandomByState(\"MT\") error = %v, want %v", err, terrors.ErrNoFootageForState)
+	}
+}
+
 func TestFindNextDaytime(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
 	// Denver (UTC-6 in May); date_filmed drives the walk. Use far-future dates
 	// so no seed/2018 rows fall after the current clip and skew the query.
-	// backdate sets an exact UTC instant per clip.
+	// backdate sets each clip's date_filmed, which holds the camera's wall
+	// clock (here, the clock in the slug) labelled UTC.
 	lat, lng := 39.7392, -104.9903
 	backdate := func(v Video, iso string) {
 		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
@@ -271,12 +293,16 @@ func TestFindNextDaytime(t *testing.T) {
 	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
 	// An earlier daytime clip from another corpus: parked, so not an answer.
 	other := insertVideo(t, db, Video{Slug: "20990515160000_000001_s0000", Lat: lat, Lng: lng, Corpus: CorpusS2})
+	// An earlier daytime clip nobody has reviewed: not an answer either.
+	unreviewed := insertVideo(t, db, Video{Slug: "2099_0515_110000_005", Lat: lat, Lng: lng})
+	unreview(t, db, unreviewed)
 
-	backdate(current, "2099-05-15T04:00:00Z")   // 22:00 MDT May 14 — night, day May 14
-	backdate(nextNight, "2099-05-15T09:00:00Z") // 03:00 MDT May 15 — night, day May 15
-	backdate(other, "2099-05-15T16:00:00Z")     // 10:00 MDT May 15 — daytime, but s2
-	backdate(morning, "2099-05-15T18:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
-	backdate(lateDay, "2099-05-15T21:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
+	backdate(current, "2099-05-14T22:00:00Z")    // 22:00 MDT May 14 — night, day May 14
+	backdate(nextNight, "2099-05-15T03:00:00Z")  // 03:00 MDT May 15 — night, day May 15
+	backdate(other, "2099-05-15T10:00:00Z")      // 10:00 MDT May 15 — daytime, but s2
+	backdate(unreviewed, "2099-05-15T11:00:00Z") // 11:00 MDT May 15 — daytime, but unreviewed
+	backdate(morning, "2099-05-15T12:00:00Z")    // 12:00 MDT May 15 — daytime, day May 15
+	backdate(lateDay, "2099-05-15T15:00:00Z")    // 15:00 MDT May 15 — daytime, day May 15
 
 	got, err := FindNextDaytime(ctx, reload(t, current.ID))
 	if err != nil {
@@ -303,8 +329,8 @@ func TestFindNextDaytime_NoDaytimeAhead(t *testing.T) {
 
 	current := insertVideo(t, db, Video{Slug: "2099_0614_220000_001", Lat: lat, Lng: lng})
 	onlyNight := insertVideo(t, db, Video{Slug: "2099_0615_030000_002", Lat: lat, Lng: lng})
-	backdate(current, "2099-06-15T04:00:00Z")   // 22:00 MDT June 14 — night
-	backdate(onlyNight, "2099-06-15T09:00:00Z") // 03:00 MDT June 15 — night
+	backdate(current, "2099-06-14T22:00:00Z")   // 22:00 MDT June 14 — night
+	backdate(onlyNight, "2099-06-15T03:00:00Z") // 03:00 MDT June 15 — night
 
 	_, err := FindNextDaytime(ctx, reload(t, current.ID))
 	if !errors.Is(err, terrors.ErrNoDaytimeFound) {

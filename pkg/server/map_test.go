@@ -347,3 +347,49 @@ func TestMapRecentHandlerServesEmptyObjectWithNoPlays(t *testing.T) {
 		t.Errorf("body = %q, want %q", got, "{}")
 	}
 }
+
+// Each corpus is counted on its own, with every counter a filter over the
+// same rows: a parked season-2 clip lands under s2, not in s1's total.
+func TestCorpusStatsHandler(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	zeros := "[" + strings.TrimSuffix(strings.Repeat("0,", 1152), ",") + "]"
+	for _, q := range []string{
+		`INSERT INTO videos (id, slug, corpus, reviewed_at, flagged, coord_confidence) VALUES
+		 (1, '2018_0514_224501_001', 's1', now(), false, 0.95),
+		 (2, '2018_0514_224801_002', 's1', now(), true, 0.5),
+		 (3, '2026_0101_120000_003', 's2', NULL, false, NULL),
+		 (4, '2026_0101_120300_004', 's2', now(), false, 0.8)`,
+		`INSERT INTO frame_embeddings (video_id, ts_sec, source_ts_sec, embedding, model) VALUES
+		 (1, 0, 0, '` + zeros + `', 'test'), (1, 1, 1, '` + zeros + `', 'test'), (4, 0, 0, '` + zeros + `', 'test')`,
+	} {
+		if err := db.WithContext(ctx).Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := insightsGET(t, "/admin/corpus/stats", corpusStatsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got corpusStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := []video.CorpusStat{
+		{Corpus: "s1", Rows: 2, Reviewed: 2, Flagged: 1, Tracked: 1, Embedded: 1},
+		{Corpus: "s2", Rows: 2, Reviewed: 1, Flagged: 0, Tracked: 1, Embedded: 1},
+	}
+	if !reflect.DeepEqual(got.Corpora, want) {
+		t.Errorf("got  %+v\nwant %+v", got.Corpora, want)
+	}
+}
+
+// An empty table is {"corpora":[]}, never null — the console iterates it.
+func TestCorpusStatsHandler_EmptyDataShape(t *testing.T) {
+	testdb.New(t)
+	rec := insightsGET(t, "/admin/corpus/stats", corpusStatsHandler)
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"corpora":[]}` {
+		t.Errorf("status = %d, body = %s, want 200 {\"corpora\":[]}", rec.Code, rec.Body.String())
+	}
+}

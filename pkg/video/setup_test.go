@@ -12,14 +12,27 @@ import (
 	"gorm.io/gorm"
 )
 
-// insertVideo writes a videos row and returns it with the SERIAL-assigned ID
-// populated, so callers can link chains by real ID.
+// insertVideo writes a reviewed videos row and returns it with the
+// SERIAL-assigned ID populated, so callers can link chains by real ID. The
+// pickers skip unreviewed clips; unreview clears the mark for a test about that.
 func insertVideo(t *testing.T, db *gorm.DB, vid Video) Video {
 	t.Helper()
 	if err := db.Create(&vid).Error; err != nil {
 		t.Fatalf("insert video %q: %v", vid.Slug, err)
 	}
+	if err := db.Exec(`UPDATE videos SET reviewed_at = now() WHERE id = ?`, vid.ID).Error; err != nil {
+		t.Fatalf("mark video %q reviewed: %v", vid.Slug, err)
+	}
 	return vid
+}
+
+// unreview clears a row's reviewed_at, the state a clip arrives in from the
+// video pipeline before anyone has watched it.
+func unreview(t *testing.T, db *gorm.DB, vid Video) {
+	t.Helper()
+	if err := db.Exec(`UPDATE videos SET reviewed_at = NULL WHERE id = ?`, vid.ID).Error; err != nil {
+		t.Fatalf("unreview video %q: %v", vid.Slug, err)
+	}
 }
 
 // playCount returns how many video_plays rows point at the given video, so

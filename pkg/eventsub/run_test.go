@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/coder/websocket"
 )
 
@@ -429,5 +430,40 @@ func TestRun_ReportsMissingScopes(t *testing.T) {
 				t.Errorf("missing scopes = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// The session latch /health/deps reads: up once a round holds a subscription,
+// down the moment Run returns, and down after a round Twitch wholly denied.
+func TestRun_ReportsTheSession(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := &fakeTwitch{respond: accepted, holdOpen: true}
+	cfg := f.start(t)
+
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, cfg, Handlers{OnRaid: func(string, int) {}}) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if up, _ := instrumentation.EventSubSubscriptions.Session(); up {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("session never reported up after an accepted round")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if up, reported := instrumentation.EventSubSubscriptions.Session(); up || !reported {
+		t.Errorf("Session after Run returned = (%v, %v), want (false, true)", up, reported)
+	}
+
+	denied := &fakeTwitch{respond: func(string) (int, string) { return http.StatusForbidden, `{"status":403}` }, closeCode: 4003}
+	if err := run(t, denied.start(t), Handlers{OnRaid: func(string, int) {}}); err == nil {
+		t.Fatal("Run after a 4003 close = nil, want an error")
+	}
+	if up, _ := instrumentation.EventSubSubscriptions.Session(); up {
+		t.Error("Session up after a wholly denied round, want down")
 	}
 }

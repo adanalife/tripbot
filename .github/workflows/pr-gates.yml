@@ -34,4 +34,9 @@ jobs:
       platforms: true
       cdk8s: true
       cdk8s-tests: true
+      # The release job is the only thing that runs the fragment-numbering
+      # scripts, and it runs on main after merge, so a break there would first
+      # show up as a release PR with mis-numbered entries.
+      checks: |
+        scripts/number-fragment-test.sh
     secrets: inherit

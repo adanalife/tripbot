@@ -12,7 +12,7 @@ data:
   ONSCREENS_SERVER_PLATFORM: tiktok
   OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=tiktok
-  OTEL_SDK_DISABLED: "true"
+  OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
   SENTRY_ENVIRONMENT: stage-1
@@ -38,7 +38,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 3cc8239ff1
+        adanalife.dev/config-hash: "e587100321"
       labels:
         app: onscreens-tiktok
     spec:

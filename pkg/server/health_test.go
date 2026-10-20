@@ -24,7 +24,7 @@ func TestDepChecksSkipUnconfiguredNats(t *testing.T) {
 	}{
 		{"no nats configured", "", "", []string{"postgres"}},
 		{"nats configured", "nats://nats:4222", "", []string{"postgres", "nats"}},
-		{"twitch reports chat", "nats://nats:4222", "twitch", []string{"postgres", "nats", "chat"}},
+		{"twitch reports chat and eventsub", "nats://nats:4222", "twitch", []string{"postgres", "nats", "chat", "eventsub"}},
 		{"youtube does not", "", "youtube", []string{"postgres"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,5 +109,23 @@ func TestChatPingFollowsTheLastPoll(t *testing.T) {
 	instrumentation.TwitchConnection.Set(true)
 	if err := chatPing(context.Background()); err != nil {
 		t.Errorf("chatPing = %v after a good poll, want nil", err)
+	}
+}
+
+// eventsubPing is silent until a subscribe round has finished, then follows
+// the session: a pod still dialing is not an EventSub outage.
+func TestEventSubPingFollowsTheSession(t *testing.T) {
+	if _, reported := instrumentation.EventSubSubscriptions.Session(); !reported {
+		if err := eventsubPing(context.Background()); err != nil {
+			t.Errorf("eventsubPing before any round = %v, want nil", err)
+		}
+	}
+	instrumentation.EventSubSubscriptions.SetSession(false)
+	if err := eventsubPing(context.Background()); err == nil {
+		t.Error("eventsubPing = nil with the session down, want an error")
+	}
+	instrumentation.EventSubSubscriptions.SetSession(true)
+	if err := eventsubPing(context.Background()); err != nil {
+		t.Errorf("eventsubPing = %v with the session up, want nil", err)
 	}
 }

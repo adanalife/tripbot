@@ -145,6 +145,12 @@ func TestDefaultConfigForFiltersAndClearsScoping(t *testing.T) {
 			t.Errorf("YouTube prefill included a Twitch-only line: %q", m.Text)
 		}
 	}
+	// YouTube's call to action is "subscribe"; "follow" is every other platform's.
+	for _, m := range yt.Right.Messages {
+		if strings.Contains(m.Text, "follow") {
+			t.Errorf("YouTube prefill asks viewers to follow: %q", m.Text)
+		}
+	}
 	// TikTok's gift lines are scoped to TikTok, so they belong in its prefill and
 	// nowhere else.
 	var tiktokGift, youtubeGift bool

@@ -259,6 +259,7 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 		held := attempted - denied
 		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied)
 		instrumentation.EventSubSubscriptions.Set(int(held), int(denied))
+		instrumentation.EventSubSubscriptions.SetSession(held > 0)
 		if h.OnMissingScopes != nil {
 			slices.Sort(missing)
 			h.OnMissingScopes(missing)
@@ -272,6 +273,7 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	// The session is gone whatever ended it, so nothing is arriving until the
 	// caller redials. denied stays as the round recorded it — see the gauge's doc.
 	instrumentation.EventSubSubscriptions.Set(0, int(denied))
+	instrumentation.EventSubSubscriptions.SetSession(false)
 	// A cancelled ctx is shutdown, whichever of the library's goroutines noticed
 	// it first — one reports nil, another "use of closed network connection".
 	if ctx.Err() != nil {

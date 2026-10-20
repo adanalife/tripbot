@@ -12,7 +12,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
@@ -107,6 +106,8 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
 	// the full dashcam route as JSON, for the console's map overlay.
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
+	// per-corpus row counts by pipeline stage, for the console's pipeline page.
+	r.Handle("/admin/corpus/stats", tagged("/admin/corpus/stats", corpusStatsHandler)).Methods("GET")
 	// the recent breadcrumbs of each platform, so a fresh console seeds its map
 	// trail from the database rather than from what the video stream can replay.
 	r.Handle("/admin/map/recent", tagged("/admin/map/recent", mapRecentHandler)).Methods("GET")
@@ -136,6 +137,14 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/chat/history", tagged("/api/chat/history", chatHistoryHandler)).Methods("GET")
 	// one clip's record, for the console's video page.
 	r.Handle("/api/videos/{id}", tagged("/api/videos/{id}", videoHandler)).Methods("GET")
+	// the operator's marks on a moment of a clip: a star, or a bad GPS point.
+	r.Handle("/api/videos/{id}/moments", tagged("/api/videos/{id}/moments", videoMomentsHandler)).Methods("POST")
+	r.Handle("/api/sources/{stem}", tagged("/api/sources/{stem}", sourceHandler)).Methods("GET")
+	// the footage calendar: every filmed day, and one day's clips.
+	r.Handle("/api/footage/days", tagged("/api/footage/days", footageDaysHandler)).Methods("GET")
+	r.Handle("/api/footage/days/{day}", tagged("/api/footage/days/{day}", footageDayHandler)).Methods("GET")
+	// every season-2 piece auto-trim or a reviewer dropped whole.
+	r.Handle("/api/footage/dropped", tagged("/api/footage/dropped", footageDroppedHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
@@ -188,7 +197,7 @@ func (s *Server) Start(ctx context.Context) error {
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
 	// attach Sentry middleware (for reporting exceptions)
-	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
+	app.Use(httpmw.NewSentry())
 
 	// attaching routes to handler happens last
 	app.UseHandler(r)
