@@ -1,13 +1,11 @@
 package server
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
-	"time"
 
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/httpmw"
 )
 
 // SetVersion lets cmd/tripbot inject its build-time version string
@@ -38,38 +36,10 @@ func (s *Server) SetBeds(b BedStore) {
 	s.beds = b
 }
 
-// startedAt is when the process began; /version reports it so callers can derive
-// uptime. (The bot's chat-connection state is surfaced separately via the
-// tripbot_twitch_connected gauge, set directly by cmd/tripbot.)
-var startedAt = time.Now()
-
-// versionHandler returns build metadata as JSON. The tag comes from the
-// build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs). started_at is the process start time
-// (startedAt) so callers can derive uptime themselves.
+// versionHandler returns build metadata as JSON; see httpmw.WriteVersion.
+// The tag comes from the build-time ldflag, injected through SetVersion.
 func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
-	resp := struct {
-		Tag       string `json:"tag"`
-		Sha       string `json:"sha"`
-		BuiltAt   string `json:"built_at"`
-		StartedAt string `json:"started_at"`
-	}{Tag: s.versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
-
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range info.Settings {
-			switch s.Key {
-			case "vcs.revision":
-				resp.Sha = s.Value
-			case "vcs.time":
-				resp.BuiltAt = s.Value
-			}
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
-	}
+	httpmw.WriteVersion(w, r, s.versionTag)
 }
 
 // return a favicon if anyone asks for one
