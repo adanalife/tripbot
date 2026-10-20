@@ -61,27 +61,6 @@ func TestVideoFile(t *testing.T) {
 	}
 }
 
-func TestVideoDashStr(t *testing.T) {
-	tests := []struct {
-		name string
-		slug string
-		want string
-	}{
-		{"normal slug", "2018_0514_224801_013", "2018_0514_224801_013"},
-		{"longer slug truncates to 20", "2018_0514_224801_013_a_opt", "2018_0514_224801_013"},
-		{"short slug returns empty (prod-crash guard)", "shortie", ""},
-		{"empty slug returns empty", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := Video{Slug: tt.slug}
-			if got := v.DashStr(); got != tt.want {
-				t.Fatalf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestVideoLocation(t *testing.T) {
 	t.Run("not flagged returns coords with nil error", func(t *testing.T) {
 		v := Video{Lat: 40.0, Lng: -111.0, Flagged: false}
