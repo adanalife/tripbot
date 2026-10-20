@@ -507,58 +507,43 @@ func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !time", "username", user.Username)
-	var err error
-	var lat, lng float64
-	vid, elapsed := a.Video.Playhead(ctx)
-	at := vid.FilmedAt(elapsed)
-	if vid.Flagged {
-		var next video.Video
-		next, err = vid.NextUnflagged(ctx)
-		if err == nil {
-			lat, lng, err = next.Location()
-		}
-	} else {
-		lat, lng, err = vid.Location()
-	}
-	if err != nil {
-		a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
-	} else {
-		realDate := helpers.ActualDate(at, lat, lng)
-		fmtTime := realDate.Format("3:04pm MST")
-		msg := fmt.Sprintf("This moment was %s", fmtTime)
-		if ago := helpers.TimeAgo(at); ago != "" {
-			msg += fmt.Sprintf(" (%s)", ago)
-		}
-		a.Reply(ctx, msg)
-	}
+	a.replyFilmedAt(ctx, "3:04pm MST")
 }
 
 func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !date", "username", user.Username)
-	var err error
-	var lat, lng float64
+	a.replyFilmedAt(ctx, "Monday January 2, 2006")
+}
+
+// replyFilmedAt tells chat when the moment on screen was filmed, in the local
+// time of where it was filmed, formatted with layout.
+//
+// The timestamp comes from the playhead, but a flagged clip has no usable GPS,
+// so its time zone comes from the next unflagged clip. This deliberately skips
+// currentSpot: that announces the fallback in chat, and its moment carries no
+// time, so pairing it with the playhead would read the playhead twice.
+func (a *App) replyFilmedAt(ctx context.Context, layout string) {
 	vid, elapsed := a.Video.Playhead(ctx)
 	at := vid.FilmedAt(elapsed)
+	located := vid
 	if vid.Flagged {
-		var next video.Video
-		next, err = vid.NextUnflagged(ctx)
-		if err == nil {
-			lat, lng, err = next.Location()
+		next, err := vid.NextUnflagged(ctx)
+		if err != nil {
+			a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
+			return
 		}
-	} else {
-		lat, lng, err = vid.Location()
+		located = next
 	}
+	lat, lng, err := located.Location()
 	if err != nil {
 		a.Reply(ctx, "I couldn't figure out current GPS coords, sorry!")
-	} else {
-		realDate := helpers.ActualDate(at, lat, lng)
-		fmtDate := realDate.Format("Monday January 2, 2006")
-		msg := fmt.Sprintf("This moment was %s", fmtDate)
-		if ago := helpers.TimeAgo(at); ago != "" {
-			msg += fmt.Sprintf(" (%s)", ago)
-		}
-		a.Reply(ctx, msg)
+		return
 	}
+	msg := "This moment was " + helpers.ActualDate(at, lat, lng).Format(layout)
+	if ago := helpers.TimeAgo(at); ago != "" {
+		msg += fmt.Sprintf(" (%s)", ago)
+	}
+	a.Reply(ctx, msg)
 }
 
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
