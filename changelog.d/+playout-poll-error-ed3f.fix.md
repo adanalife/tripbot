@@ -1,0 +1,1 @@
+A failed poll of playout no longer counts as a clip change: the current play stays open, no empty video is recorded or announced, and the clip keeps its stopwatch instead of coming back labelled as a resume.

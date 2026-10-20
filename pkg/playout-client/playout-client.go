@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -82,14 +83,16 @@ func (c *Client) publish(ctx context.Context, subject string, ev any) {
 	c.nats.Publish(ctx, subject, payload)
 }
 
-// CurrentlyPlaying finds the currently-playing video path
-func (c *Client) CurrentlyPlaying(ctx context.Context) string {
+// CurrentlyPlaying finds the currently-playing video path. An error means
+// the poll failed, which says nothing about what is on screen — callers keep
+// what they last saw rather than reading it as a switch.
+func (c *Client) CurrentlyPlaying(ctx context.Context) (string, error) {
 	response, err := c.get(ctx, c.serverURL+"/playout/current")
 	if err != nil {
 		slog.ErrorContext(ctx, "unable to determine current video", "err", err)
-		return ""
+		return "", err
 	}
-	return response
+	return response, nil
 }
 
 // lastPlayedStream is the JetStream last-value cache playout publishes its
@@ -217,6 +220,10 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 	if err != nil {
 		slog.DebugContext(ctx, "error reading response from playout server", "err", err)
 		return "", err
+	}
+	// A non-200 body is an error page, not a filename.
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("playout server answered %s: %.200s", response.Status, contents)
 	}
 	return string(contents), nil
 }

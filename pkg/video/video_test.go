@@ -5,10 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	"github.com/adanalife/tripbot/pkg/viewstats"
 	"gorm.io/gorm"
 )
@@ -279,6 +283,50 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	}
 	if n := playCount(t, db, vid.ID); n != 1 {
 		t.Errorf("video_plays rows for video %d = %d, want 1 (the no-op call recorded a play)", vid.ID, n)
+	}
+}
+
+// A failed playout poll says nothing about what is on screen: the same clip on
+// either side of it is no switch — no new play, no overlay toggle, no stopwatch
+// reset.
+func TestPlayer_GetCurrentlyPlaying_FailedPollIsNotASwitch(t *testing.T) {
+	db := testdb.New(t)
+	rec := &recordingOnscreens{}
+	current := "2018_0514_224801_013.MP4"
+	fail := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fail {
+			http.Error(w, "playout down", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(current))
+	}))
+	t.Cleanup(srv.Close)
+	p := NewPlayer(testConf, rec, playoutClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test", "twitch"))
+
+	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
+
+	p.GetCurrentlyPlaying(context.Background())
+	started := p.timeStarted
+	time.Sleep(2 * time.Millisecond)
+
+	fail = true
+	p.GetCurrentlyPlaying(context.Background())
+	if p.Current().ID != vid.ID {
+		t.Errorf("Current().ID after a failed poll = %d, want %d", p.Current().ID, vid.ID)
+	}
+
+	fail = false
+	p.GetCurrentlyPlaying(context.Background())
+
+	if p.timeStarted != started {
+		t.Error("timeStarted reset across a failed poll")
+	}
+	if len(rec.calls) != 1 {
+		t.Errorf("overlay calls = %v, want only the first transition's", rec.calls)
+	}
+	if n := playCount(t, db, vid.ID); n != 1 {
+		t.Errorf("video_plays rows for video %d = %d, want 1", vid.ID, n)
 	}
 }
 
