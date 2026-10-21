@@ -1,1 +1,0 @@
-Removed dead code with no callers: the unused OAuth token writers and refresh lock (the platform-gateway owns token refresh), the chatbot's unused NATS publish seam, the never-set per-command platform list, an unused OBS media-state helper, an unreachable geocode branch in video creation, and an unused video helper.

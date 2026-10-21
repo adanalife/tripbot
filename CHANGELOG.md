@@ -9,6 +9,22 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.0.0] — 2026-10-21
+
+### Console / API
+
+- **Breaking:** the internet-radio background-audio bed is a generic Icecast/Shoutcast bed whose value is `radio` everywhere it is reported (HTTP API, eventbus `AudioBed.Bed`, console state, metric labels). Its stations load at startup from a station list mounted at `/opt/tripbot/assets/radio/stations.json` rather than a list compiled in, and now-playing reads the stream's in-band ICY metadata. The edge-reachability gauge is renamed `radio_reachable` and the watchdog swap direction label is `to_radio`, so alerts and dashboards on the old names need updating; the single-provider credit chat command is removed. ([#1739](https://github.com/adanalife/tripbot/pull/1739))
+
+### Fixes
+
+- Go 1.26.10, for the crypto/x509 advisory GO-2026-6809 (distrust compromised intermediate certificates). ([#1737](https://github.com/adanalife/tripbot/pull/1737))
+- Album tracks in Ogg Opus (`.opus`) are picked up by the album bed and `bin/stage-streambeats`, alongside mp3, flac, m4a and ogg. ([#1740](https://github.com/adanalife/tripbot/pull/1740))
+
+### Cleanup
+
+- tripbot and onscreens-server build their HTTP middleware chain, route tagging, and /version response from one shared implementation. ([#1719](https://github.com/adanalife/tripbot/pull/1719))
+- Removed dead code with no callers: the unused OAuth token writers and refresh lock (the platform-gateway owns token refresh), the chatbot's unused NATS publish seam, the never-set per-command platform list, an unused OBS media-state helper, an unreachable geocode branch in video creation, and an unused video helper. ([#1731](https://github.com/adanalife/tripbot/pull/1731))
+
 ## [v5.39.0] — 2026-10-20
 
 ### Onscreens
