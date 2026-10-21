@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/bedprefs"
 	"github.com/adanalife/tripbot/pkg/bootstrap"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -888,7 +889,17 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	// The station list is mounted from SSM; the store's default station is its
 	// first entry, so it loads before the store is built.
 	beds.LoadStations(beds.RadioStationsFile)
-	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform).WithIndex(beds.MusicIndexFile)
+	prefs := bedprefs.New(database.GormDB())
+	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform).
+		WithIndex(beds.MusicIndexFile).WithPrefs(prefs)
+	// The saved album selection seeds the store before the watchdog's first
+	// Detect, which keeps it while the track on air falls inside it.
+	if album, shuffle, found, err := prefs.Get(ctx, t.cfg.Platform); err != nil {
+		slog.WarnContext(ctx, "background audio: could not load the saved album selection",
+			"err", err, "fix", "ensure migration 067_create_background_audio_prefs has run")
+	} else if found {
+		t.beds.Restore(album, shuffle)
+	}
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
 }
