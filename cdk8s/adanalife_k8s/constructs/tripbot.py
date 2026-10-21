@@ -66,6 +66,13 @@ MUSIC_INDEX_CONFIGMAP = "obs-music-index"
 MUSIC_INDEX_MOUNT_PATH = "/opt/tripbot/assets/music-index"
 MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 
+# The radio bed's station list, materialized from SSM so the stations stay out
+# of git. Mounted optional for the same reason as the music index: a missing
+# parameter leaves the radio bed with no stations, not the pod unschedulable.
+# pkg/obs/beds.RadioStationsFile is RADIO_MOUNT_PATH/stations.json.
+RADIO_STATIONS_SECRET = "tripbot-radio-stations"
+RADIO_MOUNT_PATH = "/opt/tripbot/assets/radio"
+
 # Small but explicit requests for the helper containers (migrate init, one-shot
 # Job containers). Namespaces under a ResourceQuota that enforces requests.*
 # (stage-1's app-quota) reject any pod whose containers omit requests for the
@@ -374,18 +381,26 @@ class Tripbot(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("1Gi")},
             ),
-            # The album background-audio bed reads its track list from here.
-            volume_mounts=(
-                [
-                    k8s.VolumeMount(
-                        name="music-index",
-                        mount_path=MUSIC_INDEX_MOUNT_PATH,
-                        read_only=True,
-                    )
-                ]
-                if env.music_share
-                else None
-            ),
+            # The album bed reads its track list, and the radio bed its
+            # stations, from these.
+            volume_mounts=[
+                k8s.VolumeMount(
+                    name="radio-stations",
+                    mount_path=RADIO_MOUNT_PATH,
+                    read_only=True,
+                ),
+                *(
+                    [
+                        k8s.VolumeMount(
+                            name="music-index",
+                            mount_path=MUSIC_INDEX_MOUNT_PATH,
+                            read_only=True,
+                        )
+                    ]
+                    if env.music_share
+                    else []
+                ),
+            ],
         )
 
         # Optional, and created out of band by bin/stage-streambeats rather than
@@ -403,7 +418,13 @@ class Tripbot(Construct):
                 )
             ]
             if env.music_share
-            else None
+            else []
+        )
+        radio_volume = k8s.Volume(
+            name="radio-stations",
+            secret=k8s.SecretVolumeSource(
+                secret_name=RADIO_STATIONS_SECRET, optional=True
+            ),
         )
 
         k8s.KubeDeployment(
@@ -442,7 +463,7 @@ class Tripbot(Construct):
                         ),
                         init_containers=[migrate],
                         containers=[container],
-                        volumes=music_volumes,
+                        volumes=[radio_volume, *music_volumes],
                     ),
                 ),
             ),
@@ -602,7 +623,8 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
             creation_policy="Owner",
             extract=sm,
         )
-    # discord alerts + bot-token: one parameter → one materialized key.
+    # discord alerts + bot-token + radio stations: one parameter → one
+    # materialized key.
     for id_, name, sm, key in [
         (
             "discord-alerts-external-secret",
@@ -615,6 +637,12 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
             "tripbot-discord-bot-token",
             "/k8s/tripbot/discord-bot-token",
             "DISCORD_BOT_TOKEN",
+        ),
+        (
+            "radio-stations-external-secret",
+            RADIO_STATIONS_SECRET,
+            "/k8s/tripbot/radio-stations",
+            "stations.json",
         ),
     ]:
         eso.external_secret(

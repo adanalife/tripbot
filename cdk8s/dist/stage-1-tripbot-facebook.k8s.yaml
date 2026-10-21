@@ -108,6 +108,9 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - mountPath: /opt/tripbot/assets/radio
+              name: radio-stations
+              readOnly: true
             - mountPath: /opt/tripbot/assets/music-index
               name: music-index
               readOnly: true
@@ -150,6 +153,10 @@ spec:
           key: dana.lol/rpi5
           operator: Exists
       volumes:
+        - name: radio-stations
+          secret:
+            optional: true
+            secretName: tripbot-radio-stations
         - configMap:
             name: obs-music-index
             optional: true
