@@ -26,7 +26,7 @@ var (
 	)
 	tripbotEvents             = mustCounter("tripbot_events_total", "Total rows written to the events table, labeled by event and by service_platform. Every kind in the event taxonomy counts here — logins, logouts, follows, command runs, deploys, watchdog transitions, state crossings.")
 	announcements             = mustCounter("tripbot_announcements_total", "Total viewer-milestone shouts posted to chat, labeled by kind (follow|sub|gift|resub|raid) and by service_platform. Pairs with tripbot_events_total to cover the one leg of the EventSub path nothing else watches: a notice that persists its row but never lands a shout means outbound chat is wedged. A shout's only other trace is ordinary bot chat text, which no query can tell apart from any other line the bot says without matching on its wording.")
-	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) and platform — answers what the stream has been playing and how often it changes")
+	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (radio|carhum|album) and platform — answers what the stream has been playing and how often it changes")
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")

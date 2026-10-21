@@ -3,10 +3,10 @@
 //
 // The OBS scene collection ships ONE "Background Audio" ffmpeg_source (see the
 // adanalife/obs repo's config/Tripbot.json.tmpl). Its settings decide the bed:
-// a network stream for SomaFM, a looping local FLAC for the car-hum drone, a
+// a network stream for the radio, a looping local FLAC for the car-hum drone, a
 // non-looping local track for the album. Switching a bed is therefore just a
 // SetInputSettings overlay onto that one source — the same mechanism the audio
-// watchdog has used since 2026-06-23 to swap SomaFM out for the local bed.
+// watchdog has used since 2026-06-23 to swap the radio out for the local bed.
 //
 // Which bed is live is process state, not database state: it's a property of
 // the OBS container this tripbot is paired with, and it dies with the pod. The
@@ -39,13 +39,14 @@ import (
 type Bed string
 
 const (
-	// SomaFM is internet radio, on whichever of SomaFM's channels is selected
-	// (see Stations). Its music is not cleared for our rebroadcast — it trips
-	// YouTube's Content ID and the other platforms' audio ID — so it is safe to
-	// select only on Twitch, by tolerance rather than licence. No platform
-	// starts here: its edges have refused our IP, so a boot that began on this
-	// bed could begin on one that never plays.
-	SomaFM Bed = "somafm"
+	// Radio is an Icecast/Shoutcast internet-radio stream, on whichever station
+	// from the mounted list is selected (see Stations). Its music is not cleared
+	// for our rebroadcast — it trips YouTube's Content ID and the other
+	// platforms' audio ID — so it is safe to select only on Twitch, by tolerance
+	// rather than licence. No platform starts here: a station's servers can
+	// refuse our IP, so a boot that began on this bed could begin on one that
+	// never plays.
+	Radio Bed = "radio"
 	// CarHum is the synthesized, licence-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
 	CarHum Bed = "carhum"
@@ -55,7 +56,7 @@ const (
 )
 
 // All is the bed set the console offers, in display order.
-var All = []Bed{SomaFM, CarHum, Album}
+var All = []Bed{Radio, CarHum, Album}
 
 // Valid reports whether b is a bed we know how to play.
 func Valid(b Bed) bool {
@@ -162,11 +163,11 @@ type Store struct {
 	// indexFile is the track index to list albums from; "" walks musicDir.
 	indexFile string
 	platform  string      // stamped on the bed metrics; each platform picks its own bed
-	np        *nowPlaying // SomaFM's feed for the tuned channel
+	np        *nowPlaying // the station's metadata for the tuned channel
 
 	mu      sync.Mutex
 	bed     Bed
-	station string // SomaFM channel id the SomaFM bed plays
+	station string // radio station id the radio bed plays
 	// album is the Album bed's selection: one album's directory, a prefix naming
 	// a group of them ("streambeats-lofi"), or "" for the whole share.
 	album string
@@ -177,10 +178,10 @@ type Store struct {
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
 	lastStart time.Time // when a track was last pointed at OBS; see Advance
-	// fallback is the bed the audio watchdog has playing while SomaFM is still
+	// fallback is the bed the audio watchdog has playing while the radio is still
 	// the selected one, and "" when nothing is standing in. The selected bed
 	// can't say so — the watchdog's outage machinery only runs while the store
-	// reads SomaFM — so this is what keeps Advance walking the fallback album
+	// reads the radio — so this is what keeps Advance walking the fallback album
 	// instead of letting one track end in the silence the fallback exists to
 	// prevent, and what lets Playing name audio the selection doesn't.
 	fallback Bed
@@ -254,7 +255,7 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		bed:      bed,
 		musicDir: musicDir,
 		platform: platform,
-		station:  DefaultStation,
+		station:  DefaultStation(),
 		voicing:  DefaultVoicing,
 		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
@@ -272,7 +273,7 @@ func (s *Store) WithIndex(path string) *Store {
 }
 
 // Current reports the selected bed and, on the album, the track file playing.
-// This is the choice, not always the audio: during a SomaFM outage the watchdog
+// This is the choice, not always the audio: during a radio outage the watchdog
 // puts another bed on air without changing the selection, which is what keeps
 // the outage machinery running. Callers naming what a viewer hears want Playing.
 func (s *Store) Current() (Bed, string) {
@@ -282,10 +283,10 @@ func (s *Store) Current() (Bed, string) {
 }
 
 // Playing reports the bed actually on air and, on the album, its track file —
-// the answer to "what is this?". It differs from Current only during a SomaFM
+// the answer to "what is this?". It differs from Current only during a radio
 // outage, where the watchdog swaps the album (or the drone) onto the source and
-// leaves SomaFM selected: reading the selection there names a station nobody is
-// hearing, and on the album a SomaFM track nobody is hearing either.
+// leaves the radio selected: reading the selection there names a station nobody is
+// hearing, and on the album a radio track nobody is hearing either.
 func (s *Store) Playing() (Bed, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -311,7 +312,7 @@ func (s *Store) trackOnAirLocked(bed Bed) string {
 	return s.tracks[s.idx]
 }
 
-// Station reports the SomaFM channel the SomaFM bed plays. Always a station,
+// Station reports the radio station the radio bed plays. Always a station,
 // whichever bed is live — it's the one the bed returns to.
 func (s *Store) Station() string {
 	s.mu.Lock()
@@ -453,11 +454,11 @@ func (s *Store) ResolveAlbum(arg string) string {
 	return match
 }
 
-// SomaFMTrack reports the song playing on the tuned channel, from SomaFM's feed
+// RadioTrack reports the song playing on the tuned channel, from the station's metadata
 // for it. Cached, so chat and the console's poll share one fetch. Only ask while
-// the SomaFM bed is live — it answers for the tuned channel either way, and on
+// the radio bed is live — it answers for the tuned channel either way, and on
 // another bed that names a song nobody is hearing.
-func (s *Store) SomaFMTrack(ctx context.Context) (artist, title string, err error) {
+func (s *Store) RadioTrack(ctx context.Context) (artist, title string, err error) {
 	return s.np.current(ctx, s.Station())
 }
 
@@ -517,23 +518,23 @@ func (s *Store) Detect(ctx context.Context) {
 
 // bedFromSettings maps an ffmpeg_source's settings back to the bed that would
 // have produced them. A local file under the music share is the album; the
-// watchdog's fallback file means SomaFM is still the selected bed and an outage
+// watchdog's fallback file means the radio is still the selected bed and an outage
 // is in progress; any other local file is the car-hum drone (that's the only
-// other one the image ships); a network source is SomaFM.
+// other one the image ships); a network source is the radio.
 func bedFromSettings(settings map[string]any, musicDir string) Bed {
 	if local, _ := settings["is_local_file"].(bool); !local {
-		return SomaFM
+		return Radio
 	}
 	file, _ := settings["local_file"].(string)
 	switch {
 	case under(file, musicDir):
 		return Album
 	case file == FallbackFile:
-		// Only the watchdog writes this path, and only while SomaFM is the
+		// Only the watchdog writes this path, and only while the radio is the
 		// selected bed. Reading it as CarHum would hand an operator choice to
 		// the outage, which switches the watchdog off and strands the stream on
-		// the drone once SomaFM comes back.
-		return SomaFM
+		// the drone once the radio comes back.
+		return Radio
 	}
 	return CarHum
 }
@@ -576,8 +577,15 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	station, album, voicing := s.station, s.album, s.voicing
 	s.mu.Unlock()
+	if bed == Radio && !ValidStation(station) {
+		return errNoStation
+	}
 	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album, Voicing: voicing})
 }
+
+// errNoStation refuses the radio bed when the station list gave it nothing to
+// tune, so the stream keeps its current bed rather than going silent.
+var errNoStation = fmt.Errorf("radio bed has no stations: %s is missing, empty or invalid", RadioStationsFile)
 
 // setNow switches to bed and applies it to OBS. Switching to the album
 // (re)shuffles the play order and starts on its first track. The store is only
@@ -630,16 +638,16 @@ func (s *Store) SetAlbum(ctx context.Context, album string) error {
 	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album, Voicing: voicing})
 }
 
-// SetStation tunes the SomaFM bed to another channel and switches to it, so
-// picking a station is one action rather than "select somafm, then tune".
+// SetStation tunes the radio bed to another channel and switches to it, so
+// picking a station is one action rather than "select radio, then tune".
 func (s *Store) SetStation(ctx context.Context, station string) error {
 	if !ValidStation(station) {
-		return fmt.Errorf("unknown somafm station %q", station)
+		return fmt.Errorf("unknown radio station %q", station)
 	}
 	s.mu.Lock()
 	album, voicing := s.album, s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: SomaFM, Station: station, Album: album, Voicing: voicing})
+	return s.schedule(ctx, Switch{Bed: Radio, Station: station, Album: album, Voicing: voicing})
 }
 
 // SetVoicing picks which car-hum render the drone plays and switches to it, so
@@ -742,7 +750,7 @@ func (s *Store) Pending() (Switch, bool) {
 
 // Advance moves to the next album track (wrapping at the end) and plays it.
 // A no-op unless the album is what's audible — either as the selected bed or as
-// the watchdog's fallback for a SomaFM outage — since the callers report the
+// the watchdog's fallback for a radio outage — since the callers report the
 // media ending, which also happens on the other beds.
 //
 // Two of them report the same ending: the playback-ended subscription, which
@@ -812,14 +820,14 @@ func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
 }
 
 // SwapToFallback points the source at the bed the audio watchdog rides out a
-// SomaFM outage on: the album when the share has tracks, the car-hum drone when
+// radio outage on: the album when the share has tracks, the car-hum drone when
 // it doesn't. The album is licence-clean (it was made for this stream) and is
 // actual music, so it's the better degraded state; the drone covers an empty or
 // unmounted share, where it's the only bed left.
 //
 // The selection is deliberately left alone — the fallback is recorded beside it
 // instead. The watchdog runs its outage machinery only while the store reads
-// SomaFM, so selecting the fallback here would switch the watchdog off and
+// the radio, so selecting the fallback here would switch the watchdog off and
 // strand the stream on it for good.
 // That is also why the album's play order is (re)built here: nothing else on
 // this path builds one, and without it the album plays a single track and falls
@@ -859,13 +867,13 @@ func (s *Store) SwapToFallback(ctx context.Context) error {
 	return nil
 }
 
-// SwapToSomaFM points the source back at the tuned station once the edge is
+// SwapToRadio points the source back at the tuned station once the edge is
 // serving again, ending the fallback — a fallback album stops advancing because
 // it has stopped playing. The counterpart of SwapToFallback; the selection is
-// untouched here too, since on this path it never stopped being SomaFM.
-func (s *Store) SwapToSomaFM(ctx context.Context) error {
-	if err := s.obs.SetNetwork(ctx, InputName, StreamURL(s.Station())); err != nil {
-		return fmt.Errorf("swap back to somafm: %w", err)
+// untouched here too, since on this path it never stopped being the radio.
+func (s *Store) SwapToRadio(ctx context.Context) error {
+	if err := s.apply(ctx, Radio, "", s.Station()); err != nil {
+		return fmt.Errorf("swap back to radio: %w", err)
 	}
 	s.mu.Lock()
 	s.fallback = ""
@@ -905,7 +913,7 @@ func (s *Store) loadAlbumLocked(playing string) error {
 	return nil
 }
 
-// trackLocked returns the local file a bed should play, or "" for SomaFM.
+// trackLocked returns the local file a bed should play, or "" for the radio.
 // Caller holds s.mu.
 func (s *Store) trackLocked(bed Bed) string {
 	switch bed {
@@ -921,8 +929,12 @@ func (s *Store) trackLocked(bed Bed) string {
 
 // apply writes the bed onto the OBS source. Only the album plays unlooped.
 func (s *Store) apply(ctx context.Context, bed Bed, track, station string) error {
-	if bed == SomaFM {
-		return s.obs.SetNetwork(ctx, InputName, StreamURL(station))
+	if bed == Radio {
+		url := StreamURL(station)
+		if url == "" {
+			return errNoStation
+		}
+		return s.obs.SetNetwork(ctx, InputName, url)
 	}
 	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
 }

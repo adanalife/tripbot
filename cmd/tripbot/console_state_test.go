@@ -13,7 +13,7 @@ import (
 func TestChangeGate(t *testing.T) {
 	var g changeGate
 	t0 := time.Now()
-	steady := eventbus.AudioBed{Platform: "twitch", Bed: "somafm"}
+	steady := eventbus.AudioBed{Platform: "twitch", Bed: "radio"}
 
 	if !g.due(steady, t0) {
 		t.Fatal("first snapshot held back")

@@ -330,7 +330,7 @@ func (t *Tripbot) Run() {
 	// the stream-health dashboards and alerts.
 	go obs.PollStreamingActive(ctx, t.cfg.Environment, t.cfg.Platform, 30*time.Second)
 	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
-	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
+	t.startBackgroundAudioWatchdog(ctx) // recovers radio outages; advances album tracks
 	go t.publishConsoleState(ctx)       // after startNATS + startBackgroundAudio: bed + flags for the console
 	t.startStreamWatchdog(ctx)          // twitch, tiktok, youtube: recovers a stream the platform stopped showing
 	if t.platformIsTwitch() {
@@ -880,11 +880,14 @@ func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Durati
 func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	seed := beds.CarHum
 	if t.platformIsTwitch() {
-		seed = beds.SomaFM
+		seed = beds.Radio
 	}
 	// The album library is read from the mounted index rather than the share,
 	// so the bot lists the music without the music PVC being a scheduling
 	// dependency of it. OBS holds that claim and plays the paths.
+	// The station list is mounted from SSM; the store's default station is its
+	// first entry, so it loads before the store is built.
+	beds.LoadStations(beds.RadioStationsFile)
 	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform).WithIndex(beds.MusicIndexFile)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
@@ -892,9 +895,9 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 
 // startBackgroundAudioWatchdog launches the volume-meter connection + the
 // background-audio watchdog. It does two jobs, both tied to the single
-// "Background Audio" source: it keeps audible music on the stream when SomaFM
-// drops (swapping onto the local Car Hum bed and back once SomaFM recovers —
-// first needed in prod on 2026-06-23, when a full SomaFM edge outage left the
+// "Background Audio" source: it keeps audible music on the stream when the radio
+// drops (swapping onto the local Car Hum bed and back once the radio recovers —
+// first needed in prod on 2026-06-23, when a full radio outage left the
 // stream silent with no self-heal), and it advances the album to its next track
 // when OBS reports the current one ended. The meter's subscription carries that
 // report, so a track boundary is a WebSocket event rather than the watchdog's

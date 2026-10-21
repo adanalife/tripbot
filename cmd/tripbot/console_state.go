@@ -66,7 +66,7 @@ func (g *changeGate) due(v any, now time.Time) bool {
 }
 
 // audioBed reads the store the way GET /api/audio does, minus the option lists
-// and SomaFM's song (a network read, not store state).
+// and the radio's song (a network read, not store state).
 func audioBed(platform string, s *beds.Store) eventbus.AudioBed {
 	bed, _ := s.Current()
 	playing, track := s.Playing()
@@ -80,7 +80,7 @@ func audioBed(platform string, s *beds.Store) eventbus.AudioBed {
 		PlayingAlbum: s.PlayingAlbum(),
 		Shuffle:      s.Shuffle(),
 	}
-	if playing != beds.SomaFM {
+	if playing != beds.Radio {
 		out.Track = beds.TrackTitle(track)
 	}
 	if sw, ok := s.Pending(); ok {

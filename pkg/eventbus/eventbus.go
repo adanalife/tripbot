@@ -482,8 +482,8 @@ func LastEgressState(ctx context.Context, js jetstream.JetStream, env, platform 
 // AudioBed is the wire format for tripbot.<env>.audio.bed.<platform> — one
 // platform instance's background-audio bed, as its bed store holds it. Bed is
 // the selection and Playing what is audible; they differ only while the audio
-// watchdog has a fallback standing in for SomaFM. Track is the album track's
-// title and is empty on SomaFM, whose song comes from SomaFM's feed through GET
+// watchdog has a fallback standing in for the radio. Track is the album track's
+// title and is empty on the radio, whose song comes from the station's metadata through GET
 // /api/audio rather than from the store.
 //
 // The option lists (stations, voicings, albums) are deliberately absent: they

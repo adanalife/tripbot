@@ -21,7 +21,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!audio",
-			Help:    "What's playing on the background audio; admins switch the bed or tune a SomaFM channel",
+			Help:    "What's playing on the background audio; admins switch the bed or tune a radio station",
 			Aliases: []string{"!bed", "!carsound", "!carhum", "!radio"},
 			Handler: a.audioCmd,
 		},

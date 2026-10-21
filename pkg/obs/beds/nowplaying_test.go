@@ -53,7 +53,7 @@ func TestNowPlaying_ParsesAndCaches(t *testing.T) {
 
 	np := &nowPlaying{streamURL: stubStreamURL(srv.URL), ttl: time.Minute}
 
-	artist, title, err := np.current(context.Background(), DefaultStation)
+	artist, title, err := np.current(context.Background(), DefaultStation())
 	if err != nil {
 		t.Fatalf("first current() returned err: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestNowPlaying_ParsesAndCaches(t *testing.T) {
 		t.Errorf("got %q / %q; want Steve Cobby / Big Wow", artist, title)
 	}
 
-	if _, _, err := np.current(context.Background(), DefaultStation); err != nil {
+	if _, _, err := np.current(context.Background(), DefaultStation()); err != nil {
 		t.Fatalf("second current() returned err: %v", err)
 	}
 	if hits != 1 {
@@ -82,12 +82,12 @@ func TestNowPlaying_StaleFallbackOnFetchError(t *testing.T) {
 
 	np := &nowPlaying{streamURL: stubStreamURL(srv.URL), ttl: time.Nanosecond} // force re-fetch every call
 
-	if _, _, err := np.current(context.Background(), DefaultStation); err != nil {
+	if _, _, err := np.current(context.Background(), DefaultStation()); err != nil {
 		t.Fatalf("seed current() returned err: %v", err)
 	}
 
 	fail = true
-	artist, title, err := np.current(context.Background(), DefaultStation)
+	artist, title, err := np.current(context.Background(), DefaultStation())
 	if err != nil {
 		t.Fatalf("expected stale fallback on fetch failure, got err: %v", err)
 	}
@@ -110,17 +110,17 @@ func TestNowPlaying_RetuningBypassesTheCache(t *testing.T) {
 
 	np := &nowPlaying{streamURL: stubStreamURL(srv.URL), ttl: time.Minute}
 
-	if _, _, err := np.current(context.Background(), "gsclassic"); err != nil {
+	if _, _, err := np.current(context.Background(), "ambient"); err != nil {
 		t.Fatal(err)
 	}
-	_, title, err := np.current(context.Background(), "dronezone")
+	_, title, err := np.current(context.Background(), "lofi")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if title != "on dronezone" {
+	if title != "on lofi" {
 		t.Errorf("title = %q; want the newly tuned channel's track", title)
 	}
-	if want := []string{"gsclassic", "dronezone"}; !slices.Equal(asked, want) {
+	if want := []string{"ambient", "lofi"}; !slices.Equal(asked, want) {
 		t.Errorf("asked %v; want %v", asked, want)
 	}
 }
@@ -133,14 +133,14 @@ func TestNowPlaying_NoCachedValue_ReturnsError(t *testing.T) {
 
 	np := &nowPlaying{streamURL: stubStreamURL(srv.URL), ttl: time.Minute}
 
-	if _, _, err := np.current(context.Background(), DefaultStation); err == nil {
+	if _, _, err := np.current(context.Background(), DefaultStation()); err == nil {
 		t.Error("expected error when no cached value and fetch fails")
 	}
 }
 
 // The store asks about the channel it has tuned, not the default — a retune has
 // to move the answer with it.
-func TestStore_SomaFMTrackAsksTheTunedChannel(t *testing.T) {
+func TestStore_RadioTrackAsksTheTunedChannel(t *testing.T) {
 	var asked []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked = append(asked, strings.TrimPrefix(r.URL.Path, "/"))
@@ -148,20 +148,20 @@ func TestStore_SomaFMTrackAsksTheTunedChannel(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewStore(&fakeOBS{}, SomaFM, t.TempDir(), "twitch")
+	s := NewStore(&fakeOBS{}, Radio, t.TempDir(), "twitch")
 	s.np = &nowPlaying{streamURL: stubStreamURL(srv.URL), ttl: time.Minute}
-	if err := s.SetStation(context.Background(), "dronezone"); err != nil {
+	if err := s.SetStation(context.Background(), "lofi"); err != nil {
 		t.Fatal(err)
 	}
 
-	artist, title, err := s.SomaFMTrack(context.Background())
+	artist, title, err := s.RadioTrack(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if artist != "Steve Cobby" || title != "Big Wow" {
 		t.Errorf("got %q / %q", artist, title)
 	}
-	if !slices.Equal(asked, []string{"dronezone"}) {
+	if !slices.Equal(asked, []string{"lofi"}) {
 		t.Errorf("asked %v; want the tuned channel", asked)
 	}
 }
