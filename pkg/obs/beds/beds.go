@@ -171,6 +171,10 @@ type Store struct {
 	// album is the Album bed's selection: one album's directory, a prefix naming
 	// a group of them ("streambeats-lofi"), or "" for the whole share.
 	album string
+	// albumChosen is whether album is a choice (restored or set) rather than the
+	// default, which Detect replaces with whatever album OBS is playing.
+	albumChosen bool
+	prefs       Prefs // where the album and shuffle are saved; nil saves nothing
 	// voicing is which car-hum render the CarHum bed plays. Like station and
 	// album it survives a switch away, so the bed returns to the one chosen.
 	voicing   string
@@ -259,6 +263,43 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		voicing:  DefaultVoicing,
 		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
+	}
+}
+
+// Prefs saves the album bed's selection and shuffle so a restart can resume
+// them: OBS reports only the file on air, which names one album and never the
+// group or whole share it was drawn from.
+type Prefs interface {
+	Save(ctx context.Context, platform, album string, shuffle bool) error
+}
+
+// WithPrefs saves every applied album selection and shuffle change to p.
+func (s *Store) WithPrefs(p Prefs) *Store {
+	s.prefs = p
+	return s
+}
+
+// Restore seeds the album selection and shuffle saved by a previous run. Call
+// it before the first Detect, which then keeps the selection while the file on
+// air falls inside it.
+func (s *Store) Restore(album string, shuffle bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.album, s.albumChosen, s.shuffle = album, true, shuffle
+}
+
+// savePrefs writes the current album selection and shuffle. A failure only
+// costs the next restart its memory of them, so it warns rather than failing
+// the switch.
+func (s *Store) savePrefs(ctx context.Context) {
+	if s.prefs == nil {
+		return
+	}
+	s.mu.Lock()
+	album, shuffle := s.album, s.shuffle
+	s.mu.Unlock()
+	if err := s.prefs.Save(ctx, s.platform, album, shuffle); err != nil {
+		slog.WarnContext(ctx, "background audio: could not save album selection", "err", err)
 	}
 }
 
@@ -368,9 +409,7 @@ func (s *Store) Shuffle() bool {
 // A no-op off the album bed beyond recording the preference, which the next
 // selection then honors.
 //
-// Not persisted: it lives with the process, like the bed itself. A pod restart
-// returns to shuffled, where the album and station survive because they can be
-// read back off OBS and this can't.
+// Saved through Prefs with the album selection, so a restart keeps the order.
 func (s *Store) SetShuffle(ctx context.Context, on bool) error {
 	s.mu.Lock()
 	s.shuffle = on
@@ -387,6 +426,7 @@ func (s *Store) SetShuffle(ctx context.Context, on bool) error {
 		return err
 	}
 	s.record()
+	s.savePrefs(ctx)
 	slog.InfoContext(ctx, "background audio: shuffle set", "shuffle", on)
 	return nil
 }
@@ -489,8 +529,10 @@ func (s *Store) Detect(ctx context.Context) {
 	}
 	// The playing file names the album OBS booted on, the way the `input` URL
 	// names the station. Without this a restart mid-album reports the whole share
-	// and the next advance wanders out of the album that's on air.
-	if album := albumFromFile(file, s.musicDir); album != "" {
+	// and the next advance wanders out of the album that's on air. A chosen
+	// selection that already covers that album stands: the file can't name a
+	// group, so adopting it would narrow "all of StreamBeats" to one album.
+	if album := albumFromFile(file, s.musicDir); album != "" && !s.coversLocked(album) {
 		s.album = album
 	}
 	// And the drone file names the voicing, the same way. "" covers both a
@@ -514,6 +556,15 @@ func (s *Store) Detect(ctx context.Context) {
 			"err", loadErr)
 	}
 	slog.InfoContext(ctx, "background audio: detected bed", "bed", bed, "station", station)
+}
+
+// coversLocked reports whether the chosen album selection includes album.
+// Caller holds s.mu.
+func (s *Store) coversLocked(album string) bool {
+	if !s.albumChosen {
+		return false
+	}
+	return s.album == "" || slices.Contains(albumsFor(s.Albums(), s.album), album)
 }
 
 // bedFromSettings maps an ffmpeg_source's settings back to the bed that would
@@ -731,7 +782,11 @@ func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 
 	s.mu.Lock()
 	s.pending = nil
+	s.albumChosen = s.albumChosen || sw.Bed == Album
 	s.mu.Unlock()
+	if sw.Bed == Album {
+		s.savePrefs(ctx)
+	}
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
 		"station", sw.Station, "album", sw.Album, "voicing", sw.Voicing)
 	return nil

@@ -412,6 +412,64 @@ func TestDetect_RecoversTheAlbumFromThePlayingTrack(t *testing.T) {
 	}
 }
 
+func TestDetect_KeepsAChosenSelectionThatCoversTheTrack(t *testing.T) {
+	// The file on air names one album; a restored group or whole-share choice
+	// that contains it must survive Detect, or every restart narrows it.
+	dir := realShare(t)
+	playing := filepath.Join(dir, "streambeats-lofi-secluded", "b track.mp3")
+	for _, chosen := range []string{"streambeats", "streambeats-lofi", ""} {
+		o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+		s := NewStore(o, CarHum, dir, "twitch")
+		s.Restore(chosen, false)
+		s.Detect(context.Background())
+		if got := s.Album(); got != chosen {
+			t.Errorf("chosen %q: Detect replaced it with %q", chosen, got)
+		}
+	}
+}
+
+func TestDetect_AdoptsTheTrackOutsideAChosenSelection(t *testing.T) {
+	dir := realShare(t)
+	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir, "twitch")
+	s.Restore("streambeats-lofi", true)
+	s.Detect(context.Background())
+	if got := s.Album(); got != "fifty-horizons" {
+		t.Errorf("want the on-air album outside the selection, got %q", got)
+	}
+}
+
+type savedPrefs struct {
+	album   string
+	shuffle bool
+	n       int
+}
+
+func (p *savedPrefs) Save(_ context.Context, _, album string, shuffle bool) error {
+	p.album, p.shuffle, p.n = album, shuffle, p.n+1
+	return nil
+}
+
+func TestPrefs_SavedOnAlbumSwitchAndShuffleOnly(t *testing.T) {
+	dir := realShare(t)
+	p := &savedPrefs{}
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch").WithPrefs(p)
+	ctx := context.Background()
+	if err := s.SetAlbum(ctx, "streambeats"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetShuffle(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, CarHum); err != nil {
+		t.Fatal(err)
+	}
+	if p.n != 2 || p.album != "streambeats" || p.shuffle {
+		t.Errorf("saved %d times, last %q shuffle %v; want 2, streambeats, false", p.n, p.album, p.shuffle)
+	}
+}
+
 func TestAlbumFromFile(t *testing.T) {
 	const share = "/opt/tripbot/assets/music"
 	for _, tc := range []struct{ file, want string }{
