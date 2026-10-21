@@ -372,6 +372,18 @@
       ]
     },
     {
+      "trigger": "!similar",
+      "aliases": [
+        "!seenthis",
+        "!lookalike",
+        "!dejavu"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!skip",
       "requires_follow": true,
       "platforms": [

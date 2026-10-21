@@ -57,6 +57,13 @@ const (
 	// out in view after the warp overlay clears rather than being hidden by it.
 	// The playout client clamps a resulting negative timestamp to start-of-clip.
 	findJumpLeadInSec = 12.0
+	// similarMaxDistance caps how far a frame may sit from the one on screen to
+	// count as a look-alike for !similar. Image-to-image distances run far lower
+	// than the text-to-image ones findMaxDistance guards: on the stage corpus a
+	// frame's nearest neighbour from another day lands at 0.04-0.10, against
+	// 0.03-0.04 for the adjacent frame of its own clip, so 0.15 only trips when
+	// the corpus holds nothing of the kind (a sparse embed pass, a one-off scene).
+	similarMaxDistance = 0.15
 )
 
 // findEmbedRequest / findEmbedResponse are the NATS request/reply wire format
@@ -110,6 +117,11 @@ type Search interface {
 	// isn't embedded. A non-nil error means the search itself couldn't run
 	// (responder down, NATS off, DB error).
 	Find(ctx context.Context, query, corpus string) ([]SearchHit, error)
+	// Similar returns the frames closest to the one tsSec into slug, nearest
+	// first, among clips in corpus filmed on a different day than slug: the
+	// "seen this before?" lookup behind !similar. An empty slice when slug has
+	// no embedded frame; errors as Find.
+	Similar(ctx context.Context, slug string, tsSec float64, corpus string) ([]SearchHit, error)
 }
 
 // errSearchUnavailable is returned when NATS isn't connected, so the embed
@@ -131,6 +143,10 @@ func (s realSearch) Find(ctx context.Context, query, corpus string) ([]SearchHit
 		return nil, err
 	}
 	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, corpus, resp.States, resp.Months, findCandidatePool)
+}
+
+func (s realSearch) Similar(ctx context.Context, slug string, tsSec float64, corpus string) ([]SearchHit, error) {
+	return similarFrameEmbeddings(ctx, database.GormDB(), slug, tsSec, corpus, findCandidatePool)
 }
 
 // requestEmbedding asks the video-pipeline responder to embed query, returning
@@ -378,4 +394,94 @@ func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
 		return false, fmt.Sprintf("Found %s%s, but couldn't jump there.", query, where)
 	}
 	return true, fmt.Sprintf("Found %s%s. Jumping there.", query, where)
+}
+
+// similarFrameEmbeddings is !similar's search: the embedded frame nearest to
+// tsSec in slug is the query vector, and the ranking runs over frames of other
+// clips in corpus filmed on a different day. Another *day* rather than another
+// clip because the nearest frame in another clip is nearly always the next
+// file of the same drive, which nobody would call "seen this before". Two
+// statements rather than a subquery so ORDER BY sees a literal vector and the
+// HNSW index applies. A slug with no embedded frame (or no date) still gets an
+// answer: no anchor returns no hits, no date relaxes the filter to other clips.
+func similarFrameEmbeddings(ctx context.Context, db *gorm.DB, slug string, tsSec float64, corpus string, limit int) ([]SearchHit, error) {
+	var anchor struct {
+		Embedding string
+		Model     string
+		Day       *string
+	}
+	anchorSQL := `SELECT fe.embedding::text AS embedding, fe.model AS model, v.date_filmed::date::text AS day
+FROM frame_embeddings fe
+JOIN videos v ON v.id = fe.video_id
+WHERE v.slug = ?
+ORDER BY abs(fe.ts_sec - ?)
+LIMIT 1`
+	res := db.WithContext(ctx).Raw(anchorSQL, slug, tsSec).Scan(&anchor)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 || anchor.Embedding == "" {
+		return nil, nil
+	}
+
+	sql := `SELECT v.slug AS slug, fe.ts_sec AS ts_sec, v.state AS state,
+       fe.embedding <=> ?::vector AS distance
+FROM frame_embeddings fe
+JOIN videos v ON v.id = fe.video_id
+WHERE fe.model = ?
+  AND v.corpus = ?
+  AND v.slug <> ?`
+	args := []any{anchor.Embedding, anchor.Model, corpus, slug}
+	if anchor.Day != nil {
+		sql += "\n  AND (v.date_filmed IS NULL OR v.date_filmed::date <> ?::date)"
+		args = append(args, *anchor.Day)
+	}
+	sql += "\nORDER BY fe.embedding <=> ?::vector\nLIMIT ?"
+	args = append(args, anchor.Embedding, limit)
+
+	var hits []SearchHit
+	if err := db.WithContext(ctx).Raw(sql, args...).Scan(&hits).Error; err != nil {
+		return nil, err
+	}
+	return hits, nil
+}
+
+// similarCmd implements !similar, "seen this before?": jump to a moment from
+// another day that looks like the one on screen. The query is the frame on
+// screen's own embedding, so there is no responder hop; the jump path and the
+// playback rate-limiter are !find's.
+func (a *App) similarCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !similar", "username", user.Username)
+
+	if runningOnDarwin() {
+		a.Reply(ctx, "Sorry, similar isn't available right now")
+		return
+	}
+	if !user.Broadcaster && time.Since(lastTimewarpTime) < 20*time.Second {
+		a.Reply(ctx, "Not yet; enjoy the moment!")
+		return
+	}
+
+	vid, elapsed := a.Video.Playhead(ctx)
+	if vid.Slug == "" {
+		a.Reply(ctx, "Nothing's on screen to match yet")
+		return
+	}
+	hits, err := a.Search.Similar(ctx, vid.Slug, elapsed.Seconds(), video.AiringCorpus(vid))
+	if err != nil {
+		slog.ErrorContext(ctx, "similar search failed", "err", err, "slug", vid.Slug)
+		a.Reply(ctx, "Search isn't available right now, sorry!")
+		return
+	}
+	if len(hits) == 0 || hits[0].Distance > similarMaxDistance {
+		a.Reply(ctx, "Nothing else looks quite like this — first time here! 🗺️")
+		return
+	}
+
+	// Don't name the state or the day — a viewer can still guess where this is.
+	a.Reply(ctx, "Seen this before? 🤔 Jumping to a look-alike from another day...")
+
+	if err := a.jumpToHit(ctx, user.Username, pickFindHit(hits)); err != nil {
+		a.Reply(ctx, "Found one, but couldn't jump there — sorry!")
+	}
 }
