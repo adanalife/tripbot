@@ -79,6 +79,15 @@ type Command struct {
 	Envelope
 }
 
+// PlayRandom is the payload for the play.random subject. An empty Corpus picks
+// from playout's current mode (the ambient rotation); a named one picks from
+// that corpus — outside the mode, a sneak that plays the corpus's block to its
+// end before the rotation returns.
+type PlayRandom struct {
+	Envelope
+	Corpus string `json:"corpus,omitempty"`
+}
+
 // LastPlayed is the payload for the lastplayed subject — the playlist
 // basename playout most recently started playing, plus how far in it was.
 // Published by playout itself (at clip start and on a periodic position
