@@ -882,8 +882,8 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 // giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
 // manual miles correction (amount may be negative) to both the lifetime total
 // and the current monthly scoreboard, and logs a correction event so the rollup
-// folds it into user_rollups.extra_miles. Admin-only for now (broadcaster);
-// widen the gate to mods once a mod-status source exists.
+// folds it into user_rollups.extra_miles, naming who issued it. Open to the
+// broadcaster and the channel's moderators.
 func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
 	if len(params) < 2 {
@@ -921,7 +921,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 	if clamped {
 		delta = float64(applied)
 	}
-	if err := a.Events.Correction(ctx, target, delta); err != nil {
+	if err := a.Events.Correction(ctx, target, user.Username, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}
 	if clamped {

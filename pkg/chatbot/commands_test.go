@@ -1512,7 +1512,7 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		if msg := out(); msg != "@target now has 60.00mi" {
 			t.Errorf("expected the running total in the reply, got %q", msg)
 		}
-		want := []recordedCorrection{{Username: "target", Delta: 50}}
+		want := []recordedCorrection{{Username: "target", IssuedBy: adminUser, Delta: 50}}
 		if !slices.Equal(rec.Corrections, want) {
 			t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
 		}
@@ -1565,7 +1565,7 @@ func TestGiveMilesCmd_ClampedClawback_RecordsAppliedDelta(t *testing.T) {
 	if msg := out(); msg != "@target only had 30.00mi to remove, now has 0.00mi" {
 		t.Errorf("expected the clamp in the reply, got %q", msg)
 	}
-	want := []recordedCorrection{{Username: "target", Delta: -30}}
+	want := []recordedCorrection{{Username: "target", IssuedBy: adminUser, Delta: -30}}
 	if !slices.Equal(rec.Corrections, want) {
 		t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
 	}
@@ -1809,5 +1809,27 @@ func TestTimeCmd_ReadsThePlayheadAtTheClipsSpeed(t *testing.T) {
 	// local — not 1:30pm, which is that clock misread as UTC.
 	if got := out(); !strings.Contains(got, "7:30pm") {
 		t.Errorf("expected the playhead's 7:30pm, got %q", got)
+	}
+}
+
+// !givemiles is open to moderators, not just the broadcaster; the registry
+// must say so, and a mod's correction names the mod as its issuer.
+func TestGiveMilesCmd_ModGatedAndNamesIssuer(t *testing.T) {
+	app := newTestApp(video.Video{})
+	cmd, ok := app.singleWordLookup["!givemiles"]
+	if !ok {
+		t.Fatal("!givemiles does not resolve to a command")
+	}
+	if !cmd.RequiresMod || cmd.RequiresAdmin {
+		t.Errorf("!givemiles gate: RequiresMod=%v RequiresAdmin=%v, want mod-only", cmd.RequiresMod, cmd.RequiresAdmin)
+	}
+	app.Sessions = &recordingSessions{FindResult: users.User{ID: 7, Username: "target"}, Miles: 10}
+	rec := &recordingEvents{}
+	app.Events = rec
+	captureSay(t, app)
+	app.giveMilesCmd(context.Background(), &users.User{Username: "a_mod", Moderator: true}, []string{"target", "5"})
+	want := []recordedCorrection{{Username: "target", IssuedBy: "a_mod", Delta: 5}}
+	if !slices.Equal(rec.Corrections, want) {
+		t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
 	}
 }
