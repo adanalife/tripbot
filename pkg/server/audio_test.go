@@ -15,6 +15,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// The radio bed's station list is mounted at runtime; the tests tune this one.
+func init() {
+	beds.Stations = []beds.Station{{ID: "lofi", Name: "Example Lo-Fi", URL: "https://radio.example/lofi"}}
+}
+
 // fakeBeds is a BedStore seam for the /api/audio handlers.
 type fakeBeds struct {
 	bed beds.Bed
@@ -51,7 +56,7 @@ func (f *fakeBeds) Playing() (beds.Bed, string) {
 	return f.bed, f.track
 }
 
-func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
+func (f *fakeBeds) RadioTrack(context.Context) (string, string, error) {
 	f.feeds++
 	return f.artist, f.title, f.feedErr
 }
@@ -68,7 +73,7 @@ func (f *fakeBeds) Pending() (beds.Switch, bool) {
 
 func (f *fakeBeds) Station() string {
 	if f.station == "" {
-		return beds.DefaultStation
+		return beds.DefaultStation()
 	}
 	return f.station
 }
@@ -103,7 +108,7 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 	if f.setErr != nil {
 		return f.setErr
 	}
-	f.bed, f.station = beds.SomaFM, station
+	f.bed, f.station = beds.Radio, station
 	return nil
 }
 
@@ -203,13 +208,13 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 	if len(opts) != len(beds.All) {
 		t.Fatalf("beds: want %d options, got %v", len(beds.All), body["beds"])
 	}
-	// Same for the SomaFM channel picker: the lineup lives here, not in the
+	// Same for the radio station picker: the lineup lives here, not in the
 	// console, so the two can't disagree about what's selectable.
 	stations, _ := body["stations"].([]any)
 	if len(stations) != len(beds.Stations) {
 		t.Fatalf("stations: want %d, got %d", len(beds.Stations), len(stations))
 	}
-	if body["station"] != beds.DefaultStation {
+	if body["station"] != beds.DefaultStation() {
 		t.Fatalf("station: %v", body["station"])
 	}
 }
@@ -304,10 +309,10 @@ func TestAudioSetHandler_AlbumSwitchFailureIs502(t *testing.T) {
 	}
 }
 
-// On the SomaFM bed the track comes from the feed, so the console renders one
-// line from one source whichever bed is live instead of fetching SomaFM itself.
-func TestAudioHandler_ReportsTheSomaFMTrack(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM, artist: "Steve Cobby", title: "Big Wow"}
+// On the radio bed the track comes from the feed, so the console renders one
+// line from one source whichever bed is live instead of fetching the radio itself.
+func TestAudioHandler_ReportsTheRadioTrack(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio, artist: "Steve Cobby", title: "Big Wow"}
 	_, body := getAudio(t, &Server{beds: f})
 	if body["track"] != "Steve Cobby — Big Wow" {
 		t.Fatalf("track: %v", body["track"])
@@ -319,20 +324,20 @@ func TestAudioHandler_ReportsTheSomaFMTrack(t *testing.T) {
 
 // A feed that won't answer is a missing line, not an error: the panel still has
 // to render the bed, and the next poll picks the track up.
-func TestAudioHandler_SomaFMFeedFailureLeavesNoTrack(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM, feedErr: errors.New("somafm unreachable")}
+func TestAudioHandler_RadioFeedFailureLeavesNoTrack(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio, feedErr: errors.New("radio unreachable")}
 	code, body := getAudio(t, &Server{beds: f})
 	if code != http.StatusOK {
 		t.Fatalf("status: %d", code)
 	}
-	if body["track"] != "" || body["bed"] != "somafm" {
+	if body["track"] != "" || body["bed"] != "radio" {
 		t.Fatalf("want the bed with no track, got %v", body)
 	}
 }
 
 // The local beds have no feed to consult — asking one would name a song nobody
 // is hearing.
-func TestAudioHandler_DoesNotConsultTheFeedOffSomaFM(t *testing.T) {
+func TestAudioHandler_DoesNotConsultTheFeedOffRadio(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum, artist: "Steve Cobby", title: "Big Wow"}
 	_, body := getAudio(t, &Server{beds: f})
 	if f.feeds != 0 {
@@ -356,7 +361,7 @@ func TestAudioHandler_UnavailableWithoutAStore(t *testing.T) {
 }
 
 func TestAudioSetHandler_SwitchesBed(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"bed":"carhum"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", w.Code, w.Body)
@@ -373,29 +378,29 @@ func TestAudioSetHandler_SwitchesBed(t *testing.T) {
 	}
 }
 
-// The console posts a station on its own; that has to select the SomaFM bed too,
+// The console posts a station on its own; that has to select the radio bed too,
 // or picking a channel from the car-hum bed would change nothing audible.
 func TestAudioSetHandler_TunesAStation(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum}
-	w := postAudio(t, &Server{beds: f}, `{"station":"dronezone"}`)
+	w := postAudio(t, &Server{beds: f}, `{"station":"lofi"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", w.Code, w.Body)
 	}
 	if len(f.sets) != 0 {
 		t.Fatalf("a station must not go through Set: %v", f.sets)
 	}
-	if len(f.stations) != 1 || f.stations[0] != "dronezone" {
+	if len(f.stations) != 1 || f.stations[0] != "lofi" {
 		t.Fatalf("stations: %v", f.stations)
 	}
 	var body map[string]any
 	_ = json.NewDecoder(w.Body).Decode(&body)
-	if body["bed"] != "somafm" || body["station"] != "dronezone" {
+	if body["bed"] != "radio" || body["station"] != "lofi" {
 		t.Fatalf("response: %v", body)
 	}
 }
 
 func TestAudioSetHandler_RejectsUnknownStation(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"station":"wurlitzer-fm"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status: want 400, got %d", w.Code)
@@ -406,7 +411,7 @@ func TestAudioSetHandler_RejectsUnknownStation(t *testing.T) {
 }
 
 func TestAudioSetHandler_RejectsUnknownBed(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"bed":"wurlitzer"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status: want 400, got %d", w.Code)
@@ -419,7 +424,7 @@ func TestAudioSetHandler_RejectsUnknownBed(t *testing.T) {
 func TestAudioSetHandler_SurfacesAFailedSwitch(t *testing.T) {
 	// A switch OBS rejects (or an album with no share mounted) must be visible
 	// as an error, not swallowed into a success the UI would render as done.
-	f := &fakeBeds{bed: beds.SomaFM, setErr: errors.New("no album tracks")}
+	f := &fakeBeds{bed: beds.Radio, setErr: errors.New("no album tracks")}
 	w := postAudio(t, &Server{beds: f}, `{"bed":"album"}`)
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("status: want 502, got %d", w.Code)
@@ -508,8 +513,8 @@ func TestAudioSetHandler_ShuffleFalseIsNotAbsent(t *testing.T) {
 // describe the audio, so without this a click renders as no change at all.
 func TestAudioHandler_ShipsTheWaitingSwitch(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum, pending: &beds.Switch{
-		Bed:     beds.SomaFM,
-		Station: "dronezone",
+		Bed:     beds.Radio,
+		Station: "lofi",
 		At:      time.Now().Add(5 * time.Second),
 	}}
 	_, body := getAudio(t, &Server{beds: f})
@@ -521,7 +526,7 @@ func TestAudioHandler_ShipsTheWaitingSwitch(t *testing.T) {
 	if !ok {
 		t.Fatalf("pending: %v", body["pending"])
 	}
-	if pending["bed"] != "somafm" || pending["station"] != "dronezone" {
+	if pending["bed"] != "radio" || pending["station"] != "lofi" {
 		t.Errorf("pending = %v", pending)
 	}
 	// A countdown, so it has to arrive as a number of seconds left rather than a
@@ -540,13 +545,13 @@ func TestAudioHandler_OmitsPendingWhenNothingIsWaiting(t *testing.T) {
 	}
 }
 
-// Mid-outage the watchdog has the album on air with SomaFM still selected. The
+// Mid-outage the watchdog has the album on air with the radio still selected. The
 // picker still has to highlight the selection, but the now-playing line must
-// come off the audio: reading the selection here fetches SomaFM's feed and
+// come off the audio: reading the selection here fetches the station's metadata and
 // prints a track nobody is hearing.
 func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 	f := &fakeBeds{
-		bed:          beds.SomaFM,
+		bed:          beds.Radio,
 		fallback:     beds.Album,
 		track:        "/opt/tripbot/assets/music/fifty-horizons/007 New York - Skyline After Midnight.mp3",
 		playingAlbum: "fifty-horizons",
@@ -554,8 +559,8 @@ func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 		title:        "Big Wow",
 	}
 	_, body := getAudio(t, &Server{beds: f})
-	if body["bed"] != "somafm" {
-		t.Fatalf("bed: want the selection somafm, got %v", body["bed"])
+	if body["bed"] != "radio" {
+		t.Fatalf("bed: want the selection radio, got %v", body["bed"])
 	}
 	if body["on_fallback"] != true {
 		t.Fatalf("on_fallback: %v", body["on_fallback"])
@@ -564,12 +569,12 @@ func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 		t.Fatalf("track: %v", body["track"])
 	}
 	if f.feeds != 0 {
-		t.Fatal("must not consult the SomaFM feed while another bed is on air")
+		t.Fatal("must not consult the station metadata while another bed is on air")
 	}
 }
 
 func TestAudioSetHandler_SelectsAVoicing(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"voicing":"highway"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d, body %q", w.Code, w.Body.String())

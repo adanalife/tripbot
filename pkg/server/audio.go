@@ -11,7 +11,7 @@ import (
 )
 
 // BedStore is the background-audio surface the console drives: read what's
-// playing, switch to another bed, retune the SomaFM bed. Implemented by
+// playing, switch to another bed, retune the radio bed. Implemented by
 // *beds.Store; an interface so the handlers test without an OBS WebSocket.
 type BedStore interface {
 	Current() (beds.Bed, string)
@@ -24,7 +24,7 @@ type BedStore interface {
 	ValidAlbum(album string) bool
 	Shuffle() bool
 	SetShuffle(ctx context.Context, on bool) error
-	SomaFMTrack(ctx context.Context) (artist, title string, err error)
+	RadioTrack(ctx context.Context) (artist, title string, err error)
 	Pending() (beds.Switch, bool)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
@@ -45,7 +45,7 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// The station list travels with the state so the console's picker is built
 	// from what this tripbot will actually accept, the same way the bed buttons
-	// are — nothing about SomaFM's lineup is duplicated in the console.
+	// are — nothing about the radio's lineup is duplicated in the console.
 	// The voicings travel for the same reason the stations do: the renders are
 	// baked into the OBS image this tripbot is paired with, so the picker is
 	// built from what will actually play rather than a list the console repeats.
@@ -57,7 +57,7 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		body["bed"] = string(bed)
 		// The picker highlights the selected bed, but the now-playing line has to
 		// name what's audible: mid-outage the watchdog has another bed on air and
-		// the selection still reads SomaFM, whose feed would name a track nobody
+		// the selection still reads the radio, whose feed would name a track nobody
 		// is hearing.
 		body["on_fallback"] = playing != bed
 		body["track"] = s.track(r.Context(), playing, track)
@@ -100,21 +100,21 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // track is the display line for whatever the live bed is playing: the album's
-// filename, or the song SomaFM's feed reports for the tuned channel. "" when
+// filename, or the song the station's metadata reports for the tuned channel. "" when
 // nothing knows (the car hum has no track, and a feed that won't answer is not
 // worth an error — the console renders no line and re-asks on its next poll).
 //
-// The SomaFM read is here rather than in the console because the station lives
+// The radio read is here rather than in the console because the station lives
 // here: one cached fetch behind this endpoint serves chat and every open tab,
 // where a console-side fetch would need the station shipped to it first and
 // would still be a second cache to keep honest.
 func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) string {
-	if bed != beds.SomaFM {
+	if bed != beds.Radio {
 		return beds.TrackTitle(albumTrack)
 	}
-	artist, title, err := s.bedStore().SomaFMTrack(ctx)
+	artist, title, err := s.bedStore().RadioTrack(ctx)
 	if err != nil {
-		slog.DebugContext(ctx, "background audio: somafm now-playing unavailable", "err", err)
+		slog.DebugContext(ctx, "background audio: radio now-playing unavailable", "err", err)
 		return ""
 	}
 	if artist == "" || title == "" {
@@ -124,7 +124,7 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 }
 
 // audioSetHandler switches the background-audio bed. The console POSTs
-// {"bed": "album"} to /api/audio, {"station": "dronezone"} to tune the SomaFM
+// {"bed": "album"} to /api/audio, {"station": "lofi"} to tune the radio
 // bed to another channel, {"voicing": "highway"} to pick which car-hum render
 // the drone plays, or {"album": "lofi-secluded"} to narrow the album bed to one
 // album — the latter three select their bed too, since tuning a station or
@@ -160,7 +160,7 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case body.Station != "":
 		if !beds.ValidStation(body.Station) {
-			http.Error(w, "unknown somafm station", http.StatusBadRequest)
+			http.Error(w, "unknown radio station", http.StatusBadRequest)
 			return
 		}
 		err = store.SetStation(r.Context(), body.Station)

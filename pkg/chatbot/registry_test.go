@@ -102,7 +102,7 @@ func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
 			t.Errorf("expected %q to be available on Facebook, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown"} {
 		if cmd, _, _ := fb.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on Facebook, got %q", token, cmd.Trigger)
 		}
@@ -119,7 +119,7 @@ func TestInstagramPlatformIndexesOnlyAllowlist(t *testing.T) {
 			t.Errorf("expected %q to be available on Instagram, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown"} {
 		if cmd, _, _ := ig.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on Instagram, got %q", token, cmd.Trigger)
 		}
@@ -142,9 +142,8 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 		}
 	}
 
-	// excluded: identity/miles, Twitch-only, admin, and the SomaFM credit line
-	// do not resolve
-	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!somafm"} {
+	// excluded: identity/miles, Twitch-only, and admin commands do not resolve
+	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello"} {
 		if cmd, _, _ := yt.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on YouTube, got %q", token, cmd.Trigger)
 		}
@@ -161,7 +160,7 @@ func TestTikTokPlatformIndexesOnlyAllowlist(t *testing.T) {
 			t.Errorf("expected %q to be available on TikTok, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown"} {
 		if cmd, _, _ := tk.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on TikTok, got %q", token, cmd.Trigger)
 		}
@@ -215,7 +214,7 @@ func TestCommandsCmdFiltersByPlatform(t *testing.T) {
 	yt.Chat = ytChat
 	yt.commandsCmd(context.Background(), nil, nil)
 	ytOut := ytChat.Output()
-	for _, absent := range []string{"!guess", "!miles", "!leaderboard", "!somafm"} {
+	for _, absent := range []string{"!guess", "!miles", "!leaderboard"} {
 		if strings.Contains(ytOut, absent) {
 			t.Errorf("YouTube !commands should not advertise %q: %q", absent, ytOut)
 		}

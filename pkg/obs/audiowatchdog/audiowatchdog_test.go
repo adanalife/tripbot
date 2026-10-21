@@ -20,7 +20,7 @@ import (
 const interval = time.Second
 
 // tick is one scripted evaluation: what OBS reports for the source's media
-// state, whether SomaFM probes reachable, and the meter's level + freshness.
+// state, whether radio probes reachable, and the meter's level + freshness.
 type tick struct {
 	state     string
 	reachable bool
@@ -35,7 +35,7 @@ type tick struct {
 
 // fakeDeps answers the watchdog's hooks from the currently-staged tick and
 // counts the swaps in each direction. The driver stages one tick per interval,
-// so all three of Level, MediaState and SomaFMReachable reflect the same
+// so all three of Level, MediaState and RadioReachable reflect the same
 // scripted evaluation. The mutex is load-bearing even inside a synctest
 // bubble: the watchdog still runs on its own goroutine, so -race wants the
 // shared state guarded.
@@ -44,13 +44,13 @@ type fakeDeps struct {
 	current tick
 
 	toFallback atomic.Int32
-	toSomaFM   atomic.Int32
+	toRadio    atomic.Int32
 	advances   atomic.Int32
 	probes     atomic.Int32
 	resyncs    atomic.Int32
 
-	// bed is the selected background-audio bed; the SomaFM outage machinery
-	// only runs while it's SomaFM.
+	// bed is the selected background-audio bed; the radio outage machinery
+	// only runs while it's the radio.
 	bed beds.Bed
 	// sourceLocal stands in for OBS: what the background-audio source is
 	// actually pointed at. The swap hooks move it, so the watchdog reads back
@@ -70,7 +70,7 @@ func (f *fakeDeps) stage(tk tick) {
 
 func (f *fakeDeps) deps() Deps {
 	return Deps{
-		SomaFMReachable: func(context.Context) bool {
+		RadioReachable: func(context.Context) bool {
 			f.probes.Add(1)
 			f.mu.Lock()
 			defer f.mu.Unlock()
@@ -97,11 +97,11 @@ func (f *fakeDeps) deps() Deps {
 			f.toFallback.Add(1)
 			return nil
 		},
-		SwapToSomaFM: func(context.Context) error {
+		SwapToRadio: func(context.Context) error {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			f.sourceLocal = false
-			f.toSomaFM.Add(1)
+			f.toRadio.Add(1)
 			return nil
 		},
 		SourceIsLocal: func(context.Context) (bool, error) {
@@ -127,7 +127,7 @@ func (f *fakeDeps) deps() Deps {
 // nothing else holds the fake.
 func run(t *testing.T, script []tick, cfg Config) *fakeDeps {
 	t.Helper()
-	return runOnBed(t, beds.SomaFM, script, cfg)
+	return runOnBed(t, beds.Radio, script, cfg)
 }
 
 // runOnBed is run with a different selected bed.
@@ -151,10 +151,10 @@ func runOnBed(t *testing.T, bed beds.Bed, script []tick, cfg Config) *fakeDeps {
 	return f
 }
 
-// playing is a healthy tick (source PLAYING, SomaFM up, audible).
+// playing is a healthy tick (source PLAYING, radio up, audible).
 var playing = tick{state: obs.MediaStatePlaying, reachable: true, db: -18, fresh: true}
 
-// ended is a wedged tick (EOF, SomaFM down, no fresh level).
+// ended is a wedged tick (EOF, radio down, no fresh level).
 var ended = tick{state: obs.MediaStateEnded, reachable: false, db: silenceFloorDB, fresh: false}
 
 func cfg(fail, recover int, cooldown time.Duration) Config {
@@ -195,7 +195,7 @@ func TestWatch_StaleSilenceDoesNotTrigger(t *testing.T) {
 	}
 }
 
-func TestWatch_SwapsBackAfterSomaFMRecovers(t *testing.T) {
+func TestWatch_SwapsBackAfterRadioRecovers(t *testing.T) {
 	// 3 down ticks → fallback, then 4 reachable ticks → swap back. Cooldown 0
 	// so the second swap isn't suppressed.
 	up := tick{state: obs.MediaStatePlaying, reachable: true, db: -18, fresh: true}
@@ -203,17 +203,17 @@ func TestWatch_SwapsBackAfterSomaFMRecovers(t *testing.T) {
 	if got := deps.toFallback.Load(); got != 1 {
 		t.Fatalf("to_fallback swaps: want 1, got %d", got)
 	}
-	if got := deps.toSomaFM.Load(); got != 1 {
-		t.Fatalf("to_somafm swaps: want 1, got %d", got)
+	if got := deps.toRadio.Load(); got != 1 {
+		t.Fatalf("to_radio swaps: want 1, got %d", got)
 	}
 }
 
-func TestWatch_ConsoleReselectingSomaFMFallsBackAgain(t *testing.T) {
-	// Mid-outage, an operator picks SomaFM again in the console. That repoints
+func TestWatch_ConsoleReselectingRadioFallsBackAgain(t *testing.T) {
+	// Mid-outage, an operator picks the radio again in the console. That repoints
 	// the source at the dead stream without the watchdog swapping anything, so
 	// the stream goes silent — and the watchdog has to notice and fall back a
 	// second time rather than sit waiting for a recovery it already handled.
-	// (2026-08-01: it sat, and Twitch was silent until SomaFM came back.)
+	// (2026-08-01: it sat, and Twitch was silent until the radio came back.)
 	reselect := ended
 	reselect.console = func(f *fakeDeps) { f.sourceLocal = false }
 	deps := run(t, []tick{ended, ended, ended, reselect, ended, ended, ended}, cfg(3, 4, 0))
@@ -223,15 +223,15 @@ func TestWatch_ConsoleReselectingSomaFMFallsBackAgain(t *testing.T) {
 }
 
 func TestWatch_CooldownSuppressesSwapBack(t *testing.T) {
-	// Fall back, then SomaFM is immediately reachable — but the cooldown from
+	// Fall back, then the radio is immediately reachable — but the cooldown from
 	// the fallback swap blocks the swap-back within the window.
 	up := tick{state: obs.MediaStatePlaying, reachable: true, db: -18, fresh: true}
 	deps := run(t, []tick{ended, ended, ended, up, up, up, up, up}, cfg(3, 4, time.Hour))
 	if got := deps.toFallback.Load(); got != 1 {
 		t.Fatalf("to_fallback swaps: want 1, got %d", got)
 	}
-	if got := deps.toSomaFM.Load(); got != 0 {
-		t.Fatalf("to_somafm swaps: want 0 (cooldown suppresses), got %d", got)
+	if got := deps.toRadio.Load(); got != 0 {
+		t.Fatalf("to_radio swaps: want 0 (cooldown suppresses), got %d", got)
 	}
 }
 
@@ -245,7 +245,7 @@ func TestWatch_AdvancesAlbumWhenTrackEnds(t *testing.T) {
 }
 
 func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
-	// A run of down ticks that would trip the SomaFM fallback. On a local bed
+	// A run of down ticks that would trip the radio fallback. On a local bed
 	// there's nothing to fall back to — swapping would stomp the operator's
 	// choice of bed — so the outage machinery must stay out of it.
 	for _, bed := range []beds.Bed{beds.CarHum, beds.Album} {
@@ -254,8 +254,8 @@ func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
 			if got := deps.toFallback.Load(); got != 0 {
 				t.Fatalf("to_fallback swaps on %s: want 0, got %d", bed, got)
 			}
-			if got := deps.toSomaFM.Load(); got != 0 {
-				t.Fatalf("to_somafm swaps on %s: want 0, got %d", bed, got)
+			if got := deps.toRadio.Load(); got != 0 {
+				t.Fatalf("to_radio swaps on %s: want 0, got %d", bed, got)
 			}
 		})
 	}
@@ -273,10 +273,10 @@ func TestWatch_ResyncsBedWhenOBSComesBack(t *testing.T) {
 }
 
 func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
-	// The probe opens a fresh connection to SomaFM's edge every time it runs, so
+	// The probe opens a fresh connection to the radio stream every time it runs, so
 	// it must only run on a tick whose outcome depends on the answer: stranded on
 	// the local bed, waiting to swap back. A local bed the operator picked, or a
-	// healthy SomaFM stream, needs no probe — and probing anyway put every
+	// healthy radio stream, needs no probe — and probing anyway put every
 	// platform's bot on the edge every interval, which is enough traffic from one
 	// IP to get it firewalled (2026-08-02).
 	t.Run("local bed never probes", func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 		}
 	})
 
-	t.Run("healthy somafm stream never probes", func(t *testing.T) {
+	t.Run("healthy radio stream never probes", func(t *testing.T) {
 		deps := run(t, []tick{playing, playing, playing, playing}, cfg(3, 4, 0))
 		if got := deps.probes.Load(); got != 0 {
 			t.Errorf("probes while the stream is healthy: want 0, got %d", got)
@@ -300,7 +300,7 @@ func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 		// swap consult the edge.
 		deps := run(t, []tick{ended, ended, ended, ended, ended}, cfg(3, 4, 0))
 		if got := deps.probes.Load(); got == 0 {
-			t.Fatal("no probe while stranded on the fallback: SomaFM can never be seen to recover")
+			t.Fatal("no probe while stranded on the fallback: the radio can never be seen to recover")
 		}
 	})
 }
@@ -339,8 +339,8 @@ func TestWatch_RecoveryIsPromptAfterABackedOffOutage(t *testing.T) {
 		script = append(script, up)
 	}
 	deps := run(t, script, cfg(3, 4, 0))
-	if got := deps.toSomaFM.Load(); got != 1 {
-		t.Fatalf("to_somafm swaps: want 1, got %d — a backed-off probe stranded the stream past the recovery", got)
+	if got := deps.toRadio.Load(); got != 1 {
+		t.Fatalf("to_radio swaps: want 1, got %d — a backed-off probe stranded the stream past the recovery", got)
 	}
 }
 

@@ -21,7 +21,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!audio",
-			Help:    "What's playing on the background audio; admins switch the bed or tune a SomaFM channel",
+			Help:    "What's playing on the background audio; admins switch the bed or tune a radio station",
 			Aliases: []string{"!bed", "!carsound", "!carhum", "!radio"},
 			Handler: a.audioCmd,
 		},
@@ -355,13 +355,6 @@ func (a *App) buildRegistry() []Command {
 			Aliases: []string{"!music"},
 			Handler: a.songCmd,
 		},
-		{
-			Trigger: "!somafm",
-			Help:    "The SomaFM link, whose channels are the background audio",
-			Handler: func(ctx context.Context, _ *users.User, _ []string) {
-				a.Reply(ctx, "Stream music by SomaFM — https://somafm.com")
-			},
-		},
 	}
 }
 
@@ -392,8 +385,7 @@ func (a *App) platform() string {
 // control" subset, plus the !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
-// !unbot) are excluded: those are per-user identity/score state. !somafm is
-// excluded too — it credits a bed that only Twitch defaults to. Aliases come
+// !unbot) are excluded: those are per-user identity/score state. Aliases come
 // along with their trigger, so only triggers are listed.
 var v1Commands = map[string]bool{
 	"!version": true, "!uptime": true, "!commands": true,

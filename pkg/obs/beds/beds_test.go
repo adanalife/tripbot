@@ -17,9 +17,17 @@ import (
 // by TestAdvance_DropsADuplicateEndingReport, which turns it back on.
 // The switch delay goes off for the same reason: these tests read OBS straight
 // after a Set, and zero applies inline. TestSchedule_* turn it back on.
+// testStations stands in for the mounted station list; the first is the default.
+var testStations = []Station{
+	{ID: "ambient", Name: "Example Ambient", URL: "https://radio.example/ambient"},
+	{ID: "lofi", Name: "Example Lo-Fi", URL: "https://radio.example/lofi"},
+	{ID: "jazz", Name: "Example Jazz", URL: "https://radio.example/jazz.mp3"},
+}
+
 func TestMain(m *testing.M) {
 	advanceDebounce = 0
 	switchDelay = 0
+	Stations = testStations
 	os.Exit(m.Run())
 }
 
@@ -171,7 +179,7 @@ func TestResolveAlbum(t *testing.T) {
 		{"streambeats-lo", ""},                             // a partial segment is a typo
 		{"lofi", ""},                                       // an interior segment is not a prefix
 		{"empty", ""},                                      // trackless dir isn't an album
-		{"groovesalad", ""},                                // a station is not an album
+		{"ambient", ""},                                    // a station is not an album
 		{"", ""},                                           // no argument resolves to nothing
 	} {
 		if got := s.ResolveAlbum(tc.arg); got != tc.want {
@@ -421,37 +429,37 @@ func TestAlbumFromFile(t *testing.T) {
 	}
 }
 
-func TestSet_SomaFMUsesNetworkMode(t *testing.T) {
+func TestSet_RadioUsesNetworkMode(t *testing.T) {
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, shareDir(t, 2), "twitch")
-	if err := s.Set(context.Background(), SomaFM); err != nil {
+	if err := s.Set(context.Background(), Radio); err != nil {
 		t.Fatal(err)
 	}
 	if !o.network {
-		t.Fatal("somafm should put the source in network mode")
+		t.Fatal("radio should put the source in network mode")
 	}
-	if bed, track := s.Current(); bed != SomaFM || track != "" {
-		t.Fatalf("current: want somafm/no track, got %s/%s", bed, track)
+	if bed, track := s.Current(); bed != Radio || track != "" {
+		t.Fatalf("current: want radio/no track, got %s/%s", bed, track)
 	}
 }
 
-// The station is what makes the SomaFM bed a choice rather than one stream, so
+// The station is what makes the radio bed a choice rather than one stream, so
 // tuning has to reach OBS as a URL and select the bed in one move — nobody means
 // "tune a station I'm not playing".
-func TestSetStation_TunesAndSelectsTheSomaFMBed(t *testing.T) {
+func TestSetStation_TunesAndSelectsTheRadioBed(t *testing.T) {
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, shareDir(t, 2), "twitch")
-	if err := s.SetStation(context.Background(), "dronezone"); err != nil {
+	if err := s.SetStation(context.Background(), "lofi"); err != nil {
 		t.Fatal(err)
 	}
-	if o.url != StreamURL("dronezone") {
-		t.Fatalf("obs url = %q, want %q", o.url, StreamURL("dronezone"))
+	if o.url != StreamURL("lofi") {
+		t.Fatalf("obs url = %q, want %q", o.url, StreamURL("lofi"))
 	}
-	if bed, _ := s.Current(); bed != SomaFM {
-		t.Fatalf("bed = %s, want somafm", bed)
+	if bed, _ := s.Current(); bed != Radio {
+		t.Fatalf("bed = %s, want radio", bed)
 	}
-	if s.Station() != "dronezone" {
-		t.Fatalf("station = %q, want dronezone", s.Station())
+	if s.Station() != "lofi" {
+		t.Fatalf("station = %q, want lofi", s.Station())
 	}
 }
 
@@ -459,55 +467,50 @@ func TestSetStation_TunesAndSelectsTheSomaFMBed(t *testing.T) {
 // console's now-playing line would then name a channel nobody is hearing.
 func TestSetStation_RollsBackWhenOBSRejectsIt(t *testing.T) {
 	o := &fakeOBS{err: errors.New("obs unreachable")}
-	s := NewStore(o, SomaFM, t.TempDir(), "twitch")
-	if err := s.SetStation(context.Background(), "dronezone"); err == nil {
+	s := NewStore(o, Radio, t.TempDir(), "twitch")
+	if err := s.SetStation(context.Background(), "lofi"); err == nil {
 		t.Fatal("want an error when OBS rejects the tune")
 	}
-	if s.Station() != DefaultStation {
-		t.Fatalf("station = %q, want the previous %q", s.Station(), DefaultStation)
+	if s.Station() != DefaultStation() {
+		t.Fatalf("station = %q, want the previous %q", s.Station(), DefaultStation())
 	}
 }
 
 func TestSetStation_RejectsAnUnknownChannel(t *testing.T) {
-	s := NewStore(&fakeOBS{}, SomaFM, t.TempDir(), "twitch")
+	s := NewStore(&fakeOBS{}, Radio, t.TempDir(), "twitch")
 	if err := s.SetStation(context.Background(), "not-a-channel"); err == nil {
-		t.Fatal("want an error for a channel SomaFM doesn't have")
+		t.Fatal("want an error for a station the list doesn't have")
 	}
 }
 
 // Switching away and back has to land on the tuned station, not the default:
 // the station outlives the bed.
-func TestSet_SomaFMReturnsToTheTunedStation(t *testing.T) {
+func TestSet_RadioReturnsToTheTunedStation(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
-	if err := s.SetStation(context.Background(), "u80s"); err != nil {
+	s := NewStore(o, Radio, shareDir(t, 2), "twitch")
+	if err := s.SetStation(context.Background(), "jazz"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Set(context.Background(), SomaFM); err != nil {
+	if err := s.Set(context.Background(), Radio); err != nil {
 		t.Fatal(err)
 	}
-	if o.url != StreamURL("u80s") {
-		t.Fatalf("obs url = %q, want the tuned %q", o.url, StreamURL("u80s"))
+	if o.url != StreamURL("jazz") {
+		t.Fatalf("obs url = %q, want the tuned %q", o.url, StreamURL("jazz"))
 	}
 }
 
 func TestStationFromURL(t *testing.T) {
 	for _, tc := range []struct{ url, want string }{
-		{StreamURL("dronezone"), "dronezone"},
-		// The obs repo's scene config pins an edge host and its own bitrate; both
-		// have to read back as the station.
-		{"https://ice4.somafm.com/gsclassic-128-mp3", "gsclassic"},
-		{"https://ice2.somafm.com/dronezone-256-mp3", "dronezone"},
-		// Ids with digits are still whole ids.
-		{StreamURL("7soul"), "7soul"},
-		{StreamURL("u80s"), "u80s"},
-		{"https://ice.somafm.com/nosuchchannel-128-mp3", ""},
-		// "live" is a real channel id, so a non-SomaFM URL that happens to end in
-		// one must not read as a station.
-		{"rtmp://example.com/live", ""},
+		{StreamURL("lofi"), "lofi"},
+		{"https://radio.example/jazz.mp3", "jazz"},
+		// Only an exact match is a station: a sibling path, another host, or a
+		// URL that merely ends in a station id is not.
+		{"https://radio.example/lofi-256", ""},
+		{"https://elsewhere.example/lofi", ""},
+		{"rtmp://example.com/lofi", ""},
 		{"", ""},
 	} {
 		if got := stationFromURL(tc.url); got != tc.want {
@@ -518,7 +521,7 @@ func TestStationFromURL(t *testing.T) {
 
 func TestSet_CarHumLoops(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
+	s := NewStore(o, Radio, shareDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
@@ -613,12 +616,12 @@ func TestSet_AlbumWithNoTracksFails(t *testing.T) {
 
 func TestSet_FailedSwitchKeepsReportingTheOldBed(t *testing.T) {
 	o := &fakeOBS{err: errors.New("obs unreachable")}
-	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
+	s := NewStore(o, Radio, shareDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), CarHum); err == nil {
 		t.Fatal("want an error when OBS rejects the switch")
 	}
-	if bed, _ := s.Current(); bed != SomaFM {
-		t.Fatalf("bed after a rejected switch: want somafm, got %s", bed)
+	if bed, _ := s.Current(); bed != Radio {
+		t.Fatalf("bed after a rejected switch: want radio, got %s", bed)
 	}
 }
 
@@ -758,13 +761,13 @@ func TestAdvance_EmptyAlbumRescuesOnlyOnce(t *testing.T) {
 	}
 }
 
-// The bed the audio watchdog rides a SomaFM outage out on. An outage lasts
+// The bed the audio watchdog rides a radio outage out on. An outage lasts
 // hours, so the album — licence-clean, and actual music — is a better degraded
 // state than the drone whenever the share can supply it.
 func TestSwapToFallback_PrefersTheAlbumOverTheDrone(t *testing.T) {
 	dir := shareDir(t, 3)
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, dir, "twitch")
+	s := NewStore(o, Radio, dir, "twitch")
 	if err := s.SwapToFallback(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -776,11 +779,11 @@ func TestSwapToFallback_PrefersTheAlbumOverTheDrone(t *testing.T) {
 	if o.loop {
 		t.Fatal("the fallback album must not loop")
 	}
-	// The swap back to SomaFM keys off the *selected* bed, so recording the
+	// The swap back to the radio keys off the *selected* bed, so recording the
 	// fallback as the bed would switch the watchdog off and strand the stream
-	// on the album once SomaFM returns.
-	if bed, _ := s.Current(); bed != SomaFM {
-		t.Fatalf("selected bed after falling back: want %s, got %s", SomaFM, bed)
+	// on the album once the radio returns.
+	if bed, _ := s.Current(); bed != Radio {
+		t.Fatalf("selected bed after falling back: want %s, got %s", Radio, bed)
 	}
 }
 
@@ -791,7 +794,7 @@ func TestSwapToFallback_UsesTheDroneWhenTheAlbumCantPlay(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := &fakeOBS{}
-			s := NewStore(o, SomaFM, tc.dir, "twitch")
+			s := NewStore(o, Radio, tc.dir, "twitch")
 			if err := s.SwapToFallback(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -806,14 +809,14 @@ func TestSwapToFallback_UsesTheDroneWhenTheAlbumCantPlay(t *testing.T) {
 	}
 }
 
-// The fallback leaves the selected bed on SomaFM, so Advance has to know the
+// The fallback leaves the selected bed on the radio, so Advance has to know the
 // album by more than the bed. Without that the outage plays one track and falls
 // silent — the album=1 / tracks=0 state, which is the thing the fallback exists
 // to prevent rather than to cause.
 func TestSwapToFallback_AlbumKeepsAdvancing(t *testing.T) {
 	const n = 3
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, shareDir(t, n), "twitch")
+	s := NewStore(o, Radio, shareDir(t, n), "twitch")
 	ctx := context.Background()
 	if err := s.SwapToFallback(ctx); err != nil {
 		t.Fatal(err)
@@ -830,14 +833,14 @@ func TestSwapToFallback_AlbumKeepsAdvancing(t *testing.T) {
 	}
 }
 
-func TestSwapToSomaFM_EndsTheAlbumFallback(t *testing.T) {
+func TestSwapToRadio_EndsTheAlbumFallback(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch")
+	s := NewStore(o, Radio, shareDir(t, 3), "twitch")
 	ctx := context.Background()
 	if err := s.SwapToFallback(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SwapToSomaFM(ctx); err != nil {
+	if err := s.SwapToRadio(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if !o.network {
@@ -857,7 +860,7 @@ func TestSwapToSomaFM_EndsTheAlbumFallback(t *testing.T) {
 // asked for, so a track ending must not walk an album nobody selected.
 func TestSet_ClearsTheAlbumFallback(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch")
+	s := NewStore(o, Radio, shareDir(t, 3), "twitch")
 	ctx := context.Background()
 	if err := s.SwapToFallback(ctx); err != nil {
 		t.Fatal(err)
@@ -880,20 +883,20 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 		settings map[string]any
 		want     Bed
 	}{
-		{"network stream", map[string]any{"is_local_file": false}, SomaFM},
+		{"network stream", map[string]any{"is_local_file": false}, Radio},
 		{"carhum flac", map[string]any{"is_local_file": true, "local_file": CarHumFile(DefaultVoicing)}, CarHum},
-		// The watchdog's copy of the same drone means SomaFM is still the
+		// The watchdog's copy of the same drone means the radio is still the
 		// selected bed, mid-outage. Reading it as CarHum switches the outage
-		// machinery off and strands the stream on the drone after SomaFM
+		// machinery off and strands the stream on the drone after the radio
 		// recovers — the restart-during-fallback case.
-		{"watchdog fallback flac", map[string]any{"is_local_file": true, "local_file": FallbackFile}, SomaFM},
+		{"watchdog fallback flac", map[string]any{"is_local_file": true, "local_file": FallbackFile}, Radio},
 		{"album track", map[string]any{"is_local_file": true, "local_file": filepath.Join(dir, "fifty-horizons", "a track.mp3")}, Album},
 		// A sibling directory whose name merely prefixes the share must not
 		// read as the album.
 		{"lookalike dir", map[string]any{"is_local_file": true, "local_file": dir + "-old/x.mp3"}, CarHum},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewStore(&fakeOBS{settings: tc.settings}, SomaFM, dir, "twitch")
+			s := NewStore(&fakeOBS{settings: tc.settings}, Radio, dir, "twitch")
 			s.Detect(context.Background())
 			if bed, _ := s.Current(); bed != tc.want {
 				t.Fatalf("detected %s, want %s", bed, tc.want)
@@ -944,19 +947,19 @@ func TestDetect_AlbumWithNoTracksStillReportsTheBed(t *testing.T) {
 func TestDetect_ReadsTheStationFromTheSourceURL(t *testing.T) {
 	o := &fakeOBS{settings: map[string]any{
 		"is_local_file": false,
-		"input":         "https://ice4.somafm.com/spacestation-128-mp3",
+		"input":         "https://radio.example/jazz.mp3",
 	}}
 	s := NewStore(o, CarHum, t.TempDir(), "twitch")
 	s.Detect(context.Background())
-	if s.Station() != "spacestation" {
-		t.Fatalf("station = %q, want spacestation", s.Station())
+	if s.Station() != "jazz" {
+		t.Fatalf("station = %q, want jazz", s.Station())
 	}
 }
 
 func TestDetect_KeepsTheSeedWhenOBSIsUnreachable(t *testing.T) {
-	s := NewStore(&fakeOBS{err: errors.New("nope")}, SomaFM, t.TempDir(), "twitch")
+	s := NewStore(&fakeOBS{err: errors.New("nope")}, Radio, t.TempDir(), "twitch")
 	s.Detect(context.Background())
-	if bed, _ := s.Current(); bed != SomaFM {
+	if bed, _ := s.Current(); bed != Radio {
 		t.Fatalf("want the seed bed retained, got %s", bed)
 	}
 }
@@ -1044,7 +1047,7 @@ func TestSchedule_SupersedesASwitchStillWaiting(t *testing.T) {
 	o := &fakeOBS{}
 	s := NewStore(o, Album, shareDir(t, 3), "twitch")
 	ctx := context.Background()
-	if err := s.Set(ctx, SomaFM); err != nil {
+	if err := s.Set(ctx, Radio); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Set(ctx, CarHum); err != nil {
@@ -1058,7 +1061,7 @@ func TestSchedule_SupersedesASwitchStillWaiting(t *testing.T) {
 	// Reading the fake after observing the store settle is ordered by the store's
 	// own lock, so there's no race with the timer goroutine.
 	if o.network {
-		t.Errorf("the superseded somafm switch reached OBS: url=%q", o.url)
+		t.Errorf("the superseded radio switch reached OBS: url=%q", o.url)
 	}
 	if o.file != CarHumFile(DefaultVoicing) {
 		t.Errorf("OBS is playing %q, want the car hum", o.file)
@@ -1074,7 +1077,7 @@ func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
 
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
-	if err := s.SetStation(context.Background(), "dronezone"); err != nil {
+	if err := s.SetStation(context.Background(), "lofi"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1082,13 +1085,13 @@ func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
 	if !ok {
 		t.Fatal("want the tune reported as pending")
 	}
-	if sw.Bed != SomaFM || sw.Station != "dronezone" {
-		t.Errorf("pending = %+v, want the somafm bed on dronezone", sw)
+	if sw.Bed != Radio || sw.Station != "lofi" {
+		t.Errorf("pending = %+v, want the radio bed on lofi", sw)
 	}
 	if sw.At.Before(time.Now()) {
 		t.Errorf("pending lands at %v, already in the past", sw.At)
 	}
-	if got := s.Station(); got == "dronezone" {
+	if got := s.Station(); got == "lofi" {
 		t.Error("the pending station is being reported as the live one")
 	}
 
@@ -1101,26 +1104,26 @@ func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
 		_, pending := s.Pending()
 		return !pending
 	})
-	if got := s.Station(); got != "dronezone" {
-		t.Errorf("station = %q after the tune landed, want dronezone", got)
+	if got := s.Station(); got != "lofi" {
+		t.Errorf("station = %q after the tune landed, want lofi", got)
 	}
-	if bed, _ := s.Current(); bed != SomaFM {
-		t.Errorf("bed = %q after the tune landed, want somafm", bed)
+	if bed, _ := s.Current(); bed != Radio {
+		t.Errorf("bed = %q after the tune landed, want radio", bed)
 	}
 }
 
 // Everything that names what a viewer is hearing — !song, !audio, the console's
 // now-playing line — reads Playing, and during an outage that is not the
-// selection: the watchdog puts the album on air and leaves SomaFM selected, so
-// a reader of the selection announces a station, and a SomaFM track, nobody is
+// selection: the watchdog puts the album on air and leaves the radio selected, so
+// a reader of the selection announces a station, and a radio track, nobody is
 // hearing.
-func TestPlaying_NamesTheFallbackWhileTheSelectionStandsSomaFM(t *testing.T) {
+func TestPlaying_NamesTheFallbackWhileTheSelectionStandsRadio(t *testing.T) {
 	dir := shareDir(t, 3)
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, dir, "twitch")
+	s := NewStore(o, Radio, dir, "twitch")
 	ctx := context.Background()
-	if bed, _ := s.Playing(); bed != SomaFM {
-		t.Fatalf("playing bed before the outage: want %s, got %s", SomaFM, bed)
+	if bed, _ := s.Playing(); bed != Radio {
+		t.Fatalf("playing bed before the outage: want %s, got %s", Radio, bed)
 	}
 	if err := s.SwapToFallback(ctx); err != nil {
 		t.Fatal(err)
@@ -1135,14 +1138,14 @@ func TestPlaying_NamesTheFallbackWhileTheSelectionStandsSomaFM(t *testing.T) {
 	if s.PlayingAlbum() != "fifty-horizons" {
 		t.Fatalf("playing album on the fallback: got %q", s.PlayingAlbum())
 	}
-	if sel, _ := s.Current(); sel != SomaFM {
-		t.Fatalf("selected bed: want %s, got %s", SomaFM, sel)
+	if sel, _ := s.Current(); sel != Radio {
+		t.Fatalf("selected bed: want %s, got %s", Radio, sel)
 	}
-	if err := s.SwapToSomaFM(ctx); err != nil {
+	if err := s.SwapToRadio(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if bed, track := s.Playing(); bed != SomaFM || track != "" {
-		t.Fatalf("playing after recovery: want %s with no track, got %s %q", SomaFM, bed, track)
+	if bed, track := s.Playing(); bed != Radio || track != "" {
+		t.Fatalf("playing after recovery: want %s with no track, got %s %q", Radio, bed, track)
 	}
 }
 
@@ -1150,7 +1153,7 @@ func TestPlaying_NamesTheFallbackWhileTheSelectionStandsSomaFM(t *testing.T) {
 // misnames the audio in exactly the same way.
 func TestPlaying_NamesTheDroneFallback(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, t.TempDir(), "twitch")
+	s := NewStore(o, Radio, t.TempDir(), "twitch")
 	if err := s.SwapToFallback(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -1272,7 +1275,7 @@ func TestAlbumIndexIsCachedUntilItsMtimeMoves(t *testing.T) {
 
 func TestSetVoicing_PlaysThatRenderAndSelectsTheDrone(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
+	s := NewStore(o, Radio, shareDir(t, 2), "twitch")
 	if err := s.SetVoicing(context.Background(), "highway"); err != nil {
 		t.Fatal(err)
 	}
@@ -1309,7 +1312,7 @@ func TestVoicing_SurvivesASwitchAwayAndBack(t *testing.T) {
 	if err := s.SetVoicing(ctx, "mountain"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Set(ctx, SomaFM); err != nil {
+	if err := s.Set(ctx, Radio); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Set(ctx, CarHum); err != nil {
@@ -1335,7 +1338,7 @@ func TestDetect_ReadsTheVoicingOffTheDroneFile(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": tc.file}}
-			s := NewStore(o, SomaFM, shareDir(t, 1), "twitch")
+			s := NewStore(o, Radio, shareDir(t, 1), "twitch")
 			s.Detect(context.Background())
 			if s.Voicing() != tc.want {
 				t.Fatalf("voicing: want %s, got %s", tc.want, s.Voicing())

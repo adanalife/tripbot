@@ -14,6 +14,11 @@ import (
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
+// The radio bed's station list is mounted at runtime; the tests tune this one.
+func init() {
+	beds.Stations = []beds.Station{{ID: "lofi", Name: "Example Lo-Fi", URL: "https://radio.example/lofi"}}
+}
+
 // --- App.OBS seam fakes ---
 
 // noopOBS swallows every OBS call — the default in newTestApp.
@@ -55,7 +60,7 @@ const testTrack = "/opt/tripbot/assets/music/fifty-horizons/Colorado Sunrise.mp3
 
 func (f *fakeBeds) Playing() (beds.Bed, string) { return f.bed, f.track }
 
-func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
+func (f *fakeBeds) RadioTrack(context.Context) (string, string, error) {
 	f.feeds++
 	return f.artist, f.title, f.feedErr
 }
@@ -72,7 +77,7 @@ func (f *fakeBeds) Pending() (beds.Switch, bool) {
 
 func (f *fakeBeds) Station() string {
 	if f.station == "" {
-		return beds.DefaultStation
+		return beds.DefaultStation()
 	}
 	return f.station
 }
@@ -94,7 +99,7 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 	if f.err != nil {
 		return f.err
 	}
-	f.bed, f.track, f.station = beds.SomaFM, "", station
+	f.bed, f.track, f.station = beds.Radio, "", station
 	return nil
 }
 
@@ -229,7 +234,7 @@ func TestAudioCmd_ViewerGetsReportWithoutSwitching(t *testing.T) {
 func TestAudioCmd_ViewerNamingABedStillCannotSwitch(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 
-	app.audioCmd(context.Background(), newTestUser("viewer1"), []string{"somafm"})
+	app.audioCmd(context.Background(), newTestUser("viewer1"), []string{"radio"})
 
 	if len(fake.sets) != 0 {
 		t.Fatalf("a non-admin must not switch the bed, got %v", fake.sets)
@@ -260,20 +265,20 @@ func TestAudioCmd_AdminSwitchesAndAnnouncesTheAlbum(t *testing.T) {
 	}
 }
 
-// A SomaFM channel id is accepted in the same argument slot as a bed name — no
+// A radio station id is accepted in the same argument slot as a bed name — no
 // channel id collides with one, and "switch the music to X" is one intent.
-func TestAudioCmd_AdminTunesASomaFMStation(t *testing.T) {
+func TestAudioCmd_AdminTunesARadioStation(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 
-	app.audioCmd(context.Background(), newAdminUser(), []string{"DroneZone"}) // case-insensitive
+	app.audioCmd(context.Background(), newAdminUser(), []string{"LoFi"}) // case-insensitive
 
 	if len(fake.sets) != 0 {
 		t.Errorf("a station is a tune, not a bed switch, got %v", fake.sets)
 	}
-	if len(fake.stations) != 1 || fake.stations[0] != "dronezone" {
-		t.Fatalf("expected one tune to dronezone, got %v", fake.stations)
+	if len(fake.stations) != 1 || fake.stations[0] != "lofi" {
+		t.Fatalf("expected one tune to lofi, got %v", fake.stations)
 	}
-	if got := out(); !strings.Contains(got, "Drone Zone") {
+	if got := out(); !strings.Contains(got, "Example Lo-Fi") {
 		t.Errorf("expected the announcement to name the channel, got %q", got)
 	}
 }

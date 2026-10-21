@@ -477,7 +477,7 @@ func seedSongRun(t *testing.T, db *gorm.DB, username, title, artist string, at t
 	meta := `{"command":"!song"}`
 	if title != "" {
 		b, _ := json.Marshal(map[string]any{"command": "!song",
-			"detail": map[string]string{"bed": "somafm", "title": title, "artist": artist}})
+			"detail": map[string]string{"bed": "radio", "title": title, "artist": artist}})
 		meta = string(b)
 	}
 	err := db.Exec(`INSERT INTO events (platform, username, event, meta, date_created)

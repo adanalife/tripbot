@@ -29,7 +29,7 @@ func testAudioMetrics(t *testing.T) (obsBackgroundAudioMetrics, *metricsdk.Manua
 	if err != nil {
 		t.Fatalf("fallback gauge: %v", err)
 	}
-	reachable, err := meter.Int64Gauge("somafm_reachable")
+	reachable, err := meter.Int64Gauge("radio_reachable")
 	if err != nil {
 		t.Fatalf("reachable gauge: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestBackgroundAudioGauges_StampPlatform(t *testing.T) {
 	audio.SetPlaying("youtube", true)
 	audio.SetPlaying("tiktok", false)
 	audio.SetOnFallback("twitch", true)
-	audio.SetSomaFMReachable("twitch", false)
+	audio.SetRadioReachable("twitch", false)
 
 	got := map[string]int64{}
 	for _, m := range collectAudio(t, reader) {
@@ -96,7 +96,7 @@ func TestBackgroundAudioGauges_StampPlatform(t *testing.T) {
 		"obs_background_audio_playing/youtube":    1,
 		"obs_background_audio_playing/tiktok":     0,
 		"obs_background_audio_on_fallback/twitch": 1,
-		"somafm_reachable/twitch":                 0,
+		"radio_reachable/twitch":                  0,
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("gauge datapoints = %v, want %v", got, want)
@@ -136,14 +136,14 @@ func TestBackgroundAudioLevel_StampsPlatform(t *testing.T) {
 }
 
 // A swap is per-platform too: without the label a to_fallback on youtube and
-// one on twitch add into one number, and "SomaFM dropped in prod" stops naming
+// one on twitch add into one number, and "the radio dropped in prod" stops naming
 // which stream it dropped on.
 func TestBackgroundAudioSwaps_StampDirectionAndPlatform(t *testing.T) {
 	audio, reader := testAudioMetrics(t)
 
 	audio.IncSwap("twitch", "to_fallback")
 	audio.IncSwap("youtube", "to_fallback")
-	audio.IncSwap("twitch", "to_somafm")
+	audio.IncSwap("twitch", "to_radio")
 
 	got := map[string]int64{}
 	for _, m := range collectAudio(t, reader) {
@@ -167,7 +167,7 @@ func TestBackgroundAudioSwaps_StampDirectionAndPlatform(t *testing.T) {
 	want := map[string]int64{
 		"twitch/to_fallback":  1,
 		"youtube/to_fallback": 1,
-		"twitch/to_somafm":    1,
+		"twitch/to_radio":     1,
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("swap datapoints = %v, want %v", got, want)

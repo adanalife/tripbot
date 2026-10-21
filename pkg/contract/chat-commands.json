@@ -397,12 +397,6 @@
       ]
     },
     {
-      "trigger": "!somafm",
-      "platforms": [
-        "twitch"
-      ]
-    },
-    {
       "trigger": "!song",
       "aliases": [
         "!music"

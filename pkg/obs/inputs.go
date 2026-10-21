@@ -95,10 +95,10 @@ func setBrowserURL(client *goobs.Client, name, url string) error {
 // merge leaves the source's `input` (network URL) field untouched, so the
 // station it names survives the detour and is still readable at startup. Used
 // by the audio-fallback watchdog to swap the background-audio source onto the
-// local Car Hum bed when SomaFM is unreachable, and by the bed store to play
+// local Car Hum bed when the radio is unreachable, and by the bed store to play
 // album tracks. file must exist inside the OBS container.
 //
-// loop must be true for a bed that has to stay audible on its own: the SomaFM
+// loop must be true for a bed that has to stay audible on its own: the radio
 // source ships with looping unset (a radio stream doesn't loop), so without
 // forcing it on, a fallback FLAC would play exactly once and then go silent —
 // re-creating the dead air we're trying to avoid. (Confirmed on stage
@@ -136,7 +136,7 @@ func GetInputSettings(ctx context.Context, inputName string) (map[string]any, er
 //
 // The url is supplied on every call rather than relying on the one the scene
 // config baked in, because which stream the source should play is a live choice
-// (the selected SomaFM station), not a fixed property of the scene.
+// (the selected radio station), not a fixed property of the scene.
 func SetInputNetworkMode(ctx context.Context, inputName, url string) error {
 	return setInputSettings(ctx, inputName, map[string]any{
 		"is_local_file": false,

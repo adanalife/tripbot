@@ -94,3 +94,24 @@ spec:
   target:
     creationPolicy: Owner
     name: tripbot-discord-bot-token
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-radio-stations
+  namespace: development
+spec:
+  data:
+    - remoteRef:
+        key: /k8s/tripbot/radio-stations
+      secretKey: stations.json
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-parameterstore
+  target:
+    creationPolicy: Owner
+    name: tripbot-radio-stations
