@@ -1,1 +1,0 @@
-The album bed keeps its selection across restarts: a group or whole-share choice is no longer narrowed to the one album OBS is playing, and the selection and shuffle are saved per platform and restored at startup.

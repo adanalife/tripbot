@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.0.1] — 2026-10-21
+
+### Fixes
+
+- The album bed keeps its selection across restarts: a group or whole-share choice is no longer narrowed to the one album OBS is playing, and the selection and shuffle are saved per platform and restored at startup. ([#1741](https://github.com/adanalife/tripbot/pull/1741))
+
 ## [v6.0.0] — 2026-10-21
 
 ### Console / API
