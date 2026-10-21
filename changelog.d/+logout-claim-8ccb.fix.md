@@ -1,1 +1,0 @@
-A viewer who left chat while a 5-minute miles checkpoint or a moderator's miles correction was being saved could lose those miles from their lifetime total, and a viewer logged out twice at once (a shutdown overlapping the regular chatter check) had their session counted twice on the monthly board. Logging out now takes the viewer's live session first, so neither can happen.

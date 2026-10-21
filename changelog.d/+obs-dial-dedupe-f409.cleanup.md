@@ -1,1 +1,0 @@
-**One place resolves the OBS WebSocket address and password.** The streaming poller connects through the same `Dial` as every other OBS call, so the `OBS_WEBSOCKET_ADDR`/`OBS_WEBSOCKET_PASSWD` defaults live in one spot. No behavior change.

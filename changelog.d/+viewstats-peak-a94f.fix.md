@@ -1,1 +1,0 @@
-A database hiccup while tripbot first looked up the all-time viewer high no longer makes that moment's viewer count the high, which could announce a false viewer record on the next tick. Tripbot retries the lookup on the next tick instead.

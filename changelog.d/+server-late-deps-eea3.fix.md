@@ -1,1 +1,0 @@
-tripbot's console API reads the feature-flag client, background-audio store and rotator editor safely while they are still being wired up at boot, instead of racing the boot sequence that installs them.
