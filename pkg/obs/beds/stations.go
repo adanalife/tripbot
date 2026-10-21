@@ -28,18 +28,11 @@ const DefaultStation = "gsclassic"
 const (
 	streamHost   = "https://ice.somafm.com"
 	streamSuffix = "-128-mp3"
-	songsHost    = "https://somafm.com/songs"
 )
 
 // StreamURL is the ICEcast URL OBS's ffmpeg_source plays for a station.
 func StreamURL(station string) string {
 	return streamHost + "/" + station + streamSuffix
-}
-
-// SongsURL is the station's now-playing JSON feed — the only source that knows
-// what SomaFM is currently playing, since the audio arrives as a bare stream.
-func SongsURL(station string) string {
-	return songsHost + "/" + station + ".json"
 }
 
 // stationFromURL recovers the station id from a stream URL, so the Store can
