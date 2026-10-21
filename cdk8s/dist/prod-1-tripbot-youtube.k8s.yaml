@@ -91,7 +91,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:5.39.0
+          image: adanalife/tripbot:6.0.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -122,6 +122,9 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - mountPath: /opt/tripbot/assets/radio
+              name: radio-stations
+              readOnly: true
             - mountPath: /opt/tripbot/assets/music-index
               name: music-index
               readOnly: true
@@ -139,7 +142,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.39.0
+          image: adanalife/tripbot:6.0.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -161,6 +164,10 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       volumes:
+        - name: radio-stations
+          secret:
+            optional: true
+            secretName: tripbot-radio-stations
         - configMap:
             name: obs-music-index
             optional: true
@@ -189,7 +196,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.39.0
+            - adanalife/tripbot:6.0.0
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
