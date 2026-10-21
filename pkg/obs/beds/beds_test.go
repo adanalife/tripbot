@@ -1346,3 +1346,25 @@ func TestDetect_ReadsTheVoicingOffTheDroneFile(t *testing.T) {
 		})
 	}
 }
+
+// scanTracks picks up every track extension the localize index can name,
+// Ogg Opus included, and nothing else in an album directory.
+func TestScanTracksExtensions(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.mp3", "b.flac", "c.m4a", "d.ogg", "e.OPUS", "cover.jpg", "f.mp3@SynoEAStream"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := scanTracks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, p := range got {
+		names = append(names, filepath.Base(p))
+	}
+	if want := []string{"a.mp3", "b.flac", "c.m4a", "d.ogg", "e.OPUS"}; !slices.Equal(names, want) {
+		t.Fatalf("scanTracks = %v, want %v", names, want)
+	}
+}

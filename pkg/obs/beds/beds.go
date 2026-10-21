@@ -139,7 +139,7 @@ func voicingFromFile(file string) string {
 
 // audioExts are the track extensions scanned for under MusicDir. Matches the
 // find in the obs repo's script/background-audio.sh.
-var audioExts = map[string]bool{".mp3": true, ".flac": true, ".m4a": true, ".ogg": true}
+var audioExts = map[string]bool{".mp3": true, ".flac": true, ".m4a": true, ".ogg": true, ".opus": true}
 
 // OBS is the subset of pkg/obs the store drives. Injectable so switching logic
 // unit-tests without a real OBS WebSocket.
