@@ -173,10 +173,18 @@ func TestTrack(t *testing.T) {
 	if got := Track(ctx, vid); !reflect.DeepEqual(got, want) {
 		t.Errorf("Track = %v, want %v", got, want)
 	}
+	// The source track keeps the moment outside the trim, on the recording's clock.
+	wantSource := []TrackPoint{{3, 39.9, -110}, {5, 40.0, -110}, {7, 40.1, -110}}
+	if got := SourceTrack(ctx, vid); !reflect.DeepEqual(got, wantSource) {
+		t.Errorf("SourceTrack = %v, want %v", got, wantSource)
+	}
 
 	vid.CoordConfidence = &lo
 	if got := Track(ctx, vid); got != nil {
 		t.Errorf("Track on an untrusted clip = %v, want nil", got)
+	}
+	if got := SourceTrack(ctx, vid); got != nil {
+		t.Errorf("SourceTrack on an untrusted clip = %v, want nil", got)
 	}
 }
 
