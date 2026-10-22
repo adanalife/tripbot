@@ -193,15 +193,33 @@ SELECT ts_sec AS sec, lat, lng FROM video_coords
 WHERE video_id = @vid AND ts_sec IS NOT NULL
 ORDER BY ts_sec`
 
+// The whole recording the clip was cut from, cut seconds included, on the
+// recording's own clock (a season-2 piece's seconds before any trim).
+const sourceTrackQuery = `
+SELECT source_ts_sec AS sec, lat, lng FROM video_coords
+WHERE video_id = @vid
+ORDER BY source_ts_sec`
+
 // Track returns vid's whole per-moment track in clip order, gated like
 // CoordAt: nil when the clip has no track worth believing, which is the
 // caller's signal to fall back to the clip-level fix.
 func Track(ctx context.Context, vid Video) []TrackPoint {
+	return trackBy(ctx, vid, trackQuery)
+}
+
+// SourceTrack is Track over the recording the clip was cut from, Sec on the
+// recording's clock: the same points for an untrimmed clip, the cut stretches
+// too for a trimmed one.
+func SourceTrack(ctx context.Context, vid Video) []TrackPoint {
+	return trackBy(ctx, vid, sourceTrackQuery)
+}
+
+func trackBy(ctx context.Context, vid Video, query string) []TrackPoint {
 	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < minCoordConfidence {
 		return nil
 	}
 	var pts []TrackPoint
-	if err := database.GormDB().WithContext(ctx).Raw(trackQuery, sql.Named("vid", vid.ID)).Scan(&pts).Error; err != nil {
+	if err := database.GormDB().WithContext(ctx).Raw(query, sql.Named("vid", vid.ID)).Scan(&pts).Error; err != nil {
 		slog.ErrorContext(ctx, "video_coords track lookup failed", "err", err, "slug", vid.Slug)
 		return nil
 	}

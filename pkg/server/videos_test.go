@@ -33,14 +33,22 @@ func TestVideoHandler(t *testing.T) {
 	// Clips 6 → 7 → 8 are chained by next_vid alone, as the corpus is: clip 7
 	// finds 6 as the clip whose next_vid names it. Clip 6 has no track, so its
 	// side reads empty rather than failing the page.
-	orig := clipTrack
-	t.Cleanup(func() { clipTrack = orig })
+	orig, origSource := clipTrack, clipSourceTrack
+	t.Cleanup(func() { clipTrack, clipSourceTrack = orig, origSource })
 	clipTrack = func(_ context.Context, v video.Video) []video.TrackPoint {
 		switch v.ID {
 		case 7:
 			return []video.TrackPoint{{Sec: 0, Lat: 38.5, Lng: -109.5}, {Sec: 30, Lat: 38.6, Lng: -109.6}}
 		case 8:
 			return []video.TrackPoint{{Sec: 0, Lat: 38.7, Lng: -109.7}}
+		}
+		return nil
+	}
+	// Clip 7 was cut 10 s into its recording: the source track is longer and
+	// on the recording's clock.
+	clipSourceTrack = func(_ context.Context, v video.Video) []video.TrackPoint {
+		if v.ID == 7 {
+			return []video.TrackPoint{{Sec: 0, Lat: 38.4, Lng: -109.4}, {Sec: 10, Lat: 38.5, Lng: -109.5}, {Sec: 40, Lat: 38.6, Lng: -109.6}}
 		}
 		return nil
 	}
@@ -73,10 +81,11 @@ func TestVideoHandler(t *testing.T) {
 		RecordedAt: "2018-05-14T22:48:01Z", RecordedAtUTC: "2018-05-15T04:48:01Z",
 		PrevID: &prev, NextID: &next,
 		Plays: 2, LastPlayedAt: "2026-10-02T00:00:00Z",
-		Track:     [][3]float64{{0, 38.5, -109.5}, {30, 38.6, -109.6}},
-		PrevTrack: [][3]float64{},
-		NextTrack: [][3]float64{{0, 38.7, -109.7}},
-		Moments:   []moment{},
+		Track:       [][3]float64{{0, 38.5, -109.5}, {30, 38.6, -109.6}},
+		SourceTrack: [][3]float64{{0, 38.4, -109.4}, {10, 38.5, -109.5}, {40, 38.6, -109.6}},
+		PrevTrack:   [][3]float64{},
+		NextTrack:   [][3]float64{{0, 38.7, -109.7}},
+		Moments:     []moment{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
@@ -225,10 +234,11 @@ func TestSourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := sourceResponse{Stem: "20260501120000_000123", Corpus: "s2", Clips: []sourceClip{
-		{ID: 2, Slug: "20260501120000_000123_s0000", RecordedAt: "2026-05-01T12:00:00Z", Track: [][3]float64{}},
+		{ID: 2, Slug: "20260501120000_000123_s0000", RecordedAt: "2026-05-01T12:00:00Z",
+			Track: [][3]float64{}, SourceTrack: [][3]float64{}},
 		{ID: 3, Slug: "20260501120000_000123_s0120", Lat: 35.1, Lng: -106.6,
 			Place: "Albuquerque, New Mexico", RecordedAt: "2026-05-01T12:02:00Z", RecordedAtUTC: "2026-05-01T18:02:00Z",
-			Track: [][3]float64{{0, 35.1, -106.6}, {20, 35.2, -106.7}}},
+			Track: [][3]float64{{0, 35.1, -106.6}, {20, 35.2, -106.7}}, SourceTrack: [][3]float64{}},
 	}, Plays: 3, Prev: "20260430090000_000001", Next: "20260501120000_010123"}
 	// A dropped piece has a cut row and no clip; the cuts are checked apart
 	// because jsonb hands back its own spacing.

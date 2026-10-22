@@ -19,6 +19,7 @@ type Playhead interface {
 // clipTrack is the data seam the playhead endpoint reads the track through,
 // overridable in tests so the handler renders without a DB.
 var clipTrack = video.Track
+var clipSourceTrack = video.SourceTrack
 
 // SetPlayhead injects the player behind GET /api/map/playhead. Called from
 // cmd/tripbot before Start runs the HTTP server (so there's no race on the

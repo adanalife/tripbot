@@ -45,10 +45,13 @@ type videoDetail struct {
 	LastPlayedAt string `json:"last_played_at"`
 	// Track is the clip's route as [sec, lat, lng] in clip order, and
 	// PrevTrack / NextTrack are its neighbours' — the road into and out of it.
-	// Each is empty when that clip has no track worth believing.
-	Track     [][3]float64 `json:"track"`
-	PrevTrack [][3]float64 `json:"prev_track"`
-	NextTrack [][3]float64 `json:"next_track"`
+	// Each is empty when that clip has no track worth believing. SourceTrack
+	// is the route of the whole recording the clip was cut from, sec on the
+	// recording's clock, so a trimmed clip's cut stretches can be drawn too.
+	Track       [][3]float64 `json:"track"`
+	SourceTrack [][3]float64 `json:"source_track"`
+	PrevTrack   [][3]float64 `json:"prev_track"`
+	NextTrack   [][3]float64 `json:"next_track"`
 	// Moments are the operator's marks on the clip, in clip order.
 	Moments []moment `json:"moments"`
 }
@@ -81,8 +84,17 @@ func filmedTimes(v video.Video) (local, utc string) {
 
 // trackOf is vid's track as triples, never nil, so it encodes as [].
 func trackOf(ctx context.Context, vid video.Video) [][3]float64 {
+	return triples(clipTrack(ctx, vid))
+}
+
+// sourceTrackOf is vid's whole recording's track as triples, never nil.
+func sourceTrackOf(ctx context.Context, vid video.Video) [][3]float64 {
+	return triples(clipSourceTrack(ctx, vid))
+}
+
+func triples(pts []video.TrackPoint) [][3]float64 {
 	out := [][3]float64{}
-	for _, p := range clipTrack(ctx, vid) {
+	for _, p := range pts {
 		out = append(out, [3]float64{p.Sec, p.Lat, p.Lng})
 	}
 	return out
@@ -120,7 +132,7 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	d := videoDetail{
 		ID: v.ID, File: v.File(), State: v.State, City: v.City, CityM: v.CityM,
 		Place: v.Place(), Lat: v.Lat, Lng: v.Lng, Flagged: v.Flagged, Corpus: v.Corpus,
-		Plays: plays.Plays, Track: trackOf(ctx, v),
+		Plays: plays.Plays, Track: trackOf(ctx, v), SourceTrack: sourceTrackOf(ctx, v),
 	}
 	d.RecordedAt, d.RecordedAtUTC = filmedTimes(v)
 	// The clip before is the one whose next_vid names this one: the chain is
@@ -191,6 +203,7 @@ type sourceClip struct {
 	RecordedAt    string       `json:"recorded_at"`
 	RecordedAtUTC string       `json:"recorded_at_utc"`
 	Track         [][3]float64 `json:"track"`
+	SourceTrack   [][3]float64 `json:"source_track"`
 }
 
 // withTracks lists clips in the order given, each with its fix and track.
@@ -198,7 +211,8 @@ func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
 	clips := make([]sourceClip, 0, len(vids))
 	for _, v := range vids {
 		c := sourceClip{
-			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Place: v.Place(), Track: trackOf(ctx, v),
+			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Place: v.Place(),
+			Track: trackOf(ctx, v), SourceTrack: sourceTrackOf(ctx, v),
 		}
 		c.RecordedAt, c.RecordedAtUTC = filmedTimes(v)
 		clips = append(clips, c)
