@@ -9,6 +9,14 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.1.0] — 2026-10-22
+
+### Console / API
+
+- `GET /api/videos/{id}` and `/api/sources/{stem}` carry `source_track`: the recording's whole track beside the clip's, cut seconds included, so the console can draw what a trim took out. ([#1743](https://github.com/adanalife/tripbot/pull/1743))
+- A station in the radio list can be marked `"private": true`: it ships in `GET /api/audio`'s `stations` with the flag, for clients that list it for home listening, but the console, `!audio` and the default station never select it as the stream's bed. ([#1745](https://github.com/adanalife/tripbot/pull/1745))
+- The album is no longer a selectable bed: the radio on its default station is every platform's default, and the album library (StreamBeats and wooderCZ's albums, a fixed list) is only what OBS boots on and what the audio watchdog rides out a radio outage on. `GET /api/audio` drops `album`, `albums`, `groups`, `shuffle` and `pending.album`, and the `audio.bed` event drops `album`, `shuffle` and `pending.album`; `!audio` no longer takes an album. ([#1745](https://github.com/adanalife/tripbot/pull/1745))
+
 ## [v6.0.1] — 2026-10-21
 
 ### Fixes
