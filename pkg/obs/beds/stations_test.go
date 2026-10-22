@@ -65,3 +65,43 @@ func TestNoStations_RadioRefusesOtherBedsWork(t *testing.T) {
 		t.Fatalf("SwapToRadio err = %v; want errNoStation", err)
 	}
 }
+
+// A private station is listed, flag and all, but nothing that picks the
+// stream's bed can land on it — the default skips it too.
+func TestPrivateStation_ListedButNotSelectable(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "stations.json")
+	body := `[{"id":"home","url":"https://radio.example/home","private":true},{"id":"lofi","url":"https://radio.example/lofi"}]`
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { Stations = testStations })
+	LoadStations(p)
+
+	if len(Stations) != 2 || !Stations[0].Private || Stations[1].Private {
+		t.Fatalf("Stations = %+v; want both, the first flagged private", Stations)
+	}
+	if got := DefaultStation(); got != "lofi" {
+		t.Errorf("DefaultStation() = %q; want the first non-private, lofi", got)
+	}
+	if SelectableStation("home") || !SelectableStation("lofi") {
+		t.Error("SelectableStation: want home refused and lofi accepted")
+	}
+
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, t.TempDir(), "twitch")
+	if err := s.SetStation(context.Background(), "home"); err == nil {
+		t.Fatal("SetStation(private): want an error")
+	}
+	if o.network {
+		t.Fatal("a refused private station reached OBS")
+	}
+	// A remembered private station (read back off OBS) is never re-selected:
+	// choosing the radio tunes the default instead.
+	s.station = "home"
+	if err := s.Set(context.Background(), Radio); err != nil {
+		t.Fatal(err)
+	}
+	if o.url != "https://radio.example/lofi" || s.Station() != "lofi" {
+		t.Errorf("Set(radio) from a private station tuned %q (%q); want lofi", o.url, s.Station())
+	}
+}

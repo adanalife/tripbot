@@ -46,6 +46,8 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	// The station list travels with the state so the console's picker is built
 	// from what this tripbot will actually accept, the same way the bed buttons
 	// are — nothing about the radio's lineup is duplicated in the console.
+	// Private stations ship too, flagged, so a client can list them for home
+	// listening; the picker offers only the unflagged ones.
 	// The voicings travel for the same reason the stations do: the renders are
 	// baked into the OBS image this tripbot is paired with, so the picker is
 	// built from what will actually play rather than a list the console repeats.
@@ -159,8 +161,8 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch {
 	case body.Station != "":
-		if !beds.ValidStation(body.Station) {
-			http.Error(w, "unknown radio station", http.StatusBadRequest)
+		if !beds.SelectableStation(body.Station) {
+			http.Error(w, "unknown or private radio station", http.StatusBadRequest)
 			return
 		}
 		err = store.SetStation(r.Context(), body.Station)

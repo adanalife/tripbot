@@ -1,0 +1,1 @@
+A station in the radio list can be marked `"private": true`: it ships in `GET /api/audio`'s `stations` with the flag, for clients that list it for home listening, but the console, `!audio` and the default station never select it as the stream's bed.

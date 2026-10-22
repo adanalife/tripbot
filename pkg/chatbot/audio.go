@@ -98,7 +98,7 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	switch bed := beds.Bed(arg); {
 	case beds.Valid(bed):
 		err = a.Beds.Set(ctx, bed)
-	case beds.ValidStation(arg):
+	case beds.SelectableStation(arg):
 		err = a.Beds.SetStation(ctx, arg)
 	default:
 		album := a.Beds.ResolveAlbum(arg)
@@ -232,11 +232,14 @@ func bedNameList() []string {
 	return names
 }
 
-// stationIDs is the radio bed's station ids, offered beside the bed names.
+// stationIDs is the radio bed's selectable station ids, offered beside the bed
+// names. Private stations are left out: chat can't select them.
 func stationIDs() []string {
-	ids := make([]string, len(beds.Stations))
-	for i, st := range beds.Stations {
-		ids[i] = st.ID
+	var ids []string
+	for _, st := range beds.Stations {
+		if !st.Private {
+			ids = append(ids, st.ID)
+		}
 	}
 	return ids
 }

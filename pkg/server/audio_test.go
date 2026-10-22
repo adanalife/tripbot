@@ -617,3 +617,27 @@ func TestAudioHandler_ReportsTheVoicingAndItsOptions(t *testing.T) {
 		}
 	}
 }
+
+// A private station ships in the list with its flag, for the clients that list
+// it, but the console can't select it as the stream's bed.
+func TestAudio_PrivateStationListedButRefused(t *testing.T) {
+	prev := beds.Stations
+	beds.Stations = append([]beds.Station{{ID: "home", Name: "Home", URL: "https://radio.example/home", Private: true}}, prev...)
+	t.Cleanup(func() { beds.Stations = prev })
+
+	f := &fakeBeds{bed: beds.Radio}
+	_, body := getAudio(t, &Server{beds: f})
+	stations, _ := body["stations"].([]any)
+	first, _ := stations[0].(map[string]any)
+	if len(stations) != 2 || first["id"] != "home" || first["private"] != true {
+		t.Fatalf("stations: %v; want home listed first with private=true", body["stations"])
+	}
+
+	w := postAudio(t, &Server{beds: f}, `{"station":"home"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d", w.Code)
+	}
+	if len(f.stations) != 0 {
+		t.Fatalf("a private station reached the store: %v", f.stations)
+	}
+}

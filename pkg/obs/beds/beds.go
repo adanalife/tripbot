@@ -454,7 +454,7 @@ func (s *Store) Groups() []string {
 }
 
 // ValidAlbum reports whether album names something playable on the share: one
-// album's directory, or a prefix naming at least one. Unlike ValidStation, which
+// album's directory, or a prefix naming at least one. Unlike SelectableStation, which
 // checks a fixed list, this has to hit the filesystem — albums are whatever is
 // on the share.
 func (s *Store) ValidAlbum(album string) bool {
@@ -628,8 +628,12 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	station, album, voicing := s.station, s.album, s.voicing
 	s.mu.Unlock()
-	if bed == Radio && !ValidStation(station) {
-		return errNoStation
+	if bed == Radio && !SelectableStation(station) {
+		// The remembered station can be one OBS was found playing; a private one
+		// is never put on air by a selection, so tune the default instead.
+		if station = DefaultStation(); station == "" {
+			return errNoStation
+		}
 	}
 	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album, Voicing: voicing})
 }
@@ -692,8 +696,8 @@ func (s *Store) SetAlbum(ctx context.Context, album string) error {
 // SetStation tunes the radio bed to another channel and switches to it, so
 // picking a station is one action rather than "select radio, then tune".
 func (s *Store) SetStation(ctx context.Context, station string) error {
-	if !ValidStation(station) {
-		return fmt.Errorf("unknown radio station %q", station)
+	if !SelectableStation(station) {
+		return fmt.Errorf("unknown or private radio station %q", station)
 	}
 	s.mu.Lock()
 	album, voicing := s.album, s.voicing

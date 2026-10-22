@@ -529,3 +529,21 @@ func TestAudioCmd_NamesTheWholeShareWhenNothingIsSelected(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// A private station is neither selectable from chat nor offered as an option.
+func TestAudioCmd_PrivateStationIsNotAnOption(t *testing.T) {
+	prev := beds.Stations
+	beds.Stations = append([]beds.Station{{ID: "home", Name: "Home", URL: "https://radio.example/home", Private: true}}, prev...)
+	t.Cleanup(func() { beds.Stations = prev })
+
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	app.audioCmd(context.Background(), newAdminUser(), []string{"home"})
+
+	if len(fake.stations) != 0 {
+		t.Fatalf("a private station was tuned: %v", fake.stations)
+	}
+	got := out()
+	if !strings.Contains(got, "lofi") || strings.Contains(got, "home,") || strings.HasSuffix(got, "home") {
+		t.Errorf("options should list lofi and not the private station, got %q", got)
+	}
+}
