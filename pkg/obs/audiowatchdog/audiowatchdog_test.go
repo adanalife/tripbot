@@ -235,20 +235,11 @@ func TestWatch_CooldownSuppressesSwapBack(t *testing.T) {
 	}
 }
 
-func TestWatch_AdvancesAlbumWhenTrackEnds(t *testing.T) {
-	// Album tracks play unlooped, so OBS reports ENDED between them — each one
-	// is the cue to queue the next track.
-	deps := runOnBed(t, beds.Album, []tick{playing, ended, playing, ended, playing}, cfg(3, 4, time.Minute))
-	if got := deps.advances.Load(); got != 2 {
-		t.Fatalf("album advances: want 2, got %d", got)
-	}
-}
-
 func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
 	// A run of down ticks that would trip the radio fallback. On a local bed
 	// there's nothing to fall back to — swapping would stomp the operator's
 	// choice of bed — so the outage machinery must stay out of it.
-	for _, bed := range []beds.Bed{beds.CarHum, beds.Album} {
+	for _, bed := range []beds.Bed{beds.CarHum} {
 		t.Run(string(bed), func(t *testing.T) {
 			deps := runOnBed(t, bed, []tick{ended, ended, ended, ended, ended}, cfg(3, 4, 0))
 			if got := deps.toFallback.Load(); got != 0 {
@@ -280,7 +271,7 @@ func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 	// platform's bot on the edge every interval, which is enough traffic from one
 	// IP to get it firewalled (2026-08-02).
 	t.Run("local bed never probes", func(t *testing.T) {
-		for _, bed := range []beds.Bed{beds.CarHum, beds.Album} {
+		for _, bed := range []beds.Bed{beds.CarHum} {
 			deps := runOnBed(t, bed, []tick{ended, ended, ended, playing}, cfg(3, 4, 0))
 			if got := deps.probes.Load(); got != 0 {
 				t.Errorf("probes on %s bed: want 0, got %d", bed, got)
@@ -366,5 +357,28 @@ func TestWatch_CarHumBedDoesNotAdvanceAlbum(t *testing.T) {
 	deps := runOnBed(t, beds.CarHum, []tick{ended, ended, ended}, cfg(3, 4, time.Minute))
 	if got := deps.advances.Load(); got != 0 {
 		t.Fatalf("album advances on carhum: want 0, got %d", got)
+	}
+}
+
+// OBS boots on the album fallback with the radio selected, so a fresh boot is
+// the stranded state from its first tick: the album keeps advancing across
+// track endings, and the recovery probe brings the radio on air with no swap
+// to the fallback ever having been made.
+func TestWatch_BootOnTheFallbackSwapsOntoTheRadio(t *testing.T) {
+	boot := ended
+	boot.console = func(f *fakeDeps) { f.sourceLocal = true }
+	script := []tick{boot}
+	for range 7 {
+		script = append(script, playing)
+	}
+	deps := run(t, script, cfg(3, 4, time.Minute))
+	if got := deps.advances.Load(); got == 0 {
+		t.Error("the boot track ended and the fallback album did not advance")
+	}
+	if got := deps.toFallback.Load(); got != 0 {
+		t.Errorf("to_fallback swaps: want 0, got %d", got)
+	}
+	if got := deps.toRadio.Load(); got != 1 {
+		t.Fatalf("to_radio swaps: want 1, got %d — the boot never reached the radio", got)
 	}
 }

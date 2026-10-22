@@ -24,7 +24,7 @@ const consoleStateHeartbeat = 30 * time.Second
 // every change, so the console holds them instead of polling GET /api/audio and
 // GET /api/flags. It reads the same bed store and flag client those endpoints
 // do, so every path that changes either — a console click, `!audio`, the audio
-// watchdog, an album advance, a flag edited in the database — is covered
+// watchdog, a fallback album advance, a flag edited in the database — is covered
 // without each one having to remember to publish.
 func (t *Tripbot) publishConsoleState(ctx context.Context) {
 	var bedGate, flagGate changeGate
@@ -76,9 +76,7 @@ func audioBed(platform string, s *beds.Store) eventbus.AudioBed {
 		Playing:      string(playing),
 		Station:      s.Station(),
 		Voicing:      s.Voicing(),
-		Album:        s.Album(),
 		PlayingAlbum: s.PlayingAlbum(),
-		Shuffle:      s.Shuffle(),
 	}
 	if playing != beds.Radio {
 		out.Track = beds.TrackTitle(track)
@@ -87,7 +85,6 @@ func audioBed(platform string, s *beds.Store) eventbus.AudioBed {
 		out.Pending = &eventbus.AudioBedSwitch{
 			Bed:     string(sw.Bed),
 			Station: sw.Station,
-			Album:   sw.Album,
 			Voicing: sw.Voicing,
 			At:      sw.At.UTC().Format(time.RFC3339Nano),
 		}

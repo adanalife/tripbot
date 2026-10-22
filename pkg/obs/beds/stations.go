@@ -13,10 +13,15 @@ import (
 // console and chat select it by, a name for humans, and the Icecast/Shoutcast
 // URL OBS's ffmpeg_source plays. The audio watchdog probes the same URL, so
 // what it checks is exactly what OBS plays.
+//
+// A Private station is listed but never selectable as the stream's bed: it is
+// for listening at home (the native client reads the list through GET
+// /api/audio) and plays music that isn't cleared for broadcast.
 type Station struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	URL     string `json:"url"`
+	Private bool   `json:"private,omitempty"`
 }
 
 // RadioStationsFile is where cdk8s mounts the station list, a Secret
@@ -69,12 +74,14 @@ func readStations(path string) ([]Station, error) {
 }
 
 // DefaultStation is the station the radio bed plays when nothing has chosen
-// one: the first in the list, or "" when there are none.
+// one: the first selectable one in the list, or "" when there are none.
 func DefaultStation() string {
-	if len(Stations) == 0 {
-		return ""
+	for _, s := range Stations {
+		if !s.Private {
+			return s.ID
+		}
 	}
-	return Stations[0].ID
+	return ""
 }
 
 func station(id string) (Station, bool) {
@@ -105,10 +112,11 @@ func stationFromURL(u string) string {
 	return ""
 }
 
-// ValidStation reports whether id is a station in the list.
-func ValidStation(id string) bool {
-	_, ok := station(id)
-	return ok
+// SelectableStation reports whether id is a station in the list that the
+// stream may play: in the list and not private.
+func SelectableStation(id string) bool {
+	s, ok := station(id)
+	return ok && !s.Private
 }
 
 // StationName is the human name for a station id, falling back to the id for

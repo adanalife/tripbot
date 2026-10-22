@@ -349,17 +349,11 @@
           "voicing": {
             "type": "string"
           },
-          "album": {
-            "type": "string"
-          },
           "playing_album": {
             "type": "string"
           },
           "track": {
             "type": "string"
-          },
-          "shuffle": {
-            "type": "boolean"
           },
           "pending": {
             "$ref": "#/$defs/AudioBedSwitch"
@@ -375,7 +369,6 @@
           "playing",
           "station",
           "voicing",
-          "shuffle",
           "emitted_at"
         ]
       }
@@ -593,9 +586,6 @@
           "type": "string"
         },
         "station": {
-          "type": "string"
-        },
-        "album": {
           "type": "string"
         },
         "voicing": {

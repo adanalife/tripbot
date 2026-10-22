@@ -4,7 +4,8 @@
 // The OBS scene collection ships ONE "Background Audio" ffmpeg_source (see the
 // adanalife/obs repo's config/Tripbot.json.tmpl). Its settings decide the bed:
 // a network stream for the radio, a looping local FLAC for the car-hum drone, a
-// non-looping local track for the album. Switching a bed is therefore just a
+// non-looping local track for the album the radio falls back to. Switching a
+// bed is therefore just a
 // SetInputSettings overlay onto that one source — the same mechanism the audio
 // watchdog has used since 2026-06-23 to swap the radio out for the local bed.
 //
@@ -35,30 +36,39 @@ import (
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
-// Bed is one selectable background-audio source.
+// Bed is one background-audio source. Radio and CarHum are selectable; Album
+// is the radio's fallback and only ever reported as what is playing.
 type Bed string
 
 const (
 	// Radio is an Icecast/Shoutcast internet-radio stream, on whichever station
-	// from the mounted list is selected (see Stations). Its music is not cleared
-	// for our rebroadcast — it trips YouTube's Content ID and the other
-	// platforms' audio ID — so it is safe to select only on Twitch, by tolerance
-	// rather than licence. No platform starts here: a station's servers can
-	// refuse our IP, so a boot that began on this bed could begin on one that
-	// never plays.
+	// from the mounted list is selected (see Stations), and the stream's default
+	// bed. Whether a station's music is cleared for our rebroadcast depends on
+	// the station: a third-party one trips YouTube's Content ID and the other
+	// platforms' audio ID. OBS never boots here — a station's servers can refuse
+	// our IP — so it boots on the Album fallback and the audio watchdog brings
+	// it onto the radio once the station answers.
 	Radio Bed = "radio"
 	// CarHum is the synthesized, licence-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
 	CarHum Bed = "carhum"
-	// Album plays tracks from the mounted music share, one at a time, advancing
-	// when OBS reports the current track ended.
+	// Album is the radio's fallback: tracks from FallbackAlbums on the mounted
+	// music share, shuffled, one at a time, advancing when OBS reports the
+	// current track ended. It plays between OBS booting and the radio coming up,
+	// and while the watchdog rides out a radio outage. Not selectable.
 	Album Bed = "album"
 )
 
-// All is the bed set the console offers, in display order.
-var All = []Bed{Radio, CarHum, Album}
+// All is the bed set the console and chat offer, in display order.
+var All = []Bed{Radio, CarHum}
 
-// Valid reports whether b is a bed we know how to play.
+// FallbackAlbums is what the album fallback plays: each entry an album's
+// directory or a group prefix, matched the way albumsFor matches. A fixed list
+// rather than the whole share, so a directory that lands on the share by
+// mistake never reaches the stream.
+var FallbackAlbums = []string{"streambeats", "fifty-horizons", "wyoming-miles"}
+
+// Valid reports whether b is a bed that can be selected.
 func Valid(b Bed) bool {
 	for _, x := range All {
 		if x == b {
@@ -153,7 +163,7 @@ type OBS interface {
 	Settings(ctx context.Context, inputName string) (map[string]any, error)
 }
 
-// Store holds the live bed + album position and applies changes to OBS.
+// Store holds the live bed + fallback album position and applies changes to OBS.
 type Store struct {
 	obs OBS
 	// musicDir is the share root the track paths sit under. It stays the path
@@ -168,18 +178,10 @@ type Store struct {
 	mu      sync.Mutex
 	bed     Bed
 	station string // radio station id the radio bed plays
-	// album is the Album bed's selection: one album's directory, a prefix naming
-	// a group of them ("streambeats-lofi"), or "" for the whole share.
-	album string
-	// albumChosen is whether album is a choice (restored or set) rather than the
-	// default, which Detect replaces with whatever album OBS is playing.
-	albumChosen bool
-	prefs       Prefs // where the album and shuffle are saved; nil saves nothing
-	// voicing is which car-hum render the CarHum bed plays. Like station and
-	// album it survives a switch away, so the bed returns to the one chosen.
+	// voicing is which car-hum render the CarHum bed plays. Like station it
+	// survives a switch away, so the bed returns to the one chosen.
 	voicing   string
-	shuffle   bool     // play order is shuffled rather than sequential
-	tracks    []string // the play order; rebuilt each time a selection starts
+	tracks    []string // the fallback album's shuffled play order
 	idx       int
 	lastStart time.Time // when a track was last pointed at OBS; see Advance
 	// fallback is the bed the audio watchdog has playing while the radio is still
@@ -198,7 +200,7 @@ type Store struct {
 	gen     uint64
 
 	// albums caches the library read, guarded by its own lock: the listings are
-	// taken while s.mu is already held (see loadAlbumLocked).
+	// taken while s.mu is already held (see loadFallbackLocked).
 	albums albumCache
 }
 
@@ -230,13 +232,12 @@ var advanceDebounce = 3 * time.Second
 // and OBS's answer is the caller's.
 var switchDelay = 5 * time.Second
 
-// Switch is a bed switch that hasn't reached OBS yet. Station and Album carry
+// Switch is a bed switch that hasn't reached OBS yet. Station and Voicing carry
 // the choice within the bed, since a pending tune has to be describable before
-// it's live — the store still reports the playing station and album, not these.
+// it's live — the store still reports the playing station and voicing, not these.
 type Switch struct {
 	Bed     Bed
 	Station string
-	Album   string
 	Voicing string
 	// At is when the switch lands. A deadline rather than a duration so a value
 	// read once doesn't go stale while it's being rendered.
@@ -261,45 +262,7 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		platform: platform,
 		station:  DefaultStation(),
 		voicing:  DefaultVoicing,
-		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
-	}
-}
-
-// Prefs saves the album bed's selection and shuffle so a restart can resume
-// them: OBS reports only the file on air, which names one album and never the
-// group or whole share it was drawn from.
-type Prefs interface {
-	Save(ctx context.Context, platform, album string, shuffle bool) error
-}
-
-// WithPrefs saves every applied album selection and shuffle change to p.
-func (s *Store) WithPrefs(p Prefs) *Store {
-	s.prefs = p
-	return s
-}
-
-// Restore seeds the album selection and shuffle saved by a previous run. Call
-// it before the first Detect, which then keeps the selection while the file on
-// air falls inside it.
-func (s *Store) Restore(album string, shuffle bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.album, s.albumChosen, s.shuffle = album, true, shuffle
-}
-
-// savePrefs writes the current album selection and shuffle. A failure only
-// costs the next restart its memory of them, so it warns rather than failing
-// the switch.
-func (s *Store) savePrefs(ctx context.Context) {
-	if s.prefs == nil {
-		return
-	}
-	s.mu.Lock()
-	album, shuffle := s.album, s.shuffle
-	s.mu.Unlock()
-	if err := s.prefs.Save(ctx, s.platform, album, shuffle); err != nil {
-		slog.WarnContext(ctx, "background audio: could not save album selection", "err", err)
 	}
 }
 
@@ -313,14 +276,15 @@ func (s *Store) WithIndex(path string) *Store {
 	return s
 }
 
-// Current reports the selected bed and, on the album, the track file playing.
+// Current reports the selected bed; the track is always "", since only the
+// album fallback has one and it is never the selection.
 // This is the choice, not always the audio: during a radio outage the watchdog
 // puts another bed on air without changing the selection, which is what keeps
 // the outage machinery running. Callers naming what a viewer hears want Playing.
 func (s *Store) Current() (Bed, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.bed, s.trackOnAirLocked(s.bed)
+	return s.bed, ""
 }
 
 // Playing reports the bed actually on air and, on the album, its track file —
@@ -369,21 +333,9 @@ func (s *Store) Voicing() string {
 	return s.voicing
 }
 
-// Album reports the Album bed's selection: one album, a group prefix, or "" for
-// the whole share. Like Station, it answers whichever bed is live — it's the
-// selection the bed returns to.
-//
-// This is what was *chosen*, which on a group is not what you're hearing. For
-// that, see PlayingAlbum.
-func (s *Store) Album() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.album
-}
-
-// PlayingAlbum reports the album the current track actually sits in, which on a
-// group selection ("streambeats-lofi", or the whole share) is the only way to
-// know what's on air. "" when the album bed isn't playing.
+// PlayingAlbum reports the album the fallback's current track sits in — the
+// fallback spans several albums, so the track is the only way to know which one
+// is on air. "" when the album isn't playing.
 //
 // Read off the track path rather than tracked separately: the path is what OBS
 // is playing, so it can't drift from the audio the way a remembered value could.
@@ -395,103 +347,6 @@ func (s *Store) PlayingAlbum() string {
 		return ""
 	}
 	return albumFromFile(track, s.musicDir)
-}
-
-// Shuffle reports whether the play order is shuffled rather than sequential.
-func (s *Store) Shuffle() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.shuffle
-}
-
-// SetShuffle turns shuffling on or off and rebuilds the play order to match,
-// keeping the track that's on air at the front so the audio doesn't jump mid-song.
-// A no-op off the album bed beyond recording the preference, which the next
-// selection then honors.
-//
-// Saved through Prefs with the album selection, so a restart keeps the order.
-func (s *Store) SetShuffle(ctx context.Context, on bool) error {
-	s.mu.Lock()
-	s.shuffle = on
-	playing := ""
-	if s.bed == Album && s.idx < len(s.tracks) {
-		playing = s.tracks[s.idx]
-	}
-	var err error
-	if s.bed == Album {
-		err = s.loadAlbumLocked(playing)
-	}
-	s.mu.Unlock()
-	if err != nil {
-		return err
-	}
-	s.record()
-	s.savePrefs(ctx)
-	slog.InfoContext(ctx, "background audio: shuffle set", "shuffle", on)
-	return nil
-}
-
-// Albums lists the selectable albums in the library, in display order. The
-// underlying library read is cached behind the index file's mtime, not held from
-// startup: new music arrives while the bot is running, and an album has to show
-// up without waiting for a restart.
-func (s *Store) Albums() []string {
-	albums := slices.Collect(maps.Keys(s.albumTracks()))
-	sort.Strings(albums)
-	return albums
-}
-
-// Groups lists the prefixes that name more than one album, so the picker can
-// offer "all of StreamBeats" and "the lofi ones" beside the individual albums.
-// Sorted, shortest-first within a name, which puts the broad group above the
-// narrow ones it contains.
-//
-// Derived from the directory names rather than declared: the naming convention
-// IS the grouping, so a new album joins its groups by being named like its
-// siblings, with nothing to keep in sync.
-func (s *Store) Groups() []string {
-	return GroupsOf(s.Albums())
-}
-
-// ValidAlbum reports whether album names something playable on the share: one
-// album's directory, or a prefix naming at least one. Unlike ValidStation, which
-// checks a fixed list, this has to hit the filesystem — albums are whatever is
-// on the share.
-func (s *Store) ValidAlbum(album string) bool {
-	return album != "" && len(albumsFor(s.Albums(), album)) > 0
-}
-
-// ResolveAlbum maps what someone typed onto a selection, or "" if nothing
-// matches. In order: an exact directory name, then a prefix naming a group
-// ("streambeats", "streambeats-lofi"), then a unique trailing segment, so "rose"
-// reaches "streambeats-synthwave-rose" without anyone typing the prefix that
-// makes the share sort usefully.
-//
-// Ambiguity in the trailing-segment step resolves to nothing rather than to a
-// guess: there are two albums called Midnight, so once both are on the share
-// "midnight" has stopped naming one of them and only the full name will do.
-func (s *Store) ResolveAlbum(arg string) string {
-	if arg == "" {
-		return ""
-	}
-	albums := s.Albums()
-	if slices.Contains(albums, arg) {
-		return arg
-	}
-	// A prefix naming a group is a selection in its own right.
-	if len(albumsFor(albums, arg)) > 0 {
-		return arg
-	}
-	var match string
-	for _, a := range albums {
-		if strings.HasSuffix(a, "-"+arg) {
-			if match != "" {
-				return ""
-			}
-			match = a
-		}
-	}
-	return match
 }
 
 // RadioTrack reports the song playing on the tuned channel, from the station's metadata
@@ -522,56 +377,50 @@ func (s *Store) Detect(ctx context.Context) {
 	// local-file detour (the overlay merge never clears it), so it's readable
 	// whichever bed is live.
 	url, _ := settings["input"].(string)
+	local, _ := settings["is_local_file"].(bool)
 	s.mu.Lock()
 	s.bed = bed
 	if station := stationFromURL(url); station != "" {
 		s.station = station
 	}
-	// The playing file names the album OBS booted on, the way the `input` URL
-	// names the station. Without this a restart mid-album reports the whole share
-	// and the next advance wanders out of the album that's on air. A chosen
-	// selection that already covers that album stands: the file can't name a
-	// group, so adopting it would narrow "all of StreamBeats" to one album.
-	if album := albumFromFile(file, s.musicDir); album != "" && !s.coversLocked(album) {
-		s.album = album
-	}
-	// And the drone file names the voicing, the same way. "" covers both a
-	// non-drone file and the watchdog's fallback copy, neither of which is a
-	// choice anyone made.
+	// The drone file names the voicing, the way the `input` URL names the
+	// station. "" covers both a non-drone file and the watchdog's fallback copy,
+	// neither of which is a choice anyone made.
 	if voicing := voicingFromFile(file); voicing != "" {
 		s.voicing = voicing
 	}
+	// A local file other than a chosen drone is a fallback standing in for the
+	// radio.
 	var loadErr error
-	if bed == Album {
-		// OBS booted straight onto the album — its per-platform default, no Set
-		// involved — so nothing has built the play order yet. Without one Advance
-		// has nowhere to go and the bed plays a single track and falls silent.
-		loadErr = s.loadAlbumLocked(file)
+	switch {
+	case local && under(file, s.musicDir):
+		// OBS boots on the album, so this is every fresh boot as well as a
+		// restart mid-outage. Nothing has built the play order yet; without one
+		// Advance has nowhere to go and the boot track ends in silence.
+		s.fallback = Album
+		loadErr = s.loadFallbackLocked(file)
+	case local && file == FallbackFile:
+		s.fallback = CarHum
+	default:
+		s.fallback = ""
 	}
-	station := s.station
+	station, fallback := s.station, s.fallback
 	s.mu.Unlock()
 	s.record()
 	if loadErr != nil {
-		slog.WarnContext(ctx, "background audio: album is live but its play order is empty",
+		slog.WarnContext(ctx, "background audio: fallback album is live but its play order is empty",
 			"err", loadErr)
 	}
-	slog.InfoContext(ctx, "background audio: detected bed", "bed", bed, "station", station)
+	slog.InfoContext(ctx, "background audio: detected bed", "bed", bed, "station", station,
+		"fallback", fallback)
 }
 
-// coversLocked reports whether the chosen album selection includes album.
-// Caller holds s.mu.
-func (s *Store) coversLocked(album string) bool {
-	if !s.albumChosen {
-		return false
-	}
-	return s.album == "" || slices.Contains(albumsFor(s.Albums(), s.album), album)
-}
-
-// bedFromSettings maps an ffmpeg_source's settings back to the bed that would
-// have produced them. A local file under the music share is the album; the
-// watchdog's fallback file means the radio is still the selected bed and an outage
-// is in progress; any other local file is the car-hum drone (that's the only
-// other one the image ships); a network source is the radio.
+// bedFromSettings maps an ffmpeg_source's settings back to the selected bed
+// that would have produced them. A local file under the music share is the
+// album fallback and the watchdog's fallback file is the drone standing in, so
+// both mean the radio is the selected bed and not yet on air; any other local
+// file is the car-hum drone (that's the only other one the image ships); a
+// network source is the radio.
 func bedFromSettings(settings map[string]any, musicDir string) Bed {
 	if local, _ := settings["is_local_file"].(bool); !local {
 		return Radio
@@ -579,7 +428,9 @@ func bedFromSettings(settings map[string]any, musicDir string) Bed {
 	file, _ := settings["local_file"].(string)
 	switch {
 	case under(file, musicDir):
-		return Album
+		// OBS boots here, and the watchdog swaps here in an outage: either way
+		// the radio is what's selected and the watchdog is what brings it back.
+		return Radio
 	case file == FallbackFile:
 		// Only the watchdog writes this path, and only while the radio is the
 		// selected bed. Reading it as CarHum would hand an operator choice to
@@ -590,9 +441,8 @@ func bedFromSettings(settings map[string]any, musicDir string) Bed {
 	return CarHum
 }
 
-// albumFromFile recovers the album subdir from a track path, so the Store can
-// read the live album back off OBS at startup rather than guessing — the
-// counterpart of stationFromURL. A track directly at the share root belongs to
+// albumFromFile recovers the album subdir from a track path, which is how the
+// fallback's album on air is named. A track directly at the share root belongs to
 // no album and yields "", as does any path outside the share.
 func albumFromFile(file, musicDir string) string {
 	if file == "" || !under(file, musicDir) {
@@ -626,32 +476,26 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 		return fmt.Errorf("unknown background-audio bed %q", bed)
 	}
 	s.mu.Lock()
-	station, album, voicing := s.station, s.album, s.voicing
+	station, voicing := s.station, s.voicing
 	s.mu.Unlock()
-	if bed == Radio && !ValidStation(station) {
-		return errNoStation
+	if bed == Radio && !SelectableStation(station) {
+		// The remembered station can be one OBS was found playing; a private one
+		// is never put on air by a selection, so tune the default instead.
+		if station = DefaultStation(); station == "" {
+			return errNoStation
+		}
 	}
-	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album, Voicing: voicing})
+	return s.schedule(ctx, Switch{Bed: bed, Station: station, Voicing: voicing})
 }
 
 // errNoStation refuses the radio bed when the station list gave it nothing to
 // tune, so the stream keeps its current bed rather than going silent.
 var errNoStation = fmt.Errorf("radio bed has no stations: %s is missing, empty or invalid", RadioStationsFile)
 
-// setNow switches to bed and applies it to OBS. Switching to the album
-// (re)shuffles the play order and starts on its first track. The store is only
-// updated once OBS accepts the change, so a failed switch leaves the reported
-// bed truthful.
+// setNow switches to bed and applies it to OBS. The store is only updated once
+// OBS accepts the change, so a failed switch leaves the reported bed truthful.
 func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
-	if bed == Album {
-		if err := s.loadAlbumLocked(""); err != nil {
-			s.mu.Unlock()
-			// No share mounted / no files: refuse rather than leaving the stream
-			// silent. The caller surfaces this; the current bed keeps playing.
-			return err
-		}
-	}
 	target := s.trackLocked(bed)
 	station := s.station
 	s.mu.Unlock()
@@ -675,30 +519,16 @@ func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	return nil
 }
 
-// SetAlbum narrows the Album bed to one album on the share — or to a group of
-// them, when album is a prefix like "streambeats-lofi" — and switches to it, so
-// picking is one action rather than "select album, then narrow". Pass "" to
-// widen back to the whole share.
-func (s *Store) SetAlbum(ctx context.Context, album string) error {
-	if album != "" && !s.ValidAlbum(album) {
-		return fmt.Errorf("unknown album %q", album)
-	}
-	s.mu.Lock()
-	station, voicing := s.station, s.voicing
-	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album, Voicing: voicing})
-}
-
 // SetStation tunes the radio bed to another channel and switches to it, so
 // picking a station is one action rather than "select radio, then tune".
 func (s *Store) SetStation(ctx context.Context, station string) error {
-	if !ValidStation(station) {
-		return fmt.Errorf("unknown radio station %q", station)
+	if !SelectableStation(station) {
+		return fmt.Errorf("unknown or private radio station %q", station)
 	}
 	s.mu.Lock()
-	album, voicing := s.album, s.voicing
+	voicing := s.voicing
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: Radio, Station: station, Album: album, Voicing: voicing})
+	return s.schedule(ctx, Switch{Bed: Radio, Station: station, Voicing: voicing})
 }
 
 // SetVoicing picks which car-hum render the drone plays and switches to it, so
@@ -709,9 +539,9 @@ func (s *Store) SetVoicing(ctx context.Context, voicing string) error {
 		return fmt.Errorf("unknown car-hum voicing %q", voicing)
 	}
 	s.mu.Lock()
-	station, album := s.station, s.album
+	station := s.station
 	s.mu.Unlock()
-	return s.schedule(ctx, Switch{Bed: CarHum, Station: station, Album: album, Voicing: voicing})
+	return s.schedule(ctx, Switch{Bed: CarHum, Station: station, Voicing: voicing})
 }
 
 // schedule holds sw for switchDelay and then applies it, replacing whatever was
@@ -749,17 +579,17 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 		}
 		if err := s.applyPending(applyCtx, sw); err != nil {
 			slog.WarnContext(applyCtx, "background audio: scheduled switch failed",
-				"err", err, "bed", sw.Bed, "station", sw.Station, "album", sw.Album)
+				"err", err, "bed", sw.Bed, "station", sw.Station)
 		}
 	})
 	s.mu.Unlock()
 	slog.InfoContext(ctx, "background audio: switch scheduled", "bed", sw.Bed,
-		"station", sw.Station, "album", sw.Album, "delay", switchDelay)
+		"station", sw.Station, "delay", switchDelay)
 	return nil
 }
 
-// applyPending records sw's station and album and switches to its bed, rolling
-// both back if OBS rejects the switch — a station or album we aren't playing must
+// applyPending records sw's station and voicing and switches to its bed,
+// rolling both back if OBS rejects the switch — a station we aren't playing must
 // not be the one we report.
 //
 // The pending flag outlives the station swap and clears only once the bed is
@@ -768,13 +598,13 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 // a caller read the new station off a store still playing the old bed.
 func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	s.mu.Lock()
-	prevStation, prevAlbum, prevVoicing := s.station, s.album, s.voicing
-	s.station, s.album, s.voicing = sw.Station, sw.Album, sw.Voicing
+	prevStation, prevVoicing := s.station, s.voicing
+	s.station, s.voicing = sw.Station, sw.Voicing
 	s.mu.Unlock()
 
 	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
-		s.station, s.album, s.voicing = prevStation, prevAlbum, prevVoicing
+		s.station, s.voicing = prevStation, prevVoicing
 		s.pending = nil
 		s.mu.Unlock()
 		return err
@@ -782,13 +612,9 @@ func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 
 	s.mu.Lock()
 	s.pending = nil
-	s.albumChosen = s.albumChosen || sw.Bed == Album
 	s.mu.Unlock()
-	if sw.Bed == Album {
-		s.savePrefs(ctx)
-	}
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
-		"station", sw.Station, "album", sw.Album, "voicing", sw.Voicing)
+		"station", sw.Station, "voicing", sw.Voicing)
 	return nil
 }
 
@@ -803,17 +629,16 @@ func (s *Store) Pending() (Switch, bool) {
 	return *s.pending, true
 }
 
-// Advance moves to the next album track (wrapping at the end) and plays it.
-// A no-op unless the album is what's audible — either as the selected bed or as
-// the watchdog's fallback for a radio outage — since the callers report the
-// media ending, which also happens on the other beds.
+// Advance moves to the next fallback album track (wrapping at the end) and
+// plays it. A no-op unless the album is what's audible, since the callers report
+// the media ending, which also happens on the other beds.
 //
 // Two of them report the same ending: the playback-ended subscription, which
 // arrives in milliseconds, and the watchdog tick that backs it up. So an
 // advance within advanceDebounce of the last track starting is dropped as that
 // duplicate. Tracks run minutes, so nothing legitimate lands that close — and
-// the same guard covers an operator's switch, which starts a track through Set
-// and would otherwise be stepped over by the outgoing track's own ending.
+// the same guard covers a swap onto the fallback, which starts a track and
+// would otherwise be stepped over by the outgoing source's own ending.
 func (s *Store) Advance(ctx context.Context) error {
 	s.mu.Lock()
 	if s.playingLocked() != Album || time.Since(s.lastStart) < advanceDebounce {
@@ -830,8 +655,8 @@ func (s *Store) Advance(ctx context.Context) error {
 	// Re-shuffle on wrap so a long stream doesn't repeat the same 100-track
 	// sequence in the same order every time. The fresh order has to keep the
 	// track that just finished off the front, or wrapping plays it twice back
-	// to back. Sequential order wraps as-is — repeating it is the point.
-	if s.idx == 0 && s.shuffle {
+	// to back.
+	if s.idx == 0 {
 		reshuffleAvoiding(s.tracks, current)
 	}
 	track := s.tracks[s.idx]
@@ -844,22 +669,18 @@ func (s *Store) Advance(ctx context.Context) error {
 	return nil
 }
 
-// rescueEmptyAlbum puts the car hum on air when the album is selected with no
-// play order to advance through. That state is reachable without ever passing
-// the guard in setNow, which refuses an album with no tracks: Detect adopts
-// whichever bed OBS booted on, so an OBS started on an album track while the
-// track index is missing leaves the store on Album with nothing loaded. The
-// boot track then ends, there is nothing to queue, and the stream is silent
-// with OBS reporting a healthy source.
+// rescueEmptyAlbum puts the car hum on air when the album fallback is playing
+// with no play order to advance through. Detect reaches that state when OBS
+// boots on an album track while the track index is missing or holds none of
+// FallbackAlbums: the boot track ends, there is nothing to queue, and the
+// stream is silent with OBS reporting a healthy source.
 //
 // The drone is the only bed left — it is baked into the image, so it needs
 // neither the share nor the index — and it loops, so nothing has to advance it.
-// The selection stays Album: it is still what the operator asked for, and
-// keeping it is what makes the album=1 / tracks=0 gauge go on describing a
-// misconfiguration that wants fixing rather than resolving into a bed nobody
-// chose. Recording the drone as the fallback is what takes the stream off this
-// path — playingLocked then reports CarHum, so the next Advance returns early
-// instead of rescuing an already-rescued stream.
+// Recording it as the fallback is what takes the stream off this path —
+// playingLocked then reports CarHum, so the next Advance returns early instead
+// of rescuing an already-rescued stream. The selection stays the radio, so the
+// watchdog still swaps onto it once the station answers.
 func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
 	if err := s.obs.SetLocalFile(ctx, InputName, FallbackFile, true); err != nil {
 		return fmt.Errorf("rescue empty album bed: %w", err)
@@ -869,16 +690,15 @@ func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
 	s.lastStart = time.Now()
 	s.mu.Unlock()
 	s.record()
-	slog.ErrorContext(ctx, "background audio: album bed has no tracks, falling back to the car hum",
-		"album", s.Album())
+	slog.ErrorContext(ctx, "background audio: fallback album has no tracks, falling back to the car hum")
 	return nil
 }
 
 // SwapToFallback points the source at the bed the audio watchdog rides out a
-// radio outage on: the album when the share has tracks, the car-hum drone when
-// it doesn't. The album is licence-clean (it was made for this stream) and is
-// actual music, so it's the better degraded state; the drone covers an empty or
-// unmounted share, where it's the only bed left.
+// radio outage on: the album when the share has FallbackAlbums tracks, the
+// car-hum drone when it doesn't. The album is licence-clean (it was made for
+// this stream) and is actual music, so it's the better degraded state; the
+// drone covers an empty or unmounted share, where it's the only bed left.
 //
 // The selection is deliberately left alone — the fallback is recorded beside it
 // instead. The watchdog runs its outage machinery only while the store reads
@@ -886,11 +706,11 @@ func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
 // strand the stream on it for good.
 // That is also why the album's play order is (re)built here: nothing else on
 // this path builds one, and without it the album plays a single track and falls
-// silent — the album=1 / tracks=0 state record() exists to expose.
+// silent — the tracks=0 state record() exists to expose.
 func (s *Store) SwapToFallback(ctx context.Context) error {
 	s.mu.Lock()
 	track := ""
-	loadErr := s.loadAlbumLocked("")
+	loadErr := s.loadFallbackLocked("")
 	if loadErr == nil {
 		track = s.trackLocked(Album)
 	}
@@ -936,34 +756,23 @@ func (s *Store) SwapToRadio(ctx context.Context) error {
 	return nil
 }
 
-// loadAlbumLocked builds a fresh shuffled play order. playing positions the
-// order on a track already on air (pass "" to start at the top), so the next
-// advance moves off it instead of restarting it. Caller holds s.mu.
-func (s *Store) loadAlbumLocked(playing string) error {
+// loadFallbackLocked builds a fresh shuffled play order over FallbackAlbums.
+// playing positions the order on a track already on air (pass "" to start at
+// the top), so the next advance moves off it instead of restarting it. Caller
+// holds s.mu.
+func (s *Store) loadFallbackLocked(playing string) error {
 	byAlbum := s.albumTracks()
-	albums := slices.Collect(maps.Keys(byAlbum))
-	sort.Strings(albums)
-
-	// The whole share plays every album; a selection plays the one it names or
-	// every album under a group prefix. Either way the tracks are concatenated
-	// in album order, so an unshuffled group plays album by album instead of
-	// interleaving them.
-	matched := albums
-	if s.album != "" {
-		if matched = albumsFor(albums, s.album); len(matched) == 0 {
-			return fmt.Errorf("no album on the share named or under %q", s.album)
+	albums := slices.Sorted(maps.Keys(byAlbum))
+	var tracks []string
+	for _, sel := range FallbackAlbums {
+		for _, album := range albumsFor(albums, sel) {
+			tracks = append(tracks, byAlbum[album]...)
 		}
 	}
-	var tracks []string
-	for _, album := range matched {
-		tracks = append(tracks, byAlbum[album]...)
-	}
 	if len(tracks) == 0 {
-		return fmt.Errorf("no album tracks for selection %q under %s", s.album, s.musicDir)
+		return fmt.Errorf("no tracks for the fallback albums %v under %s", FallbackAlbums, s.musicDir)
 	}
-	if s.shuffle {
-		shuffle(tracks)
-	}
+	shuffle(tracks)
 	s.tracks, s.idx = tracks, max(slices.Index(tracks, playing), 0)
 	return nil
 }
@@ -994,8 +803,9 @@ func (s *Store) apply(ctx context.Context, bed Bed, track, station string) error
 	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
 }
 
-// albumsFor returns the albums a selection covers: the one it names exactly, or
-// every album under it when it's a group prefix. Empty when nothing matches.
+// albumsFor returns the albums a FallbackAlbums entry covers: the one it names
+// exactly, or every album under it when it's a group prefix. Empty when nothing
+// matches.
 //
 // The prefix has to end at a "-" boundary, or "streambeats-lo" would quietly
 // select the lofi albums and read as a working selection rather than a typo.
@@ -1012,37 +822,13 @@ func albumsFor(albums []string, selection string) []string {
 	return out
 }
 
-// GroupsOf finds the prefixes shared by more than one album — every "-"
-// boundary of every name, kept when at least two albums sit under it. Sorted, so
-// "streambeats" precedes "streambeats-lofi": broad group first, then the narrow
-// ones inside it.
-func GroupsOf(albums []string) []string {
-	counts := map[string]int{}
-	for _, a := range albums {
-		for i, c := range a {
-			if c == '-' {
-				counts[a[:i]]++
-			}
-		}
-	}
-	var out []string
-	for prefix, n := range counts {
-		if n > 1 {
-			out = append(out, prefix)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
 // albumTracks is the library: album directory name to its sorted track paths.
 // One source for every listing the store does, read from the index when one is
 // configured and by walking the share otherwise.
 //
 // An unreadable library yields no albums rather than an error. That is the
 // designed state where the index is mounted optional and absent: an empty album
-// list makes the album bed refuse to start, which leaves whatever bed is on air
-// playing rather than switching the stream to silence.
+// list leaves the fallback to the car-hum drone rather than to silence.
 func (s *Store) albumTracks() map[string][]string {
 	// ponytail: only the index read is cached. With no index configured the
 	// library is a directory walk, and no cheap stat says whether a track
@@ -1152,9 +938,9 @@ func scanTracks(dir string) ([]string, error) {
 // are read back under the lock so the gauges describe one consistent moment.
 //
 // The play-order depth is here because an empty one is invisible everywhere
-// else. Advance keeps such a bed audible by falling back to the drone, but that
-// is a rescue, not a repair: the album the operator selected still cannot play,
-// and album=1 with tracks=0 is the only thing that says so.
+// else. Advance keeps the stream audible by falling back to the drone, but that
+// is a rescue, not a repair: the fallback album still cannot play, and tracks=0
+// is the only thing that says so.
 func (s *Store) record() {
 	s.mu.Lock()
 	bed, tracks := s.bed, len(s.tracks)

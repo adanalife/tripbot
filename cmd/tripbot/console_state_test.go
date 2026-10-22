@@ -22,12 +22,12 @@ func TestChangeGate(t *testing.T) {
 		t.Fatal("unchanged snapshot sent again before the heartbeat")
 	}
 	pending := steady
-	pending.Pending = &eventbus.AudioBedSwitch{Bed: "album"}
+	pending.Pending = &eventbus.AudioBedSwitch{Bed: "carhum"}
 	if !g.due(pending, t0.Add(2*time.Second)) {
 		t.Fatal("a scheduled switch was held back")
 	}
 	again := steady
-	again.Pending = &eventbus.AudioBedSwitch{Bed: "album"}
+	again.Pending = &eventbus.AudioBedSwitch{Bed: "carhum"}
 	if g.due(again, t0.Add(3*time.Second)) {
 		t.Fatal("an equal snapshot behind a new pointer counted as a change")
 	}
