@@ -13,10 +13,11 @@ import (
 // retrying, single-edge jitter, and a full radio outage. These series are the
 // alert signal and the audit trail for the audio-fallback watchdog
 // (pkg/obs/audiowatchdog), which swaps the source to a local license-clean bed
-// when the radio is down and swaps back when it recovers.
+// when the radio is down (and finds OBS booted on one) and swaps back when the
+// radio answers.
 //
 // Every series here carries the platform. The watchdog runs on every platform —
-// any platform can select any bed — so one instance per platform writes each of
+// every platform boots on the fallback and selects the radio — so one instance per platform writes each of
 // these, and without the label they differ only by pod name. A rule reading
 // them then has no platform to group by: max() over the lot collapses to one
 // number that only goes silent when every platform does at once, which is how
@@ -34,11 +35,11 @@ var (
 	obsBackgroundAudioSwaps = mustCounter("obs_background_audio_swaps_total",
 		"Total background-audio source swaps performed by the audio-fallback watchdog, labeled by direction (to_fallback|to_radio). Any to_fallback increment means the radio dropped in prod.")
 	backgroundAudioBed = mustGauge("tripbot_background_audio_bed",
-		"1 for the background-audio bed on air, 0 for every other bed, labeled by bed (radio|carhum|album) and platform. Exactly one bed per platform reads 1 at a time, so this is the 'what is the stream playing' series.")
+		"1 for the selected background-audio bed, 0 for the other, labeled by bed (radio|carhum) and platform. Exactly one bed per platform reads 1 at a time. The album is the radio's fallback rather than a selection, so it never appears here: obs_background_audio_on_fallback says when it is standing in.")
 	backgroundAudioResyncs = mustCounter("tripbot_background_audio_resyncs_total",
 		"Total times the audio watchdog re-read the live bed off OBS, labeled by platform. The watchdog resyncs on the first tick OBS answers after a tick it didn't, so an increment means OBS went unanswerable and came back — an OBS restart, which boots the source onto its own default bed and used to leave the store reporting the pre-restart one. Exactly one increment per process is the initial read at startup rather than a restart, so read the first as the boot and the rest as recoveries.")
 	backgroundAudioAlbumTracks = mustGauge("tripbot_background_audio_album_tracks",
-		"Number of tracks in the album bed's play order, labeled by platform. 0 while the album bed is on air means nothing advances when the current track ends: the stream falls silent with no error, no log line, and OBS still reporting a healthy source. Alert on album=1 AND tracks=0.")
+		"Number of tracks in the album fallback's play order, labeled by platform. 0 while the radio's fallback is on air means the album cannot play: the store rescues the stream onto the car-hum drone, and this is the only series that says the fallback album is broken.")
 )
 
 // OBSBackgroundAudio exposes the background-audio gauges + counters.
@@ -98,9 +99,8 @@ func (o obsBackgroundAudioMetrics) SetBed(platform, bed string, live bool) {
 		metric.WithAttributes(attribute.String("bed", bed)), platformAttr(platform))
 }
 
-// SetAlbumTracks records how many tracks the album play order holds. 0 is the
-// interesting value: on the album bed it means the next track-ended event has
-// nowhere to advance to.
+// SetAlbumTracks records how many tracks the album fallback's play order holds.
+// 0 is the interesting value: the fallback has nothing to advance to.
 func (o obsBackgroundAudioMetrics) SetAlbumTracks(platform string, n int) {
 	o.albumTracks.Record(context.Background(), int64(n), platformAttr(platform))
 }

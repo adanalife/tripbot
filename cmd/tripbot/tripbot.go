@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/bedprefs"
 	"github.com/adanalife/tripbot/pkg/bootstrap"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -876,30 +875,18 @@ func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Durati
 }
 
 // startBackgroundAudio constructs this instance's bed store and hands it to the
-// console API. The seed bed stands in until the audio watchdog reads the real
-// bed off OBS — on its first tick, and again after every OBS restart.
+// console API. The radio is every platform's default bed and the seed that
+// stands in until the audio watchdog reads the real bed off OBS — on its first
+// tick, and again after every OBS restart.
 func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
-	seed := beds.CarHum
-	if t.platformIsTwitch() {
-		seed = beds.Radio
-	}
-	// The album library is read from the mounted index rather than the share,
-	// so the bot lists the music without the music PVC being a scheduling
+	// The fallback album library is read from the mounted index rather than the
+	// share, so the bot lists the music without the music PVC being a scheduling
 	// dependency of it. OBS holds that claim and plays the paths.
 	// The station list is mounted from SSM; the store's default station is its
-	// first entry, so it loads before the store is built.
+	// first selectable entry, so it loads before the store is built.
 	beds.LoadStations(beds.RadioStationsFile)
-	prefs := bedprefs.New(database.GormDB())
-	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform).
-		WithIndex(beds.MusicIndexFile).WithPrefs(prefs)
-	// The saved album selection seeds the store before the watchdog's first
-	// Detect, which keeps it while the track on air falls inside it.
-	if album, shuffle, found, err := prefs.Get(ctx, t.cfg.Platform); err != nil {
-		slog.WarnContext(ctx, "background audio: could not load the saved album selection",
-			"err", err, "fix", "ensure migration 067_create_background_audio_prefs has run")
-	} else if found {
-		t.beds.Restore(album, shuffle)
-	}
+	t.beds = beds.NewStore(beds.RealOBS{}, beds.Radio, "", t.cfg.Platform).
+		WithIndex(beds.MusicIndexFile)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
 }
@@ -907,17 +894,18 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 // startBackgroundAudioWatchdog launches the volume-meter connection + the
 // background-audio watchdog. It does two jobs, both tied to the single
 // "Background Audio" source: it keeps audible music on the stream when the radio
-// drops (swapping onto the local Car Hum bed and back once the radio recovers —
-// first needed in prod on 2026-06-23, when a full radio outage left the
-// stream silent with no self-heal), and it advances the album to its next track
-// when OBS reports the current one ended. The meter's subscription carries that
+// drops (swapping onto the album fallback, or the car hum without one, and back
+// once the radio answers — which is also how a freshly booted OBS, which starts
+// on the album, reaches the radio), and it advances the fallback album to its
+// next track when OBS reports the current one ended. The meter's subscription carries that
 // report, so a track boundary is a WebSocket event rather than the watchdog's
 // next tick — the difference between a hard cut and seconds of dead air. The
 // tick still advances as a backstop for an ending missed while the subscription
 // was reconnecting.
 //
-// Runs on every platform: any platform can select any bed, so neither job
-// is Twitch-specific. On the car-hum bed it only records the audio gauges.
+// Runs on every platform: every platform boots on the fallback and selects the
+// radio, so neither job is Twitch-specific. On the car-hum bed it only records
+// the audio gauges.
 func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(
 		audiowatchdog.BackgroundAudioInputName, 30*time.Second, t.beds.Advance)

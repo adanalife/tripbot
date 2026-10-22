@@ -482,12 +482,12 @@ func LastEgressState(ctx context.Context, js jetstream.JetStream, env, platform 
 // AudioBed is the wire format for tripbot.<env>.audio.bed.<platform> — one
 // platform instance's background-audio bed, as its bed store holds it. Bed is
 // the selection and Playing what is audible; they differ only while the audio
-// watchdog has a fallback standing in for the radio. Track is the album track's
+// watchdog has a fallback standing in for the radio. Track is the fallback album track's
 // title and is empty on the radio, whose song comes from the station's metadata through GET
 // /api/audio rather than from the store.
 //
-// The option lists (stations, voicings, albums) are deliberately absent: they
-// change on a deploy or a new album on the share, not on a click, and GET
+// The option lists (stations, voicings) are deliberately absent: they change
+// on a deploy, not on a click, and GET
 // /api/audio still serves them.
 type AudioBed struct {
 	Platform     string          `json:"platform"`
@@ -495,10 +495,8 @@ type AudioBed struct {
 	Playing      string          `json:"playing"`
 	Station      string          `json:"station"`
 	Voicing      string          `json:"voicing"`
-	Album        string          `json:"album,omitempty"`
 	PlayingAlbum string          `json:"playing_album,omitempty"`
 	Track        string          `json:"track,omitempty"`
-	Shuffle      bool            `json:"shuffle"`
 	Pending      *AudioBedSwitch `json:"pending,omitempty"`
 	EmittedAt    string          `json:"emitted_at"`
 }
@@ -510,7 +508,6 @@ type AudioBed struct {
 type AudioBedSwitch struct {
 	Bed     string `json:"bed"`
 	Station string `json:"station,omitempty"`
-	Album   string `json:"album,omitempty"`
 	Voicing string `json:"voicing,omitempty"`
 	At      string `json:"at"`
 }

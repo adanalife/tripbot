@@ -229,17 +229,14 @@ var (
 		{"playing", strType(), true},
 		{"station", strType(), true},
 		{"voicing", strType(), true},
-		{"album", strType(), false},
 		{"playing_album", strType(), false},
 		{"track", strType(), false},
-		{"shuffle", boolType(), true},
 		{"pending", refType("AudioBedSwitch"), false},
 		{"emitted_at", dateType(), true},
 	}
 	audioBedSwitchFields = []field{
 		{"bed", strType(), true},
 		{"station", strType(), false},
-		{"album", strType(), false},
 		{"voicing", strType(), false},
 		{"at", dateType(), true},
 	}

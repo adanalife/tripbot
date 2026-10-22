@@ -14,8 +14,9 @@
 // All of it is the OBS-side analogue of the silent-disconnect stream watchdog
 // in pkg/obs/watchdog — same injectable-deps shape so the decision loop
 // unit-tests without a real OBS WebSocket. cmd/tripbot is the sole consumer,
-// and runs one per platform: any platform can select any bed, so neither the
-// fallback nor the album advance is Twitch-specific. Every series the loop
+// and runs one per platform: every platform boots on the album fallback and
+// selects the radio, so neither the fallback nor the album advance is
+// Twitch-specific. Every series the loop
 // writes carries the platform it was started for.
 package audiowatchdog
 
@@ -66,17 +67,16 @@ type Deps struct {
 	// SwapToRadio points the source back at its radio network stream.
 	SwapToRadio func(context.Context) error
 	// ActiveBed reports which bed the stream is meant to be playing. Only the
-	// radio bed needs the outage machinery below: a local bed that plays has
-	// nothing to ride out, and the one that doesn't — an album with no play
-	// order — is rescued by AdvanceAlbum instead.
+	// radio bed needs the outage machinery below: the car hum loops and has
+	// nothing to ride out.
 	ActiveBed func() beds.Bed
 	// SourceIsLocal reports whether the background-audio source is pointed at a
 	// local file right now. Read from OBS every tick rather than remembered
 	// from the last swap: the console and chat repoint the same source, so
 	// remembered state goes stale the moment an operator switches a bed.
 	SourceIsLocal func(context.Context) (bool, error)
-	// AdvanceAlbum queues the next album track. Called when OBS reports the
-	// media ended while the album bed is live.
+	// AdvanceAlbum queues the next fallback album track. Called when OBS
+	// reports the media ended while the fallback is on air.
 	AdvanceAlbum func(context.Context) error
 	// Resync re-reads the live bed off OBS. Called on the first tick OBS
 	// answers after it didn't: a restarted OBS boots onto its own default bed,
@@ -151,7 +151,13 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		// the console or chat can retune mid-outage, and swapping back to the
 		// station we left would undo that.
 		RadioReachable: func(ctx context.Context) bool {
-			return defaultRadioReachable(ctx, beds.StreamURL(store.Station()))
+			// No station to tune is the designed degraded state — the stream stays
+			// on the fallback — not a probe failure worth a warning each attempt.
+			url := beds.StreamURL(store.Station())
+			if url == "" {
+				return false
+			}
+			return defaultRadioReachable(ctx, url)
 		},
 		// Both swaps go through the Store: picking the fallback bed means
 		// scanning the share and building a play order, and the Store is what
@@ -278,28 +284,11 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			// *to* and nothing to recover, so hold the counters at zero rather
 			// than letting a quiet passage accumulate misses toward a swap that
 			// would stomp the operator's choice.
-			if bed := deps.ActiveBed(); bed != beds.Radio {
+			if deps.ActiveBed() != beds.Radio {
 				failMisses, recoverHits = 0, 0
 				// "On fallback" is a statement about the radio bed: a local bed
 				// the operator chose is not a fallback, however local it is.
 				instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
-				// The album plays one track at a time, unlooped, so OBS ends the
-				// media between tracks — that's the cue to queue the next one.
-				// The meter's playback-ended subscription normally gets there
-				// first, in milliseconds; this is the backstop for an ending
-				// that landed while the subscription was down, where the cost is
-				// one gap of up to Interval instead of a bed that never advances
-				// again. The Store drops whichever arrives second.
-				//
-				// It is also the one path that rescues an album with no play
-				// order, which the Store cannot advance and which would
-				// otherwise hold the stream silent: down media on that bed
-				// never clears on its own, so this tick is what reaches it.
-				if bed == beds.Album && obs.MediaStateDown(state) {
-					if err := deps.AdvanceAlbum(ctx); err != nil {
-						slog.ErrorContext(ctx, "audio watchdog: album advance failed", "err", err)
-					}
-				}
 				continue
 			}
 
@@ -356,12 +345,14 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				continue
 			}
 
-			// The fallback album plays unlooped like the selected one, so OBS
-			// ends the media between tracks and each ending is the cue to queue
-			// the next. Same backstop as the selected album bed gets above, for
-			// the same reason — and it matters more here, since the subscription
-			// that normally advances first is down exactly when OBS is unwell.
-			// A no-op on the drone, which loops, and off the album entirely.
+			// The fallback album plays one track at a time, unlooped, so OBS ends
+			// the media between tracks and each ending is the cue to queue the
+			// next. The meter's playback-ended subscription normally gets there
+			// first, in milliseconds; this is the backstop for an ending that
+			// landed while the subscription was down, and the Store drops
+			// whichever arrives second. It is also the one path that rescues a
+			// fallback album with no play order onto the drone: down media there
+			// never clears on its own. A no-op on the drone, which loops.
 			if obs.MediaStateDown(state) {
 				if err := deps.AdvanceAlbum(ctx); err != nil {
 					slog.ErrorContext(ctx, "audio watchdog: fallback album advance failed", "err", err)
