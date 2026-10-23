@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/achievements"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
@@ -20,11 +21,14 @@ import (
 func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float32) {
 	t.Helper()
 	savedFind, savedCount, savedMonthly, savedEarliest := findUser, sessionCount, monthlyMiles, earliestEvent
-	savedFindByID := findUserByID
+	savedFindByID, savedEarned := findUserByID, earnedBy
 	t.Cleanup(func() {
 		findUser, sessionCount, monthlyMiles, earliestEvent = savedFind, savedCount, savedMonthly, savedEarliest
-		findUserByID = savedFindByID
+		findUserByID, earnedBy = savedFindByID, savedEarned
 	})
+	earnedBy = func(context.Context, string, string) ([]achievements.Earned, error) {
+		return []achievements.Earned{}, nil
+	}
 	findUser = func(context.Context, string, string) (users.User, error) {
 		// mirror pkg/users.Find's contract: a staged zero-ID user means "no row"
 		if u.ID == 0 {
@@ -247,5 +251,28 @@ func TestUserProfileHandler_FirstSeenPrefersEarliest(t *testing.T) {
 	want := time.Date(2019, 6, 2, 0, 0, 0, 0, time.UTC)
 	if got := profileJSON(t, "veteran"); !got.FirstSeen.Equal(want) {
 		t.Errorf("first seen = %v, want earliest %v", got.FirstSeen, want)
+	}
+}
+
+// A chatter's achievements ride their profile, newest first as stored, and a
+// failed read leaves the rest of the card intact with none.
+func TestUserProfileAPIHandler_Achievements(t *testing.T) {
+	withProfileSeams(t, users.User{ID: 42, Username: "danalol", Platform: "twitch"}, 0, 0)
+	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+	var asked [2]string
+	earnedBy = func(_ context.Context, platform, username string) ([]achievements.Earned, error) {
+		asked = [2]string{platform, username}
+		return []achievements.Earned{{Title: "Saw Niagara Falls", EarnedAt: at}}, nil
+	}
+	got := gatherUserProfile(context.Background(), "twitch", "", "DanaLol")
+	if asked != [2]string{"twitch", "danalol"} || len(got.Achievements) != 1 || got.Achievements[0].Title != "Saw Niagara Falls" {
+		t.Errorf("asked %v, got %+v", asked, got.Achievements)
+	}
+	earnedBy = func(context.Context, string, string) ([]achievements.Earned, error) {
+		return nil, gorm.ErrInvalidDB
+	}
+	got = gatherUserProfile(context.Background(), "twitch", "", "danalol")
+	if !got.Found || got.Achievements == nil || len(got.Achievements) != 0 {
+		t.Errorf("failed read: found=%v achievements=%#v", got.Found, got.Achievements)
 	}
 }
