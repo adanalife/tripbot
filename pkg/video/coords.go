@@ -10,13 +10,13 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
-// minCoordConfidence is how believable a clip's per-moment track has to be
+// MinCoordConfidence is how believable a clip's per-moment track has to be
 // before a moment inside it is worth answering with. Interpolation always
 // produces rows, so a clip whose overlay mostly failed to read still has a
 // full track — videos.coord_confidence is the only thing that says so, and
 // below this the clip's single fix is the more honest answer. 0.8 keeps 4,023
 // of the corpus's 4,354 clips (measured 2026-08-05).
-const minCoordConfidence = 0.8
+const MinCoordConfidence = 0.8
 
 // coordWindow is how far either side of a moment, in seconds, a coordinate may
 // be read from. The track is sampled on a 2 s grid, so a row this close is the
@@ -42,7 +42,7 @@ const (
 )
 
 // minRouteConfidence is how believable a track has to be to be drawn per-moment
-// rather than as a single point. Lower than minCoordConfidence on purpose: a
+// rather than as a single point. Lower than MinCoordConfidence on purpose: a
 // bridged track is far too coarse to answer "where are we" with, but it is
 // still the real shape of the road, and the alternative on the map is a
 // straight chord between clips ~4 miles apart.
@@ -65,7 +65,7 @@ func RouteBand(confidence *float64) string {
 	switch {
 	case confidence == nil:
 		return BandUntrusted
-	case *confidence >= minCoordConfidence:
+	case *confidence >= MinCoordConfidence:
 		return BandTrusted
 	case *confidence >= minRouteConfidence:
 		return BandSynthetic
@@ -144,7 +144,7 @@ LIMIT 1`
 // single clip-level fix, which sits a median 598 m from where the van actually
 // was at a given moment inside the clip (p90 1.9 km, max 4.4 km).
 func CoordAt(ctx context.Context, vid Video, at time.Duration) (Moment, bool) {
-	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < minCoordConfidence {
+	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < MinCoordConfidence {
 		return Moment{}, false
 	}
 	// A negative offset means the caller's clock disagrees with playout's
@@ -215,7 +215,7 @@ func SourceTrack(ctx context.Context, vid Video) []TrackPoint {
 }
 
 func trackBy(ctx context.Context, vid Video, query string) []TrackPoint {
-	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < minCoordConfidence {
+	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < MinCoordConfidence {
 		return nil
 	}
 	var pts []TrackPoint
