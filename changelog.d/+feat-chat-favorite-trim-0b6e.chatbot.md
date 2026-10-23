@@ -1,0 +1,1 @@
+`!favorite` (`!fav`, `!bookmark`) stars the moment on screen and `!trim` reports a stretch that should be cut, each with an optional note. Both write the same marks the console sets on a clip, keeping the viewer name and platform.

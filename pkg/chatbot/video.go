@@ -27,6 +27,8 @@ type Video interface {
 	PlayheadLocation(ctx context.Context) (vid video.Video, at video.Moment, ok bool)
 	// Playhead returns the clip on screen and how far into it the playhead is.
 	Playhead(ctx context.Context) (video.Video, time.Duration)
+	// SetMark writes a viewer's mark on a moment (a star or a trim report).
+	SetMark(ctx context.Context, m video.Mark) error
 	// PlayheadVelocity reports which way and how fast the van is travelling at
 	// the playhead. v.Moving is false when the van is sitting still, so the
 	// caller says so instead of naming a direction; ok is false when the clip
@@ -92,6 +94,10 @@ func (r realVideo) Playhead(ctx context.Context) (video.Video, time.Duration) {
 		return video.Video{}, 0
 	}
 	return r.player.Playhead(ctx)
+}
+
+func (r realVideo) SetMark(ctx context.Context, m video.Mark) error {
+	return video.SetMark(ctx, m)
 }
 
 func (r realVideo) PlayheadVelocity(ctx context.Context) (video.Velocity, bool) {

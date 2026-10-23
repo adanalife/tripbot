@@ -18,40 +18,29 @@ import (
 	"gorm.io/gorm"
 )
 
-// moment is one of the operator's marks on a clip, at Sec seconds into the
-// clip as it airs now.
+// moment is one mark on a clip, at Sec seconds into the clip as it airs now.
+// By and Platform name the viewer who set it from chat, empty for the
+// operator's own marks.
 type moment struct {
-	Kind string  `json:"kind"`
-	Sec  float64 `json:"sec"`
-	Note string  `json:"note"`
+	Kind     string  `json:"kind"`
+	Sec      float64 `json:"sec"`
+	Note     string  `json:"note"`
+	By       string  `json:"by"`
+	Platform string  `json:"platform"`
 }
 
+// momentKinds are the kinds the console may set; a trim only comes from chat.
 var momentKinds = map[string]bool{"star": true, "bad_coord": true}
-
-// A clip's offset into its original recording, read off its own track: the
-// two clocks differ by a constant within a clip. A clip with no track is
-// taken as untrimmed.
-// ponytail: a trimmed clip with no coords mis-keys its marks by its trim
-// start; derive the offset from the trim manifest if one ever needs it.
-const clipOffsetSQL = `
-SELECT COALESCE((SELECT source_ts_sec - ts_sec FROM video_coords
-                 WHERE video_id = @id AND ts_sec IS NOT NULL LIMIT 1), 0)`
-
-func clipOffset(db *gorm.DB, id int) (float64, error) {
-	var off float64
-	err := db.Raw(clipOffsetSQL, sql.Named("id", id)).Scan(&off).Error
-	return off, err
-}
 
 // momentsOf is clip id's marks in clip order, never nil, so it encodes as [].
 func momentsOf(ctx context.Context, db *gorm.DB, id int) ([]moment, error) {
-	off, err := clipOffset(db, id)
+	off, err := video.ClipOffset(db, id)
 	if err != nil {
 		return nil, err
 	}
 	out := []moment{}
 	err = db.WithContext(ctx).Raw(`
-SELECT kind, source_ts_sec - @off AS sec, note FROM video_moments
+SELECT kind, source_ts_sec - @off AS sec, note, username AS by, platform FROM video_moments
 WHERE video_id = @id ORDER BY source_ts_sec, kind`,
 		sql.Named("id", id), sql.Named("off", off)).Scan(&out).Error
 	return out, err
@@ -91,20 +80,11 @@ func videoMomentsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"no such video"}`, http.StatusNotFound)
 		return
 	}
-	off, err := clipOffset(db, id)
-	if err == nil {
-		args := []any{sql.Named("id", id), sql.Named("kind", body.Kind),
-			sql.Named("src", *body.Sec+off), sql.Named("note", note)}
-		if body.Remove {
-			// source_ts_sec is REAL and comes back here through a float64 sum,
-			// so a fractional second only matches within a tolerance.
-			err = db.Exec(`DELETE FROM video_moments
-WHERE video_id = @id AND kind = @kind AND abs(source_ts_sec - @src) < 0.01`, args...).Error
-		} else {
-			err = db.Exec(`INSERT INTO video_moments (video_id, kind, source_ts_sec, note)
-VALUES (@id, @kind, @src, @note)
-ON CONFLICT (video_id, kind, source_ts_sec) DO UPDATE SET note = EXCLUDED.note`, args...).Error
-		}
+	m := video.Mark{VideoID: id, Kind: body.Kind, Sec: *body.Sec, Note: note}
+	if body.Remove {
+		err = video.RemoveMark(r.Context(), id, body.Kind, *body.Sec)
+	} else {
+		err = video.SetMark(r.Context(), m)
 	}
 	if err != nil {
 		logQueryFailure(r.Context(), "video moment write failed", err, "id", id)

@@ -134,6 +134,20 @@
       ]
     },
     {
+      "trigger": "!favorite",
+      "aliases": [
+        "!fav",
+        "!bookmark"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!find",
       "aliases": [
         "!search",
@@ -493,6 +507,16 @@
       "requires_follow": true,
       "platforms": [
         "twitch"
+      ]
+    },
+    {
+      "trigger": "!trim",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
       ]
     },
     {

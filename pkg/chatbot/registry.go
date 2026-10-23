@@ -343,6 +343,17 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger: "!favorite",
+			Help:    "Star the moment on screen, with an optional note: !favorite <what's good about it>",
+			Aliases: []string{"!fav", "!bookmark"},
+			Handler: a.favoriteCmd,
+		},
+		{
+			Trigger: "!trim",
+			Help:    "Report a stretch of this clip that should be cut, with an optional note: !trim <what's wrong>",
+			Handler: a.trimCmd,
+		},
+		{
 			Trigger:        "!report",
 			Help:           "Report a stream problem, like no audio or a frozen picture",
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
@@ -389,7 +400,7 @@ func (a *App) platform() string {
 // along with their trigger, so only triggers are listed.
 var v1Commands = map[string]bool{
 	"!version": true, "!uptime": true, "!commands": true,
-	"!gas": true, "!report": true,
+	"!gas": true, "!report": true, "!favorite": true, "!trim": true,
 	// background audio (every platform's scene ships the one bed source)
 	"!song": true, "!audio": true,
 	// info (read current-video state only)

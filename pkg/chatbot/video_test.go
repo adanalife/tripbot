@@ -42,6 +42,18 @@ type recordingVideo struct {
 	RefreshedVid *video.Video
 	// Elapsed is how far into Vid Playhead reports the playhead.
 	Elapsed time.Duration
+	// Marks records every SetMark; MarkErr fails them.
+	Marks   []video.Mark
+	MarkErr error
+}
+
+func (r *recordingVideo) SetMark(_ context.Context, m video.Mark) error {
+	r.Calls = append(r.Calls, "SetMark")
+	if r.MarkErr != nil {
+		return r.MarkErr
+	}
+	r.Marks = append(r.Marks, m)
+	return nil
 }
 
 func (r *recordingVideo) Current() video.Video {
