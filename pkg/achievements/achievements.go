@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
@@ -155,4 +156,19 @@ func distanceKm(lat1, lng1, lat2, lng2 float64) float64 {
 	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
 		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
 	return 2 * earthRadiusKm * math.Asin(math.Sqrt(a))
+}
+
+// Earned is one achievement a viewer holds.
+type Earned struct {
+	Title    string    `json:"title"`
+	EarnedAt time.Time `json:"earned_at"`
+}
+
+// EarnedBy is username's achievements on platform, newest first, never nil.
+func EarnedBy(ctx context.Context, platform, username string) ([]Earned, error) {
+	out := []Earned{}
+	err := database.GormDB().WithContext(ctx).
+		Raw(`SELECT title, earned_at FROM achievements WHERE platform = ? AND username = ? ORDER BY earned_at DESC`,
+			platform, username).Scan(&out).Error
+	return out, err
 }

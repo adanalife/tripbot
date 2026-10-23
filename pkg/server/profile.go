@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/achievements"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -28,6 +29,7 @@ var (
 	monthlyMiles  = func(ctx context.Context, u users.User) float32 {
 		return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard())
 	}
+	earnedBy = achievements.EarnedBy
 )
 
 // bestEffortFirstSeen picks the earliest non-zero timestamp among the user
@@ -64,6 +66,9 @@ type userProfile struct {
 	Sessions     int64     `json:"sessions"`
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`
+	// Achievements are collected silently until their viewer-facing design
+	// exists: this profile is how the console's owner sees them meanwhile.
+	Achievements []achievements.Earned `json:"achievements"`
 }
 
 // resolveUser finds the chatter's row, preferring the platform's user id over
@@ -100,7 +105,7 @@ func resolveUser(ctx context.Context, platform, platformUserID, username string)
 func gatherUserProfile(ctx context.Context, platform, platformUserID, username string) userProfile {
 	username = strings.ToLower(strings.TrimSpace(username))
 	platformUserID = strings.TrimSpace(platformUserID)
-	prof := userProfile{Username: username}
+	prof := userProfile{Username: username, Achievements: []achievements.Earned{}}
 	if username == "" && platformUserID == "" {
 		return prof
 	}
@@ -126,6 +131,11 @@ func gatherUserProfile(ctx context.Context, platform, platformUserID, username s
 	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, u.Username))
 	prof.LastSeen = u.LastSeen
 	prof.Sessions = sessionCount(ctx, platform, u.Username)
+	if earned, err := earnedBy(ctx, u.Platform, u.Username); err != nil {
+		logQueryFailure(ctx, "error reading achievements", err, "username", u.Username)
+	} else {
+		prof.Achievements = earned
+	}
 	return prof
 }
 
