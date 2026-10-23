@@ -45,6 +45,7 @@ var landmarks = []struct {
 	{"old-faithful", "Saw Old Faithful", 44.4605, -110.8281, 2},
 	{"golden-gate-bridge", "Saw the Golden Gate Bridge", 37.8199, -122.4786, 3},
 	{"devils-tower", "Saw Devils Tower", 44.5902, -104.7146, 10},
+	{"niagara-falls", "Saw Niagara Falls", 43.0896, -79.0849, 3},
 }
 
 // award inserts one achievement row, idempotently. Returns true when the row
