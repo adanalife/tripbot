@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.2.0] — 2026-10-23
+
+### Chatbot
+
+- Record which states and landmarks each viewer has caught on screen, kept server-side for the console; nothing is shown in chat. ([#1012](https://github.com/adanalife/tripbot/pull/1012))
+- `!favorite` (`!fav`, `!bookmark`) stars the moment on screen and `!trim` reports a stretch that should be cut, each with an optional note. Both write the same marks the console sets on a clip, keeping the viewer name and platform. ([#1748](https://github.com/adanalife/tripbot/pull/1748))
+
+### Console / API
+
+- `GET /api/sources/{stem}` carries a dropped piece's own GPS track on its cut (`track`), read from the new `piece_tracks` table the pipeline fills, so the console can map a piece that never aired. ([#1749](https://github.com/adanalife/tripbot/pull/1749))
+
+### CI / Tooling
+
+- A pre-commit hook fails when go.mod's go line and the .tool-versions Go pin disagree, and the pin moves to 1.26.10 to match. ([#1746](https://github.com/adanalife/tripbot/pull/1746))
+
 ## [v6.1.0] — 2026-10-22
 
 ### Console / API
