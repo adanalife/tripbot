@@ -303,10 +303,12 @@ func (t *Tripbot) Run() {
 		// Award viewer achievements on each clip transition. Twitch-only:
 		// it's the instance with presence tracking, and achievements key off
 		// who's in chat. Set after findInitialVideo so a restart doesn't
-		// re-award for the clip already on screen.
+		// re-award for the clip already on screen. Collected silently: nothing
+		// is said in chat until the viewer-facing design exists, and only the
+		// console's owner sees them, on a chatter's card.
 		t.player.OnChange = func(ctx context.Context, v video.Video) {
 			for _, msg := range achievements.HandleVideoChange(ctx, t.cfg, v, t.sessions.LoggedInHumans()) {
-				t.app.Chat.Say(msg)
+				slog.InfoContext(ctx, "achievement awarded", "award", msg)
 			}
 		}
 	}

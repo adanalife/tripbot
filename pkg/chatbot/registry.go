@@ -260,13 +260,6 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!achievements",
-			Help:           "The achievements you've earned",
-			Aliases:        []string{"!achievement", "!badges"},
-			Handler:        a.achievementsCmd,
-			RequiresFollow: true,
-		},
-		{
 			Trigger:       "!givemiles",
 			Help:          "Grant a viewer miles: !givemiles @user <miles>",
 			Handler:       a.giveMilesCmd,

@@ -1,1 +1,1 @@
-Viewer achievements: state visits (1st/10th/100th distinct day catching a state's footage) and landmark sightings (Old Faithful, Golden Gate Bridge, Devils Tower, Niagara Falls), announced in chat and listed by `!achievements`.
+Record which states and landmarks each viewer has caught on screen, kept server-side for the console; nothing is shown in chat.
