@@ -6,19 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"gorm.io/gorm"
 )
-
-// validDashStr matches the 20-character underscore-and-digit timestamp that
-// opens every dashcam clip filename.
-var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
 
 // LoadOrCreate() will look up the video in the DB,
 // or add it to the DB if it's not there yet
@@ -69,56 +63,71 @@ func create(ctx context.Context, file string) (Video, error) {
 	return newVid, nil
 }
 
-// save() fills in the fields derived from the slug and the coords, then
-// inserts the video. It writes through the receiver, so a caller holding a
-// freshly built Video gets the DB-assigned ID and date_created back.
+// save() fills in the fields derived from the slug, then inserts the video.
+// It writes through the receiver, so a caller holding a freshly built Video
+// gets the DB-assigned ID and date_created back.
 func (v *Video) save(ctx context.Context) error {
-	if v.CoordSource == "" {
-		v.CoordSource = CoordSourceOCR
-	}
+	// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
+	v.Flagged = true
+	v.CoordSource = CoordSourceMissing
 
-	if v.Lat == 0 || v.Lng == 0 {
-		// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
-		v.Flagged = true
-		v.CoordSource = CoordSourceMissing
+	if v.Corpus == "" {
+		v.Corpus = slugCorpus(v.Slug)
 	}
-
-	if !v.Flagged {
-		// figure out which state we're in
-		state, err := geo.State(v.Lat, v.Lng)
-		// ErrDisabled is the expected steady-state when no Maps key
-		// is configured; don't spam Sentry on every video import.
-		if err != nil && !errors.Is(err, geo.ErrDisabled) {
-			slog.ErrorContext(ctx, "error geocoding coords", "err", err)
-		}
-		v.State = state
-	}
-
 	v.DateFilmed = v.toDate()
 	return database.GormDB().WithContext(ctx).Create(v).Error
 }
 
-// NextUnflagged() finds the next unflagged video by walking the next_vid chain.
-// The walk is bounded by the playlist length, so a broken chain or a
-// cycle of flagged videos returns an error instead of spinning forever.
-func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
-	var count int64
-	if err := database.GormDB().WithContext(ctx).Model(&Video{}).Count(&count).Error; err != nil {
-		return Video{}, err
-	}
+// nextUnflaggedQuery walks the next_vid chain server-side from a starting id
+// and stops at the first unflagged clip. The path array is the cycle guard: a
+// chain that loops back on itself ends the recursion rather than spinning.
+// The deepest row reached is either the unflagged answer or the dead end that
+// explains why there isn't one — chain_next names the id the walk could not
+// follow, and next_exists tells a dangling link apart from a closed loop.
+const nextUnflaggedQuery = `
+	WITH RECURSIVE walk AS (
+		SELECT v.id, v.next_vid, v.flagged, ARRAY[v.id] AS path
+		FROM videos v
+		WHERE v.id = @start
+	UNION ALL
+		SELECT n.id, n.next_vid, n.flagged, w.path || n.id
+		FROM walk w
+		JOIN videos n ON n.id = w.next_vid
+		WHERE w.flagged AND NOT n.id = ANY(w.path)
+	)
+	SELECT v.*,
+	       w.next_vid AS chain_next,
+	       EXISTS (SELECT 1 FROM videos x WHERE x.id = w.next_vid) AS next_exists
+	FROM walk w
+	JOIN videos v ON v.id = w.id
+	ORDER BY array_length(w.path, 1) DESC
+	LIMIT 1`
 
-	vid := v
-	for i := int64(0); i < count; i++ {
-		nextID := vid.NextVid.Int64
-		var err error
-		vid, err = load(ctx, nextID)
-		if err != nil {
-			return Video{}, fmt.Errorf("broken next_vid chain at id %d: %w", nextID, err)
-		}
-		// use the first unflagged video we find
-		if !vid.Flagged {
-			return vid, nil
-		}
+// NextUnflagged() finds the next unflagged video by following the next_vid
+// chain forward from this one. The walk happens in a single statement, so the
+// number of hops costs no extra round trips. A broken chain or a cycle of
+// flagged videos returns an error naming where the walk stopped.
+func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
+	startID := v.NextVid.Int64
+
+	var row struct {
+		Video
+		ChainNext  sql.NullInt64
+		NextExists bool
+	}
+	result := database.GormDB().WithContext(ctx).
+		Raw(nextUnflaggedQuery, sql.Named("start", startID)).Scan(&row)
+	if result.Error != nil {
+		return Video{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return Video{}, fmt.Errorf("broken next_vid chain at id %d: no matches found", startID)
+	}
+	if !row.Flagged {
+		return row.Video, nil
+	}
+	if !row.NextExists {
+		return Video{}, fmt.Errorf("broken next_vid chain at id %d", row.ChainNext.Int64)
 	}
 	return Video{}, errors.New("no unflagged video found in next_vid chain")
 }
@@ -127,14 +136,12 @@ func (v Video) SetNextVid(ctx context.Context, nextVid Video) error {
 	return database.GormDB().WithContext(ctx).Model(&v).Update("next_vid", nextVid.ID).Error
 }
 
-func validate(dashStr string) error {
-	if len(dashStr) < 20 {
-		return errors.New("dash string too short")
-	}
-	shortened := dashStr[:20]
-
-	if !validDashStr.MatchString(shortened) {
-		return errors.New("dash string did not match regex")
+// validate accepts a slug in one season's filename shape. A season-2
+// original (no _s offset) is not a clip and is refused along with everything
+// else, so the runtime fallback can never mint a row for one.
+func validate(slug string) error {
+	if slugCorpus(slug) == "" {
+		return fmt.Errorf("slug %q is in no season's filename shape", slug)
 	}
 	return nil
 }
@@ -145,11 +152,26 @@ func validate(dashStr string) error {
 // share one statement, so no clip can be added or removed between them.
 const randomByStateQuery = `
 	SELECT * FROM videos
-	WHERE state = @state
-	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state))
+	WHERE state = @state AND corpus = @corpus AND reviewed_at IS NOT NULL
+	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state AND corpus = @corpus AND reviewed_at IS NOT NULL))
 	LIMIT 1`
 
-func FindRandomByState(ctx context.Context, state string) (Video, error) {
+// AiringCorpus is the corpus a pick stays inside: the one on screen. A clip is
+// on playout's playlist exactly when its corpus is live, so staying in the
+// current clip's corpus is what keeps a pick off a parked clip that playout
+// would refuse. Nothing on screen yet reads as the ambient corpus.
+// ponytail: a set of live corpora would let a pick cross from s2 back to s1;
+// playout owns that set, and tripbot doesn't read it yet.
+func AiringCorpus(current Video) string {
+	if current.Corpus == "" {
+		return CorpusS1
+	}
+	return current.Corpus
+}
+
+// FindRandomByState returns a random reviewed clip filmed in `state`, from the
+// corpus `current` is in.
+func FindRandomByState(ctx context.Context, state string, current Video) (Video, error) {
 	var vid Video
 
 	// convert to long form
@@ -162,7 +184,9 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	// title-case the state (it's stored in the DB like that)
 	state = helpers.TitlecaseState(state)
 
-	result := database.GormDB().WithContext(ctx).Raw(randomByStateQuery, sql.Named("state", state)).Scan(&vid)
+	result := database.GormDB().WithContext(ctx).
+		Raw(randomByStateQuery, sql.Named("state", state), sql.Named("corpus", AiringCorpus(current))).
+		Scan(&vid)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
@@ -184,8 +208,9 @@ const nextDaytimeScanLimit = 5000
 // !daytime. The dashcam corpus is daytime driving footage, so from a dusk or
 // night clip the next daylight is the following day's first daylight clip; this
 // walks clips in film order and returns it. Clips without a GPS fix are skipped
-// (daytime needs coords to resolve sunrise/sunset). Returns a
-// terrors.ErrNoDaytimeFound when no later daytime clip exists in the scanned window.
+// (daytime needs coords to resolve sunrise/sunset), and so are unreviewed clips
+// and clips from any corpus but `after`'s. Returns a terrors.ErrNoDaytimeFound when no later
+// daytime clip exists in the scanned window.
 func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 	// Baseline calendar day: the current clip's local day when it has a fix,
 	// else its raw filmed day (a flagged clip has no coords to localize).
@@ -196,7 +221,7 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 
 	var clips []Video
 	err := database.GormDB().WithContext(ctx).
-		Where("date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", after.DateFilmed).
+		Where("corpus = ? AND reviewed_at IS NOT NULL AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", AiringCorpus(after), after.DateFilmed).
 		Order("date_filmed").
 		Limit(nextDaytimeScanLimit).
 		Find(&clips).Error
@@ -270,4 +295,43 @@ func CorpusRoute(ctx context.Context) []RoutePoint {
 		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: RouteBand(r.CoordConfidence)}
 	}
 	return out
+}
+
+// CorpusStat is how far one corpus's clips have come through the pipeline:
+// how many rows it holds, how many a person has reviewed, how many are
+// flagged, how many carry a trusted track, and how many are embedded.
+type CorpusStat struct {
+	Corpus   string `json:"corpus"`
+	Rows     int64  `json:"rows"`
+	Reviewed int64  `json:"reviewed"`
+	Flagged  int64  `json:"flagged"`
+	Tracked  int64  `json:"tracked"`
+	Embedded int64  `json:"embedded"`
+}
+
+// One GROUP BY over videos; each counter is a FILTER on the same scan. Tracked
+// is the map's trusted band (RouteBand): a confidence at or above the gate every
+// coordinate consumer applies. Embedded is an EXISTS rather than a join so a
+// clip with many frames still counts once.
+const corpusStatsQuery = `
+SELECT v.corpus,
+       COUNT(*) AS "rows",
+       COUNT(*) FILTER (WHERE v.reviewed_at IS NOT NULL) AS reviewed,
+       COUNT(*) FILTER (WHERE v.flagged) AS flagged,
+       COUNT(*) FILTER (WHERE v.coord_confidence >= @minConfidence) AS tracked,
+       COUNT(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM frame_embeddings e WHERE e.video_id = v.id)) AS embedded
+FROM videos v
+GROUP BY v.corpus
+ORDER BY v.corpus`
+
+// CorpusStats counts each corpus's clips by pipeline stage, ordered by corpus
+// name. A corpus with no rows is absent rather than zeroed; an empty table
+// yields an empty, non-nil slice.
+func CorpusStats(ctx context.Context) ([]CorpusStat, error) {
+	out := []CorpusStat{}
+	err := database.GormDB().WithContext(ctx).
+		Raw(corpusStatsQuery, sql.Named("minConfidence", minCoordConfidence)).
+		Scan(&out).Error
+	return out, err
 }

@@ -45,6 +45,7 @@ from adanalife_k8s.contract import load_contract
 from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.eso import ESData
 from adanalife_k8s.naming import app_name, meta_labels, selector
+from adanalife_k8s.network_policy import emit_http_ingress_policy
 
 IMAGE = "adanalife/tripbot"
 DB_SECRET_NAME = "tripbot-database-creds"  # ESO-materialized DB creds (eso envs)
@@ -65,15 +66,27 @@ MUSIC_INDEX_CONFIGMAP = "obs-music-index"
 MUSIC_INDEX_MOUNT_PATH = "/opt/tripbot/assets/music-index"
 MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 
+# The radio bed's station list, materialized from SSM so the stations stay out
+# of git. Mounted optional for the same reason as the music index: a missing
+# parameter leaves the radio bed with no stations, not the pod unschedulable.
+# pkg/obs/beds.RadioStationsFile is RADIO_MOUNT_PATH/stations.json.
+RADIO_STATIONS_SECRET = "tripbot-radio-stations"
+RADIO_MOUNT_PATH = "/opt/tripbot/assets/radio"
+
 # Small but explicit requests for the helper containers (migrate init, one-shot
 # Job containers). Namespaces under a ResourceQuota that enforces requests.*
 # (stage-1's app-quota) reject any pod whose containers omit requests for the
-# quota'd resources — so every container must declare them.
+# quota'd resources — so every container must declare them. The memory limit
+# satisfies the cluster's require-requests-limits policy; it sits at 4x the
+# request because an OOMKilled migrate blocks the rollout it gates, and the
+# helpers are too short-lived for cAdvisor to record a peak to size from. No
+# cpu limit, deliberately.
 SMALL_RESOURCES = k8s.ResourceRequirements(
     requests={
         "cpu": k8s.Quantity.from_string("100m"),
         "memory": k8s.Quantity.from_string("128Mi"),
-    }
+    },
+    limits={"memory": k8s.Quantity.from_string("512Mi")},
 )
 
 # The contract's ports, so a rename in pkg/contract reaches the manifests
@@ -96,8 +109,7 @@ def config_map_name(platform: str) -> str:
     return f"{app_name('tripbot', platform)}-config"
 
 
-# Placeholder DB creds for the laptop `local` overlay (gitignored secret.env in
-# Kustomize). DB-only — everything else comes from ESO even locally.
+# Placeholder DB creds for the laptop `local` env. DB-only — everything else comes from ESO even locally.
 _LOCAL_SECRET = {
     "DATABASE_USER": "tripbot_docker",
     "DATABASE_PASS": "hunter2",
@@ -235,16 +247,18 @@ class Tripbot(Construct):
 
         # --- envFrom: config, DB creds, shared Sentry, then app Secrets ---
         # Order is load-bearing: later entries win on key collision.
-        # The discord and Sentry Secrets are optional so the bot boots without
-        # them — observability gates itself off when the env vars are absent,
-        # and the pod isn't hostage to ExternalSecret sync order.
-        # Boot-required Secrets (DB creds, and twitch on a twitch instance)
-        # stay required: a missing one fails loud.
+        # The discord Secrets are optional so the bot boots without them, and so
+        # is Sentry outside prod (env.sentry_required) — observability gates
+        # itself off when the env vars are absent, and the pod isn't hostage to
+        # ExternalSecret sync order. Boot-required Secrets (DB creds, and twitch
+        # on a twitch instance) stay required: a missing one fails loud.
         env_from = [
             k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
             k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
             k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(name="sentry-tripbot", optional=True)
+                secret_ref=k8s.SecretEnvSource(
+                    name="sentry-tripbot", optional=not env.sentry_required
+                )
             ),
         ]
 
@@ -367,18 +381,26 @@ class Tripbot(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("1Gi")},
             ),
-            # The album background-audio bed reads its track list from here.
-            volume_mounts=(
-                [
-                    k8s.VolumeMount(
-                        name="music-index",
-                        mount_path=MUSIC_INDEX_MOUNT_PATH,
-                        read_only=True,
-                    )
-                ]
-                if env.music_share
-                else None
-            ),
+            # The album bed reads its track list, and the radio bed its
+            # stations, from these.
+            volume_mounts=[
+                k8s.VolumeMount(
+                    name="radio-stations",
+                    mount_path=RADIO_MOUNT_PATH,
+                    read_only=True,
+                ),
+                *(
+                    [
+                        k8s.VolumeMount(
+                            name="music-index",
+                            mount_path=MUSIC_INDEX_MOUNT_PATH,
+                            read_only=True,
+                        )
+                    ]
+                    if env.music_share
+                    else []
+                ),
+            ],
         )
 
         # Optional, and created out of band by bin/stage-streambeats rather than
@@ -396,7 +418,13 @@ class Tripbot(Construct):
                 )
             ]
             if env.music_share
-            else None
+            else []
+        )
+        radio_volume = k8s.Volume(
+            name="radio-stations",
+            secret=k8s.SecretVolumeSource(
+                secret_name=RADIO_STATIONS_SECRET, optional=True
+            ),
         )
 
         k8s.KubeDeployment(
@@ -435,7 +463,7 @@ class Tripbot(Construct):
                         ),
                         init_containers=[migrate],
                         containers=[container],
-                        volumes=music_volumes,
+                        volumes=[radio_volume, *music_volumes],
                     ),
                 ),
             ),
@@ -465,6 +493,15 @@ class Tripbot(Construct):
                     )
                 ],
             ),
+        )
+
+        emit_http_ingress_policy(
+            self,
+            name=name,
+            namespace=env.namespace,
+            labels=labels,
+            selector=sel,
+            port=_PORTS.port("tripbot_http"),
         )
 
 
@@ -586,7 +623,8 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
             creation_policy="Owner",
             extract=sm,
         )
-    # discord alerts + bot-token: one parameter → one materialized key.
+    # discord alerts + bot-token + radio stations: one parameter → one
+    # materialized key.
     for id_, name, sm, key in [
         (
             "discord-alerts-external-secret",
@@ -599,6 +637,12 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
             "tripbot-discord-bot-token",
             "/k8s/tripbot/discord-bot-token",
             "DISCORD_BOT_TOKEN",
+        ),
+        (
+            "radio-stations-external-secret",
+            RADIO_STATIONS_SECRET,
+            "/k8s/tripbot/radio-stations",
+            "stations.json",
         ),
     ]:
         eso.external_secret(

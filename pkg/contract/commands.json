@@ -15,6 +15,9 @@
           },
           "msg": {
             "type": "string"
+          },
+          "hide_after_seconds": {
+            "type": "integer"
           }
         },
         "required": [
@@ -101,6 +104,9 @@
           },
           "username": {
             "type": "string"
+          },
+          "no_background": {
+            "type": "boolean"
           }
         },
         "required": [

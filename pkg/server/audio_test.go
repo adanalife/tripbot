@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +13,11 @@ import (
 	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/gorilla/mux"
 )
+
+// The radio bed's station list is mounted at runtime; the tests tune this one.
+func init() {
+	beds.Stations = []beds.Station{{ID: "lofi", Name: "Example Lo-Fi", URL: "https://radio.example/lofi"}}
+}
 
 // fakeBeds is a BedStore seam for the /api/audio handlers.
 type fakeBeds struct {
@@ -23,19 +27,15 @@ type fakeBeds struct {
 	fallback     beds.Bed
 	track        string
 	station      string
+	voicing      string
+	voicings     []string // SetVoicing calls, in order
 	artist       string
 	title        string
 	feedErr      error
 	setErr       error
 	sets         []beds.Bed
 	stations     []string
-	albums       []string // SetAlbum calls, in order
-	album        string
 	playingAlbum string
-	groups       []string
-	shuffle      bool
-	shuffles     []bool   // SetShuffle calls, in order
-	onShare      []string // what Albums() reports; nil means the fan album alone
 	feeds        int
 	pending      *beds.Switch // a switch waiting out the delay; nil = none
 }
@@ -49,7 +49,7 @@ func (f *fakeBeds) Playing() (beds.Bed, string) {
 	return f.bed, f.track
 }
 
-func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
+func (f *fakeBeds) RadioTrack(context.Context) (string, string, error) {
 	f.feeds++
 	return f.artist, f.title, f.feedErr
 }
@@ -66,9 +66,25 @@ func (f *fakeBeds) Pending() (beds.Switch, bool) {
 
 func (f *fakeBeds) Station() string {
 	if f.station == "" {
-		return beds.DefaultStation
+		return beds.DefaultStation()
 	}
 	return f.station
+}
+
+func (f *fakeBeds) Voicing() string {
+	if f.voicing == "" {
+		return beds.DefaultVoicing
+	}
+	return f.voicing
+}
+
+func (f *fakeBeds) SetVoicing(_ context.Context, voicing string) error {
+	f.voicings = append(f.voicings, voicing)
+	if f.setErr != nil {
+		return f.setErr
+	}
+	f.bed, f.voicing = beds.CarHum, voicing
+	return nil
 }
 
 func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
@@ -85,57 +101,11 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 	if f.setErr != nil {
 		return f.setErr
 	}
-	f.bed, f.station = beds.SomaFM, station
+	f.bed, f.station = beds.Radio, station
 	return nil
 }
-
-func (f *fakeBeds) Album() string { return f.album }
 
 func (f *fakeBeds) PlayingAlbum() string { return f.playingAlbum }
-
-func (f *fakeBeds) Groups() []string { return f.groups }
-
-func (f *fakeBeds) Shuffle() bool { return f.shuffle }
-
-func (f *fakeBeds) SetShuffle(_ context.Context, on bool) error {
-	f.shuffles = append(f.shuffles, on)
-	if f.setErr != nil {
-		return f.setErr
-	}
-	f.shuffle = on
-	return nil
-}
-
-func (f *fakeBeds) Albums() []string {
-	if f.onShare == nil {
-		return []string{"fifty-horizons"}
-	}
-	return f.onShare
-}
-
-func (f *fakeBeds) ValidAlbum(album string) bool {
-	if album == "" {
-		return false
-	}
-	if slices.Contains(f.Albums(), album) {
-		return true
-	}
-	for _, a := range f.Albums() {
-		if strings.HasPrefix(a, album+"-") {
-			return true // a group prefix is a valid selection
-		}
-	}
-	return false
-}
-
-func (f *fakeBeds) SetAlbum(_ context.Context, album string) error {
-	f.albums = append(f.albums, album)
-	if f.setErr != nil {
-		return f.setErr
-	}
-	f.bed, f.album = beds.Album, album
-	return nil
-}
 
 func audioRouter(s *Server) *mux.Router {
 	r := mux.NewRouter()
@@ -164,7 +134,7 @@ func postAudio(t *testing.T, s *Server, payload string) *httptest.ResponseRecord
 }
 
 func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
-	s := &Server{beds: &fakeBeds{bed: beds.Album, track: "/opt/tripbot/assets/music/007 New York - Skyline After Midnight.mp3"}}
+	s := &Server{beds: &fakeBeds{bed: beds.Radio, fallback: beds.Album, track: "/opt/tripbot/assets/music/007 New York - Skyline After Midnight.mp3"}}
 	code, body := getAudio(t, s)
 	if code != http.StatusOK {
 		t.Fatalf("status: %d", code)
@@ -172,8 +142,15 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 	if body["ok"] != true {
 		t.Fatalf("ok: %v", body["ok"])
 	}
-	if body["bed"] != "album" {
+	if body["bed"] != "radio" {
 		t.Fatalf("bed: %v", body["bed"])
+	}
+	// The album is the radio's fallback, never a selection, so nothing about
+	// choosing one ships.
+	for _, k := range []string{"album", "albums", "groups", "shuffle"} {
+		if _, ok := body[k]; ok {
+			t.Errorf("%s shipped: %v", k, body[k])
+		}
 	}
 	// The console renders the track name as-is, so it must arrive without the
 	// directory, the extension, or the track number.
@@ -185,111 +162,21 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 	if len(opts) != len(beds.All) {
 		t.Fatalf("beds: want %d options, got %v", len(beds.All), body["beds"])
 	}
-	// Same for the SomaFM channel picker: the lineup lives here, not in the
+	// Same for the radio station picker: the lineup lives here, not in the
 	// console, so the two can't disagree about what's selectable.
 	stations, _ := body["stations"].([]any)
 	if len(stations) != len(beds.Stations) {
 		t.Fatalf("stations: want %d, got %d", len(beds.Stations), len(stations))
 	}
-	if body["station"] != beds.DefaultStation {
+	if body["station"] != beds.DefaultStation() {
 		t.Fatalf("station: %v", body["station"])
 	}
 }
 
-// The album picker is built from the share, so the list has to travel with the
-// state the same way the station lineup does — and be read live, since music
-// lands on the NAS without a deploy.
-func TestAudioHandler_ReportsTheAlbumAndTheShare(t *testing.T) {
-	f := &fakeBeds{
-		bed:     beds.Album,
-		album:   "lofi-secluded",
-		onShare: []string{"fifty-horizons", "ambient-diamonds", "lofi-secluded"},
-	}
-	_, body := getAudio(t, &Server{beds: f})
-	if body["album"] != "lofi-secluded" {
-		t.Fatalf("album: %v", body["album"])
-	}
-	albums, _ := body["albums"].([]any)
-	if len(albums) != 3 {
-		t.Fatalf("albums: want 3, got %v", body["albums"])
-	}
-}
-
-func TestAudioSetHandler_SelectsAnAlbum(t *testing.T) {
-	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons", "lofi-secluded"}}
-	w := postAudio(t, &Server{beds: f}, `{"album":"lofi-secluded"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status: %d, body %q", w.Code, w.Body.String())
-	}
-	if len(f.albums) != 1 || f.albums[0] != "lofi-secluded" {
-		t.Fatalf("expected one selection of lofi-secluded, got %v", f.albums)
-	}
-	if len(f.sets) != 0 {
-		t.Errorf("an album selects its own bed, no separate switch: %v", f.sets)
-	}
-}
-
-// A stale console tab POSTing an album that has left the share is the client's
-// mistake (400), not the share failing (502) — the two want different UI.
-func TestAudioSetHandler_UnknownAlbumIs400(t *testing.T) {
-	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons"}}
-	w := postAudio(t, &Server{beds: f}, `{"album":"edm-nocturnal"}`)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status: want 400, got %d (%q)", w.Code, w.Body.String())
-	}
-	if len(f.albums) != 0 {
-		t.Errorf("an unknown album must not reach the store, got %v", f.albums)
-	}
-}
-
-// "" is a real album selection — the whole share, shuffled together — so it has
-// to reach the store rather than falling through to the bed branch and 400ing.
-// It's what the console's blank option posts.
-func TestAudioSetHandler_EmptyAlbumWidensToTheWholeShare(t *testing.T) {
-	f := &fakeBeds{bed: beds.Album, album: "lofi-secluded"}
-	w := postAudio(t, &Server{beds: f}, `{"album":""}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status: want 200, got %d (%q)", w.Code, w.Body.String())
-	}
-	if len(f.albums) != 1 || f.albums[0] != "" {
-		t.Fatalf("expected one widening selection, got %v", f.albums)
-	}
-}
-
-// Omitting the field entirely is a bed switch, not a widening — otherwise every
-// {"bed": ...} POST would silently reset the selected album.
-func TestAudioSetHandler_AbsentAlbumIsNotAWidening(t *testing.T) {
-	f := &fakeBeds{bed: beds.Album, album: "lofi-secluded"}
-	w := postAudio(t, &Server{beds: f}, `{"bed":"carhum"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
-	}
-	if len(f.albums) != 0 {
-		t.Fatalf("a bed switch must not touch the album, got %v", f.albums)
-	}
-	if len(f.sets) != 1 || f.sets[0] != beds.CarHum {
-		t.Fatalf("expected one bed switch to carhum, got %v", f.sets)
-	}
-}
-
-// A share that goes away mid-switch is a 502: the name was real, applying it
-// wasn't possible, and the previous bed keeps playing.
-func TestAudioSetHandler_AlbumSwitchFailureIs502(t *testing.T) {
-	f := &fakeBeds{
-		bed:     beds.CarHum,
-		onShare: []string{"lofi-secluded"},
-		setErr:  errors.New("no album tracks under /opt/tripbot/assets/music/lofi-secluded"),
-	}
-	w := postAudio(t, &Server{beds: f}, `{"album":"lofi-secluded"}`)
-	if w.Code != http.StatusBadGateway {
-		t.Fatalf("status: want 502, got %d (%q)", w.Code, w.Body.String())
-	}
-}
-
-// On the SomaFM bed the track comes from the feed, so the console renders one
-// line from one source whichever bed is live instead of fetching SomaFM itself.
-func TestAudioHandler_ReportsTheSomaFMTrack(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM, artist: "Steve Cobby", title: "Big Wow"}
+// On the radio bed the track comes from the feed, so the console renders one
+// line from one source whichever bed is live instead of fetching the radio itself.
+func TestAudioHandler_ReportsTheRadioTrack(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio, artist: "Steve Cobby", title: "Big Wow"}
 	_, body := getAudio(t, &Server{beds: f})
 	if body["track"] != "Steve Cobby — Big Wow" {
 		t.Fatalf("track: %v", body["track"])
@@ -301,20 +188,20 @@ func TestAudioHandler_ReportsTheSomaFMTrack(t *testing.T) {
 
 // A feed that won't answer is a missing line, not an error: the panel still has
 // to render the bed, and the next poll picks the track up.
-func TestAudioHandler_SomaFMFeedFailureLeavesNoTrack(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM, feedErr: errors.New("somafm unreachable")}
+func TestAudioHandler_RadioFeedFailureLeavesNoTrack(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio, feedErr: errors.New("radio unreachable")}
 	code, body := getAudio(t, &Server{beds: f})
 	if code != http.StatusOK {
 		t.Fatalf("status: %d", code)
 	}
-	if body["track"] != "" || body["bed"] != "somafm" {
+	if body["track"] != "" || body["bed"] != "radio" {
 		t.Fatalf("want the bed with no track, got %v", body)
 	}
 }
 
 // The local beds have no feed to consult — asking one would name a song nobody
 // is hearing.
-func TestAudioHandler_DoesNotConsultTheFeedOffSomaFM(t *testing.T) {
+func TestAudioHandler_DoesNotConsultTheFeedOffRadio(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum, artist: "Steve Cobby", title: "Big Wow"}
 	_, body := getAudio(t, &Server{beds: f})
 	if f.feeds != 0 {
@@ -338,7 +225,7 @@ func TestAudioHandler_UnavailableWithoutAStore(t *testing.T) {
 }
 
 func TestAudioSetHandler_SwitchesBed(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"bed":"carhum"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", w.Code, w.Body)
@@ -355,29 +242,29 @@ func TestAudioSetHandler_SwitchesBed(t *testing.T) {
 	}
 }
 
-// The console posts a station on its own; that has to select the SomaFM bed too,
+// The console posts a station on its own; that has to select the radio bed too,
 // or picking a channel from the car-hum bed would change nothing audible.
 func TestAudioSetHandler_TunesAStation(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum}
-	w := postAudio(t, &Server{beds: f}, `{"station":"dronezone"}`)
+	w := postAudio(t, &Server{beds: f}, `{"station":"lofi"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", w.Code, w.Body)
 	}
 	if len(f.sets) != 0 {
 		t.Fatalf("a station must not go through Set: %v", f.sets)
 	}
-	if len(f.stations) != 1 || f.stations[0] != "dronezone" {
+	if len(f.stations) != 1 || f.stations[0] != "lofi" {
 		t.Fatalf("stations: %v", f.stations)
 	}
 	var body map[string]any
 	_ = json.NewDecoder(w.Body).Decode(&body)
-	if body["bed"] != "somafm" || body["station"] != "dronezone" {
+	if body["bed"] != "radio" || body["station"] != "lofi" {
 		t.Fatalf("response: %v", body)
 	}
 }
 
 func TestAudioSetHandler_RejectsUnknownStation(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"station":"wurlitzer-fm"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status: want 400, got %d", w.Code)
@@ -388,7 +275,7 @@ func TestAudioSetHandler_RejectsUnknownStation(t *testing.T) {
 }
 
 func TestAudioSetHandler_RejectsUnknownBed(t *testing.T) {
-	f := &fakeBeds{bed: beds.SomaFM}
+	f := &fakeBeds{bed: beds.Radio}
 	w := postAudio(t, &Server{beds: f}, `{"bed":"wurlitzer"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status: want 400, got %d", w.Code)
@@ -399,10 +286,10 @@ func TestAudioSetHandler_RejectsUnknownBed(t *testing.T) {
 }
 
 func TestAudioSetHandler_SurfacesAFailedSwitch(t *testing.T) {
-	// A switch OBS rejects (or an album with no share mounted) must be visible
-	// as an error, not swallowed into a success the UI would render as done.
-	f := &fakeBeds{bed: beds.SomaFM, setErr: errors.New("no album tracks")}
-	w := postAudio(t, &Server{beds: f}, `{"bed":"album"}`)
+	// A switch OBS rejects must be visible as an error, not swallowed into a
+	// success the UI would render as done.
+	f := &fakeBeds{bed: beds.Radio, setErr: errors.New("obs unreachable")}
+	w := postAudio(t, &Server{beds: f}, `{"bed":"carhum"}`)
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("status: want 502, got %d", w.Code)
 	}
@@ -415,83 +302,12 @@ func TestAudioSetHandler_UnavailableWithoutAStore(t *testing.T) {
 	}
 }
 
-// The console builds the picker from albums + groups, and shows the album on air
-// rather than the selection — under a group they're different, and the album is
-// the one Dana would act on.
-func TestAudioHandler_ReportsGroupsPlayingAlbumAndShuffle(t *testing.T) {
-	f := &fakeBeds{
-		bed:          beds.Album,
-		album:        "streambeats",
-		playingAlbum: "streambeats-lofi-gold",
-		onShare:      []string{"streambeats-lofi-gold", "streambeats-synthwave-rose"},
-		groups:       []string{"streambeats"},
-		shuffle:      false,
-	}
-	_, body := getAudio(t, &Server{beds: f})
-	if body["album"] != "streambeats" {
-		t.Errorf("selection: %v", body["album"])
-	}
-	if body["playing_album"] != "streambeats-lofi-gold" {
-		t.Errorf("playing album: %v", body["playing_album"])
-	}
-	groups, _ := body["groups"].([]any)
-	if len(groups) != 1 {
-		t.Errorf("groups: want 1, got %v", body["groups"])
-	}
-	if body["shuffle"] != false {
-		t.Errorf("shuffle: %v", body["shuffle"])
-	}
-}
-
-func TestAudioSetHandler_SelectsAGroup(t *testing.T) {
-	f := &fakeBeds{bed: beds.CarHum, onShare: []string{
-		"streambeats-lofi-gold", "streambeats-synthwave-rose",
-	}}
-	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
-	}
-	if len(f.albums) != 1 || f.albums[0] != "streambeats" {
-		t.Fatalf("expected the group to reach the store, got %v", f.albums)
-	}
-}
-
-func TestAudioSetHandler_TogglesShuffle(t *testing.T) {
-	f := &fakeBeds{bed: beds.Album, shuffle: true}
-	w := postAudio(t, &Server{beds: f}, `{"shuffle":false}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
-	}
-	if !slices.Equal(f.shuffles, []bool{false}) {
-		t.Fatalf("expected one shuffle-off, got %v", f.shuffles)
-	}
-	if f.shuffle {
-		t.Error("shuffle should be off")
-	}
-}
-
-// false is a real instruction, so it must not read as "the caller said nothing".
-// A plain bool in the request struct would make shuffle impossible to turn off.
-func TestAudioSetHandler_ShuffleFalseIsNotAbsent(t *testing.T) {
-	f := &fakeBeds{bed: beds.Album, shuffle: true}
-	postAudio(t, &Server{beds: f}, `{"shuffle":false}`)
-	if len(f.shuffles) != 1 {
-		t.Fatalf("shuffle:false must reach the store, got %v", f.shuffles)
-	}
-	// ...and omitting it entirely must not touch shuffle at all.
-	g := &fakeBeds{bed: beds.Album, shuffle: true, onShare: []string{"fifty-horizons"}}
-	postAudio(t, &Server{beds: g}, `{"bed":"carhum"}`)
-	if len(g.shuffles) != 0 {
-		t.Fatalf("a bed switch must not touch shuffle, got %v", g.shuffles)
-	}
-}
-
 // The console needs the waiting switch as its own field: bed/station/album still
 // describe the audio, so without this a click renders as no change at all.
 func TestAudioHandler_ShipsTheWaitingSwitch(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum, pending: &beds.Switch{
-		Bed:     beds.SomaFM,
-		Station: "dronezone",
+		Bed:     beds.Radio,
+		Station: "lofi",
 		At:      time.Now().Add(5 * time.Second),
 	}}
 	_, body := getAudio(t, &Server{beds: f})
@@ -503,7 +319,7 @@ func TestAudioHandler_ShipsTheWaitingSwitch(t *testing.T) {
 	if !ok {
 		t.Fatalf("pending: %v", body["pending"])
 	}
-	if pending["bed"] != "somafm" || pending["station"] != "dronezone" {
+	if pending["bed"] != "radio" || pending["station"] != "lofi" {
 		t.Errorf("pending = %v", pending)
 	}
 	// A countdown, so it has to arrive as a number of seconds left rather than a
@@ -522,13 +338,13 @@ func TestAudioHandler_OmitsPendingWhenNothingIsWaiting(t *testing.T) {
 	}
 }
 
-// Mid-outage the watchdog has the album on air with SomaFM still selected. The
+// Mid-outage the watchdog has the album on air with the radio still selected. The
 // picker still has to highlight the selection, but the now-playing line must
-// come off the audio: reading the selection here fetches SomaFM's feed and
+// come off the audio: reading the selection here fetches the station's metadata and
 // prints a track nobody is hearing.
 func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 	f := &fakeBeds{
-		bed:          beds.SomaFM,
+		bed:          beds.Radio,
 		fallback:     beds.Album,
 		track:        "/opt/tripbot/assets/music/fifty-horizons/007 New York - Skyline After Midnight.mp3",
 		playingAlbum: "fifty-horizons",
@@ -536,8 +352,8 @@ func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 		title:        "Big Wow",
 	}
 	_, body := getAudio(t, &Server{beds: f})
-	if body["bed"] != "somafm" {
-		t.Fatalf("bed: want the selection somafm, got %v", body["bed"])
+	if body["bed"] != "radio" {
+		t.Fatalf("bed: want the selection radio, got %v", body["bed"])
 	}
 	if body["on_fallback"] != true {
 		t.Fatalf("on_fallback: %v", body["on_fallback"])
@@ -546,6 +362,87 @@ func TestAudioHandler_OnFallback_ReportsTheAudioNotTheSelection(t *testing.T) {
 		t.Fatalf("track: %v", body["track"])
 	}
 	if f.feeds != 0 {
-		t.Fatal("must not consult the SomaFM feed while another bed is on air")
+		t.Fatal("must not consult the station metadata while another bed is on air")
+	}
+}
+
+func TestAudioSetHandler_SelectsAVoicing(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio}
+	w := postAudio(t, &Server{beds: f}, `{"voicing":"highway"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d, body %q", w.Code, w.Body.String())
+	}
+	if len(f.voicings) != 1 || f.voicings[0] != "highway" {
+		t.Fatalf("expected one selection of highway, got %v", f.voicings)
+	}
+	if len(f.sets) != 0 {
+		t.Errorf("a voicing selects its own bed, no separate switch: %v", f.sets)
+	}
+}
+
+// A voicing the paired OBS image never rendered is a path nothing can open, so
+// it stops at the handler rather than reaching OBS and going silent.
+func TestAudioSetHandler_UnknownVoicingIs400(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum}
+	w := postAudio(t, &Server{beds: f}, `{"voicing":"spaceship"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d (%q)", w.Code, w.Body.String())
+	}
+	if len(f.voicings) != 0 {
+		t.Errorf("an unknown voicing must not reach the store, got %v", f.voicings)
+	}
+}
+
+func TestAudioHandler_ReportsTheVoicingAndItsOptions(t *testing.T) {
+	_, body := getAudio(t, &Server{beds: &fakeBeds{bed: beds.CarHum, voicing: "mountain"}})
+	if body["voicing"] != "mountain" {
+		t.Errorf("voicing: want mountain, got %v", body["voicing"])
+	}
+	// The picker is built from what this tripbot will accept, so the option
+	// list has to travel with the state the way the stations do.
+	got, _ := body["voicings"].([]any)
+	if len(got) != len(beds.Voicings) {
+		t.Fatalf("voicings: want %d options, got %v", len(beds.Voicings), body["voicings"])
+	}
+	for i, want := range beds.Voicings {
+		if got[i] != want {
+			t.Errorf("voicings[%d]: want %s, got %v", i, want, got[i])
+		}
+	}
+}
+
+// A private station ships in the list with its flag, for the clients that list
+// it, but the console can't select it as the stream's bed.
+func TestAudio_PrivateStationListedButRefused(t *testing.T) {
+	prev := beds.Stations
+	beds.Stations = append([]beds.Station{{ID: "home", Name: "Home", URL: "https://radio.example/home", Private: true}}, prev...)
+	t.Cleanup(func() { beds.Stations = prev })
+
+	f := &fakeBeds{bed: beds.Radio}
+	_, body := getAudio(t, &Server{beds: f})
+	stations, _ := body["stations"].([]any)
+	first, _ := stations[0].(map[string]any)
+	if len(stations) != 2 || first["id"] != "home" || first["private"] != true {
+		t.Fatalf("stations: %v; want home listed first with private=true", body["stations"])
+	}
+
+	w := postAudio(t, &Server{beds: f}, `{"station":"home"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d", w.Code)
+	}
+	if len(f.stations) != 0 {
+		t.Fatalf("a private station reached the store: %v", f.stations)
+	}
+}
+
+// The album is the radio's fallback, not a bed anyone selects.
+func TestAudioSetHandler_AlbumIsNotABed(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio}
+	w := postAudio(t, &Server{beds: f}, `{"bed":"album"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d", w.Code)
+	}
+	if len(f.sets) != 0 {
+		t.Fatalf("the album reached the store: %v", f.sets)
 	}
 }

@@ -140,7 +140,19 @@ var (
 		{"broadcaster", boolType(), false},
 		{"badges", mapType(intType()), false},
 		{"emotes", arrayType(refType("Emote")), false},
+		{"reply", refType("ChatReply"), false},
+		{"message_type", strType(), false},
+		{"color", strType(), false},
+		{"video_id", intType(), false},
+		{"video_file", strType(), false},
+		{"video_ts_sec", numType(), false},
 		{"emitted_at", dateType(), true},
+	}
+	chatReplyFields = []field{
+		{"parent_message_id", strType(), true},
+		{"parent_username", strType(), false},
+		{"parent_user_id", strType(), false},
+		{"parent_text", strType(), false},
 	}
 	// Start/End index the message text in code points with an inclusive end —
 	// Twitch's own convention, carried through so the console can slice its
@@ -149,6 +161,13 @@ var (
 		{"id", strType(), true},
 		{"start", intType(), true},
 		{"end", intType(), true},
+	}
+	chatDeletedFields = []field{
+		{"platform", strType(), true},
+		{"user_id", strType(), true},
+		{"username", strType(), false},
+		{"message_id", strType(), false},
+		{"emitted_at", dateType(), true},
 	}
 	subscriberEventFields = []field{
 		{"platform", strType(), false},
@@ -174,6 +193,8 @@ var (
 		{"flagged", boolType(), true},
 		{"lat", numType(), true},
 		{"lng", numType(), true},
+		{"heading", numType(), false},
+		{"speed_mps", numType(), false},
 		{"emitted_at", dateType(), true},
 	}
 	authStatusFields = []field{
@@ -186,6 +207,60 @@ var (
 		{"login_as", strType(), false},
 		{"expires_at", dateType(), false},
 		{"reason", strType(), false},
+	}
+	obsStreamFields = []field{
+		{"platform", strType(), true},
+		{"state", strType(), false},
+		{"reachable", boolType(), true},
+		{"emitted_at", dateType(), true},
+	}
+	egressStateFields = []field{
+		{"platform", strType(), true},
+		{"configured", boolType(), true},
+		{"live", boolType(), true},
+		{"title", strType(), false},
+		{"detail", strType(), false},
+		{"lifecycle", strType(), false},
+		{"emitted_at", dateType(), true},
+	}
+	audioBedFields = []field{
+		{"platform", strType(), true},
+		{"bed", strType(), true},
+		{"playing", strType(), true},
+		{"station", strType(), true},
+		{"voicing", strType(), true},
+		{"playing_album", strType(), false},
+		{"track", strType(), false},
+		{"pending", refType("AudioBedSwitch"), false},
+		{"emitted_at", dateType(), true},
+	}
+	audioBedSwitchFields = []field{
+		{"bed", strType(), true},
+		{"station", strType(), false},
+		{"voicing", strType(), false},
+		{"at", dateType(), true},
+	}
+	chatModeFields = []field{
+		{"platform", strType(), true},
+		{"slow_seconds", intType(), true},
+		{"follower_minutes", intType(), false},
+		{"subscribers_only", boolType(), true},
+		{"emote_only", boolType(), true},
+		{"unique_only", boolType(), true},
+		{"emitted_at", dateType(), true},
+	}
+	featureFlagsFields = []field{
+		{"platform", strType(), true},
+		{"flags", arrayType(refType("FeatureFlag")), true},
+		{"emitted_at", dateType(), true},
+	}
+	featureFlagFields = []field{
+		{"key", strType(), true},
+		{"description", strType(), true},
+		{"enabled", boolType(), true},
+		{"enabled_for_usernames", arrayType(strType()), false},
+		{"enabled_for_roles", arrayType(strType()), false},
+		{"target_removal_date", dateType(), false},
 	}
 	youtubeBroadcastFields = []field{
 		{"video_id", strType(), true},
@@ -212,12 +287,21 @@ var (
 // reflection test can cross-check against the real pkg/eventbus structs.
 var envelopeFields = map[string][]field{
 	"ChatMessage":       chatMessageFields,
+	"ChatDeleted":       chatDeletedFields,
 	"SubscriberEvent":   subscriberEventFields,
 	"ViewerCount":       viewerCountFields,
 	"VideoChanged":      videoChangedFields,
 	"AuthStatus":        authStatusFields,
 	"AuthAccount":       authAccountFields,
 	"Emote":             emoteFields,
+	"ChatReply":         chatReplyFields,
+	"OBSStream":         obsStreamFields,
+	"EgressState":       egressStateFields,
+	"AudioBed":          audioBedFields,
+	"AudioBedSwitch":    audioBedSwitchFields,
+	"ChatMode":          chatModeFields,
+	"FeatureFlags":      featureFlagsFields,
+	"FeatureFlag":       featureFlagFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
 	"FacebookBroadcast": facebookBroadcastFields,
 }
@@ -235,6 +319,12 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_CHAT"},
 				{"schema", objectSchema("ChatMessage", chatMessageFields)},
+			}},
+			{"chat_deleted", orderedObject{
+				{"subject", "tripbot.{env}.chat.deleted"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_CHAT"},
+				{"schema", objectSchema("ChatDeleted", chatDeletedFields)},
 			}},
 			{"chat_subscriber", orderedObject{
 				{"subject", "tripbot.{env}.chat.subscriber"},
@@ -259,6 +349,41 @@ func eventbusContract() orderedObject {
 				{"stream", "TRIPBOT_AUTH"},
 				{"schema", objectSchema("AuthStatus", authStatusFields)},
 			}},
+			{"obs_stream", orderedObject{
+				{"subject", "tripbot.{env}.obs.stream.{platform}"},
+				{"wildcard", "tripbot.{env}.obs.stream.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_OBS"},
+				{"schema", objectSchema("OBSStream", obsStreamFields)},
+			}},
+			{"egress_state", orderedObject{
+				{"subject", "tripbot.{env}.egress.state.{platform}"},
+				{"wildcard", "tripbot.{env}.egress.state.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_EGRESS"},
+				{"schema", objectSchema("EgressState", egressStateFields)},
+			}},
+			{"audio_bed", orderedObject{
+				{"subject", "tripbot.{env}.audio.bed.{platform}"},
+				{"wildcard", "tripbot.{env}.audio.bed.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_AUDIO"},
+				{"schema", objectSchema("AudioBed", audioBedFields)},
+			}},
+			{"chat_mode", orderedObject{
+				{"subject", "tripbot.{env}.chat.mode.{platform}"},
+				{"wildcard", "tripbot.{env}.chat.mode.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_CHAT_MODE"},
+				{"schema", objectSchema("ChatMode", chatModeFields)},
+			}},
+			{"flags_snapshot", orderedObject{
+				{"subject", "tripbot.{env}.flags.snapshot.{platform}"},
+				{"wildcard", "tripbot.{env}.flags.snapshot.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_FLAGS"},
+				{"schema", objectSchema("FeatureFlags", featureFlagsFields)},
+			}},
 			{"youtube_broadcast", orderedObject{
 				{"subject", "tripbot.{env}.youtube.broadcast"},
 				{"transport", "jetstream"},
@@ -275,6 +400,9 @@ func eventbusContract() orderedObject {
 		{"$defs", orderedObject{
 			{"AuthAccount", objectSchema("AuthAccount", authAccountFields)},
 			{"Emote", objectSchema("Emote", emoteFields)},
+			{"ChatReply", objectSchema("ChatReply", chatReplyFields)},
+			{"AudioBedSwitch", objectSchema("AudioBedSwitch", audioBedSwitchFields)},
+			{"FeatureFlag", objectSchema("FeatureFlag", featureFlagFields)},
 		}},
 	}
 }

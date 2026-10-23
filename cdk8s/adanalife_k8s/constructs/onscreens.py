@@ -26,6 +26,7 @@ from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.contract import load_contract
 from adanalife_k8s.constructs.image_gate import emit_image_gate
 from adanalife_k8s.naming import app_name, meta_labels, selector
+from adanalife_k8s.network_policy import emit_http_ingress_policy
 
 
 # The contract's ports, so a rename in pkg/contract reaches the manifests
@@ -85,13 +86,14 @@ class OnscreensServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
-                # onscreens-server reports to its own Sentry project. The
-                # Secret is optional so the pod can start before the
+                # onscreens-server reports to its own Sentry project. Outside
+                # prod the Secret is optional so the pod can start before the
                 # ExternalSecrets sync; Sentry gates off when the env vars
                 # are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-onscreens-server", optional=True
+                        name="sentry-onscreens-server",
+                        optional=not env.sentry_required,
                     )
                 ),
             ],
@@ -201,4 +203,13 @@ class OnscreensServer(Construct):
                     )
                 ],
             ),
+        )
+
+        emit_http_ingress_policy(
+            self,
+            name=name,
+            namespace=env.namespace,
+            labels=labels,
+            selector=sel,
+            port=_PORTS.port("onscreens_http"),
         )

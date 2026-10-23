@@ -3,6 +3,7 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -66,7 +67,7 @@ type wantStream struct {
 func expectedStreams(env string) map[string]wantStream {
 	return map[string]wantStream{
 		chatStreamName: {
-			subjects: []string{ChatMessageSubject(env)}, maxMsgs: chatStreamMaxMsgs, maxMsgsPerSubject: -1,
+			subjects: []string{ChatMessageSubject(env), ChatDeletedSubject(env)}, maxMsgs: chatStreamMaxMsgs, maxMsgsPerSubject: -1,
 		},
 		videoStreamName: {
 			subjects: []string{VideoChangedSubject(env)}, maxMsgs: videoStreamMaxMsgs, maxMsgsPerSubject: -1,
@@ -79,6 +80,21 @@ func expectedStreams(env string) map[string]wantStream {
 		},
 		facebookStreamName: {
 			subjects: []string{FacebookBroadcastSubject(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
+		obsStreamName: {
+			subjects: []string{OBSStreamWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
+		egressStreamName: {
+			subjects: []string{EgressStateWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
+		audioStreamName: {
+			subjects: []string{AudioBedWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
+		flagsStreamName: {
+			subjects: []string{FeatureFlagsWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
+		},
+		chatModeStreamName: {
+			subjects: []string{ChatModeWildcard(env)}, maxMsgs: -1, maxMsgsPerSubject: 1,
 		},
 	}
 }
@@ -305,5 +321,45 @@ func TestEmit_MarshalFailure(t *testing.T) {
 
 	if len(rec.Publishes) != 0 {
 		t.Errorf("published %d messages, want 0 (marshal failed)", len(rec.Publishes))
+	}
+}
+
+// TestLastEgressState checks the read the stream watchdog leans on: nothing
+// retained reads as ErrMsgNotFound, and the latest snapshot per platform is the
+// one returned, not an older one or another platform's.
+func TestLastEgressState(t *testing.T) {
+	ctx := context.Background()
+	_, js := connectEmbeddedJetStream(t)
+	if err := EnsureStreams(ctx, js, "test"); err != nil {
+		t.Fatalf("EnsureStreams: %v", err)
+	}
+
+	if _, err := LastEgressState(ctx, js, "test", "youtube"); !errors.Is(err, jetstream.ErrMsgNotFound) {
+		t.Fatalf("empty stream: err = %v, want ErrMsgNotFound", err)
+	}
+	if _, err := LastEgressState(ctx, nil, "test", "youtube"); err == nil {
+		t.Fatal("nil jetstream: want an error")
+	}
+
+	publish := func(s EgressState) {
+		t.Helper()
+		b, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := js.Publish(ctx, EgressStateSubject("test", s.Platform), b); err != nil {
+			t.Fatalf("publish: %v", err)
+		}
+	}
+	publish(EgressState{Platform: "youtube", Configured: true, Live: false, Detail: "broadcast ready"})
+	publish(EgressState{Platform: "youtube", Configured: true, Live: true, Detail: "live"})
+	publish(EgressState{Platform: "tiktok", Configured: true, Live: false, Detail: "no portrait relay target"})
+
+	got, err := LastEgressState(ctx, js, "test", "youtube")
+	if err != nil {
+		t.Fatalf("LastEgressState: %v", err)
+	}
+	if !got.Live || got.Detail != "live" {
+		t.Errorf("youtube = %+v, want the latest (live) snapshot", got)
 	}
 }

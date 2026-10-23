@@ -3,6 +3,7 @@ package instrumentation
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -24,8 +25,8 @@ var (
 		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 	)
 	tripbotEvents             = mustCounter("tripbot_events_total", "Total rows written to the events table, labeled by event and by service_platform. Every kind in the event taxonomy counts here — logins, logouts, follows, command runs, deploys, watchdog transitions, state crossings.")
-	announcements             = mustCounter("tripbot_announcements_total", "Total viewer-milestone shouts posted to chat, labeled by kind (follow|sub|gift|resub) and by service_platform. Pairs with tripbot_events_total to cover the one leg of the EventSub path nothing else watches: a notice that persists its row but never lands a shout means outbound chat is wedged. A shout's only other trace is ordinary bot chat text, which no query can tell apart from any other line the bot says without matching on its wording.")
-	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) and platform — answers what the stream has been playing and how often it changes")
+	announcements             = mustCounter("tripbot_announcements_total", "Total viewer-milestone shouts posted to chat, labeled by kind (follow|sub|gift|resub|raid) and by service_platform. Pairs with tripbot_events_total to cover the one leg of the EventSub path nothing else watches: a notice that persists its row but never lands a shout means outbound chat is wedged. A shout's only other trace is ordinary bot chat text, which no query can tell apart from any other line the bot says without matching on its wording.")
+	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (radio|carhum) and platform — answers what the stream has been playing and how often it changes")
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
@@ -118,7 +119,15 @@ var TwitchTokenExpiry = twitchTokenExpiryGauge{gauge: twitchTokenExpiry}
 // same series identity and collide onto one, last write winning. Every platform
 // an alert can watch must call this; a platform that never does has no series,
 // which the lost-visibility canary reports rather than reading as offline.
-var ChannelLive = channelLiveGauge{gauge: channelLive}
+//
+// It also remembers the last value written per platform: a Set that flips it
+// is a liveness transition, and OnTransition (when set) is called with the new
+// state, outside the latch's lock. The first write per platform seeds the
+// latch without firing — a process that boots mid-stream observes "live", not
+// a stream going up. The callback is injected by cmd/tripbot (it records the
+// transition as a stream_up / stream_down event); this package stays free of
+// the events/database dependency.
+var ChannelLive = &channelLiveGauge{gauge: channelLive, last: map[string]bool{}}
 
 // OrphanedSessions exposes the ungraceful-exit gauge. Call Set(n, platform)
 // once per boot with events.OrphanedSessions' answer; it is a fact about the
@@ -249,8 +258,20 @@ func (a twitchAudienceGauges) SetFollowers(n int64) {
 
 type twitchConnectionGauge struct{ gauge metric.Int64Gauge }
 
+// twitchChatState is the last value Set wrote, for in-process readers (the
+// /health/deps check): 0 before any poll has reported, then 1 down / 2 up.
+var twitchChatState atomic.Int32
+
 func (t twitchConnectionGauge) Set(connected bool) {
 	t.gauge.Record(context.Background(), b2i(connected))
+	twitchChatState.Store(1 + int32(b2i(connected)))
+}
+
+// Connected is the last state Set recorded. reported is false until the first
+// poll has answered, which is "not judged yet" rather than "down".
+func (twitchConnectionGauge) Connected() (connected, reported bool) {
+	s := twitchChatState.Load()
+	return s == 2, s != 0
 }
 
 type twitchTokenExpiryGauge struct{ gauge metric.Int64Gauge }
@@ -263,10 +284,27 @@ func (t twitchTokenExpiryGauge) SetExpiresAt(account string, expiresAt time.Time
 	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
 }
 
-type channelLiveGauge struct{ gauge metric.Int64Gauge }
+type channelLiveGauge struct {
+	gauge metric.Int64Gauge
 
-func (c channelLiveGauge) Set(live bool, platform string) {
+	// OnTransition, when set, is called after a Set changes a platform's
+	// remembered live state. Set it once at startup, before any writer runs.
+	OnTransition func(platform string, live bool)
+
+	mu   sync.Mutex
+	last map[string]bool // per platform; absent means never observed
+}
+
+func (c *channelLiveGauge) Set(live bool, platform string) {
 	c.gauge.Record(context.Background(), b2i(live), platformAttr(platform))
+
+	c.mu.Lock()
+	prev, seen := c.last[platform]
+	c.last[platform] = live
+	c.mu.Unlock()
+	if seen && prev != live && c.OnTransition != nil {
+		c.OnTransition(platform, live)
+	}
 }
 
 type orphanedSessionsGauge struct{ gauge metric.Int64Gauge }
@@ -315,6 +353,26 @@ type eventsubSubscriptionsGauge struct{ gauge metric.Int64Gauge }
 func (e eventsubSubscriptionsGauge) Set(held, denied int) {
 	e.record("ok", held)
 	e.record("denied", denied)
+}
+
+// eventsubSessionState is the last session state Run reported, for in-process
+// readers (the /health/deps check): 0 before the first welcome, then 1 down /
+// 2 up. Set only by a finished subscribe round and by the session ending, never
+// by the boot-time gauge publish, so a pod that hasn't dialed yet is "not judged".
+var eventsubSessionState atomic.Int32
+
+// SetSession records whether an EventSub session is up: true after a subscribe
+// round that held at least one subscription, false once the session ends or a
+// round was wholly denied.
+func (eventsubSubscriptionsGauge) SetSession(up bool) {
+	eventsubSessionState.Store(1 + int32(b2i(up)))
+}
+
+// Session is the last state SetSession recorded. reported is false until the
+// first round has finished, which is "not judged yet" rather than "down".
+func (eventsubSubscriptionsGauge) Session() (up, reported bool) {
+	s := eventsubSessionState.Load()
+	return s == 2, s != 0
 }
 
 func (e eventsubSubscriptionsGauge) record(result string, n int) {
@@ -400,6 +458,7 @@ func b2i(b bool) int64 {
 }
 
 func mustCounter(name, desc string) metric.Int64Counter {
+	register(name, "counter")
 	c, err := meter.Int64Counter(name, metric.WithDescription(desc))
 	if err != nil {
 		panic(err)
@@ -408,6 +467,7 @@ func mustCounter(name, desc string) metric.Int64Counter {
 }
 
 func mustGauge(name, desc string) metric.Int64Gauge {
+	register(name, "gauge")
 	g, err := meter.Int64Gauge(name, metric.WithDescription(desc))
 	if err != nil {
 		panic(err)
@@ -416,6 +476,7 @@ func mustGauge(name, desc string) metric.Int64Gauge {
 }
 
 func mustHistogram(name, desc string, buckets ...float64) metric.Float64Histogram {
+	register(name, "histogram")
 	opts := []metric.Float64HistogramOption{metric.WithDescription(desc)}
 	if len(buckets) > 0 {
 		opts = append(opts, metric.WithExplicitBucketBoundaries(buckets...))
@@ -428,6 +489,7 @@ func mustHistogram(name, desc string, buckets ...float64) metric.Float64Histogra
 }
 
 func mustFloat64Gauge(name, desc string) metric.Float64Gauge {
+	register(name, "gauge")
 	g, err := meter.Float64Gauge(name, metric.WithDescription(desc))
 	if err != nil {
 		panic(err)

@@ -10,34 +10,43 @@ import (
 )
 
 // songCmd answers "what is this music". Which answer is right depends on the
-// live background-audio bed: only SomaFM has an external now-playing feed, so
+// live background-audio bed: only the radio has a now-playing feed, so
 // reading that feed while the album or the car hum is on air names a track
 // nobody is hearing — including when the watchdog put one of them there and
-// left SomaFM selected, which is why this reads the playing bed rather than the
+// left the radio selected, which is why this reads the playing bed rather than the
 // selected one. Both answers come from the bed store, which is also what
-// the console's now-playing line reads — one fetch of SomaFM's feed serves chat
-// and every open tab.
+// the console's now-playing line reads — one fetch of the station's metadata serves chat
+// and every open tab. A named track also lands in the command_run row, which
+// is what ranks the most-asked-about songs.
 func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !song", "username", user.Username)
 
 	if a.Beds == nil {
-		a.Chat.Say("♪ Background audio isn't wired up on this stream")
+		a.Reply(ctx, "♪ Background audio isn't wired up on this stream")
 		return
 	}
-	if bed, _ := a.Beds.Playing(); bed != beds.SomaFM {
-		a.Chat.Say("♪ Now playing: " + a.describeAudio())
+	if bed, track := a.Beds.Playing(); bed != beds.Radio {
+		if t := beds.ParseTrack(track); t.Title != "" {
+			setRunDetail(ctx, map[string]string{
+				"bed": string(bed), "album": t.Album, "artist": t.Artist, "title": t.Title,
+			})
+		}
+		a.Reply(ctx, "♪ Now playing: "+a.describeAudio())
 		return
 	}
 
-	artist, title, err := a.Beds.SomaFMTrack(ctx)
+	artist, title, err := a.Beds.RadioTrack(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "now-playing fetch failed", "err", err,
 			"station", a.Beds.Station())
-		a.Chat.Say("Couldn't reach the music source for the current track, sorry!")
+		a.Reply(ctx, "Couldn't reach the music source for the current track, sorry!")
 		return
 	}
+	setRunDetail(ctx, map[string]string{
+		"bed": string(beds.Radio), "station": a.Beds.Station(), "artist": artist, "title": title,
+	})
 	// Naming the channel matters once there are 40-odd of them: "Drone Zone" is
 	// half the answer to "what is this".
-	a.Chat.Say(fmt.Sprintf("♪ Now playing on %s: %s — %s",
+	a.Reply(ctx, fmt.Sprintf("♪ Now playing on %s: %s — %s",
 		beds.StationName(a.Beds.Station()), title, artist))
 }

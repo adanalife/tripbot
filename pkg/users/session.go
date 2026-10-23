@@ -24,7 +24,7 @@ import (
 // one). Its view of who is in chat comes from an injected ChatterSource.
 //
 // Sessions is accessed from multiple goroutines: the UpdateSession /
-// UpdateLeaderboard crons, the inbound IRC handlers, and command dispatch.
+// UpdateLeaderboard crons, the inbound chat handlers, and command dispatch.
 // mu guards loggedIn and lifetimeLeaderboard; it is held only for map/slice
 // access, never across DB or chatter-source calls.
 type Sessions struct {
@@ -128,7 +128,7 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 			continue
 		}
 		// they're logged in and NOT a current chatter, so log them out
-		s.logout(ctx, user)
+		s.logout(ctx, user.Username)
 	}
 
 	// log in the chatters missing from the session, so the work scales with
@@ -161,6 +161,7 @@ func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUse
 	s.mu.Lock()
 	if live, ok := s.loggedIn[u.Username]; ok {
 		live.PlatformUserID = u.PlatformUserID
+		live.platformUserIDTaken = u.platformUserIDTaken
 	}
 	s.mu.Unlock()
 	return u
@@ -168,9 +169,7 @@ func (s *Sessions) RecordPlatformUserID(ctx context.Context, u User, platformUse
 
 // LogoutIfNecessary will log out the user if it finds them in the session
 func (s *Sessions) LogoutIfNecessary(ctx context.Context, username string) {
-	if user, ok := s.get(username); ok {
-		s.logout(ctx, user)
-	}
+	s.logout(ctx, username)
 }
 
 // get returns a copy of the logged-in User for username, if present. It takes
@@ -249,9 +248,27 @@ func (s *Sessions) login(ctx context.Context, username string) User {
 }
 
 // logout removes the user from the list of currently-logged in users,
-// and updates the DB with their most up-to-date values
-func (s *Sessions) logout(ctx context.Context, u User) {
-	sessionMiles := s.sessionMiles(ctx, u)
+// and updates the DB with their most up-to-date values. It is a no-op for
+// anyone not logged in.
+//
+// The session entry is claimed (copied and deleted under mu) before anything
+// is computed, which makes logout safe against what runs beside it: miles a
+// checkpoint, gift or correction added before the claim are in the copy, ones
+// after it find no entry, and of two logouts racing for one session (Shutdown
+// against a reconcile tick) only the first closes it.
+func (s *Sessions) logout(ctx context.Context, username string) {
+	s.mu.Lock()
+	live, ok := s.loggedIn[username]
+	var u User
+	if ok {
+		u = *live
+		delete(s.loggedIn, username)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	sessionMiles := s.inFlightMiles(u)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -260,13 +277,11 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
 			"session_miles", sessionMiles,
-			"monthly_miles", s.CurrentMonthlyMiles(ctx, u),
-			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
 		)
 	}
 
 	// update miles
-	u.Miles = s.CurrentMiles(ctx, u)
+	u.Miles += sessionMiles
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -281,7 +296,7 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 	// source; left NULL when zero (most sessions).
 	extra := float64(u.sessionExtraMiles)
 	if s.IsSubscriber(u) {
-		extra += float64(s.BonusMiles(u))
+		extra += float64(s.sessionBonus(u))
 	}
 	var extraMiles *float64
 	if extra > 0 {
@@ -290,11 +305,6 @@ func (s *Sessions) logout(ctx context.Context, u User) {
 	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
-
-	// remove them from the session
-	s.mu.Lock()
-	delete(s.loggedIn, u.Username)
-	s.mu.Unlock()
 }
 
 // CheckpointMiles banks every logged-in user's in-flight session miles — into
@@ -335,18 +345,6 @@ func (s *Sessions) CheckpointMiles(ctx context.Context) {
 	}
 }
 
-// milesCheckpointed reports how much of username's session accrual is already
-// banked in the DB, or 0 for anyone not in the session. Takes mu; callers must
-// not already hold it.
-func (s *Sessions) milesCheckpointed(username string) float32 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if live, ok := s.loggedIn[username]; ok {
-		return live.milesCheckpointed
-	}
-	return 0.0
-}
-
 // isLoggedIn checks if the user is currently logged in
 func (s *Sessions) isLoggedIn(username string) bool {
 	_, ok := s.get(username)
@@ -356,8 +354,8 @@ func (s *Sessions) isLoggedIn(username string) bool {
 // Shutdown loops through all of the logged-in users and logs them out
 func (s *Sessions) Shutdown(ctx context.Context) {
 	snapshot := s.sessionSnapshot()
-	for _, user := range snapshot {
-		s.logout(ctx, user)
+	for username := range snapshot {
+		s.logout(ctx, username)
 	}
 }
 
@@ -377,7 +375,9 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 // persists it immediately, to both places a viewer sees their miles: the
 // lifetime total and the current monthly scoreboard. If they're logged in, the
 // live session copy is adjusted so logout doesn't clobber the correction.
-// Returns the new lifetime total. The delta is deliberately NOT added to
+// Returns the new lifetime total and the delta actually applied to it: a
+// clawback larger than the lifetime balance removes exactly the balance, so
+// the total never goes below zero. The delta is deliberately NOT added to
 // sessionExtraMiles — the caller logs a separate correction event carrying it,
 // and doing both would double-count.
 //
@@ -390,11 +390,12 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 // meaningless, so callers must neither report it nor record a correction event
 // for it. events is append-only, so an event without the matching users write
 // is a permanent divergence in the rollups.
-func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) (float32, error) {
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) (total, applied float32, err error) {
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
 	var updated User
 	if ok {
+		delta = clampClawback(live.Miles, delta)
 		live.Miles += delta
 		updated = *live
 	}
@@ -405,18 +406,30 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 		// it if this write hits a transient failure.
 		updated.save(ctx)
 		s.correctMonthly(ctx, updated, delta)
-		return updated.Miles, nil
+		return updated.Miles, delta, nil
 	}
 	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
 	if err != nil {
 		// save() refuses an ID-less user, so there is no total to report: the
 		// correction is dropped rather than half-applied.
-		return 0, err
+		return 0, 0, err
 	}
+	delta = clampClawback(u.Miles, delta)
 	u.Miles += delta
 	u.save(ctx)
 	s.correctMonthly(ctx, u, delta)
-	return u.Miles, nil
+	return u.Miles, delta, nil
+}
+
+// clampClawback limits a negative delta to the balance it comes out of, so a
+// clawback can empty a balance but never take it below zero. A balance already
+// at or below zero gives nothing back: clamping against it would turn the
+// clawback into a credit.
+func clampClawback(balance, delta float32) float32 {
+	if delta >= 0 {
+		return delta
+	}
+	return max(delta, -max(balance, 0))
 }
 
 // correctMonthly applies a correction's delta to the current monthly
@@ -446,7 +459,7 @@ func (s *Sessions) correctMonthly(ctx context.Context, u User, delta float32) {
 	u.AddToScore(ctx, board, delta)
 }
 
-// The snapshot helpers below (sortedUsernameList, colorizeUsernames, humans,
+// The snapshot helpers below (sortedUsernameList, humanUsernames, humans,
 // countHumans, bots, countBots) read loggedIn directly and assume the caller
 // holds mu.
 
@@ -460,19 +473,18 @@ func (s *Sessions) sortedUsernameList() []string {
 	return usernames
 }
 
-// colorizeUsernames loops over the sorted names and colorizes them
-func (s *Sessions) colorizeUsernames(usernames []string) []string {
-	coloredUsernames := make([]string, 0, len(usernames))
+// humanUsernames drops the bots from a sorted name list — the snapshot counts
+// them separately, so naming them too would just make the line longer.
+func (s *Sessions) humanUsernames(usernames []string) []string {
+	humans := make([]string, 0, len(usernames))
 	for _, username := range usernames {
 		user := *s.loggedIn[username]
 		if user.IsBot {
-			// don't add them to the output
 			continue
 		}
-		// add the colored username to the list
-		coloredUsernames = append(coloredUsernames, user.String())
+		humans = append(humans, user.String())
 	}
-	return coloredUsernames
+	return humans
 }
 
 // humans returns the users in the session who are not bots
@@ -511,7 +523,7 @@ func (s *Sessions) countBots() int {
 // ctx links the snapshot log line to the parent cron-tick span.
 func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 	s.mu.Lock()
-	coloredUsernames := s.colorizeUsernames(s.sortedUsernameList())
+	loggedIn := s.humanUsernames(s.sortedUsernameList())
 	humanCount := s.countHumans()
 	botCount := s.countBots()
 	s.mu.Unlock()
@@ -520,7 +532,7 @@ func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 		"chatters", s.source.ChatterCount(),
 		"humans", humanCount,
 		"bots", botCount,
-		"logged_in", strings.Join(coloredUsernames, ", "),
+		"logged_in", strings.Join(loggedIn, ", "),
 	)
 }
 

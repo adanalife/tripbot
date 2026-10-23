@@ -93,7 +93,7 @@ func TestEmitPublishesEveryVariable(t *testing.T) {
 	if got.State != "Utah" {
 		t.Errorf("state = %q, want %q", got.State, "Utah")
 	}
-	if want := local.Format("Monday January 2, 2006"); got.Date != want {
+	if want := local.Format("January 2, 2006"); got.Date != want {
 		t.Errorf("date = %q, want %q", got.Date, want)
 	}
 	if got.Weather != "Clear sky, 88°F" {
@@ -224,7 +224,7 @@ func TestFlaggedClipSkips(t *testing.T) {
 // A zero DateFilmed reaches Emit two ways — an empty Video from a player that
 // answered with nothing, and a freshly-inserted row the import pass hasn't
 // stamped — and neither is flagged, so the GPS check alone lets them through.
-// Publishing one puts "Monday January 1, 0001" on a rotator that runs
+// Publishing one puts "January 1, 0001" on a rotator that runs
 // unprompted, which is worse than holding the previous clip's line.
 func TestZeroDateFilmedSkips(t *testing.T) {
 	for _, tc := range []struct {

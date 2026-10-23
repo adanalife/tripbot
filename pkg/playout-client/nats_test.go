@@ -205,7 +205,7 @@ func TestSeek_PublishesSignedDeltaMs(t *testing.T) {
 func TestCurrentlyPlaying_DoesNotPublish(t *testing.T) {
 	rec := &recordingPublisher{}
 	c := New(okServer(t), rec, "stage", "twitch")
-	_ = c.CurrentlyPlaying(context.Background())
+	_, _ = c.CurrentlyPlaying(context.Background())
 	if len(rec.Publishes) != 0 {
 		t.Errorf("expected 0 publishes for CurrentlyPlaying, got %d", len(rec.Publishes))
 	}

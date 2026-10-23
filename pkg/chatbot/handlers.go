@@ -52,6 +52,7 @@ type chatUser interface {
 	HasCommandAvailable(ctx context.Context) bool
 	IsSubscriber() bool
 	IsAdmin() bool
+	IsMod() bool
 }
 
 // checkAccess returns true when the user is allowed to run cmd on platform.
@@ -66,14 +67,20 @@ type chatUser interface {
 // a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
 // instead.
 //
-// The admin gate is silent unless the command sets AdminDeniedMsg, where the
-// follower and subscriber gates always explain themselves.
+// The admin and mod gates are silent unless the command sets AdminDeniedMsg,
+// where the follower and subscriber gates always explain themselves.
 func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) (ok bool, refused string) {
 	if cmd.RequiresAdmin && !user.IsAdmin() {
 		if cmd.AdminDeniedMsg != "" {
 			say(cmd.AdminDeniedMsg)
 		}
 		return false, events.RefusedAdminGate
+	}
+	if cmd.RequiresMod && !user.IsMod() {
+		if cmd.AdminDeniedMsg != "" {
+			say(cmd.AdminDeniedMsg)
+		}
+		return false, events.RefusedModGate
 	}
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		say(followerMsg)
@@ -101,8 +108,20 @@ func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 func (su sessionUser) IsSubscriber() bool {
 	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
 }
+
+// IsAdmin is the platform's own word that the sender is the channel owner.
+// It reads the flag the gateway set from the sender's user id, never the
+// username: display names are free to pick on most platforms, so a name
+// compare would hand the admin commands to whoever renamed themselves after
+// the channel.
 func (su sessionUser) IsAdmin() bool {
-	return su.cfg.UserIsAdmin(su.u.Username)
+	return su.u.Broadcaster
+}
+
+// IsMod is the broadcaster or anyone the platform flagged as a moderator on
+// the message being handled — the admin gate's superset.
+func (su sessionUser) IsMod() bool {
+	return su.IsAdmin() || su.u.Moderator
 }
 
 // dispatch runs cmd for user. typed is the token that matched the command —
@@ -110,7 +129,7 @@ func (su sessionUser) IsAdmin() bool {
 // command_run event keeps when it differs from the canonical trigger.
 func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, a.Chat.Say); !ok {
+	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, func(m string) { a.Reply(ctx, m) }); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
 			Username: user.Username,
 			Command:  cmd.Trigger,
@@ -131,6 +150,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 	// cooldown); the mark lets dispatch see that and skip the command_run row,
 	// so each attempt lands in exactly one event kind — a run or a refusal.
 	ctx, refused := withRefusalMark(ctx)
+	ctx, detail := withRunDetail(ctx)
 
 	start := time.Now()
 	cmd.Handler(ctx, user, params)
@@ -147,7 +167,52 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 		Command:  cmd.Trigger,
 		Typed:    typed,
 		Args:     strings.Join(params, " "),
+		Detail:   *detail,
 	})
+}
+
+// runDetailKey carries the per-dispatch slot setRunDetail fills with what a
+// handler answered, for the command_run row.
+type runDetailKey struct{}
+
+// withRunDetail returns ctx carrying an empty run-detail slot, and the slot.
+func withRunDetail(ctx context.Context) (context.Context, *map[string]string) {
+	detail := new(map[string]string)
+	return context.WithValue(ctx, runDetailKey{}, detail), detail
+}
+
+// setRunDetail records what the running command answered, so its command_run
+// row can be queried by answer rather than only by trigger. A no-op outside a
+// dispatch (tests calling a handler directly).
+func setRunDetail(ctx context.Context, detail map[string]string) {
+	if slot, ok := ctx.Value(runDetailKey{}).(*map[string]string); ok {
+		*slot = detail
+	}
+}
+
+// replyParentKey carries the MessageID of the inbound line a dispatch is
+// answering, so App.Reply can thread the answer under it.
+type replyParentKey struct{}
+
+// withReplyParent returns ctx carrying the message id to reply to; an empty id
+// leaves ctx unchanged, which is every platform that surfaces none.
+func withReplyParent(ctx context.Context, messageID string) context.Context {
+	if messageID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, replyParentKey{}, messageID)
+}
+
+// Reply posts msg as a reply to the message ctx is answering — the inbound
+// line HandleMessage stashed — or as a plain Say when ctx carries none: a timed
+// job, a test, or a platform whose inbound has no message ids. Handlers reach
+// chat through this so a viewer can tell which answer is theirs.
+func (a *App) Reply(ctx context.Context, msg string) {
+	if parent, ok := ctx.Value(replyParentKey{}).(string); ok {
+		a.Chat.Reply(parent, msg)
+		return
+	}
+	a.Chat.Say(msg)
 }
 
 // refusalMarkKey carries the per-dispatch flag recordRefusal flips when a
@@ -158,6 +223,43 @@ type refusalMarkKey struct{}
 func withRefusalMark(ctx context.Context) (context.Context, *bool) {
 	refused := new(bool)
 	return context.WithValue(ctx, refusalMarkKey{}, refused), refused
+}
+
+// stampAiring puts the clip on screen, and the playhead into it, onto a chat
+// line about to go out — what lets a console reader see what the chatter was
+// reacting to. Current() is the cached notion of what's playing, no I/O.
+// An instance with no video source leaves the fields empty.
+func (a *App) stampAiring(line *eventbus.ChatMessage) {
+	if a.Video == nil {
+		return
+	}
+	cur := a.Video.Current()
+	if cur.ID == 0 {
+		return
+	}
+	line.VideoID = cur.ID
+	line.VideoFile = cur.File()
+	secs := a.Video.CurrentProgress().Seconds()
+	line.VideoTsSec = &secs
+}
+
+// recordChat appends a chat line, stamp and all, to the chat log. Best-effort:
+// the line is already on the bus, so a failed insert is logged and dropped.
+func (a *App) recordChat(ctx context.Context, line eventbus.ChatMessage) {
+	if a.Events == nil {
+		return
+	}
+	err := a.Events.ChatLine(ctx, events.ChatLine{
+		Username:  line.Username,
+		UserID:    line.UserID,
+		MessageID: line.MessageID,
+		Text:      line.Text,
+		VideoID:   line.VideoID,
+		TsSec:     line.VideoTsSec,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "error recording chat line", "err", err, "user", line.Username)
+	}
 }
 
 // recordRefusal writes a command_refused event, stamping whatever clip is
@@ -388,11 +490,13 @@ func fuzzyStateName(guess string) string {
 	best := ""
 	bestDist := maxDist + 1
 	ambiguous := false
-	for _, name := range helpers.StateNames() {
-		dist := levenshtein(lowered, strings.ToLower(name))
+	names := helpers.StateNames()
+	for i, lowerName := range helpers.LowercaseStateNames() {
+		dist := levenshtein(lowered, lowerName)
 		if dist > maxDist {
 			continue
 		}
+		name := names[i]
 		switch {
 		case dist < bestDist:
 			best, bestDist, ambiguous = name, dist, false
@@ -448,7 +552,7 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 			reason = events.RefusedWrongPlatform
 			// Say so rather than swallowing it: the viewer typed a real
 			// trigger, and silence reads as a broken bot.
-			a.Chat.Say(fmt.Sprintf(wrongPlatformMsg, command))
+			a.Reply(ctx, fmt.Sprintf(wrongPlatformMsg, command))
 		}
 		slog.InfoContext(ctx, "unknown chat command", "command", command, "reason", reason)
 		a.recordRefusal(ctx, events.CommandRefusal{
@@ -499,11 +603,21 @@ type IncomingMessage struct {
 	// that don't surface one. Carried onto the event bus so a console
 	// moderation action has something to address.
 	MessageID string
+	// Reply names the message this one answers, when the platform threads.
+	Reply *eventbus.ChatReply
+	// MessageType is the platform's word for a line it singles out (Twitch's
+	// "user_intro" for a first-timer), carried onto the event bus for display.
+	MessageType string
+	// Color is the sender's chosen name colour ("#RRGGBB"), carried onto the
+	// event bus for display; empty when the platform reports none.
+	Color string
 	// Moderator, Subscriber, and Broadcaster are the sender's role in this
 	// channel as the platform reported it on this message. They ride the event
-	// bus for display; the access checks in checkAccess still read the
-	// persisted session, which is the answer that survives a platform that
-	// reports no roles at all.
+	// bus for display; the follower and subscriber checks in checkAccess read
+	// the persisted session, which is the answer that survives a platform that
+	// reports no roles at all. Moderator alone also gates commands: there is
+	// no persisted mod list, so the platform's word on the message is the one
+	// source.
 	Moderator   bool
 	Subscriber  bool
 	Broadcaster bool
@@ -541,7 +655,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, eventbus.ChatMessage{
+	line := eventbus.ChatMessage{
 		Platform:    a.Platform,
 		Username:    msg.User,
 		UserID:      msg.UserID,
@@ -552,11 +666,20 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Broadcaster: msg.Broadcaster,
 		Badges:      msg.Badges,
 		Emotes:      msg.Emotes,
-	})
+		Reply:       msg.Reply,
+		MessageType: msg.MessageType,
+		Color:       msg.Color,
+	}
+	a.stampAiring(&line)
+	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, line)
+	a.recordChat(ctx, line)
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.
-	a.runCommand(ctx, a.chatUser(ctx, msg.User, msg.UserID), msg.Text)
+	user := a.chatUser(ctx, msg.User, msg.UserID)
+	user.Moderator = msg.Moderator
+	user.Broadcaster = msg.Broadcaster
+	a.runCommand(withReplyParent(ctx, msg.MessageID), user, msg.Text)
 }
 
 // chatUser resolves a sender to the user the command path runs as.

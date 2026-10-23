@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"gorm.io/gorm"
 )
 
@@ -39,9 +41,15 @@ const (
 	findRandomizeTopN = 10
 	// findMaxDistance is the cosine-distance ceiling for "close enough to jump".
 	// pgvector's <=> is (1 - cosine_similarity). Above this we treat the query
-	// as a miss rather than yanking the stream to a bad match. Calibrated on the
-	// stage corpus: a real match ("rain") tops out around 0.887, a nonsense
-	// query around 0.977, so 0.93 splits the two.
+	// as a miss rather than yanking the stream to a bad match. The gap is narrow
+	// and the ceiling sits in the middle of it: on video-pipeline's find-eval set
+	// against the stage corpus (327k SigLIP2 frames), real queries' best hit
+	// ranges 0.818-0.919 (0.929 for a facet-filtered one like "sunset in nevada",
+	// whose candidate pool is smaller) while nonsense queries bottom out at 0.941
+	// ("a close-up portrait of a smiling face"); the easy nonsense sits near
+	// 0.98. Loosening past 0.94 admits garbage, tightening under 0.92 drops real
+	// matches, and the scale is a property of the checkpoint: re-run find-eval
+	// before changing either the model or this number.
 	findMaxDistance = 0.93
 	// findJumpLeadInSec lands the playhead this many seconds BEFORE the matched
 	// frame, so the moment is still upcoming when playback resumes (we don't
@@ -97,10 +105,11 @@ type SearchHit struct {
 // fake; production uses realSearch, which requests a query embedding from the
 // video-pipeline responder over NATS and runs the pgvector cosine search.
 type Search interface {
-	// Find returns the closest frames to query (nearest first), or an empty
-	// slice when nothing matches / the corpus isn't embedded. A non-nil error
-	// means the search itself couldn't run (responder down, NATS off, DB error).
-	Find(ctx context.Context, query string) ([]SearchHit, error)
+	// Find returns the closest frames to query (nearest first) among the
+	// clips in corpus, or an empty slice when nothing matches / the corpus
+	// isn't embedded. A non-nil error means the search itself couldn't run
+	// (responder down, NATS off, DB error).
+	Find(ctx context.Context, query, corpus string) ([]SearchHit, error)
 }
 
 // errSearchUnavailable is returned when NATS isn't connected, so the embed
@@ -110,18 +119,18 @@ var errSearchUnavailable = errors.New("search unavailable: NATS not connected")
 
 // realSearch is the production Search adapter. Beyond the env its NATS
 // subjects are namespaced by, it holds no state: the embed request goes
-// through the pkg/natsclient singleton (like realNATS) and the pgvector
+// through the pkg/natsclient singleton and the pgvector
 // query through the process-wide DB (like realSessions).
 type realSearch struct {
 	env string
 }
 
-func (s realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
+func (s realSearch) Find(ctx context.Context, query, corpus string) ([]SearchHit, error) {
 	resp, err := requestEmbedding(ctx, s.env, query)
 	if err != nil {
 		return nil, err
 	}
-	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, resp.States, resp.Months, findCandidatePool)
+	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, corpus, resp.States, resp.Months, findCandidatePool)
 }
 
 // requestEmbedding asks the video-pipeline responder to embed query, returning
@@ -154,10 +163,11 @@ func requestEmbedding(_ context.Context, env, query string) (findEmbedResponse, 
 }
 
 // searchFrameEmbeddings runs the pgvector cosine search: the nearest frames to
-// vec, filtered to the responder's model and any parsed state/month facets.
+// vec, filtered to the responder's model, the corpus's reviewed clips, and any parsed
+// state/month facets.
 // Ports video-pipeline's search.py SQL to Go (tripbot owns the DB). Exported-ish
 // as a standalone func so it's sqlmock-testable without NATS or a real model.
-func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, model string, states []string, months []int, limit int) ([]SearchHit, error) {
+func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, model, corpus string, states []string, months []int, limit int) ([]SearchHit, error) {
 	if len(vec) == 0 {
 		return nil, errors.New("empty query vector")
 	}
@@ -170,8 +180,10 @@ func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, mode
        fe.embedding <=> ?::vector AS distance
 FROM frame_embeddings fe
 JOIN videos v ON v.id = fe.video_id
-WHERE fe.model = ?`
-	args := []any{lit, model}
+WHERE fe.model = ?
+  AND v.corpus = ?
+  AND v.reviewed_at IS NOT NULL`
+	args := []any{lit, model, corpus}
 
 	if len(states) > 0 {
 		lower := make([]string, len(states))
@@ -247,61 +259,123 @@ func pickFindHit(hits []SearchHit) SearchHit {
 
 // findCmd implements !find: visual search over the dashcam corpus, jumping the
 // stream to the closest matching moment. Shares the playback-jump rate-limiter
-// with !timewarp / !goto so the playhead can't be yanked too often.
+// with !timewarp / !jump so the playhead can't be yanked too often.
 func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !find", "username", user.Username)
 
-	// Playout playback isn't wired up on the dev Mac (same guard as !goto).
+	// Playout playback isn't wired up on the dev Mac (same guard as !jump).
 	if runningOnDarwin() {
-		a.Chat.Say("Sorry, find isn't available right now")
+		a.Reply(ctx, "Sorry, find isn't available right now")
 		return
 	}
 
 	// rate-limit non-admins, shared with the other playback jumps.
-	if !a.Cfg.UserIsAdmin(user.Username) {
+	if !user.Broadcaster {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
+			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	if len(params) == 0 {
-		a.Chat.Say("Usage: !find <something you want to see, e.g. a tunnel at sunset>")
+		a.Reply(ctx, "Usage: !find <something you want to see, e.g. a tunnel at sunset>")
 		return
 	}
 	query := strings.Join(params, " ")
 
+	// "!find utah" (usually typed as its !goto alias) means the state, not a
+	// scene that looks like one. Full names only: two-letter codes collide with
+	// real words ("ok", "hi", "or").
+	if helpers.StateToStateAbbrev(query) != "" {
+		a.jumpCmd(ctx, user, params)
+		return
+	}
+
 	// Acknowledge immediately — the embed + pgvector search can take several
 	// seconds, and without a reply the command looks dead. Remove once the
 	// search is consistently fast.
-	a.Chat.Say(fmt.Sprintf("@%s 👀", user.Username))
+	a.Reply(ctx, fmt.Sprintf("@%s 👀", user.Username))
 
-	hits, err := a.Search.Find(ctx, query)
+	hit, err := a.findHit(ctx, query)
+	if errors.Is(err, errFindMiss) {
+		a.Reply(ctx, fmt.Sprintf("Couldn't find anything like %q 😔", query))
+		return
+	}
 	if err != nil {
-		slog.ErrorContext(ctx, "find search failed", "err", err, "query", query)
-		a.Chat.Say("Search isn't available right now, sorry!")
+		a.Reply(ctx, "Search isn't available right now, sorry!")
 		return
 	}
-	if len(hits) == 0 || hits[0].Distance > findMaxDistance {
-		a.Chat.Say(fmt.Sprintf("Couldn't find anything like %q 😔", query))
-		return
-	}
-
-	hit := pickFindHit(hits)
 
 	// Don't name the state — a viewer can still guess where this is.
-	a.Chat.Say(fmt.Sprintf("Found %q! Jumping there...", query))
+	a.Reply(ctx, fmt.Sprintf("Found %q! Jumping there...", query))
 
-	// Cover the jump with the full-screen warp overlay, same as !timewarp/!guess.
-	a.showTimewarpOverlay(ctx, user.Username)
+	if err := a.jumpToHit(ctx, user.Username, hit); err != nil {
+		a.Reply(ctx, "Found it, but couldn't jump there — sorry!")
+	}
+}
+
+// errFindMiss means the search ran but nothing was close enough to jump to.
+var errFindMiss = errors.New("no close enough match")
+
+// findHit runs the visual search and picks the moment to jump to. It returns
+// errFindMiss when the search ran and nothing cleared findMaxDistance; any
+// other error means the search itself couldn't run.
+func (a *App) findHit(ctx context.Context, query string) (SearchHit, error) {
+	// Stay in the corpus on screen, as !jump does: a parked clip's frames are
+	// embedded too, and playout refuses a jump into one.
+	hits, err := a.Search.Find(ctx, query, video.AiringCorpus(a.Video.Current()))
+	if err != nil {
+		slog.ErrorContext(ctx, "find search failed", "err", err, "query", query)
+		return SearchHit{}, err
+	}
+	if len(hits) == 0 || hits[0].Distance > findMaxDistance {
+		return SearchHit{}, errFindMiss
+	}
+	return pickFindHit(hits), nil
+}
+
+// jumpToHit covers the jump with the full-screen warp overlay (same as
+// !timewarp/!guess), then lands the playhead just ahead of hit. username is
+// the overlay's credit line; empty shows none.
+func (a *App) jumpToHit(ctx context.Context, username string, hit SearchHit) error {
+	a.showTimewarpOverlay(ctx, username)
 
 	// Land ahead of the matched frame so the moment doesn't slip past on stream.
 	if err := a.Playout.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
-		a.Chat.Say("Found it, but couldn't jump there — sorry!")
-		return
+		return err
 	}
 
 	a.Video.GetCurrentlyPlaying(ctx)
 	lastTimewarpTime = time.Now()
+	return nil
+}
+
+// Find is !find for an operator: the same search and jump with nothing said in
+// chat, answering with a verdict worth reading back instead. Unlike the chat
+// command it skips the rate limit (operators are admins) and names the state,
+// which only viewers playing along need kept from them.
+func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return false, "Find what?"
+	}
+	if runningOnDarwin() {
+		return false, "Find isn't available on this machine."
+	}
+	hit, err := a.findHit(ctx, query)
+	if errors.Is(err, errFindMiss) {
+		return false, fmt.Sprintf("Couldn't find anything like %s.", query)
+	}
+	if err != nil {
+		return false, "Search isn't available right now."
+	}
+	where := ""
+	if hit.State != "" {
+		where = " in " + hit.State
+	}
+	if err := a.jumpToHit(ctx, "", hit); err != nil {
+		return false, fmt.Sprintf("Found %s%s, but couldn't jump there.", query, where)
+	}
+	return true, fmt.Sprintf("Found %s%s. Jumping there.", query, where)
 }

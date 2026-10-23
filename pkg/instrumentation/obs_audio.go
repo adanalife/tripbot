@@ -7,16 +7,17 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-// Background-audio metrics for the Twitch stream's music bed ("Groove Salad
-// Classic", a SomaFM ffmpeg_source). The 2026-06-23 outage showed the source
+// Background-audio metrics for the stream's music bed (an internet-radio
+// ffmpeg_source). The 2026-06-23 outage showed the source
 // can go silent in three ways with no self-heal — an EOF-wedge where OBS stops
-// retrying, single-edge jitter, and a full SomaFM outage. These series are the
+// retrying, single-edge jitter, and a full radio outage. These series are the
 // alert signal and the audit trail for the audio-fallback watchdog
 // (pkg/obs/audiowatchdog), which swaps the source to a local license-clean bed
-// when SomaFM is down and swaps back when it recovers.
+// when the radio is down (and finds OBS booted on one) and swaps back when the
+// radio answers.
 //
 // Every series here carries the platform. The watchdog runs on every platform —
-// any platform can select any bed — so one instance per platform writes each of
+// every platform boots on the fallback and selects the radio — so one instance per platform writes each of
 // these, and without the label they differ only by pod name. A rule reading
 // them then has no platform to group by: max() over the lot collapses to one
 // number that only goes silent when every platform does at once, which is how
@@ -28,17 +29,17 @@ var (
 	obsBackgroundAudioPlaying = mustGauge("obs_background_audio_playing",
 		"1 when the platform's background-audio source's OBS media state is PLAYING, 0 when it is ended/stopped/errored/none.")
 	obsBackgroundAudioOnFallback = mustGauge("obs_background_audio_on_fallback",
-		"1 when the audio-fallback watchdog has swapped the platform's background bed to the local Car Hum file because SomaFM was unreachable, 0 when on the normal SomaFM source.")
-	somafmReachable = mustGauge("somafm_reachable",
-		"1 when the SomaFM edge served stream bytes on the watchdog's last probe, 0 when it timed out or returned no data. Gates the swap back from the local fallback, and reported only while a bot is waiting on that gate: absent in steady state, so read a gap as 'nothing needed the edge', not as 'the edge is down'.")
+		"1 when the audio-fallback watchdog has swapped the platform's background bed to the local Car Hum file because the radio was unreachable, 0 when on the normal radio source.")
+	radioReachable = mustGauge("radio_reachable",
+		"1 when the radio stream served stream bytes on the watchdog's last probe, 0 when it timed out or returned no data. Gates the swap back from the local fallback, and reported only while a bot is waiting on that gate: absent in steady state, so read a gap as 'nothing needed the edge', not as 'the edge is down'.")
 	obsBackgroundAudioSwaps = mustCounter("obs_background_audio_swaps_total",
-		"Total background-audio source swaps performed by the audio-fallback watchdog, labeled by direction (to_fallback|to_somafm). Any to_fallback increment means SomaFM dropped in prod.")
+		"Total background-audio source swaps performed by the audio-fallback watchdog, labeled by direction (to_fallback|to_radio). Any to_fallback increment means the radio dropped in prod.")
 	backgroundAudioBed = mustGauge("tripbot_background_audio_bed",
-		"1 for the background-audio bed on air, 0 for every other bed, labeled by bed (somafm|carhum|album) and platform. Exactly one bed per platform reads 1 at a time, so this is the 'what is the stream playing' series.")
+		"1 for the selected background-audio bed, 0 for the other, labeled by bed (radio|carhum) and platform. Exactly one bed per platform reads 1 at a time. The album is the radio's fallback rather than a selection, so it never appears here: obs_background_audio_on_fallback says when it is standing in.")
 	backgroundAudioResyncs = mustCounter("tripbot_background_audio_resyncs_total",
 		"Total times the audio watchdog re-read the live bed off OBS, labeled by platform. The watchdog resyncs on the first tick OBS answers after a tick it didn't, so an increment means OBS went unanswerable and came back — an OBS restart, which boots the source onto its own default bed and used to leave the store reporting the pre-restart one. Exactly one increment per process is the initial read at startup rather than a restart, so read the first as the boot and the rest as recoveries.")
 	backgroundAudioAlbumTracks = mustGauge("tripbot_background_audio_album_tracks",
-		"Number of tracks in the album bed's play order, labeled by platform. 0 while the album bed is on air means nothing advances when the current track ends: the stream falls silent with no error, no log line, and OBS still reporting a healthy source. Alert on album=1 AND tracks=0.")
+		"Number of tracks in the album fallback's play order, labeled by platform. 0 while the radio's fallback is on air means the album cannot play: the store rescues the stream onto the car-hum drone, and this is the only series that says the fallback album is broken.")
 )
 
 // OBSBackgroundAudio exposes the background-audio gauges + counters.
@@ -51,7 +52,7 @@ var OBSBackgroundAudio = obsBackgroundAudioMetrics{
 	levelDB:     obsBackgroundAudioLevelDB,
 	playing:     obsBackgroundAudioPlaying,
 	onFallback:  obsBackgroundAudioOnFallback,
-	reachable:   somafmReachable,
+	reachable:   radioReachable,
 	swaps:       obsBackgroundAudioSwaps,
 	bed:         backgroundAudioBed,
 	albumTracks: backgroundAudioAlbumTracks,
@@ -84,8 +85,8 @@ func (o obsBackgroundAudioMetrics) SetOnFallback(platform string, on bool) {
 	o.onFallback.Record(context.Background(), b2i(on), platformAttr(platform))
 }
 
-// SetSomaFMReachable records the last SomaFM edge probe result.
-func (o obsBackgroundAudioMetrics) SetSomaFMReachable(platform string, reachable bool) {
+// SetRadioReachable records the last radio stream probe result.
+func (o obsBackgroundAudioMetrics) SetRadioReachable(platform string, reachable bool) {
 	o.reachable.Record(context.Background(), b2i(reachable), platformAttr(platform))
 }
 
@@ -98,14 +99,13 @@ func (o obsBackgroundAudioMetrics) SetBed(platform, bed string, live bool) {
 		metric.WithAttributes(attribute.String("bed", bed)), platformAttr(platform))
 }
 
-// SetAlbumTracks records how many tracks the album play order holds. 0 is the
-// interesting value: on the album bed it means the next track-ended event has
-// nowhere to advance to.
+// SetAlbumTracks records how many tracks the album fallback's play order holds.
+// 0 is the interesting value: the fallback has nothing to advance to.
 func (o obsBackgroundAudioMetrics) SetAlbumTracks(platform string, n int) {
 	o.albumTracks.Record(context.Background(), int64(n), platformAttr(platform))
 }
 
-// IncSwap counts a source swap; direction is "to_fallback" or "to_somafm".
+// IncSwap counts a source swap; direction is "to_fallback" or "to_radio".
 func (o obsBackgroundAudioMetrics) IncSwap(platform, direction string) {
 	o.swaps.Add(context.Background(), 1,
 		metric.WithAttributes(attribute.String("direction", direction)), platformAttr(platform))

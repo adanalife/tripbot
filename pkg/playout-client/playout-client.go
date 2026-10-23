@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -28,6 +29,17 @@ import (
 // "youtube"); it's the trailing leaf on every command subject so only the
 // matching playout-<platform> server acts on it — a Twitch-triggered !find never
 // seeks the YouTube stream.
+// requestTimeout bounds the one HTTP call this client makes
+// (CurrentlyPlaying). playout is an in-cluster neighbour answering from
+// in-memory playback state rather than proxying anything, so a healthy read
+// is sub-millisecond and 5s is already far into "playout is broken"
+// territory. The bound has to exist because no caller supplies a deadline:
+// chat commands (!find, !timewarp, !back, !skip) and the 60s now-playing
+// cron all carry the process context, so a playout that accepts the
+// connection and never answers would otherwise block that goroutine until
+// the pod restarts. Short because a viewer is waiting on the chat reply.
+const requestTimeout = 5 * time.Second
+
 type Client struct {
 	serverURL  string
 	httpClient *http.Client
@@ -46,11 +58,14 @@ type Client struct {
 // publishing (tests).
 func New(host string, nats natsclient.Publisher, env, platform string) *Client {
 	return &Client{
-		serverURL:  "http://" + host,
-		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
-		nats:       nats,
-		env:        env,
-		platform:   platform,
+		serverURL: "http://" + host,
+		httpClient: &http.Client{
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+			Timeout:   requestTimeout,
+		},
+		nats:     nats,
+		env:      env,
+		platform: platform,
 	}
 }
 
@@ -68,14 +83,16 @@ func (c *Client) publish(ctx context.Context, subject string, ev any) {
 	c.nats.Publish(ctx, subject, payload)
 }
 
-// CurrentlyPlaying finds the currently-playing video path
-func (c *Client) CurrentlyPlaying(ctx context.Context) string {
+// CurrentlyPlaying finds the currently-playing video path. An error means
+// the poll failed, which says nothing about what is on screen — callers keep
+// what they last saw rather than reading it as a switch.
+func (c *Client) CurrentlyPlaying(ctx context.Context) (string, error) {
 	response, err := c.get(ctx, c.serverURL+"/playout/current")
 	if err != nil {
 		slog.ErrorContext(ctx, "unable to determine current video", "err", err)
-		return ""
+		return "", err
 	}
-	return response
+	return response, nil
 }
 
 // lastPlayedStream is the JetStream last-value cache playout publishes its
@@ -203,6 +220,10 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 	if err != nil {
 		slog.DebugContext(ctx, "error reading response from playout server", "err", err)
 		return "", err
+	}
+	// A non-200 body is an error page, not a filename.
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("playout server answered %s: %.200s", response.Status, contents)
 	}
 	return string(contents), nil
 }

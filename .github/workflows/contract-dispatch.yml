@@ -1,0 +1,22 @@
+name: contract-dispatch
+
+# Tells the consumers that a contract this repo owns changed on main, via the shared
+# contract-dispatch workflow (adanalife/infra), so each one's contract workflow
+# re-syncs its copy within minutes rather than at its next daily sweep.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pkg/contract/*.json'
+
+permissions: {}
+
+jobs:
+  dispatch:
+    uses: adanalife/infra/.github/workflows/contract-dispatch.yml@main
+    with:
+      # Every repo that keeps a copy and listens for contract-changed.
+      repositories: tripbot-console,platform-gateway,infra,obs,playout
+    secrets:
+      AUTOMATION_APP_PRIVATE_KEY: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}

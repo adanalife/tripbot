@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// GormDB is reached from every goroutine in the process — the crons, the IRC
+// GormDB is reached from every goroutine in the process — the crons, the chat
 // read loop, the HTTP handlers — and its lazy init writes a package global.
 // Without the lock, two callers arriving before the handle exists both build
 // one, which is a data race on gormConn and leaves one of the two connection

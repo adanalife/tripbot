@@ -106,6 +106,22 @@
       ]
     },
     {
+      "trigger": "!direction",
+      "aliases": [
+        "!heading",
+        "!compass",
+        "!bearing"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!discord",
       "platforms": [
         "facebook",
@@ -131,7 +147,8 @@
     {
       "trigger": "!find",
       "aliases": [
-        "!search"
+        "!search",
+        "!goto"
       ],
       "requires_subscriber": true,
       "platforms": [
@@ -173,20 +190,6 @@
       ]
     },
     {
-      "trigger": "!goto",
-      "aliases": [
-        "!jump"
-      ],
-      "requires_follow": true,
-      "platforms": [
-        "facebook",
-        "instagram",
-        "tiktok",
-        "twitch",
-        "youtube"
-      ]
-    },
-    {
       "trigger": "!guess",
       "aliases": [
         "guess",
@@ -222,6 +225,17 @@
       ]
     },
     {
+      "trigger": "!guessstats",
+      "aliases": [
+        "!guessrecord",
+        "!battingaverage"
+      ],
+      "requires_subscriber": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!instagram",
       "aliases": [
         "!ig",
@@ -236,10 +250,32 @@
       ]
     },
     {
+      "trigger": "!jump",
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!km",
       "aliases": [
         "!kilometres",
         "!kilometers"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!lastmonth",
+      "aliases": [
+        "!lastleaderboard",
+        "!lastlb"
       ],
       "requires_follow": true,
       "platforms": [
@@ -372,16 +408,25 @@
       ]
     },
     {
-      "trigger": "!somafm",
-      "platforms": [
-        "twitch"
-      ]
-    },
-    {
       "trigger": "!song",
       "aliases": [
         "!music"
       ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!speed",
+      "aliases": [
+        "!velocity",
+        "!speedometer"
+      ],
+      "requires_mod": true,
       "platforms": [
         "facebook",
         "instagram",

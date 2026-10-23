@@ -164,7 +164,7 @@ GENRES: dict[str, list[str]] = {
 # the share at once since they're separate directories.
 SAME_NAME = {"Midnight": ("synthwave", "hiphop")}
 
-AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".ogg"}
+AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".ogg", ".opus"}
 
 
 def slug(name: str) -> str:

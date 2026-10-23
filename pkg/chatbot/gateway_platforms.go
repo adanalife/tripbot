@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/geo"
 )
@@ -46,11 +47,15 @@ type gatewayChat struct {
 	keepActions bool
 }
 
-func (g gatewayChat) Say(msg string) {
+func (g gatewayChat) Say(msg string) { g.send(msg, "") }
+
+func (g gatewayChat) Reply(parentID, msg string) { g.send(msg, parentID) }
+
+func (g gatewayChat) send(msg, parentID string) {
 	if !g.keepActions {
 		msg = strings.TrimPrefix(msg, "/me ")
 	}
-	err := g.client.SendChat(context.Background(), g.identity, msg)
+	err := g.client.SendChatReply(context.Background(), g.identity, msg, parentID)
 	switch {
 	case err == nil:
 	case errors.Is(err, gateway.ErrNoBroadcast), errors.Is(err, gateway.ErrUpstreamUnavailable):
@@ -77,6 +82,8 @@ func (c noOutboundChat) Say(msg string) {
 	slog.Debug(c.platform+" has no chat send; dropped", "text", msg)
 }
 
+func (c noOutboundChat) Reply(_, msg string) { c.Say(msg) }
+
 // connectViaGateway installs inner as the App's outbound chat client behind the
 // console mirror and warms the process-wide geocoder. There is no connection to
 // fail: the gateway holds the credential, and inbound runs as a separate poller.
@@ -91,6 +98,8 @@ func (a *App) connectViaGateway(inner ChatClient) {
 		channel:     a.Cfg.ChannelName,
 		platform:    a.Cfg.Platform,
 		botUsername: a.Cfg.BotUsername,
+		stamp:       a.stampAiring,
+		record:      func(line eventbus.ChatMessage) { a.recordChat(context.Background(), line) },
 	}
 }
 

@@ -415,3 +415,34 @@ func TestRotatorsDefaultsArePlatformSpecific(t *testing.T) {
 		t.Errorf("YouTube defaults included the Twitch-only line %q", twitchOnly)
 	}
 }
+
+// The body cap must admit every rotator config Sanitize accepts: four pools
+// full to MaxMessagesPerPool, each line at its corner's hard length in
+// 4-byte runes, which an ASCII-only JSON encoder (Python's default, the
+// console's) writes as 12-byte \u surrogate pairs — 3x the UTF-8 size.
+func TestMaxRequestBodyFitsRotatorConfig(t *testing.T) {
+	pool := func(side rot.Side) []rot.Message {
+		text := strings.Repeat("😀", rot.BudgetFor(side).HardMaxRunes())
+		msgs := make([]rot.Message, rot.MaxMessagesPerPool)
+		for i := range msgs {
+			msgs[i] = rot.Message{
+				Text:      text,
+				Platforms: []string{"twitch", "youtube", "facebook", "instagram", "tiktok"},
+				Weight:    rot.MaxWeight,
+			}
+		}
+		return msgs
+	}
+	cfg := rot.Config{
+		Left:        rot.Corner{Messages: pool(rot.SideLeft), PromoMessages: pool(rot.SideLeft)},
+		Right:       rot.Corner{Messages: pool(rot.SideRight), PromoMessages: pool(rot.SideRight)},
+		RareMessage: strings.Repeat("😀", rot.BudgetFor(rot.SideLeft).HardMaxRunes()),
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worst := 3 * len(b); worst > maxRequestBody {
+		t.Fatalf("largest valid rotator body is ~%d bytes escaped, over the %d-byte cap", worst, maxRequestBody)
+	}
+}

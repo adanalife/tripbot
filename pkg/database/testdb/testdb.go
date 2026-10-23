@@ -10,6 +10,12 @@
 // vars as production code. When postgres is unreachable the calling test
 // skips — unless TESTDB_REQUIRED is set (the compose test service sets it),
 // where a skip would silently mask a wiring bug.
+//
+// A bare host `go test` over a package that uses this reports `ok` in well
+// under a second having exercised nothing, and `go test` discards a passing
+// package's output, so the SKIP lines are invisible without -v. `task
+// test:pkg -- ./pkg/<pkg>/` runs the package inside the stack, where the
+// skip is a failure instead.
 package testdb
 
 import (
@@ -89,7 +95,10 @@ func connect(t *testing.T) *gorm.DB {
 		if os.Getenv("TESTDB_REQUIRED") != "" {
 			t.Fatalf("testdb: postgres unreachable with TESTDB_REQUIRED set: %v", dialErr)
 		}
-		t.Skipf("testdb: postgres unreachable, skipping: %v", dialErr)
+		// Only visible under -v: `go test` discards a passing package's
+		// output, so there is no way to make this skip loud from in here.
+		// Naming the task is what a reader who does see it needs.
+		t.Skipf("testdb: postgres unreachable, skipping (run `task test:pkg -- ./pkg/<pkg>/` for the real thing): %v", dialErr)
 	}
 	return pool
 }

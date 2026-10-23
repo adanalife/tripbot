@@ -65,6 +65,30 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
     assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
 
 
+# prod-1's app dist is frozen at its release pin (task cdk8s:synth), so the
+# policy shape is asserted on the envs that re-synth from HEAD.
+@pytest.mark.parametrize(
+    "env,comp,platform",
+    [t for t in _env_components() if t[0] != "prod-1"],
+    ids=lambda v: str(v),
+)
+def test_http_port_admits_only_own_namespace_and_monitoring(env, comp, platform):
+    """The /api writes are unauthenticated, so the pod's HTTP port admits only
+    its own namespace and monitoring. Ingress-only: egress must stay open."""
+    name = f"{comp}-{platform}"
+    (pol,) = _by_kind(_objects(f"{env}-{name}"), "NetworkPolicy")
+    spec = pol["spec"]
+    assert spec["policyTypes"] == ["Ingress"]
+    assert spec["podSelector"] == {"matchLabels": {"app": name}}
+    (rule,) = spec["ingress"]
+    allowed = {
+        peer["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"]
+        for peer in rule["from"]
+    }
+    assert allowed == {ENVS[env].namespace, "monitoring"}
+    assert rule["ports"] == [{"port": 8080, "protocol": "TCP"}]
+
+
 @pytest.mark.parametrize("env,platform", ENV_PLATFORM_PAIRS, ids=lambda v: str(v))
 @pytest.mark.parametrize("comp", ["tripbot"])
 def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):

@@ -33,15 +33,11 @@ const browserReloadGap = 600 * time.Millisecond
 // per-source failure is logged and skipped so one bad source doesn't strand the
 // rest.
 func RefreshBrowserSources(ctx context.Context) (int, error) {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 
 	list, err := client.Inputs.GetInputList(inputs.NewGetInputListParams())
 	if err != nil {
@@ -99,10 +95,10 @@ func setBrowserURL(client *goobs.Client, name, url string) error {
 // merge leaves the source's `input` (network URL) field untouched, so the
 // station it names survives the detour and is still readable at startup. Used
 // by the audio-fallback watchdog to swap the background-audio source onto the
-// local Car Hum bed when SomaFM is unreachable, and by the bed store to play
+// local Car Hum bed when the radio is unreachable, and by the bed store to play
 // album tracks. file must exist inside the OBS container.
 //
-// loop must be true for a bed that has to stay audible on its own: the SomaFM
+// loop must be true for a bed that has to stay audible on its own: the radio
 // source ships with looping unset (a radio stream doesn't loop), so without
 // forcing it on, a fallback FLAC would play exactly once and then go silent —
 // re-creating the dead air we're trying to avoid. (Confirmed on stage
@@ -120,15 +116,11 @@ func SetInputLocalFileMode(ctx context.Context, inputName, file string, loop boo
 // at startup to work out which background-audio bed the OBS container booted
 // on, so the console reports what's actually playing rather than a guess.
 func GetInputSettings(ctx context.Context, inputName string) (map[string]any, error) {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 	resp, err := client.Inputs.GetInputSettings(
 		inputs.NewGetInputSettingsParams().WithInputName(inputName),
 	)
@@ -144,7 +136,7 @@ func GetInputSettings(ctx context.Context, inputName string) (map[string]any, er
 //
 // The url is supplied on every call rather than relying on the one the scene
 // config baked in, because which stream the source should play is a live choice
-// (the selected SomaFM station), not a fixed property of the scene.
+// (the selected radio station), not a fixed property of the scene.
 func SetInputNetworkMode(ctx context.Context, inputName, url string) error {
 	return setInputSettings(ctx, inputName, map[string]any{
 		"is_local_file": false,
@@ -157,15 +149,11 @@ func SetInputNetworkMode(ctx context.Context, inputName, url string) error {
 // mode-swap helpers: open a fresh connection, merge the given settings onto the
 // named input, disconnect.
 func setInputSettings(ctx context.Context, inputName string, settings map[string]any) error {
-	client, err := dial(ctx)
+	client, err := Dial(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := client.Disconnect(); err != nil {
-			slog.WarnContext(ctx, "obs disconnect", "err", err)
-		}
-	}()
+	defer disconnect(ctx, client)
 	_, err = client.Inputs.SetInputSettings(
 		inputs.NewSetInputSettingsParams().
 			WithInputName(inputName).

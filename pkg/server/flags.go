@@ -6,35 +6,32 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/gorilla/mux"
 )
 
-// flagDTO is the JSON shape the standalone console renders for the feature-flag
-// panel. It mirrors feature.Flag, exposing the targeting allowlists and the
-// target-removal date for read-only display — the console can only flip the
-// global default (the FlagToggler write surface), not edit allowlists.
-type flagDTO struct {
-	Key                 string   `json:"key"`
-	Description         string   `json:"description"`
-	Enabled             bool     `json:"enabled"`
-	EnabledForUsernames []string `json:"enabled_for_usernames,omitempty"`
-	EnabledForRoles     []string `json:"enabled_for_roles,omitempty"`
-	TargetRemovalDate   string   `json:"target_removal_date,omitempty"`
-}
-
-func toFlagDTO(f feature.Flag) flagDTO {
-	d := flagDTO{
-		Key:                 f.Key,
-		Description:         f.Description,
-		Enabled:             f.Enabled,
-		EnabledForUsernames: f.EnabledForUsernames,
-		EnabledForRoles:     f.EnabledForRoles,
+// FeatureFlags converts a flag client's snapshot to the wire shape, shared by
+// GET /api/flags and the flags.snapshot eventbus subject. It exposes the
+// targeting allowlists and the target-removal date for read-only display — the
+// console can only flip the global default (the FlagToggler write surface), not
+// edit allowlists.
+func FeatureFlags(snap []feature.Flag) []eventbus.FeatureFlag {
+	out := make([]eventbus.FeatureFlag, 0, len(snap))
+	for _, f := range snap {
+		ff := eventbus.FeatureFlag{
+			Key:                 f.Key,
+			Description:         f.Description,
+			Enabled:             f.Enabled,
+			EnabledForUsernames: f.EnabledForUsernames,
+			EnabledForRoles:     f.EnabledForRoles,
+		}
+		if !f.TargetRemovalDate.IsZero() {
+			ff.TargetRemovalDate = f.TargetRemovalDate.UTC().Format(time.RFC3339)
+		}
+		out = append(out, ff)
 	}
-	if !f.TargetRemovalDate.IsZero() {
-		d.TargetRemovalDate = f.TargetRemovalDate.UTC().Format(time.RFC3339)
-	}
-	return d
+	return out
 }
 
 // flagsHandler serves the current feature-flag snapshot as JSON for the
@@ -43,16 +40,12 @@ func toFlagDTO(f feature.Flag) flagDTO {
 // window before the Postgres-backed client loads.
 func (s *Server) flagsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if s.flags == nil {
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "flags": []flagDTO{}})
+	flags := s.flagClient()
+	if flags == nil {
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "flags": []eventbus.FeatureFlag{}})
 		return
 	}
-	snap := s.flags.Snapshot(r.Context())
-	out := make([]flagDTO, 0, len(snap))
-	for _, f := range snap {
-		out = append(out, toFlagDTO(f))
-	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "flags": out})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "flags": FeatureFlags(flags.Snapshot(r.Context()))})
 }
 
 // flagToggleHandler flips a flag's global-default enabled state. The console
@@ -63,7 +56,7 @@ func (s *Server) flagsHandler(w http.ResponseWriter, r *http.Request) {
 // the /api surface — the console reaches it over the in-namespace Service.
 func (s *Server) flagToggleHandler(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
-	toggler, ok := s.flags.(feature.FlagToggler)
+	toggler, ok := s.flagClient().(feature.FlagToggler)
 	if !ok {
 		http.Error(w, "flag toggling unavailable", http.StatusServiceUnavailable)
 		return

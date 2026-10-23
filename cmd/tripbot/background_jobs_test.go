@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/adanalife/tripbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/go-co-op/gocron/v2"
 )
@@ -18,12 +19,14 @@ import (
 // with no other symptom than a feature quietly running where it can't work.
 
 // neutralJobs run on every instance regardless of platform: each one plays
-// video, posts the periodic chatter, and republishes the rotators' clip feed.
+// video, posts the periodic chatter, republishes the rotators' clip feed, and
+// records its own onscreens-server's deploys.
 var neutralJobs = []string{
 	"video.GetCurrentlyPlaying",
 	"video.TrackState",
 	"chatbot.Chatter",
 	"video.LocationFeed",
+	"events.OnscreensDeploy",
 }
 
 // twitchOnlyJobs each need something only Twitch has. Session and presence
@@ -233,7 +236,10 @@ func TestLeaderboardJobsAreTwitchOnly(t *testing.T) {
 		}
 	}
 
-	for _, platform := range []string{"youtube", "facebook", "instagram", "tiktok"} {
+	for _, platform := range tripbot.Platforms() {
+		if platform == "twitch" {
+			continue
+		}
 		names := scheduledJobNames(t, &c.TripbotConfig{Platform: platform})
 		for _, job := range leaderboardJobs {
 			if slices.Contains(names, job) {

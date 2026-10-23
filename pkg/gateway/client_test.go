@@ -290,6 +290,32 @@ func TestCachedReads_ErrorOnNon200(t *testing.T) {
 	}
 }
 
+// SendChatReply carries the parent as reply_to; a plain SendChat omits the key
+// so a gateway without reply support sees a plain send's body.
+func TestSendChatReply(t *testing.T) {
+	var gotBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody = nil
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &gotBody)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL).SendChatReply(context.Background(), "bot", "hello", "m1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotBody["reply_to"] != "m1" {
+		t.Errorf("reply_to = %q, want m1", gotBody["reply_to"])
+	}
+	if err := New(srv.URL).SendChat(context.Background(), "bot", "hello"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := gotBody["reply_to"]; ok {
+		t.Errorf("plain SendChat sent reply_to = %q, want none", gotBody["reply_to"])
+	}
+}
+
 func TestSendChat_ErrorsOnNon2xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented) // e.g. a platform with no chat send
@@ -312,6 +338,7 @@ func TestSendChat_ClassifiesToleratedStatuses(t *testing.T) {
 	}{
 		{"nothing live", http.StatusConflict, ErrNoBroadcast},
 		{"platform refused", http.StatusServiceUnavailable, ErrUpstreamUnavailable},
+		{"platform throttled", http.StatusTooManyRequests, ErrUpstreamUnavailable},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -337,6 +364,20 @@ func TestSendChat_ClassifiesToleratedStatuses(t *testing.T) {
 	}
 	if errors.Is(err, ErrNoBroadcast) || errors.Is(err, ErrUpstreamUnavailable) {
 		t.Errorf("502 matched a tolerated sentinel: %v", err)
+	}
+}
+
+// A GET reply classifies the same way as a send: a throttled broadcast lookup
+// is the platform refusing, not a defect.
+func TestActiveBroadcast_ThrottleIsUpstreamUnavailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL).ActiveBroadcast(context.Background())
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want %v", err, ErrUpstreamUnavailable)
 	}
 }
 
@@ -442,6 +483,27 @@ func TestViewers(t *testing.T) {
 	}
 	if got.Count != 137 || !got.Live || !got.Reported {
 		t.Errorf("audience = %+v, want {137 true true}", got)
+	}
+	// A gateway that sends no started_at leaves it zero, which the broadcast-cap
+	// watchdog reads as "unknown" and leaves alone.
+	if !got.StartedAt.IsZero() {
+		t.Errorf("StartedAt = %v, want zero when the gateway sends none", got.StartedAt)
+	}
+}
+
+// The broadcast's start rides along when the platform reports one.
+func TestViewersStartedAt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"count":3,"live":true,"started_at":"2026-09-29T18:04:05Z"}`))
+	}))
+	defer srv.Close()
+
+	got, err := New(srv.URL).Viewers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 9, 29, 18, 4, 5, 0, time.UTC); !got.StartedAt.Equal(want) {
+		t.Errorf("StartedAt = %v, want %v", got.StartedAt, want)
 	}
 }
 

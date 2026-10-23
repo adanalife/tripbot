@@ -25,6 +25,12 @@ type Onscreen struct {
 	expires       time.Time
 	dontExpire    bool
 	sleepInterval time.Duration
+	// rendered is content with inline markdown applied, and renderedFrom is the
+	// content it was rendered from — a single-entry memo, so a run of polls over
+	// unchanged content renders once. Only markdown-flagged overlays consult it
+	// (see renderedContent).
+	rendered     string
+	renderedFrom string
 	// done ends the background loop. Closed by stop().
 	done     chan struct{}
 	stopOnce sync.Once
@@ -37,6 +43,9 @@ type Onscreen struct {
 type onscreenView struct {
 	Content   string `json:"content"`
 	IsShowing bool   `json:"showing"`
+	// NoBackground is set only on the timewarp overlay, whose browser source
+	// reads it to drop the opaque cover. Omitted everywhere else.
+	NoBackground bool `json:"no_background,omitempty"`
 }
 
 // newOnscreen returns a freshly-initialized *Onscreen with an expiry pinned to
@@ -55,9 +64,9 @@ func newOnscreen(sleepInterval time.Duration) *Onscreen {
 	return osc
 }
 
-// stop ends the background loop. An overlay lives as long as the process does,
-// so this is a lifecycle seam rather than something the server calls: it lets a
-// test wind the loop down once it has asserted on what the sweep did.
+// stop ends the background loop, and the rotator loop of a corner overlay.
+// Server.Shutdown calls it on every overlay; a test calls it directly to wind
+// the loop down once it has asserted on what the sweep did. Idempotent.
 func (osc *Onscreen) stop() {
 	osc.stopOnce.Do(func() { close(osc.done) })
 }
@@ -121,6 +130,22 @@ func (osc *Onscreen) view() onscreenView {
 	osc.mu.RLock()
 	defer osc.mu.RUnlock()
 	return onscreenView{Content: osc.content, IsShowing: osc.isShowing}
+}
+
+// renderedContent returns the overlay's content with inline markdown applied.
+// The result is memoized against the content it came from, so the browser
+// sources' ~14 req/s poll of state.json renders once per content change rather
+// than once per request. The stored content stays the raw markdown source for
+// everything else that reads it (the JetStream-persisted middle-text state, the
+// console, the rotator's sibling scan).
+func (osc *Onscreen) renderedContent() string {
+	osc.mu.Lock()
+	defer osc.mu.Unlock()
+	if osc.renderedFrom != osc.content {
+		osc.rendered = renderInlineMarkdown(osc.content)
+		osc.renderedFrom = osc.content
+	}
+	return osc.rendered
 }
 
 // Show makes an onscreen visible until hidden

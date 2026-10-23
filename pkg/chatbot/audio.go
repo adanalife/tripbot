@@ -35,22 +35,17 @@ func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
 type Beds interface {
 	Playing() (beds.Bed, string)
 	Station() string
-	Album() string
 	PlayingAlbum() string
-	Albums() []string
-	Groups() []string
-	ResolveAlbum(arg string) string
-	SomaFMTrack(ctx context.Context) (artist, title string, err error)
+	RadioTrack(ctx context.Context) (artist, title string, err error)
 	Pending() (beds.Switch, bool)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
-	SetAlbum(ctx context.Context, album string) error
 }
 
 // bedDescs is the audience-facing name of each local bed — chat asks "what am I
-// listening to", not "which enum is set". SomaFM isn't here: it's named by its
-// tuned channel, and the album bed by whichever album the track is in — both
-// runtime choices. This is the fallback for when neither is known.
+// listening to", not "which enum is set". The radio isn't here: it's named by its
+// tuned station, and the album fallback by whichever album the track is in —
+// both known only at runtime. This is the fallback for when neither is known.
 var bedDescs = map[beds.Bed]string{
 	beds.CarHum: "the car's own hum",
 	beds.Album:  "the music share",
@@ -68,13 +63,10 @@ var albumDescs = map[string]string{
 // admins switch, because the bed is the music every viewer hears at once and
 // the console offers the same beds to the same person.
 //
-// One argument covers a bed, a SomaFM channel, an album on the share, or a group
-// of albums ("!audio carhum", "!audio dronezone", "!audio rose", "!audio
-// streambeats") because none of those namespaces collide, and "switch the music
-// to X" is one intent however X is spelled. Beds are matched first and anything
-// off the share last: a bed name is fixed vocabulary, a directory is something
-// Dana can rename, so the share can never shadow a word the command already
-// answered to.
+// One argument covers a bed or a selectable radio station ("!audio carhum",
+// "!audio <station id>") because "switch the music to X" is one intent however
+// X is spelled. Beds are matched first: a bed name is fixed vocabulary, a
+// station id comes off a list that changes without a deploy.
 func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	arg := ""
 	if len(params) > 0 {
@@ -84,13 +76,13 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	// No argument, or no permission to act on one: answer the question underneath
 	// either message — what's on air — so a non-admin gets something useful
 	// rather than a refusal. !song is where that answer lives.
-	if arg == "" || !a.Cfg.UserIsAdmin(user.Username) {
+	if arg == "" || !user.Broadcaster {
 		a.songCmd(ctx, user, nil)
 		return
 	}
 
 	if a.Beds == nil {
-		a.Chat.Say("🎵 Background audio isn't wired up on this stream")
+		a.Reply(ctx, "🎵 Background audio isn't wired up on this stream")
 		return
 	}
 
@@ -98,28 +90,18 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	switch bed := beds.Bed(arg); {
 	case beds.Valid(bed):
 		err = a.Beds.Set(ctx, bed)
-	case beds.ValidStation(arg):
+	case beds.SelectableStation(arg):
 		err = a.Beds.SetStation(ctx, arg)
 	default:
-		album := a.Beds.ResolveAlbum(arg)
-		if album == "" {
-			// The channel list is 40-odd names, so chat gets the link rather than the
-			// list — somafm.com names them better than we would anyway. The albums
-			// are ours and few, so those are named outright.
-			// Groups first: "streambeats" is a more useful thing to be told about
-			// than any one of the 29 albums under it.
-			options := append(bedNameList(), a.Beds.Groups()...)
-			a.Chat.Say(fmt.Sprintf("🎵 No background audio called %q. Options: %s, "+
-				"any album on the share, or any SomaFM channel id from "+
-				"https://somafm.com/listen/", arg, strings.Join(options, ", ")))
-			return
-		}
-		err = a.Beds.SetAlbum(ctx, album)
+		options := append(bedNameList(), stationIDs()...)
+		a.Reply(ctx, fmt.Sprintf("🎵 No background audio called %q. Options: %s",
+			arg, strings.Join(options, ", ")))
+		return
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "background audio switch failed",
 			"err", err, "arg", arg, "username", user.Username)
-		a.Chat.Say("🎵 Couldn't switch the background audio right now, try again in a bit")
+		a.Reply(ctx, "🎵 Couldn't switch the background audio right now, try again in a bit")
 		return
 	}
 
@@ -128,11 +110,11 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	// tense would name audio nobody can hear yet — and the wait is worth saying out
 	// loud, since it's the window another `!audio` can correct this one in.
 	if sw, ok := a.Beds.Pending(); ok {
-		a.Chat.Say(fmt.Sprintf("🎵 Switching to %s in %s",
+		a.Reply(ctx, fmt.Sprintf("🎵 Switching to %s in %s",
 			describeSwitch(sw), time.Until(sw.At).Round(time.Second)))
 		return
 	}
-	a.Chat.Say("🎵 Switched to " + a.audioSource())
+	a.Reply(ctx, "🎵 Switched to "+a.audioSource())
 }
 
 // describeAudio renders what's on air for chat, track first: the answer to "what
@@ -146,18 +128,10 @@ func (a *App) describeAudio() string {
 }
 
 // describeSwitch names what a pending switch will land on. Reads the switch
-// rather than the store, which still describes the audio that's playing — and on
-// the album bed it can only name the selection, since the track it will start on
-// hasn't been chosen yet.
+// rather than the store, which still describes the audio that's playing.
 func describeSwitch(sw beds.Switch) string {
-	switch sw.Bed {
-	case beds.SomaFM:
-		return beds.StationName(sw.Station) + " on SomaFM"
-	case beds.Album:
-		if sw.Album == "" {
-			return "everything on the music share"
-		}
-		return albumName(sw.Album)
+	if sw.Bed == beds.Radio {
+		return beds.StationName(sw.Station) + " on the radio"
 	}
 	if desc, ok := bedDescs[sw.Bed]; ok {
 		return desc
@@ -166,13 +140,13 @@ func describeSwitch(sw beds.Switch) string {
 }
 
 // audioSource names where the audio is coming from and nothing about the song:
-// the SomaFM bed by its channel, the album bed by its album, the car hum by
+// the radio bed by its channel, the album fallback by its album, the car hum by
 // itself. This is what a switch announces — the track it lands on is a second
 // old and about to change, so naming it there answers a question nobody asked.
 func (a *App) audioSource() string {
 	bed, track := a.Beds.Playing()
-	if bed == beds.SomaFM {
-		return beds.StationName(a.Beds.Station()) + " on SomaFM"
+	if bed == beds.Radio {
+		return beds.StationName(a.Beds.Station()) + " on the radio"
 	}
 	desc, ok := bedDescs[bed]
 	if !ok {
@@ -181,8 +155,7 @@ func (a *App) audioSource() string {
 	if bed != beds.Album {
 		return desc
 	}
-	// Name the album the track is actually in rather than the selection: on a group
-	// ("streambeats-lofi") or the whole share the selection covers dozens of
+	// Name the album the track is actually in: the fallback covers dozens of
 	// albums, and the one playing is the answer to "what is this?" — the question
 	// anyone asking is asking.
 	t := beds.ParseTrack(track)
@@ -197,8 +170,6 @@ func (a *App) audioSource() string {
 		return t.Album
 	case a.Beds.PlayingAlbum() != "":
 		return albumName(a.Beds.PlayingAlbum())
-	case a.Beds.Album() != "":
-		return albumName(a.Beds.Album())
 	}
 	return desc
 }
@@ -223,12 +194,24 @@ func albumName(album string) string {
 	return strings.Join(words, " ")
 }
 
-// bedNameList is the "somafm, carhum, album" list shown when a switch names
-// something that is neither a bed, a station, nor an album.
+// bedNameList is the "radio, carhum" list shown when a switch names something
+// that is neither a bed nor a station.
 func bedNameList() []string {
 	names := make([]string, len(beds.All))
 	for i, b := range beds.All {
 		names[i] = string(b)
 	}
 	return names
+}
+
+// stationIDs is the radio bed's selectable station ids, offered beside the bed
+// names. Private stations are left out: chat can't select them.
+func stationIDs() []string {
+	var ids []string
+	for _, st := range beds.Stations {
+		if !st.Private {
+			ids = append(ids, st.ID)
+		}
+	}
+	return ids
 }

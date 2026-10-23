@@ -86,6 +86,11 @@ class EnvConfig:
         "development"  # OTEL deployment.environment + telemetry env id
     )
     secret_source: str = "eso"  # eso | local
+    # Mount the Sentry Secrets as required: a pod whose Sentry ExternalSecret
+    # never synced fails to start instead of running with error reporting
+    # silently off. Prod only — elsewhere the pod boots ahead of the sync and
+    # Sentry gates itself off when its env vars are absent.
+    sentry_required: bool = False
     gpu: bool = False  # request gpu.intel.com/i915
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
     # Emit the Google Maps ExternalSecret + envFrom it. Off by default: every
@@ -178,11 +183,10 @@ class EnvConfig:
     # YOUTUBE_INBOUND_ENABLED + onscreens' rotator copy). False = bot-less
     # YouTube: outbound rotators + background jobs run, but nothing reads chat
     # (no command responds) and the rotators advertise promo copy pointing at
-    # Twitch instead of commands. Prod launches bot-less while the YouTube Data
-    # API quota extension is pending — prod's 2s poll floor would blow the
-    # default 10k/day quota. Flip to True the day the extension lands. Stage
-    # stays True: its 10s floor fits the default quota, so it runs the full bot
-    # for testing. Only meaningful on a youtube instance.
+    # Twitch instead of commands. The lever for when the project's Data API
+    # quota can't carry the poll: prod's 2s floor projects ~43k units/day on a
+    # chat-busy day, against a default quota of 10k. Only meaningful on a
+    # youtube instance.
     youtube_inbound_enabled: bool = True
 
     def tag_for(self, component: str) -> str:
@@ -226,9 +230,12 @@ class EnvConfig:
     @property
     def postgres_host(self) -> str:
         """DATABASE_HOST apps connect to: the bare Service name when co-located
-        (parity), the cross-namespace FQDN when the DB is isolated."""
+        (parity), the cross-namespace FQDN when the DB is isolated. The FQDN is
+        absolute (trailing dot): with 4 dots under the pod's ndots:5 it would
+        otherwise walk every search suffix, the node's upstream one included,
+        before resolving as written — on every new connection."""
         return (
-            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local"
+            f"{self.postgres_service}.{self.data_namespace}.svc.cluster.local."
             if self.data_isolated
             else self.postgres_service
         )
@@ -239,8 +246,7 @@ _STAGE_ROLE = "arn:aws:iam::413585268653:role/ExternalDNSRole"
 _PROD_ROLE = "arn:aws:iam::704461573429:role/ExternalDNSRole"
 
 
-# Per-env table. Mirrors the Kustomize overlays; the source of truth once those
-# overlays are retired. Values cross-checked against k8s/apps/*/overlays/<env>.
+# Per-env table: the source of truth for each environment's config.
 ENVS: dict[str, EnvConfig] = {
     "prod-1": EnvConfig(
         name="prod-1",
@@ -253,6 +259,7 @@ ENVS: dict[str, EnvConfig] = {
         sentry_env="prod-1",
         binary_env="production",
         deployment_env="prod-1",
+        sentry_required=True,
         gpu=True,
         otel=True,
         # Prod's key is seeded and syncing; keep it mounted. Nothing on the
@@ -271,8 +278,8 @@ ENVS: dict[str, EnvConfig] = {
         # Every platform's app stack (tripbot / onscreens) is emitted and Argo
         # manages it, but births parked at replicas:0 — a console scale-up brings
         # one live (Argo ignores .spec.replicas, so the scale sticks). Only twitch
-        # runs today; youtube waits on the pending Data API quota extension
-        # (youtube_inbound_enabled below), and facebook streams to the real ADL
+        # runs today; youtube runs whenever it holds the second encoder slot,
+        # and facebook streams to the real ADL
         # Page once scaled up (gateway-facebook holds the Page token). Manifests
         # render while parked — e.g. the tripbot-youtube-creds ExternalSecret
         # (prod-account SM k8s/tripbot/youtube-creds) keeps syncing, which
@@ -280,10 +287,6 @@ ENVS: dict[str, EnvConfig] = {
         # (born parked); they wait on the 9:16 vertical scene + stream keys before
         # a console scale-up can bring them live.
         platforms=SUPPORTED_PLATFORMS,
-        # prod youtube launches bot-less: inbound chat poll off (quota extension
-        # pending), so rotators serve promo copy and no command responds. Flip to
-        # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
-        youtube_inbound_enabled=False,
         # Route prod tripbot-youtube's outbound chat sends through the in-namespace
         # gateway-youtube (the gateway owns the YouTube token). Mirrors stage.
         # Sends fail if the prod gateway is missing its YouTube token.
@@ -327,7 +330,7 @@ ENVS: dict[str, EnvConfig] = {
         prefer_rpi5=True,
         # Requires the obs-music-local claim, filled by `task k8s:stage:music-localize`.
         music_share=True,
-        otel=False,
+        otel=True,
         postgres_size="10Gi",
         postgres_storage_class="local-path",
         external_dns_role_arn=_STAGE_ROLE,

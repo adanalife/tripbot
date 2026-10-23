@@ -31,6 +31,10 @@ func NewEnvelope() Envelope {
 type MiddleShow struct {
 	Envelope
 	Msg string `json:"msg"`
+	// HideAfterSeconds auto-hides the text that many seconds after it lands.
+	// Optional on the wire: omitted (or zero) leaves the text up until
+	// something hides it.
+	HideAfterSeconds int `json:"hide_after_seconds,omitempty"`
 }
 
 // MiddleState is the last-value state onscreens-server publishes about the
@@ -61,12 +65,17 @@ type LeaderboardShow struct {
 type TimewarpShow struct {
 	Envelope
 	Username string `json:"username"`
+	// NoBackground strips the overlay's opaque cover, leaving the wordmark
+	// over the live video. Feature-flagged by the caller, and optional on the
+	// wire: a publisher that omits it (the console's timewarp button) gets the
+	// normal warp, cover and all.
+	NoBackground bool `json:"no_background,omitempty"`
 }
 
 // LocationData is the payload for the location.update subject — everything
 // onscreens-server knows about the currently-playing clip, pre-formatted for
 // display: the location ("City, State", or a bare state when geocoding is
-// unavailable), the state on its own, the date ("Monday January 2, 2006"), the
+// unavailable), the state on its own, the date ("January 2, 2006"), the
 // conditions when it was filmed ("Partly cloudy, 71°F"), and that day's sunset
 // at that spot ("8:42 PM").
 //

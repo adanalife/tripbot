@@ -1,6 +1,8 @@
 package natsclient
 
 import (
+	"context"
+	"errors"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"net"
 	"strconv"
@@ -84,5 +86,110 @@ func TestConnectCallbackFiresAfterLateServer(t *testing.T) {
 	case <-connected:
 	case <-time.After(3 * reconnectWait):
 		t.Fatal("on-connect callback never ran after the server came up")
+	}
+}
+
+// TestConnectRedeclaresStreamsAfterWipedRestart pins the reconnect contract:
+// the on-connect callbacks run again after a reconnect, so a NATS restart that
+// comes back with empty storage gets its streams re-declared instead of
+// silently capturing nothing until this process restarts.
+func TestConnectRedeclaresStreamsAfterWipedRestart(t *testing.T) {
+	t.Cleanup(func() { SetConn(nil) })
+	SetConn(nil)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	_ = l.Close()
+
+	start := func() *natsserver.Server {
+		t.Helper()
+		ns, err := natsserver.NewServer(&natsserver.Options{
+			Host: "127.0.0.1", Port: port, NoLog: true, NoSigs: true,
+			JetStream: true, StoreDir: t.TempDir(), // a fresh dir each start: the wipe
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go ns.Start()
+		if !ns.ReadyForConnections(5 * time.Second) {
+			t.Fatal("embedded nats-server not ready")
+		}
+		return ns
+	}
+	ns := start()
+
+	ctx := context.Background()
+	declared := make(chan struct{}, 4)
+	conn := Connect("nats://127.0.0.1:"+strconv.Itoa(port), "natsclient-test", func(*nats.Conn) {
+		if err := RetryDeclare(ctx, func(ctx context.Context) error {
+			return EnsureLastValueStream(ctx, JetStream(), "TEST_LV", "test", []string{"test.lv.>"})
+		}); err != nil {
+			t.Errorf("declare: %v", err)
+		}
+		declared <- struct{}{}
+	})
+	if conn == nil {
+		t.Fatal("Connect returned nil")
+	}
+	t.Cleanup(conn.Close)
+
+	waitDeclared := func(when string) {
+		t.Helper()
+		select {
+		case <-declared:
+		case <-time.After(10 * reconnectWait):
+			t.Fatalf("stream declare never ran %s", when)
+		}
+	}
+	waitDeclared("on first connect")
+
+	ns.Shutdown()
+	ns.WaitForShutdown()
+	ns = start()
+	t.Cleanup(ns.Shutdown)
+	waitDeclared("after the reconnect")
+
+	if _, err := JetStream().Stream(ctx, "TEST_LV"); err != nil {
+		t.Fatalf("stream missing after a wiped restart: %v", err)
+	}
+}
+
+// RetryDeclare's backoff: a declare that fails while JetStream recovers is
+// retried until it succeeds, and a canceled ctx ends the wait early.
+func TestRetry(t *testing.T) {
+	calls := 0
+	err := retry(context.Background(), 5, time.Millisecond, func(context.Context) error {
+		calls++
+		if calls < 3 {
+			return errors.New("jetstream not ready")
+		}
+		return nil
+	})
+	if err != nil || calls != 3 {
+		t.Fatalf("retry = (%v) after %d calls, want success on the 3rd", err, calls)
+	}
+
+	calls = 0
+	err = retry(context.Background(), 3, time.Millisecond, func(context.Context) error {
+		calls++
+		return errors.New("still down")
+	})
+	if err == nil || calls != 3 {
+		t.Fatalf("retry = (%v) after %d calls, want the last error after 3", err, calls)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls = 0
+	start := time.Now()
+	_ = retry(ctx, 5, time.Hour, func(context.Context) error {
+		calls++
+		return errors.New("down")
+	})
+	if calls != 1 || time.Since(start) > time.Second {
+		t.Fatalf("retry on a canceled ctx made %d calls in %v, want 1 and no wait", calls, time.Since(start))
 	}
 }

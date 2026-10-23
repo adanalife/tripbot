@@ -41,10 +41,12 @@ var (
 	middleShowFields = []field{
 		{"emitted_at", dateType(), true},
 		{"msg", strType(), true},
+		{"hide_after_seconds", intType(), false},
 	}
 	timewarpShowFields = []field{
 		{"emitted_at", dateType(), true},
 		{"username", strType(), true},
+		{"no_background", boolType(), false},
 	}
 	leaderboardShowFields = []field{
 		{"emitted_at", dateType(), true},

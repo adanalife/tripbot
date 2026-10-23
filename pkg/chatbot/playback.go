@@ -25,6 +25,12 @@ import (
 // verified on stream. The warp itself always runs; only the credit is gated.
 const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 
+// timewarpNoBackgroundFlagKey strips the warp overlay's opaque cover, leaving
+// the wordmark and speed-lines over the live video. Named for the removal so
+// an unknown key (which evaluates false) keeps the cover — it masks the video
+// gap the playhead jump causes, so losing it by accident is visible on stream.
+const timewarpNoBackgroundFlagKey = "chatbot.timewarp_no_background"
+
 // lastTimewarpTime is used to rate-limit users so they can't
 // over-do the time-skip features (including !skip and !back)
 // plus it's also used to reset peoples lastLocation time
@@ -64,7 +70,17 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 
 	// bring up the full-screen warp overlay, then give the browser source a
 	// beat to render the opaque cover before we hard-cut
-	a.Onscreens.ShowTimewarp(ctx, credit)
+	// Evaluated without Username/Roles on purpose. This flag is how the
+	// overlay looks, not what a given chatter may do, so it's global-default
+	// only — and the console publishes the same warp command with its own read
+	// of the flag, where only the global default is visible (it has no DB, and
+	// tripbot's /api/flags write surface flips nothing else). A bare context
+	// keeps both triggers computing the same answer from the same row.
+	noBackground := a.Flags.Bool(ctx, timewarpNoBackgroundFlagKey, feature.EvalContext{
+		Env: a.Cfg.Environment,
+	})
+
+	a.Onscreens.ShowTimewarp(ctx, credit, noBackground)
 	time.Sleep(timewarpCoverDelay)
 }
 
@@ -116,21 +132,21 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// exit early if we're on OS X
 	if runningOnDarwin() {
-		a.Chat.Say("Sorry, timewarp isn't available right now")
+		a.Reply(ctx, "Sorry, timewarp isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if !a.Cfg.UserIsAdmin(user.Username) {
+	if !user.Broadcaster {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
+			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	// only say this if the caller is not me
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		a.Chat.Say("Here we go...!")
+	if !user.Broadcaster {
+		a.Reply(ctx, "Here we go...!")
 	}
 
 	// do the timewarp, crediting the caller on the overlay
@@ -143,21 +159,21 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 
 	// exit early if we're on OS X
 	if runningOnDarwin() {
-		a.Chat.Say("Sorry, jump isn't available right now")
+		a.Reply(ctx, "Sorry, jump isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if !a.Cfg.UserIsAdmin(user.Username) {
+	if !user.Broadcaster {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
+			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	// exit if the user gave no args
 	if len(params) == 0 {
-		a.Chat.Say("Usage: !jump [state]")
+		a.Reply(ctx, "Usage: !jump [state]")
 		return
 	}
 
@@ -166,7 +182,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// the longest state and territory names run four words
 	// ("Federated States of Micronesia")
 	if state == "" || len(strings.Fields(state)) > 4 {
-		a.Chat.Say("Usage: !jump [state]")
+		a.Reply(ctx, "Usage: !jump [state]")
 		return
 	}
 	titlecaseState := helpers.TitlecaseState(state)
@@ -174,13 +190,13 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// check to see if we even have footage for this state
 	if errors.Is(err, terrors.ErrNoFootageForState) {
 		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
-		a.Chat.Say(msg)
+		a.Reply(ctx, msg)
 		return
 	}
 	// check to see if there was an error finding a candidate video
 	if err != nil {
 		slog.ErrorContext(ctx, "error from finding random video for state", "err", err)
-		a.Chat.Say("Usage: !jump [state]")
+		a.Reply(ctx, "Usage: !jump [state]")
 		return
 	}
 	// read the departing clip before the handoff, so we can tell chat we're
@@ -191,13 +207,13 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	err = a.Playout.PlayFileInPlaylist(ctx, randomVid.File())
 	if err != nil {
 		slog.ErrorContext(ctx, "error from Playout client", "err", err)
-		a.Chat.Say("Usage: !jump [state]")
+		a.Reply(ctx, "Usage: !jump [state]")
 		return
 	}
 	if sameState {
-		a.Chat.Say(fmt.Sprintf("Jumping elsewhere in %s...!", titlecaseState))
+		a.Reply(ctx, fmt.Sprintf("Jumping elsewhere in %s...!", titlecaseState))
 	} else {
-		a.Chat.Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
+		a.Reply(ctx, fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
@@ -215,36 +231,36 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// exit early if we're on OS X
 	if runningOnDarwin() {
-		a.Chat.Say("Sorry, daytime isn't available right now")
+		a.Reply(ctx, "Sorry, daytime isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if !a.Cfg.UserIsAdmin(user.Username) {
+	if !user.Broadcaster {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
+			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	target, err := a.Video.FindNextDaytime(ctx, a.Video.Current())
 	if errors.Is(err, terrors.ErrNoDaytimeFound) {
-		a.Chat.Say("I couldn't find any daytime footage ahead — enjoy the night! 🌙")
+		a.Reply(ctx, "I couldn't find any daytime footage ahead — enjoy the night! 🌙")
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "error finding next daytime video", "err", err)
-		a.Chat.Say("Sorry, I couldn't skip to daytime right now")
+		a.Reply(ctx, "Sorry, I couldn't skip to daytime right now")
 		return
 	}
 
 	// tell Playout to play it
 	if err := a.Playout.PlayFileInPlaylist(ctx, target.File()); err != nil {
 		slog.ErrorContext(ctx, "error from Playout client", "err", err)
-		a.Chat.Say("Sorry, I couldn't skip to daytime right now")
+		a.Reply(ctx, "Sorry, I couldn't skip to daytime right now")
 		return
 	}
-	a.Chat.Say("☀️ Fast-forwarding to the next morning...")
+	a.Reply(ctx, "☀️ Fast-forwarding to the next morning...")
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
@@ -290,14 +306,14 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 
 	// exit early if we're on OS X
 	if runningOnDarwin() {
-		a.Chat.Say(fmt.Sprintf("Sorry, %s isn't available right now", strings.TrimPrefix(name, "!")))
+		a.Reply(ctx, fmt.Sprintf("Sorry, %s isn't available right now", strings.TrimPrefix(name, "!")))
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if !a.Cfg.UserIsAdmin(user.Username) {
+	if !user.Broadcaster {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
+			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
 	}
@@ -317,7 +333,7 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 		// joining params lets "!skip 1h 30m" read as one span
 		span, err := parseSeekSpan(strings.Join(params, ""))
 		if err != nil || span == 0 {
-			a.Chat.Say(fmt.Sprintf("Usage: %s [time, like 10m or 1h30m]", name))
+			a.Reply(ctx, fmt.Sprintf("Usage: %s [time, like 10m or 1h30m]", name))
 			return
 		}
 		span *= time.Duration(dir)
@@ -326,9 +342,9 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 		}
 		// same reply formatting as !followage: two largest units
 		if span > 0 {
-			a.Chat.Say(fmt.Sprintf("⏩ Skipping ahead %s", durafmt.Parse(span).LimitFirstN(2)))
+			a.Reply(ctx, fmt.Sprintf("⏩ Skipping ahead %s", durafmt.Parse(span).LimitFirstN(2)))
 		} else {
-			a.Chat.Say(fmt.Sprintf("⏪ Going back %s", durafmt.Parse(-span).LimitFirstN(2)))
+			a.Reply(ctx, fmt.Sprintf("⏪ Going back %s", durafmt.Parse(-span).LimitFirstN(2)))
 		}
 	}
 

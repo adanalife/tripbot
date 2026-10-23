@@ -19,8 +19,10 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -121,9 +123,42 @@ type ChatMessage struct {
 	// its version, which is the part a role bool loses: for "subscriber" the
 	// version is the months. Only Twitch reports either, so empty means "this
 	// platform reports none", not "this viewer has none".
-	Badges    map[string]int `json:"badges,omitempty"`
-	Emotes    []Emote        `json:"emotes,omitempty"`
-	EmittedAt string         `json:"emitted_at"`
+	Badges map[string]int `json:"badges,omitempty"`
+	Emotes []Emote        `json:"emotes,omitempty"`
+	// Reply is set when the line answers an earlier one — a viewer's threaded
+	// reply on Twitch, or the bot's own answer to a command (which carries only
+	// the parent id: the bot never saw the parent's text at send time). Nil on
+	// a plain line and on every platform whose chat is flat.
+	Reply *ChatReply `json:"reply,omitempty"`
+	// MessageType is Twitch's word for a line it singles out: "user_intro"
+	// for a chatter's first message in the channel,
+	// "channel_points_highlighted" for one paid for with channel points, and
+	// the rest of Twitch's list. Empty for an ordinary line, the bot's own
+	// sends, and every other platform.
+	MessageType string `json:"message_type,omitempty"`
+	// Color is the name colour the sender picked on their platform, as
+	// "#RRGGBB". Empty for a chatter who never picked one, the bot's own
+	// sends, and every platform that has no such setting — a renderer then
+	// falls back to its own palette.
+	Color string `json:"color,omitempty"`
+	// VideoID, VideoFile and VideoTsSec are the clip on screen when the line
+	// was said, and how far into it — what a reader needs to see what the
+	// chatter saw. Empty when the writing instance had no playhead.
+	VideoID    int      `json:"video_id,omitempty"`
+	VideoFile  string   `json:"video_file,omitempty"`
+	VideoTsSec *float64 `json:"video_ts_sec,omitempty"`
+	EmittedAt  string   `json:"emitted_at"`
+}
+
+// ChatReply is the parent of a threaded chat line. ParentMessageID is the
+// message_id of the line being answered; the parent's username, user id and
+// text ride along when the platform reported them, so a renderer can show what
+// is being answered without a log of its own.
+type ChatReply struct {
+	ParentMessageID string `json:"parent_message_id"`
+	ParentUsername  string `json:"parent_username,omitempty"`
+	ParentUserID    string `json:"parent_user_id,omitempty"`
+	ParentText      string `json:"parent_text,omitempty"`
 }
 
 // Emote is one occurrence of a platform emote inside a chat message's Text —
@@ -201,32 +236,32 @@ type VideoChanged struct {
 	// subject; this is what lets the console keep a separate now-playing card
 	// and map trail per platform. Empty on events emitted before the tag
 	// existed.
-	Platform  string  `json:"platform,omitempty"`
-	File      string  `json:"file"`
-	State     string  `json:"state"`
-	Flagged   bool    `json:"flagged"`
-	Lat       float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
-	Lng       float64 `json:"lng"`
-	EmittedAt string  `json:"emitted_at"`
+	Platform string  `json:"platform,omitempty"`
+	File     string  `json:"file"`
+	State    string  `json:"state"`
+	Flagged  bool    `json:"flagged"`
+	Lat      float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
+	Lng      float64 `json:"lng"`
+	// Heading is the direction of travel at the playhead in degrees clockwise
+	// from north, and SpeedMPS the ground speed in metres per second, both
+	// read off the clip's per-moment coordinate track. Heading is absent when
+	// the van is stopped or the clip has no track; SpeedMPS is absent only
+	// without a track, so a stopped van reports 0 with no heading.
+	Heading   *float64 `json:"heading,omitempty"`
+	SpeedMPS  *float64 `json:"speed_mps,omitempty"`
+	EmittedAt string   `json:"emitted_at"`
 }
 
 // VideoChangedSubject returns the subscribe/publish subject for video-change
 // events in env.
 func VideoChangedSubject(env string) string { return subject(env, "video", "changed") }
 
-// EmitVideoChanged publishes a video switch for this instance's platform. The
-// emitted_at doubles as the clip's start time, so the console can tick an
-// elapsed timer from it.
-func EmitVideoChanged(ctx context.Context, env, platform, file, state string, flagged bool, lat, lng float64) {
-	emit(ctx, VideoChangedSubject(env), VideoChanged{
-		Platform:  platform,
-		File:      file,
-		State:     state,
-		Flagged:   flagged,
-		Lat:       lat,
-		Lng:       lng,
-		EmittedAt: emittedAt(),
-	})
+// EmitVideoChanged publishes a video switch for this instance's platform,
+// stamping emitted_at — which doubles as the clip's start time, so the console
+// can tick an elapsed timer from it.
+func EmitVideoChanged(ctx context.Context, env string, ev VideoChanged) {
+	ev.EmittedAt = emittedAt()
+	emit(ctx, VideoChangedSubject(env), ev)
 }
 
 // --- auth.status ------------------------------------------------------------
@@ -239,7 +274,7 @@ type AuthAccount struct {
 	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
 	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339Nano UTC; empty when unknown (missing token, or auto-refreshed)
-	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired"
+	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired" | "missing_scope: <scopes>"
 }
 
 // AuthStatus is the wire format for tripbot.<env>.auth.status.<platform> — a
@@ -348,6 +383,245 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 	})
 }
 
+// --- obs.stream -------------------------------------------------------------
+
+// OBSStream is the wire format for tripbot.<env>.obs.stream.<platform> — the
+// streaming state of one platform's OBS, as the instance's held OBS WebSocket
+// connection last read it. State is "inactive"/"reconnecting"/"steady", and is
+// empty when Reachable is false — the instance has no live connection to OBS
+// and therefore no state to report, which is not the same as a stopped stream.
+//
+// Published on change rather than on every read: it is a last-value cache
+// (TRIPBOT_OBS, MaxMsgsPerSubject=1), so a fresh subscriber replays the current
+// state and then sees only transitions.
+type OBSStream struct {
+	Platform  string `json:"platform"`
+	State     string `json:"state,omitempty"`
+	Reachable bool   `json:"reachable"`
+	EmittedAt string `json:"emitted_at"`
+}
+
+// OBSStreamSubject returns the publish subject for one platform instance's OBS
+// stream state. Per-platform for the same reason auth.status is: each instance
+// watches its own OBS deployment, and the leaf lets TRIPBOT_OBS retain a
+// last value per platform instead of the instances clobbering one another.
+func OBSStreamSubject(env, platform string) string {
+	return subject(env, "obs", "stream") + "." + platform
+}
+
+// OBSStreamWildcard returns the subscribe pattern covering every platform's OBS
+// stream state in env.
+func OBSStreamWildcard(env string) string { return subject(env, "obs", "stream") + ".*" }
+
+// EmitOBSStream publishes this instance's OBS streaming state.
+func EmitOBSStream(ctx context.Context, env, platform, state string, reachable bool) {
+	emit(ctx, OBSStreamSubject(env, platform), OBSStream{
+		Platform:  platform,
+		State:     state,
+		Reachable: reachable,
+		EmittedAt: emittedAt(),
+	})
+}
+
+// --- egress.state -----------------------------------------------------------
+
+// EgressState is platform-gateway's snapshot of one platform's broadcast egress:
+// whether the platform reports the stream live, plus the gateway's prose detail
+// (e.g. TikTok's relay binding, Facebook's published/unpublished state). Published
+// as a full snapshot on a ticker and after an operator start/stop, never as a delta.
+// Ingest server/key are deliberately absent: those stay on the in-cluster HTTP response.
+//
+// tripbot declares the subject and the TRIPBOT_EGRESS last-value stream; the
+// gateway is the only publisher, so there is no Emit helper here.
+type EgressState struct {
+	Platform   string `json:"platform"`
+	Configured bool   `json:"configured"` // false when the platform has no egress credential yet (the HTTP route's 503)
+	Live       bool   `json:"live"`
+	Title      string `json:"title,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	Lifecycle  string `json:"lifecycle,omitempty"` // platform-native lifecycle; YouTube only
+	EmittedAt  string `json:"emitted_at"`
+}
+
+// EgressStateSubject returns the publish subject for one platform's egress
+// state. Per-platform so TRIPBOT_EGRESS retains a last value per platform.
+func EgressStateSubject(env, platform string) string {
+	return subject(env, "egress", "state") + "." + platform
+}
+
+// EgressStateWildcard returns the subscribe pattern covering every platform's
+// egress state in env.
+func EgressStateWildcard(env string) string { return subject(env, "egress", "state") + ".*" }
+
+// LastEgressState reads the egress snapshot TRIPBOT_EGRESS retains for one
+// platform. The error is jetstream.ErrMsgNotFound when the gateway has published
+// nothing for it yet; a nil js is an error too, so a caller with NATS off falls
+// back the same way it does for a missing snapshot. Freshness is the caller's
+// call: the stream keeps the last value however old it is.
+func LastEgressState(ctx context.Context, js jetstream.JetStream, env, platform string) (EgressState, error) {
+	if js == nil {
+		return EgressState{}, errors.New("egress state: jetstream unavailable")
+	}
+	stream, err := js.Stream(ctx, egressStreamName)
+	if err != nil {
+		return EgressState{}, err
+	}
+	raw, err := stream.GetLastMsgForSubject(ctx, EgressStateSubject(env, platform))
+	if err != nil {
+		return EgressState{}, err
+	}
+	var s EgressState
+	if err := json.Unmarshal(raw.Data, &s); err != nil {
+		return EgressState{}, fmt.Errorf("egress state: decode: %w", err)
+	}
+	return s, nil
+}
+
+// --- audio.bed --------------------------------------------------------------
+
+// AudioBed is the wire format for tripbot.<env>.audio.bed.<platform> — one
+// platform instance's background-audio bed, as its bed store holds it. Bed is
+// the selection and Playing what is audible; they differ only while the audio
+// watchdog has a fallback standing in for the radio. Track is the fallback album track's
+// title and is empty on the radio, whose song comes from the station's metadata through GET
+// /api/audio rather than from the store.
+//
+// The option lists (stations, voicings) are deliberately absent: they change
+// on a deploy, not on a click, and GET
+// /api/audio still serves them.
+type AudioBed struct {
+	Platform     string          `json:"platform"`
+	Bed          string          `json:"bed"`
+	Playing      string          `json:"playing"`
+	Station      string          `json:"station"`
+	Voicing      string          `json:"voicing"`
+	PlayingAlbum string          `json:"playing_album,omitempty"`
+	Track        string          `json:"track,omitempty"`
+	Pending      *AudioBedSwitch `json:"pending,omitempty"`
+	EmittedAt    string          `json:"emitted_at"`
+}
+
+// AudioBedSwitch is a bed switch waiting out the store's delay. At is when it
+// lands, as a timestamp rather than GET /api/audio's seconds-left: a retained
+// message is read at an unknown time after it was sent, so only a deadline
+// stays true.
+type AudioBedSwitch struct {
+	Bed     string `json:"bed"`
+	Station string `json:"station,omitempty"`
+	Voicing string `json:"voicing,omitempty"`
+	At      string `json:"at"`
+}
+
+// AudioBedSubject returns the publish subject for one platform instance's bed.
+// Per-platform because each instance owns its own OBS's bed.
+func AudioBedSubject(env, platform string) string {
+	return subject(env, "audio", "bed") + "." + platform
+}
+
+// AudioBedWildcard returns the subscribe pattern covering every platform's bed.
+func AudioBedWildcard(env string) string { return subject(env, "audio", "bed") + ".*" }
+
+// EmitAudioBed publishes bed, stamped now.
+func EmitAudioBed(ctx context.Context, env string, bed AudioBed) {
+	bed.EmittedAt = emittedAt()
+	emit(ctx, AudioBedSubject(env, bed.Platform), bed)
+}
+
+// --- flags.snapshot ---------------------------------------------------------
+
+// FeatureFlags is the wire format for tripbot.<env>.flags.snapshot.<platform> —
+// every feature flag one platform instance evaluates, as GET /api/flags serves
+// them. Flags are rows per platform, so each instance speaks for its own.
+type FeatureFlags struct {
+	Platform  string        `json:"platform"`
+	Flags     []FeatureFlag `json:"flags"`
+	EmittedAt string        `json:"emitted_at"`
+}
+
+// FeatureFlag is one flag in a FeatureFlags snapshot.
+type FeatureFlag struct {
+	Key                 string   `json:"key"`
+	Description         string   `json:"description"`
+	Enabled             bool     `json:"enabled"`
+	EnabledForUsernames []string `json:"enabled_for_usernames,omitempty"`
+	EnabledForRoles     []string `json:"enabled_for_roles,omitempty"`
+	TargetRemovalDate   string   `json:"target_removal_date,omitempty"`
+}
+
+// FeatureFlagsSubject returns the publish subject for one platform's flags.
+func FeatureFlagsSubject(env, platform string) string {
+	return subject(env, "flags", "snapshot") + "." + platform
+}
+
+// FeatureFlagsWildcard returns the subscribe pattern covering every platform's
+// flags.
+func FeatureFlagsWildcard(env string) string { return subject(env, "flags", "snapshot") + ".*" }
+
+// EmitFeatureFlags publishes one platform's flag snapshot, stamped now.
+func EmitFeatureFlags(ctx context.Context, env, platform string, flags []FeatureFlag) {
+	emit(ctx, FeatureFlagsSubject(env, platform), FeatureFlags{
+		Platform:  platform,
+		Flags:     flags,
+		EmittedAt: emittedAt(),
+	})
+}
+
+// --- chat.deleted -----------------------------------------------------------
+
+// ChatDeleted is the wire format for tripbot.<env>.chat.deleted — a moderation
+// removal of chat already published on chat.message, so a consumer holding the
+// log can strike or drop the lines it names. It rides the TRIPBOT_CHAT stream
+// beside the messages it addresses, so a replay from the stream applies the
+// removal in the same order the platform did and a restarted console does not
+// resurrect a deleted line.
+//
+// MessageID set names one message (the platform's own id, the same value the
+// matching ChatMessage carries). MessageID empty means every message by UserID
+// — a timeout, ban, or clear-user action, which Twitch reports as one event
+// with no message list.
+//
+// platform-gateway is the only publisher (its EventSub session is where the
+// platform reports the removal), so there is no Emit helper here; tripbot
+// declares the subject and the stream.
+type ChatDeleted struct {
+	Platform  string `json:"platform"`
+	UserID    string `json:"user_id"`              // the sender whose line(s) were removed
+	Username  string `json:"username,omitempty"`   // their login, for a consumer that logs by name
+	MessageID string `json:"message_id,omitempty"` // one message; empty = all of user_id's
+	EmittedAt string `json:"emitted_at"`
+}
+
+// ChatDeletedSubject returns the subscribe/publish subject for chat removals in
+// env. The console builds the same string to subscribe.
+func ChatDeletedSubject(env string) string { return subject(env, "chat", "deleted") }
+
+// --- chat.mode --------------------------------------------------------------
+
+// ChatMode is the wire format for tripbot.<env>.chat.mode.<platform> — the
+// restrictions a platform's chat holds, as the gateway last read them. The
+// Twitch gateway reads them from Helix when its chat session connects and follows
+// channel.chat_settings.update after that.
+//
+// SlowSeconds is 0 when slow mode is off. FollowerMinutes is absent when
+// followers-only is off, and 0 when it admits any follower. A consumer counts
+// slow mode down from its own caller's last send: the platform doesn't say when
+// that was.
+//
+// platform-gateway is the only publisher, so there is no Emit helper here.
+type ChatMode struct {
+	Platform        string `json:"platform"`
+	SlowSeconds     int    `json:"slow_seconds"`
+	FollowerMinutes *int   `json:"follower_minutes,omitempty"`
+	SubscribersOnly bool   `json:"subscribers_only"`
+	EmoteOnly       bool   `json:"emote_only"`
+	UniqueOnly      bool   `json:"unique_only"`
+	EmittedAt       string `json:"emitted_at"`
+}
+
+// ChatModeWildcard returns the subscribe pattern covering every platform's chat
+// mode in env.
+func ChatModeWildcard(env string) string { return subject(env, "chat", "mode") + ".*" }
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -407,6 +681,11 @@ const (
 	authStreamName     = "TRIPBOT_AUTH"
 	youtubeStreamName  = "TRIPBOT_YOUTUBE"
 	facebookStreamName = "TRIPBOT_FACEBOOK"
+	obsStreamName      = "TRIPBOT_OBS"
+	egressStreamName   = "TRIPBOT_EGRESS"
+	audioStreamName    = "TRIPBOT_AUDIO"
+	flagsStreamName    = "TRIPBOT_FLAGS"
+	chatModeStreamName = "TRIPBOT_CHAT_MODE"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -438,8 +717,8 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 	configs := []jetstream.StreamConfig{
 		{
 			Name:        chatStreamName,
-			Description: "Admin live-console chat history (bounded recent ring).",
-			Subjects:    []string{ChatMessageSubject(env)},
+			Description: "Admin live-console chat history (bounded recent ring), with the removals that apply to it.",
+			Subjects:    []string{ChatMessageSubject(env), ChatDeletedSubject(env)},
 			Storage:     jetstream.FileStorage,
 			Retention:   jetstream.LimitsPolicy,
 			Discard:     jetstream.DiscardOld,
@@ -467,6 +746,54 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 		{
+			Name:        obsStreamName,
+			Description: "Last-known OBS stream state per platform instance (last-value cache).",
+			Subjects:    []string{OBSStreamWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:        egressStreamName,
+			Description: "Last-known egress.state snapshot per platform (last-value cache); published by platform-gateway.",
+			Subjects:    []string{EgressStateWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:        audioStreamName,
+			Description: "Last-known background-audio bed per platform instance (last-value cache).",
+			Subjects:    []string{AudioBedWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per platform leaf, same as auth.status.
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:              flagsStreamName,
+			Description:       "Last-known feature-flag snapshot per platform instance (last-value cache).",
+			Subjects:          []string{FeatureFlagsWildcard(env)},
+			Storage:           jetstream.FileStorage,
+			Retention:         jetstream.LimitsPolicy,
+			Discard:           jetstream.DiscardOld,
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:              chatModeStreamName,
+			Description:       "Last-known chat mode per platform (last-value cache); published by platform-gateway.",
+			Subjects:          []string{ChatModeWildcard(env)},
+			Storage:           jetstream.FileStorage,
+			Retention:         jetstream.LimitsPolicy,
+			Discard:           jetstream.DiscardOld,
+			MaxMsgsPerSubject: 1,
+		},
+		{
 			Name:        youtubeStreamName,
 			Description: "Last-known YouTube broadcast snapshot (last-value cache).",
 			Subjects:    []string{YoutubeBroadcastSubject(env)},
@@ -489,11 +816,13 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			MaxMsgsPerSubject: 1,
 		},
 	}
+	names := make([]string, 0, len(configs))
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
+		names = append(names, cfg.Name)
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", strings.Join(names, ","), "env", env)
 	return nil
 }

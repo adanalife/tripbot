@@ -46,6 +46,24 @@
               "$ref": "#/$defs/Emote"
             }
           },
+          "reply": {
+            "$ref": "#/$defs/ChatReply"
+          },
+          "message_type": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "video_id": {
+            "type": "integer"
+          },
+          "video_file": {
+            "type": "string"
+          },
+          "video_ts_sec": {
+            "type": "number"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
@@ -54,6 +72,38 @@
         "required": [
           "username",
           "text",
+          "emitted_at"
+        ]
+      }
+    },
+    "chat_deleted": {
+      "subject": "tripbot.{env}.chat.deleted",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT",
+      "schema": {
+        "type": "object",
+        "title": "ChatDeleted",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "user_id",
           "emitted_at"
         ]
       }
@@ -154,6 +204,12 @@
           "lng": {
             "type": "number"
           },
+          "heading": {
+            "type": "number"
+          },
+          "speed_mps": {
+            "type": "number"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
@@ -195,6 +251,196 @@
         "required": [
           "platform",
           "accounts",
+          "emitted_at"
+        ]
+      }
+    },
+    "obs_stream": {
+      "subject": "tripbot.{env}.obs.stream.{platform}",
+      "wildcard": "tripbot.{env}.obs.stream.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_OBS",
+      "schema": {
+        "type": "object",
+        "title": "OBSStream",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "reachable",
+          "emitted_at"
+        ]
+      }
+    },
+    "egress_state": {
+      "subject": "tripbot.{env}.egress.state.{platform}",
+      "wildcard": "tripbot.{env}.egress.state.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_EGRESS",
+      "schema": {
+        "type": "object",
+        "title": "EgressState",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "configured",
+          "live",
+          "emitted_at"
+        ]
+      }
+    },
+    "audio_bed": {
+      "subject": "tripbot.{env}.audio.bed.{platform}",
+      "wildcard": "tripbot.{env}.audio.bed.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_AUDIO",
+      "schema": {
+        "type": "object",
+        "title": "AudioBed",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "bed": {
+            "type": "string"
+          },
+          "playing": {
+            "type": "string"
+          },
+          "station": {
+            "type": "string"
+          },
+          "voicing": {
+            "type": "string"
+          },
+          "playing_album": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string"
+          },
+          "pending": {
+            "$ref": "#/$defs/AudioBedSwitch"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "bed",
+          "playing",
+          "station",
+          "voicing",
+          "emitted_at"
+        ]
+      }
+    },
+    "chat_mode": {
+      "subject": "tripbot.{env}.chat.mode.{platform}",
+      "wildcard": "tripbot.{env}.chat.mode.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT_MODE",
+      "schema": {
+        "type": "object",
+        "title": "ChatMode",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "slow_seconds": {
+            "type": "integer"
+          },
+          "follower_minutes": {
+            "type": "integer"
+          },
+          "subscribers_only": {
+            "type": "boolean"
+          },
+          "emote_only": {
+            "type": "boolean"
+          },
+          "unique_only": {
+            "type": "boolean"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "slow_seconds",
+          "subscribers_only",
+          "emote_only",
+          "unique_only",
+          "emitted_at"
+        ]
+      }
+    },
+    "flags_snapshot": {
+      "subject": "tripbot.{env}.flags.snapshot.{platform}",
+      "wildcard": "tripbot.{env}.flags.snapshot.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_FLAGS",
+      "schema": {
+        "type": "object",
+        "title": "FeatureFlags",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FeatureFlag"
+            }
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "flags",
           "emitted_at"
         ]
       }
@@ -309,6 +555,86 @@
         "id",
         "start",
         "end"
+      ]
+    },
+    "ChatReply": {
+      "type": "object",
+      "title": "ChatReply",
+      "properties": {
+        "parent_message_id": {
+          "type": "string"
+        },
+        "parent_username": {
+          "type": "string"
+        },
+        "parent_user_id": {
+          "type": "string"
+        },
+        "parent_text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_message_id"
+      ]
+    },
+    "AudioBedSwitch": {
+      "type": "object",
+      "title": "AudioBedSwitch",
+      "properties": {
+        "bed": {
+          "type": "string"
+        },
+        "station": {
+          "type": "string"
+        },
+        "voicing": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bed",
+        "at"
+      ]
+    },
+    "FeatureFlag": {
+      "type": "object",
+      "title": "FeatureFlag",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "enabled_for_usernames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enabled_for_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_removal_date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "key",
+        "description",
+        "enabled"
       ]
     }
   }

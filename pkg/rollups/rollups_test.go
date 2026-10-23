@@ -10,6 +10,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -182,6 +183,41 @@ func TestReconcile_ComputesMilesFromPairedSessions(t *testing.T) {
 
 	if wm := watermark(t, db); wm != maxID {
 		t.Errorf("watermark: got %d, want %d", wm, maxID)
+	}
+}
+
+// addKeyedEvent writes a twitch login or logout carrying a session_id, the
+// shape every session event has had since session_id was added.
+func addKeyedEvent(t *testing.T, db *gorm.DB, username, event string, sessionID uuid.UUID, at time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO events (platform, username, event, session_id, date_created)
+	                VALUES ('twitch', ?, ?, ?, ?)`, username, event, sessionID, at).Error
+	if err != nil {
+		t.Fatalf("insert %s event for %s: %v", event, username, err)
+	}
+}
+
+// A login whose logout was never written (a crash) pairs with nothing: the
+// sessions after it still pair by session_id, so their lengths come out right
+// instead of every later login pairing with the next session's logout.
+func TestReconcile_OrphanedLoginDoesNotShiftLaterSessions(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+
+	addKeyedEvent(t, db, "crashed", "login", uuid.New(), base)
+	for _, start := range []time.Duration{time.Hour, 2 * time.Hour} {
+		id := uuid.New()
+		addKeyedEvent(t, db, "crashed", "login", id, base.Add(start))
+		addKeyedEvent(t, db, "crashed", "logout", id, base.Add(start+30*time.Minute))
+	}
+
+	Reconcile(context.Background(), testConf)
+
+	// two 30-minute sessions at 0.1mi/3min
+	got := getRollup(t, db, "twitch", "crashed")
+	closeTo(t, "events_miles", got.EventsMiles, 2.0)
+	if got.SessionCount != 3 {
+		t.Errorf("session_count: got %d, want 3", got.SessionCount)
 	}
 }
 

@@ -9,7 +9,7 @@ metadata:
 data:
   BOT_USERNAME: tripbot4001
   CHANNEL_NAME: adanalife_staging
-  DATABASE_HOST: pg-rw.stage-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.stage-1-data.svc.cluster.local.
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
@@ -19,7 +19,7 @@ data:
   ONSCREENS_SERVER_HOST: onscreens-twitch:8080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://k8s-monitoring-alloy-receiver.monitoring.svc:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=twitch
-  OTEL_SDK_DISABLED: "true"
+  OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
   PLAYOUT_HOST: playout-twitch:8080
@@ -44,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 3eeb856012
+        adanalife.dev/config-hash: 5a700baa79
       labels:
         app: tripbot-twitch
     spec:
@@ -109,6 +109,9 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - mountPath: /opt/tripbot/assets/radio
+              name: radio-stations
+              readOnly: true
             - mountPath: /opt/tripbot/assets/music-index
               name: music-index
               readOnly: true
@@ -130,6 +133,8 @@ spec:
           imagePullPolicy: Always
           name: migrate
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -149,6 +154,10 @@ spec:
           key: dana.lol/rpi5
           operator: Exists
       volumes:
+        - name: radio-stations
+          secret:
+            optional: true
+            secretName: tripbot-radio-stations
         - configMap:
             name: obs-music-index
             optional: true
@@ -170,3 +179,29 @@ spec:
   selector:
     app: tripbot-twitch
   type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-twitch
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-twitch
+  namespace: stage-1
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: stage-1
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: tripbot-twitch
+  policyTypes:
+    - Ingress

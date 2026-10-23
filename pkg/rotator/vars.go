@@ -42,7 +42,7 @@ var variables = []Variable{
 	{
 		Name:        "date",
 		Description: "the day the clip was filmed",
-		Example:     "Wednesday September 26, 2018",
+		Example:     "September 26, 2018",
 	},
 	{
 		Name:        "weather",

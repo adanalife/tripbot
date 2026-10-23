@@ -10,21 +10,25 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/httpmw"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 // An unconfigured NATS is not a degraded one — a laptop run with NATS_URL
 // unset must not report a dependency down that it was never given.
 func TestDepChecksSkipUnconfiguredNats(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		natsURL string
-		want    []string
+		name     string
+		natsURL  string
+		platform string
+		want     []string
 	}{
-		{"no nats configured", "", []string{"postgres"}},
-		{"nats configured", "nats://nats:4222", []string{"postgres", "nats"}},
+		{"no nats configured", "", "", []string{"postgres"}},
+		{"nats configured", "nats://nats:4222", "", []string{"postgres", "nats"}},
+		{"twitch reports chat and eventsub", "nats://nats:4222", "twitch", []string{"postgres", "nats", "chat", "eventsub"}},
+		{"youtube does not", "", "youtube", []string{"postgres"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := New(&c.TripbotConfig{NatsURL: tc.natsURL})
+			s := New(&c.TripbotConfig{NatsURL: tc.natsURL, Platform: tc.platform})
 			got := make([]string, 0, len(s.depChecks()))
 			for _, chk := range s.depChecks() {
 				got = append(got, chk.Name)
@@ -87,5 +91,41 @@ func TestDepsHandlerNamesTheFailedDependency(t *testing.T) {
 func TestNatsPingUnconnected(t *testing.T) {
 	if err := natsPing(context.Background()); err == nil {
 		t.Error("natsPing = nil with no connection, want an error")
+	}
+}
+
+// chatPing is silent until a poll has reported, then follows the last report:
+// a boot that hasn't polled yet is not a chat outage.
+func TestChatPingFollowsTheLastPoll(t *testing.T) {
+	if _, reported := instrumentation.TwitchConnection.Connected(); !reported {
+		if err := chatPing(context.Background()); err != nil {
+			t.Errorf("chatPing before any poll = %v, want nil", err)
+		}
+	}
+	instrumentation.TwitchConnection.Set(false)
+	if err := chatPing(context.Background()); err == nil {
+		t.Error("chatPing = nil after a failed poll, want an error")
+	}
+	instrumentation.TwitchConnection.Set(true)
+	if err := chatPing(context.Background()); err != nil {
+		t.Errorf("chatPing = %v after a good poll, want nil", err)
+	}
+}
+
+// eventsubPing is silent until a subscribe round has finished, then follows
+// the session: a pod still dialing is not an EventSub outage.
+func TestEventSubPingFollowsTheSession(t *testing.T) {
+	if _, reported := instrumentation.EventSubSubscriptions.Session(); !reported {
+		if err := eventsubPing(context.Background()); err != nil {
+			t.Errorf("eventsubPing before any round = %v, want nil", err)
+		}
+	}
+	instrumentation.EventSubSubscriptions.SetSession(false)
+	if err := eventsubPing(context.Background()); err == nil {
+		t.Error("eventsubPing = nil with the session down, want an error")
+	}
+	instrumentation.EventSubSubscriptions.SetSession(true)
+	if err := eventsubPing(context.Background()); err != nil {
+		t.Errorf("eventsubPing = %v with the session up, want nil", err)
 	}
 }

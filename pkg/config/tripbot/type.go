@@ -42,9 +42,9 @@ type TripbotConfig struct {
 	// PlayoutHost is the host:port of playout's playback HTTP API
 	// (/playout/current).
 	PlayoutHost string `required:"true" envconfig:"PLAYOUT_HOST"`
-	// OnscreensServerHost is the host:port for the onscreens-server HTTP
-	// API (state.json, render/, asset/, plus the show/hide endpoints the
-	// chatbot drives).
+	// OnscreensServerHost is the host:port of this platform's
+	// onscreens-server. Overlay commands reach it over NATS; tripbot reads
+	// only its /version, to record its deploys.
 	OnscreensServerHost string `required:"true" envconfig:"ONSCREENS_SERVER_HOST"`
 	// ObsServerHost is the host:port of obs-server — the Flask process
 	// baked into the OBS image that exposes /health/ready, /version,
@@ -85,8 +85,7 @@ type TripbotConfig struct {
 	// running, but nothing reads chat, so no command can respond. When false the
 	// chatbot also swaps its rotating Chatter/!help copy from command ads to
 	// promotional lines (see pkg/chatbot enabledHelpMessages) — advertising a
-	// command nobody can run reads as a broken bot. Flip to true the day the
-	// YouTube Data API quota extension lands. No effect on Twitch.
+	// command nobody can run reads as a broken bot. No effect on Twitch.
 	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
 
 	// FacebookAPIURL points a PLATFORM=facebook instance at the platform-gateway

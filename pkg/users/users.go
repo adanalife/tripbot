@@ -10,7 +10,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/google/uuid"
-	"github.com/logrusorgru/aurora/v3"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -34,6 +34,20 @@ type User struct {
 	// while leaving it a normal chatter everywhere else. Independent of
 	// IsBot, which carries behavioral meaning beyond ranking.
 	ExcludeFromLeaderboard bool
+	// Starred and Note are the operator's own marks, set from the console:
+	// a friend to pick out of its lists, and who someone is. save() leaves
+	// both alone, like ExcludeFromLeaderboard.
+	Starred bool
+	Note    string
+	// Moderator is the platform's word, on the message being handled, that
+	// this chatter moderates the channel. Per message, never persisted: a
+	// mod gate should track the platform's roster, not a snapshot of it.
+	Moderator bool `gorm:"-"`
+	// Broadcaster is the platform's word, on the message being handled, that
+	// this chatter is the channel owner — matched on the platform-native user
+	// id, never on a display name a viewer could pick for themselves. It is the
+	// admin gate. Per message, never persisted, for the same reason Moderator is.
+	Broadcaster bool `gorm:"-"`
 	// autoCreateTime stamps these with the current time on insert. create()
 	// builds a User without setting them, so without the tag GORM writes the
 	// zero value (0001-01-01) into columns whose DEFAULT is CURRENT_TIMESTAMP —
@@ -48,6 +62,11 @@ type User struct {
 	sessionID    uuid.UUID `gorm:"-"`
 	lastCmd      time.Time `gorm:"-"`
 	lastLocation time.Time `gorm:"-"`
+	// platformUserIDTaken records that another row on this platform already
+	// holds the id this chatter reports, so the stamp is not retried for the
+	// rest of the session. Not stored: the duplicate pair is the DB's to
+	// resolve, and a fresh login re-checks rather than inheriting the verdict.
+	platformUserIDTaken bool `gorm:"-"`
 	// sessionExtraMiles accumulates community sub-grants received during this
 	// session (GiveEveryoneMiles), so logout can record the full unreconstructable
 	// bonus. Resets each login (fresh User from FindOrCreate).
@@ -66,31 +85,28 @@ var guessCooldown = 3 * time.Minute
 // source. They take the User as a parameter so the session state and the
 // per-user data stay explicitly separate.
 
-func (s *Sessions) loggedInDur(u User) time.Duration {
-	// lookup the user in the session so the LoggedIn value is current
+func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
+	// Read the live session copy, not u: an other-user lookup passes a fresh
+	// DB row, whose zero milesCheckpointed would re-count the banked miles.
 	live, ok := s.get(u.Username)
 	if !ok {
-		return 0 * time.Second
-	}
-	return time.Since(live.LoggedIn)
-}
-
-func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
-	// exit early if they're not logged in
-	if !s.isLoggedIn(u.Username) {
 		return 0.0
 	}
-	loggedInDur := s.loggedInDur(u)
-	sessionMiles := helpers.DurationToMiles(loggedInDur)
+	return s.inFlightMiles(live)
+}
+
+// inFlightMiles is the accrual of a session entry not yet banked in the DB.
+// It reads nothing from the session map, so logout can apply it to the entry
+// it has already claimed.
+func (s *Sessions) inFlightMiles(live User) float32 {
+	sessionMiles := helpers.DurationToMiles(time.Since(live.LoggedIn))
 	// give subscribers a miles bonus
-	if s.IsSubscriber(u) {
-		sessionMiles += s.BonusMiles(u)
+	if s.IsSubscriber(live) {
+		sessionMiles += s.sessionBonus(live)
 	}
 	// Whatever CheckpointMiles already banked is counted in the DB figures
-	// callers add this to, so only the remainder is still in flight. Read from
-	// the live session copy, not u: an other-user lookup passes a fresh DB row,
-	// whose zero value would re-count the banked miles.
-	inFlight := sessionMiles - s.milesCheckpointed(u.Username)
+	// callers add this to, so only the remainder is still in flight.
+	inFlight := sessionMiles - live.milesCheckpointed
 	// A subscription lapsing mid-session drops the bonus out of sessionMiles
 	// while the banked figure keeps it, which would otherwise show up as a
 	// total that ticks backwards.
@@ -109,16 +125,21 @@ func (s *Sessions) CurrentMiles(ctx context.Context, u User) float32 {
 // Non-subscribers get the tier-1 rate — !bonusmiles reports the would-be bonus
 // for anyone, and only sessionMiles' IsSubscriber gate decides who is awarded.
 func (s *Sessions) BonusMiles(u User) float32 {
-	if s.isLoggedIn(u.Username) {
-		loggedInDur := s.loggedInDur(u)
-		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		tier := s.source.SubscriberTier(u.Username)
-		if tier < 1 {
-			tier = 1
-		}
-		return sessionMiles * 0.05 * float32(tier)
+	live, ok := s.get(u.Username)
+	if !ok {
+		return 0.0
 	}
-	return 0.0
+	return s.sessionBonus(live)
+}
+
+// sessionBonus is BonusMiles for a session entry the caller already holds.
+func (s *Sessions) sessionBonus(live User) float32 {
+	sessionMiles := helpers.DurationToMiles(time.Since(live.LoggedIn))
+	tier := s.source.SubscriberTier(live.Username)
+	if tier < 1 {
+		tier = 1
+	}
+	return sessionMiles * 0.05 * float32(tier)
 }
 
 func (s *Sessions) CurrentMonthlyMiles(ctx context.Context, u User) float32 {
@@ -166,6 +187,55 @@ func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) erro
 	return nil
 }
 
+// SetExcludeFromLeaderboard flips users.exclude_from_leaderboard for a
+// username. It writes the column directly because save() deliberately leaves
+// it alone. Returns gorm.ErrRecordNotFound if the user doesn't exist in the DB.
+func (s *Sessions) SetExcludeFromLeaderboard(ctx context.Context, username string, exclude bool) error {
+	user, err := Find(ctx, s.cfg.Platform, username)
+	if err != nil {
+		return err
+	}
+	if err := database.GormDB().WithContext(ctx).Model(&user).
+		Update("exclude_from_leaderboard", exclude).Error; err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if loggedIn, ok := s.loggedIn[username]; ok {
+		loggedIn.ExcludeFromLeaderboard = exclude
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+// SetStarred flips users.starred for a username, and SetNote replaces
+// users.note. Both write the column directly: save() never writes them, and
+// nothing reads them off a session, so there is no live copy to keep in step.
+// Return gorm.ErrRecordNotFound if the user doesn't exist in the DB.
+func (s *Sessions) SetStarred(ctx context.Context, username string, starred bool) error {
+	return s.setColumn(ctx, username, "starred", starred)
+}
+
+func (s *Sessions) SetNote(ctx context.Context, username, note string) error {
+	return s.setColumn(ctx, username, "note", note)
+}
+
+func (s *Sessions) setColumn(ctx context.Context, username, column string, value any) error {
+	user, err := Find(ctx, s.cfg.Platform, username)
+	if err != nil {
+		return err
+	}
+	return database.GormDB().WithContext(ctx).Model(&user).Update(column, value).Error
+}
+
+// Starred lists every starred account on every platform, with its note.
+func Starred(ctx context.Context) ([]User, error) {
+	var out []User
+	err := database.GormDB().WithContext(ctx).
+		Select("platform", "username", "note").
+		Where("starred").Order("platform, username").Find(&out).Error
+	return out, err
+}
+
 // IsFollower returns true if the user is a follower
 func (s *Sessions) IsFollower(u User) bool {
 	return s.source.IsFollower(u.Username)
@@ -182,13 +252,12 @@ func (s *Sessions) SubscriberTier(u User) int {
 	return s.source.SubscriberTier(u.Username)
 }
 
-// User.String prints a colored version of the user
-func (u User) String() string {
-	if u.IsBot {
-		return aurora.Gray(15, u.Username).String()
-	}
-	return aurora.Magenta(u.Username).String()
-}
+// User.String is the user's name. Both callers are slog attribute values, so
+// it has to stay plain text: an escape sequence in an attribute is shipped
+// verbatim to Loki and OTLP, where it makes the field unmatchable rather than
+// colored. Colouring belongs in the handler, which knows whether it is writing
+// to a terminal.
+func (u User) String() string { return u.Username }
 
 // ErrLookupFailed and ErrCreateFailed mark which half of FindOrCreate gave up:
 // an existing row that couldn't be read, versus a new row that couldn't be
@@ -262,20 +331,47 @@ func RecordPlatformUserID(ctx context.Context, u *User, platformUserID string) {
 	if platformUserID == "" || u == nil || u.PlatformUserID == platformUserID {
 		return
 	}
+	if u.platformUserIDTaken {
+		return
+	}
 	if u.ID == 0 {
 		// No DB row (transient Find error, or a transient user on a platform
 		// that doesn't persist). Updates() without a primary key would build an
 		// UPDATE with no WHERE, which GORM refuses — same guard as save().
 		return
 	}
-	err := database.GormDB().WithContext(ctx).Model(u).
+	// Update through a bare row carrying only the primary key, not through u:
+	// GORM writes the new value into the struct it is given whether or not the
+	// statement succeeds, so a rejected write would leave the in-memory user —
+	// and the session entry mirroring it — claiming an id the DB never took.
+	row := User{ID: u.ID}
+	err := database.GormDB().WithContext(ctx).Model(&row).
 		Update("platform_user_id", platformUserID).Error
 	if err != nil {
+		if isUniqueViolation(err) {
+			// Another row on this platform already holds the id, so this
+			// chatter has two rows: the id followed the person, the username
+			// followed a rename. Which row wins is an identity-merge question
+			// no single-column write can answer, so record that the stamp is
+			// contested and stop re-issuing it on every message they send.
+			u.platformUserIDTaken = true
+			slog.WarnContext(ctx, "platform user id belongs to another row",
+				"username", u.Username, "platform", u.Platform,
+				"platform_user_id", platformUserID, "user_id", u.ID)
+			return
+		}
 		slog.ErrorContext(ctx, "couldn't record platform user id", "err", err,
 			"username", u.Username, "platform", u.Platform)
 		return
 	}
 	u.PlatformUserID = platformUserID
+}
+
+// isUniqueViolation reports whether err is postgres' 23505 — the only failure
+// this path can say something specific about.
+func isUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 
 // HasCommandAvailable lets users run a command once a day,

@@ -50,7 +50,8 @@ const (
 //
 //   - ErrNoBroadcast (409) — the call needed a live broadcast and there is
 //     none. A definite negative answer: there is nowhere to post right now.
-//   - ErrUpstreamUnavailable (503) — the platform refused the call rather than
+//   - ErrUpstreamUnavailable (503, or 429 when the platform's rate limit is
+//     spent) — the platform refused the call rather than
 //     answering it. The answer is unknown, not negative, so it must not be read
 //     as "no"; retrying is the recovery.
 //
@@ -67,7 +68,7 @@ func statusErr(op string, status int) error {
 	switch status {
 	case http.StatusConflict:
 		return fmt.Errorf("gateway %s: %w", op, ErrNoBroadcast)
-	case http.StatusServiceUnavailable:
+	case http.StatusServiceUnavailable, http.StatusTooManyRequests:
 		return fmt.Errorf("gateway %s: %w", op, ErrUpstreamUnavailable)
 	}
 	return fmt.Errorf("gateway %s: unexpected status %d", op, status)
@@ -169,7 +170,22 @@ func (c *Client) UserID(ctx context.Context, login string) (string, error) {
 // SendChat posts text to the channel's chat as identity ("bot" / "broadcaster";
 // "" lets the gateway pick its default) via POST /v1/chat.
 func (c *Client) SendChat(ctx context.Context, identity, text string) error {
-	payload, err := json.Marshal(map[string]string{"identity": identity, "text": text})
+	return c.sendChat(ctx, identity, text, "")
+}
+
+// SendChatReply is SendChat threaded under parentID, the MessageID of an
+// inbound line. The gateway threads it where the platform can (Twitch) and
+// sends it plain where it can't (YouTube), so the reply always goes out.
+func (c *Client) SendChatReply(ctx context.Context, identity, text, parentID string) error {
+	return c.sendChat(ctx, identity, text, parentID)
+}
+
+func (c *Client) sendChat(ctx context.Context, identity, text, parentID string) error {
+	body := map[string]string{"identity": identity, "text": text}
+	if parentID != "" {
+		body["reply_to"] = parentID
+	}
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("gateway send-chat encode: %w", err)
 	}
@@ -211,10 +227,15 @@ func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err 
 // when no number was available — a platform that publishes none, a gateway
 // too old to serve /v1/viewers, or a failed call — which callers must not
 // flatten to a count of zero.
+//
+// StartedAt is when the running broadcast began, on platforms that report it
+// (Twitch). Zero when nothing is live, when the platform has no such field,
+// or when the gateway predates it.
 type Audience struct {
-	Count    int
-	Live     bool
-	Reported bool
+	Count     int
+	Live      bool
+	Reported  bool
+	StartedAt time.Time
 }
 
 // Viewers returns the channel's concurrent-viewer count (GET /v1/viewers).
@@ -232,13 +253,14 @@ func (c *Client) Viewers(ctx context.Context) (Audience, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var body struct {
-			Count int  `json:"count"`
-			Live  bool `json:"live"`
+			Count     int       `json:"count"`
+			Live      bool      `json:"live"`
+			StartedAt time.Time `json:"started_at"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			return Audience{}, fmt.Errorf("gateway viewers decode: %w", err)
 		}
-		return Audience{Count: body.Count, Live: body.Live, Reported: true}, nil
+		return Audience{Count: body.Count, Live: body.Live, Reported: true, StartedAt: body.StartedAt}, nil
 	case http.StatusNotFound:
 		return Audience{}, nil // platform reports no viewer count — expected
 	default:
@@ -340,6 +362,25 @@ type InboundChatMessage struct {
 	Broadcaster bool           `json:"broadcaster,omitempty"`
 	Badges      map[string]int `json:"badges,omitempty"`
 	Emotes      []Emote        `json:"emotes,omitempty"`
+	// Reply names the earlier message this one answers, on a platform whose
+	// chat threads (Twitch); nil otherwise.
+	Reply *InboundReply `json:"reply,omitempty"`
+	// MessageType is Twitch's word for a line it singles out — "user_intro"
+	// for a chatter's first message in the channel,
+	// "channel_points_highlighted" — and empty for an ordinary line.
+	MessageType string `json:"message_type,omitempty"`
+	// Color is the sender's chosen name colour as "#RRGGBB"; empty when they
+	// never picked one, and on every platform but Twitch.
+	Color string `json:"color,omitempty"`
+}
+
+// InboundReply is the parent of a threaded reply: the id a reply send takes,
+// plus the parent's author and text for a renderer to show.
+type InboundReply struct {
+	ParentMessageID string `json:"parent_message_id"`
+	ParentAuthor    string `json:"parent_author,omitempty"`
+	ParentAuthorID  string `json:"parent_author_id,omitempty"`
+	ParentText      string `json:"parent_text,omitempty"`
 }
 
 // Emote is one occurrence of a platform emote inside a message's Text — the
@@ -444,7 +485,7 @@ func (c *Client) postEmpty(ctx context.Context, path string) error {
 	instrumentation.GatewayConnection.Set(true)
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+		return statusErr(path, resp.StatusCode)
 	}
 	return nil
 }
@@ -458,7 +499,7 @@ func (c *Client) getJSON(ctx context.Context, path string, dest any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+		return statusErr(path, resp.StatusCode)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(dest); err != nil {
 		return fmt.Errorf("gateway %s decode: %w", path, err)

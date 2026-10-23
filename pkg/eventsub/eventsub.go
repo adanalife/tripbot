@@ -28,9 +28,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	twitch "github.com/joeyak/go-twitch-eventsub/v3"
@@ -47,6 +48,10 @@ var ErrUnauthorized = errors.New("eventsub: broadcaster token unauthorized")
 // The status line Twitch returns for a rejected token, as the library renders it
 // into the error message ("401 Unauthorized").
 var unauthorizedStatus = strconv.Itoa(http.StatusUnauthorized) + " " + http.StatusText(http.StatusUnauthorized)
+
+// The status line Twitch returns for a token whose grant lacks the event type's
+// scope ("403 Forbidden").
+var forbiddenStatus = strconv.Itoa(http.StatusForbidden) + " " + http.StatusText(http.StatusForbidden)
 
 // Handlers carries the per-event callbacks the caller wants registered.
 // All fields optional — leave a callback nil to skip subscribing to
@@ -68,6 +73,21 @@ type Handlers struct {
 	// OnRaid fires on channel.raid — another channel raiding this one,
 	// carrying the raiding broadcaster's name and the party size.
 	OnRaid func(from string, viewers int)
+	// OnMissingScopes receives the scopes the broadcaster grant lacks after
+	// every subscribe round: the scopes of the event types Twitch refused with
+	// 403, sorted, or empty when nothing was refused, so a later clean round
+	// clears an earlier report.
+	OnMissingScopes func(scopes []string)
+}
+
+// requiredScope names the authorization scope each event type needs on the
+// broadcaster's token. channel.raid needs none beyond a valid token.
+var requiredScope = map[twitch.EventSubscription]string{
+	twitch.SubChannelFollow:              "moderator:read:followers",
+	twitch.SubChannelSubscribe:           "channel:read:subscriptions",
+	twitch.SubChannelSubscriptionEnd:     "channel:read:subscriptions",
+	twitch.SubChannelSubscriptionGift:    "channel:read:subscriptions",
+	twitch.SubChannelSubscriptionMessage: "channel:read:subscriptions",
 }
 
 // Config is the static input Run needs to subscribe. ClientID matches
@@ -79,6 +99,12 @@ type Config struct {
 	ClientID          string
 	BroadcasterToken  string
 	BroadcasterUserID string
+
+	// wsURL and subscribeURL override the Twitch WebSocket and Helix
+	// subscription endpoints; empty means Twitch's. Tests point them at
+	// httptest servers.
+	wsURL        string
+	subscribeURL string
 }
 
 // Run dials the EventSub WebSocket, subscribes to the events for which
@@ -91,6 +117,9 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	}
 
 	client := twitch.NewClient()
+	if cfg.wsURL != "" {
+		client = twitch.NewClientWithUrl(cfg.wsURL)
+	}
 
 	client.OnError(func(err error) {
 		slog.ErrorContext(ctx, "eventsub client error", "err", err)
@@ -146,26 +175,45 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 		})
 	}
 
-	// Written from the OnWelcome callback, which the library runs on its own read
-	// goroutine, and read after ConnectWithContext returns — hence atomic.
-	var attempted, denied atomic.Int32
+	// The library runs OnWelcome on a goroutine of its own, so the socket can
+	// close — or ctx be cancelled — while a subscribe round is still running.
+	// round serializes the two: the callback holds it for the whole round, and
+	// Run takes it after ConnectWithContext returns, so the counts it reads are
+	// a finished round's and a round still pending skips itself (ended) rather
+	// than publishing a gauge for a session that is already gone.
+	var (
+		round                           sync.Mutex
+		ended                           bool
+		attempted, denied, unauthorized int32
+	)
 
 	client.OnWelcome(func(msg twitch.WelcomeMessage) {
-		// The library reconnects transparently on a session_reconnect frame, so
-		// OnWelcome can fire more than once per Run and each firing is a fresh
-		// subscribe round. Counting across rounds would let one good round mask a
-		// later wholly-refused one, and would report a subscription count that
-		// only grows.
-		attempted.Store(0)
-		denied.Store(0)
+		round.Lock()
+		defer round.Unlock()
+		if ended {
+			return
+		}
+		// OnWelcome fires once per Run: on a session_reconnect frame the library
+		// takes the new session's welcome itself and the subscriptions carry
+		// over. The counts still start from zero here, so a round only ever
+		// reports itself.
+		attempted, denied, unauthorized = 0, 0, 0
+		var missing []string
 
 		sid := msg.Payload.Session.ID
 		slog.InfoContext(ctx, "eventsub welcome received; subscribing", "session_id", sid)
 
 		sub := func(ev twitch.EventSubscription, cond map[string]string) {
-			attempted.Add(1)
-			if subscribe(ctx, cfg, sid, ev, cond) {
-				denied.Add(1)
+			attempted++
+			switch subscribe(ctx, cfg, sid, ev, cond) {
+			case refusedToken:
+				denied++
+				unauthorized++
+			case refusedScope:
+				denied++
+				if scope := requiredScope[ev]; scope != "" && !slices.Contains(missing, scope) {
+					missing = append(missing, scope)
+				}
 			}
 		}
 
@@ -208,51 +256,92 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			})
 		}
 
-		held := attempted.Load() - denied.Load()
-		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied.Load())
-		instrumentation.EventSubSubscriptions.Set(int(held), int(denied.Load()))
+		held := attempted - denied
+		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied)
+		instrumentation.EventSubSubscriptions.Set(int(held), int(denied))
+		instrumentation.EventSubSubscriptions.SetSession(held > 0)
+		if h.OnMissingScopes != nil {
+			slices.Sort(missing)
+			h.OnMissingScopes(missing)
+		}
 	})
 
 	err := client.ConnectWithContext(ctx)
+	round.Lock()
+	defer round.Unlock()
+	ended = true
 	// The session is gone whatever ended it, so nothing is arriving until the
 	// caller redials. denied stays as the round recorded it — see the gauge's doc.
-	instrumentation.EventSubSubscriptions.Set(0, int(denied.Load()))
+	instrumentation.EventSubSubscriptions.Set(0, int(denied))
+	instrumentation.EventSubSubscriptions.SetSession(false)
+	// A cancelled ctx is shutdown, whichever of the library's goroutines noticed
+	// it first — one reports nil, another "use of closed network connection".
+	if ctx.Err() != nil {
+		return nil
+	}
 	// A wholly rejected token outranks whatever closed the socket: Twitch hangs
 	// up on a subscription-less session (close code 4003), so the connection
 	// error here is a symptom and redialing would just repeat it.
-	if tokenRejected(attempted.Load(), denied.Load()) {
+	if tokenRejected(attempted, unauthorized) {
 		return fmt.Errorf("%w (connection ended: %v)", ErrUnauthorized, err)
 	}
 	return err
 }
 
-// tokenRejected reports whether a subscribe round failed entirely on auth.
-// Requiring *every* attempt to have been denied keeps the partial-subscription
-// behavior this package documents: a token missing one event type's scope still
-// gets the others, and the caller keeps redialing so a later socket drop
-// recovers. Only a token that buys nothing is worth giving up on.
-func tokenRejected(attempted, denied int32) bool {
-	return attempted > 0 && denied == attempted
+// tokenRejected reports whether a subscribe round failed entirely on a refused
+// token. Requiring *every* attempt to have been a 401 keeps the
+// partial-subscription behavior this package documents: a token missing one
+// event type's scope (a 403) still gets the others, and the caller keeps
+// redialing so a later socket drop recovers. Only a token that buys nothing is
+// worth giving up on.
+func tokenRejected(attempted, unauthorized int32) bool {
+	return attempted > 0 && unauthorized == attempted
 }
+
+// subscribeResult is how Twitch answered one subscribe call.
+type subscribeResult int
+
+const (
+	subscribed subscribeResult = iota
+	// failed is any error that says nothing about the grant: a transport
+	// failure, a malformed request.
+	failed
+	// refusedToken is a 401: Twitch rejected the token itself.
+	refusedToken
+	// refusedScope is a 403: the token is valid but its grant lacks the event
+	// type's scope. A refresh keeps the original grant's scopes, so only a
+	// re-consent clears it.
+	refusedScope
+)
 
 // subscribe creates a single Twitch-side subscription. A failure is logged but
 // doesn't abort Run — losing one event type is better than losing all of them.
-// Reports whether the failure was an expired or unscoped token, which is
-// permanent until someone re-consents.
-func subscribe(ctx context.Context, cfg Config, sessionID string, ev twitch.EventSubscription, cond map[string]string) (unauthorized bool) {
-	_, err := twitch.SubscribeEventWithContext(ctx, twitch.SubscribeRequest{
+func subscribe(ctx context.Context, cfg Config, sessionID string, ev twitch.EventSubscription, cond map[string]string) subscribeResult {
+	req := twitch.SubscribeRequest{
 		SessionID:   sessionID,
 		ClientID:    cfg.ClientID,
 		AccessToken: cfg.BroadcasterToken,
 		Event:       ev,
 		Condition:   cond,
-	})
+	}
+	var err error
+	if cfg.subscribeURL != "" {
+		_, err = twitch.SubscribeEventUrlWithContext(ctx, req, cfg.subscribeURL)
+	} else {
+		_, err = twitch.SubscribeEventWithContext(ctx, req)
+	}
 	if err != nil {
 		slog.ErrorContext(ctx, "eventsub subscribe failed", "err", fmt.Errorf("event %s: %w", ev, err))
-		return isUnauthorized(err)
+		switch {
+		case isUnauthorized(err):
+			return refusedToken
+		case isForbidden(err):
+			return refusedScope
+		}
+		return failed
 	}
 	slog.InfoContext(ctx, "eventsub subscribed", "event", string(ev))
-	return false
+	return subscribed
 }
 
 // isUnauthorized reports whether Twitch rejected the token on a subscribe call.
@@ -261,4 +350,10 @@ func subscribe(ctx context.Context, cfg Config, sessionID string, ev twitch.Even
 // exposing a typed error or the status code.
 func isUnauthorized(err error) bool {
 	return err != nil && strings.Contains(err.Error(), unauthorizedStatus)
+}
+
+// isForbidden reports whether Twitch refused a subscribe call for a missing
+// scope, matched on the status line for the same reason isUnauthorized is.
+func isForbidden(err error) bool {
+	return err != nil && strings.Contains(err.Error(), forbiddenStatus)
 }

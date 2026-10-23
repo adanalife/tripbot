@@ -95,8 +95,8 @@ func TestAnnounceNewFollower_NudgesCommands(t *testing.T) {
 
 // An incoming raid records one raid event carrying the raiding channel and
 // party size, stamped with the airing clip and playhead — the row a per-clip
-// audience rollup uses to discount the spike. Nothing is said in chat: Twitch
-// announces the raid natively.
+// audience rollup uses to discount the spike — and thanks the raider in chat
+// by name with the party size.
 func TestRecordRaid_RecordsRaidEventWithAiring(t *testing.T) {
 	app := newTestApp(video.Video{ID: 77})
 	rec := &recordingEvents{}
@@ -119,8 +119,11 @@ func TestRecordRaid_RecordsRaidEventWithAiring(t *testing.T) {
 	if got.TsSec == nil {
 		t.Error("ts_sec = nil, want the playhead stamped")
 	}
-	if len(chat.Says) != 0 {
-		t.Errorf("chat says = %v, want none for a raid", chat.Says)
+	if len(chat.Says) != 1 {
+		t.Fatalf("chat says = %v, want exactly one raid shout", chat.Says)
+	}
+	if !strings.Contains(chat.Says[0], "@somechannel") || !strings.Contains(chat.Says[0], "25") {
+		t.Errorf("raid shout = %q, want the raider's @name and the viewer count", chat.Says[0])
 	}
 }
 

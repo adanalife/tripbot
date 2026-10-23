@@ -13,15 +13,22 @@ import (
 // instead.
 type noopChat struct{}
 
-func (noopChat) Say(_ string) {}
+func (noopChat) Say(_ string)      {}
+func (noopChat) Reply(_, _ string) {}
 
 // recordingChat captures every Say call so tests can assert on chat output.
 // Messages are appended in order.
 type recordingChat struct {
-	Says []string // ordered list of Say() messages
+	Says    []string // ordered list of Say() and Reply() messages
+	Parents []string // the parent of each Reply(), in order
 }
 
 func (r *recordingChat) Say(msg string) {
+	r.Says = append(r.Says, msg)
+}
+
+func (r *recordingChat) Reply(parentID, msg string) {
+	r.Parents = append(r.Parents, parentID)
 	r.Says = append(r.Says, msg)
 }
 
@@ -66,5 +73,21 @@ func TestConsoleMirror_PublishesBotOutputToEventbus(t *testing.T) {
 	}
 	if ev.Text != "hello chat" {
 		t.Errorf("text = %q, want hello chat", ev.Text)
+	}
+	if ev.Reply != nil {
+		t.Errorf("reply = %+v on a plain Say, want none", ev.Reply)
+	}
+
+	// A threaded reply carries the parent id, and only that: the bot never
+	// saw the parent's text at send time.
+	cm.Reply("m1", "you asked")
+	if len(rec.Publishes) != 2 {
+		t.Fatalf("expected 2 publishes, got %d", len(rec.Publishes))
+	}
+	if err := json.Unmarshal(rec.Publishes[1].Payload, &ev); err != nil {
+		t.Fatalf("bad payload: %v", err)
+	}
+	if ev.Reply == nil || ev.Reply.ParentMessageID != "m1" || ev.Reply.ParentText != "" {
+		t.Errorf("reply = %+v, want parent m1 and nothing else", ev.Reply)
 	}
 }

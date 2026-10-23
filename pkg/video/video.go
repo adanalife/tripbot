@@ -68,11 +68,16 @@ func NewPlayer(cfg *c.TripbotConfig, onscreens onscreens, playout *playoutClient
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
 
+	// figure out what's currently playing; a failed poll keeps the previous
+	// video rather than reading as a switch to nothing
+	vid, err := p.playout.CurrentlyPlaying(ctx)
+	if err != nil {
+		return
+	}
+
 	// save the video we used last time
 	p.preVid = p.curVid
-
-	// figure out what's currently playing
-	p.curVid = p.playout.CurrentlyPlaying(ctx)
+	p.curVid = vid
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
@@ -80,6 +85,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		p.timeStarted = time.Now()
 
 		// share the Video with the system
+		prev := p.CurrentlyPlaying
 		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
 		if err != nil {
 			// Downstream of playout.CurrentlyPlaying; the wrapper there already
@@ -96,16 +102,15 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
-			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
-			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+		p.emitVideoChanged(ctx, 0)
 
 		// Persist the switch as a video_plays row — the durable half of the
 		// emission above (NATS core is fire-and-forget). The first tick after a
 		// restart records a fresh play for the clip already on screen, since its
 		// true start time wasn't observed.
 		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
-			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng,
+			p.switchCause(prev))
 
 		if p.OnChange != nil {
 			p.OnChange(ctx, p.CurrentlyPlaying)
@@ -118,6 +123,24 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		} else {
 			p.onscreens.HideGPSImage(ctx)
 		}
+	}
+}
+
+// switchCause is the structural reading of why the clip changed, for a
+// switch no chatbot command claims: the first observation after boot found
+// the clip already up; a clip that follows the previous one in corpus order
+// advanced naturally; anything else is a jump this process did not send.
+// Unknown ("") when either clip has no DB row to compare.
+func (p *Player) switchCause(prev Video) string {
+	switch {
+	case p.preVid == "":
+		return viewstats.CauseResume
+	case prev.ID == 0 || p.CurrentlyPlaying.ID == 0:
+		return ""
+	case prev.NextVid.Valid && int(prev.NextVid.Int64) == p.CurrentlyPlaying.ID:
+		return viewstats.CauseNatural
+	default:
+		return viewstats.CauseExternal
 	}
 }
 
@@ -218,7 +241,27 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	if p.CurrentlyPlaying.Slug == "" {
 		return
 	}
-	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
-		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
-		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+	p.emitVideoChanged(ctx, p.CurrentProgress())
+}
+
+// emitVideoChanged publishes the current clip with the van's velocity `at`
+// into it, so the console can point its marker and glide it between clips.
+// A clip with no track publishes without one; a stopped van publishes a
+// speed of 0 and no heading.
+func (p *Player) emitVideoChanged(ctx context.Context, at time.Duration) {
+	ev := eventbus.VideoChanged{
+		Platform: p.cfg.Platform,
+		File:     p.CurrentlyPlaying.File(),
+		State:    p.CurrentlyPlaying.State,
+		Flagged:  p.CurrentlyPlaying.Flagged,
+		Lat:      p.CurrentlyPlaying.Lat,
+		Lng:      p.CurrentlyPlaying.Lng,
+	}
+	if v, ok := VelocityAt(ctx, p.CurrentlyPlaying, at); ok {
+		ev.SpeedMPS = &v.SpeedMPS
+		if v.Moving {
+			ev.Heading = &v.Bearing
+		}
+	}
+	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, ev)
 }

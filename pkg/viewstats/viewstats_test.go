@@ -23,13 +23,55 @@ func setup(t *testing.T) *gorm.DB {
 
 	resetOpenPlays()
 	t.Cleanup(resetOpenPlays)
+	resetNotedCauses()
+	t.Cleanup(resetNotedCauses)
+	resetPeaks()
+	t.Cleanup(resetPeaks)
 	return db
+}
+
+func resetNotedCauses() {
+	causeMu.Lock()
+	notedCauses = map[string]notedCause{}
+	causeMu.Unlock()
 }
 
 func resetOpenPlays() {
 	openPlayMu.Lock()
 	openPlayIDs = map[string]int{}
 	openPlayMu.Unlock()
+}
+
+func resetPeaks() {
+	peakMu.Lock()
+	peaks = map[string]int{}
+	peakMu.Unlock()
+}
+
+// recordEvents reads the viewer_record rows the events table holds. Queried by
+// raw SQL rather than through pkg/events' model so this package's tests don't
+// take a dependency on that package's schema type.
+func recordEvents(t *testing.T, db *gorm.DB) []struct {
+	Platform string
+	Meta     string
+} {
+	t.Helper()
+	var rows []struct {
+		Platform string
+		Meta     string
+	}
+	err := db.Raw(`SELECT platform, meta::text AS meta FROM events
+		WHERE event = 'viewer_record' ORDER BY id`).Scan(&rows).Error
+	if err != nil {
+		t.Fatalf("read viewer_record events: %v", err)
+	}
+	return rows
+}
+
+// sample takes one tick with a reported audience of n.
+func sample(t *testing.T, n int) {
+	t.Helper()
+	RecordSample(context.Background(), testConf, 0, Audience{Count: n, Live: true, Reported: true}, 0, nil)
 }
 
 func allPlays(t *testing.T, db *gorm.DB) []VideoPlay {
@@ -53,7 +95,7 @@ func allSamples(t *testing.T, db *gorm.DB) []ViewerSample {
 func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
 	db := setup(t)
 
-	RecordPlay(context.Background(), testConf, 42, "Utah", true, 38.5, -109.5)
+	RecordPlay(context.Background(), testConf, 42, "Utah", true, 38.5, -109.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 1 {
@@ -79,12 +121,78 @@ func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
 	}
 }
 
+// The row carries the cause the Player read off the switch.
+func TestRecordPlay_PersistsStructuralCause(t *testing.T) {
+	db := setup(t)
+
+	RecordPlay(context.Background(), testConf, 42, "Utah", false, 38.5, -109.5, CauseResume)
+
+	if got := allPlays(t, db)[0].Cause; got != CauseResume {
+		t.Errorf("cause: want %q, got %q", CauseResume, got)
+	}
+}
+
+// A command the chatbot noted since the last play names the switch, whatever
+// the Player made of it structurally — and it is claimed once: the play
+// after it falls back to the Player's reading.
+func TestRecordPlay_ClaimsNotedCauseOnce(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+
+	NoteCause("twitch", CauseTimewarp)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5, CauseExternal)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
+
+	plays := allPlays(t, db)
+	if len(plays) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(plays))
+	}
+	if plays[0].Cause != CauseTimewarp || plays[1].Cause != CauseNatural {
+		t.Errorf("causes: want [timewarp natural], got [%s %s]", plays[0].Cause, plays[1].Cause)
+	}
+}
+
+// A note playout never acted on must not label a switch a minute and a half
+// later: past causeWindow the Player's reading stands and the note is gone.
+func TestRecordPlay_ExpiredNoteIsDropped(t *testing.T) {
+	db := setup(t)
+
+	causeMu.Lock()
+	notedCauses["twitch"] = notedCause{cause: CauseFind, at: time.Now().Add(-causeWindow - time.Second)}
+	causeMu.Unlock()
+	RecordPlay(context.Background(), testConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
+
+	if got := allPlays(t, db)[0].Cause; got != CauseNatural {
+		t.Errorf("cause: want %q, got %q", CauseNatural, got)
+	}
+	causeMu.Lock()
+	_, still := notedCauses["twitch"]
+	causeMu.Unlock()
+	if still {
+		t.Error("expired note was left behind")
+	}
+}
+
+// Notes are per platform: a Twitch !skip never names the YouTube instance's
+// next switch.
+func TestRecordPlay_NoteIsPerPlatform(t *testing.T) {
+	db := setup(t)
+	youtubeConf := &c.TripbotConfig{Environment: "testing", Platform: "youtube"}
+
+	NoteCause("twitch", CauseSkip)
+	RecordPlay(context.Background(), youtubeConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
+
+	if got := allPlays(t, db)[0].Cause; got != CauseNatural {
+		t.Errorf("cause: want %q, got %q", CauseNatural, got)
+	}
+}
+
 // A clip with no DB row (LoadOrCreate failed) still records the switch, with a
 // NULL video_id.
 func TestRecordPlay_ZeroVideoIDWritesNull(t *testing.T) {
 	db := setup(t)
 
-	RecordPlay(context.Background(), testConf, 0, "", false, 0, 0)
+	RecordPlay(context.Background(), testConf, 0, "", false, 0, 0, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 1 {
@@ -102,8 +210,8 @@ func TestRecordPlay_ClosesPreviousPlay(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 2 {
@@ -137,7 +245,7 @@ func TestRecordPlay_LeavesPriorProcessRowOpen(t *testing.T) {
 	}
 	resetOpenPlays()
 
-	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 2 {
@@ -155,8 +263,8 @@ func TestRecordPlay_ClosesOnlyOwnPlatform(t *testing.T) {
 	ctx := context.Background()
 	youtubeConf := &c.TripbotConfig{Environment: "testing", Platform: "youtube"}
 
-	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordPlay(ctx, youtubeConf, 43, "Colorado", false, 39.1, -108.5)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
+	RecordPlay(ctx, youtubeConf, 43, "Colorado", false, 39.1, -108.5, CauseNatural)
 
 	plays := allPlays(t, db)
 	if len(plays) != 2 {
@@ -259,7 +367,7 @@ func TestReadOnly_SkipsWrites(t *testing.T) {
 	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 	ctx := context.Background()
 
-	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
+	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5, CauseNatural)
 	RecordSample(ctx, readOnlyConf, 5, Audience{}, 42, nil)
 
 	if plays := allPlays(t, db); len(plays) != 0 {
@@ -308,5 +416,124 @@ func TestRecordSample_UnreportedAudienceWritesNull(t *testing.T) {
 	}
 	if samples[0].Viewers != nil || samples[0].Live != nil {
 		t.Errorf("viewers = %v live = %v, want both NULL", samples[0].Viewers, samples[0].Live)
+	}
+}
+
+func TestRecordSample_FirstReadingSetsTheBarWithoutAnnouncingIt(t *testing.T) {
+	db := setup(t)
+
+	// An empty series has no high to beat, so the first number reported is not
+	// a record — announcing it would make every fresh database claim one.
+	sample(t, 11)
+
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("expected no viewer_record event on the first reading, got %d", len(got))
+	}
+}
+
+func TestRecordSample_RecordsANewHigh(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 11) // sets the bar
+	sample(t, 9)  // under it
+	sample(t, 14) // clears it
+
+	events := recordEvents(t, db)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 viewer_record event, got %d", len(events))
+	}
+	if events[0].Platform != "twitch" {
+		t.Errorf("platform = %q, want twitch", events[0].Platform)
+	}
+	// Previous names the high it beat — 11, not the 9 immediately before it.
+	if want := `{"viewers": 14, "previous": 11}`; events[0].Meta != want {
+		t.Errorf("meta = %s, want %s", events[0].Meta, want)
+	}
+}
+
+func TestRecordSample_TyingTheHighIsNotARecord(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 11)
+	sample(t, 11)
+
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("equalling the high is not beating it, got %d events", len(got))
+	}
+}
+
+func TestRecordSample_UnreportedAndZeroCountsCannotSetARecord(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 11)
+	// NULL viewers means nobody counted, and nobody watching is not a
+	// milestone — neither may move the bar or announce one.
+	RecordSample(context.Background(), testConf, 5, Audience{}, 0, nil)
+	RecordSample(context.Background(), testConf, 5, Audience{Count: 0, Live: true, Reported: true}, 0, nil)
+	sample(t, 12)
+
+	events := recordEvents(t, db)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 viewer_record event, got %d", len(events))
+	}
+	if want := `{"viewers": 12, "previous": 11}`; events[0].Meta != want {
+		t.Errorf("meta = %s, want %s", events[0].Meta, want)
+	}
+}
+
+func TestRecordSample_SeedsThePeakFromTheSeries(t *testing.T) {
+	db := setup(t)
+
+	// History this process did not write — a restart, or another replica.
+	sample(t, 40)
+	resetPeaks()
+
+	sample(t, 30) // under the stored high: no record
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("a reading under the stored high is not a record, got %d", len(got))
+	}
+
+	sample(t, 41)
+	events := recordEvents(t, db)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 viewer_record event, got %d", len(events))
+	}
+	// The bar came from the table, so previous is 40 even though this process
+	// never saw that reading.
+	if want := `{"viewers": 41, "previous": 40}`; events[0].Meta != want {
+		t.Errorf("meta = %s, want %s", events[0].Meta, want)
+	}
+}
+
+func TestRecordSample_FailedPeakReadLeavesTheBarUnset(t *testing.T) {
+	db := setup(t)
+
+	sample(t, 40)
+	resetPeaks()
+
+	// A DB blip on the tick that would seed the bar: a cancelled context is
+	// the cheapest real query failure. The reading can't be judged, so it
+	// must not become the bar either.
+	failing, cancel := context.WithCancel(context.Background())
+	cancel()
+	RecordSample(failing, testConf, 5, Audience{Count: 5, Live: true, Reported: true}, 0, nil)
+
+	sample(t, 6) // still under the stored 40
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("a reading under the stored high is not a record, got %v", got)
+	}
+}
+
+func TestRecordSample_ReadOnlyRecordsNothing(t *testing.T) {
+	db := setup(t)
+	ro := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
+
+	RecordSample(context.Background(), ro, 0, Audience{Count: 99, Live: true, Reported: true}, 0, nil)
+
+	if got := recordEvents(t, db); len(got) != 0 {
+		t.Fatalf("a read-only instance must write nothing, got %d events", len(got))
+	}
+	if got := allSamples(t, db); len(got) != 0 {
+		t.Fatalf("a read-only instance must write no samples, got %d", len(got))
 	}
 }

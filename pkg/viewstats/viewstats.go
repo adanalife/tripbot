@@ -16,6 +16,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 )
 
 // VideoPlay is one video_plays row: a clip landed on screen at StartedAt.
@@ -35,6 +36,10 @@ type VideoPlay struct {
 	// the zero value over its DEFAULT CURRENT_TIMESTAMP. See pkg/events for
 	// the full story.
 	StartedAt time.Time `gorm:"autoCreateTime"`
+	// Cause is why the clip changed — one of the Cause* constants, or ""
+	// when it couldn't be told (the clip had no DB row to compare against,
+	// or the row predates the column).
+	Cause string
 	// EndedAt is when the clip stopped airing, stamped by the play that
 	// supersedes this row. nil means the end was never observed — the process
 	// crashed or restarted while the clip was up, or the row predates the
@@ -65,6 +70,78 @@ type ViewerSample struct {
 	ChatMessages *int
 	// autoCreateTime: see VideoPlay.StartedAt.
 	SampledAt time.Time `gorm:"autoCreateTime"`
+}
+
+// Why a clip changed, as a video_plays row records it. The Player reads the
+// structural causes off the switch it observes; the command causes are noted
+// by the chatbot before the command goes out (NoteCause) and claimed by the
+// next switch RecordPlay sees.
+const (
+	// CauseNatural — the clip before it ended and playout advanced in corpus
+	// order.
+	CauseNatural = "natural"
+	// CauseResume — the first observation after this process started: the
+	// clip was already up, and its real start was never seen.
+	CauseResume = "resume"
+	// CauseExternal — a jump this process did not send: the console, another
+	// client, or playout restarting onto its last-played clip.
+	CauseExternal = "external"
+	// CauseTimewarp — !timewarp, a correct guess, a gift effect: playout's
+	// random pick.
+	CauseTimewarp = "timewarp"
+	// CauseJump — !jump / !daytime: a chosen clip.
+	CauseJump = "jump"
+	// CauseFind — !find: a chosen moment.
+	CauseFind = "find"
+	// CauseSkip — !skip / !back by clips.
+	CauseSkip = "skip"
+	// CauseSeek — !skip / !back by duration, when the seek crosses a clip
+	// boundary.
+	CauseSeek = "seek"
+)
+
+// causeWindow is how long a noted cause waits to be claimed. The now-playing
+// poll runs every 60s, so a switch is observed up to a minute after the
+// command that caused it; a command playout never acted on expires unclaimed.
+// ponytail: a natural switch landing between a command and the next poll is
+// attributed to the command — the poll interval is the resolution, and a
+// playout-reported cause on the video.changed event is the upgrade path.
+const causeWindow = 90 * time.Second
+
+type notedCause struct {
+	cause string
+	at    time.Time
+}
+
+var (
+	causeMu     sync.Mutex
+	notedCauses = map[string]notedCause{}
+)
+
+// NoteCause records that this platform's chatbot just sent playout a command
+// that will change the clip, so the switch the Player observes next is
+// recorded with that cause rather than read as external. A later note
+// replaces an unclaimed earlier one.
+func NoteCause(platform, cause string) {
+	causeMu.Lock()
+	notedCauses[platform] = notedCause{cause: cause, at: time.Now()}
+	causeMu.Unlock()
+}
+
+// claimCause returns the platform's noted cause if one is waiting within
+// causeWindow, consuming it, and the Player's structural reading otherwise.
+func claimCause(platform, structural string) string {
+	causeMu.Lock()
+	defer causeMu.Unlock()
+	n, ok := notedCauses[platform]
+	if !ok {
+		return structural
+	}
+	delete(notedCauses, platform)
+	if time.Since(n.at) > causeWindow {
+		return structural
+	}
+	return n.cause
 }
 
 // openPlayIDs remembers, per platform, the id of the video_plays row this
@@ -99,8 +176,9 @@ func closePreviousPlay(ctx context.Context, platform string) {
 // RecordPlay writes a video_plays row for a clip switch, closing the
 // platform's previous row (its clip stopped airing the moment this one
 // started). Pass videoID 0 when the clip has no DB row; the row is written
-// with a NULL video_id.
-func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64) {
+// with a NULL video_id. cause is the Player's structural reading of the
+// switch; a command the chatbot noted since the last play takes precedence.
+func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64, cause string) {
 	if cfg.ReadOnly {
 		return
 	}
@@ -116,6 +194,7 @@ func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state st
 		Flagged:  flagged,
 		Lat:      lat,
 		Lng:      lng,
+		Cause:    claimCause(cfg.Platform, cause),
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&play).Error; err != nil {
 		slog.ErrorContext(ctx, "error recording video play", "err", err, "video_id", videoID)
@@ -135,6 +214,77 @@ type Audience struct {
 	Reported bool
 }
 
+// peaks caches, per platform, the highest concurrent-viewer count the series
+// holds, so the record check costs a comparison rather than a query every tick.
+// Seeded once per platform from the table itself, which is what makes it
+// survive a restart: the high is a property of the history, not of this
+// process. Unlike openPlayIDs above, a value carried over from a previous
+// process is exactly what's wanted here.
+var (
+	peakMu sync.Mutex
+	peaks  = map[string]int{}
+)
+
+// storedPeak reads the platform's highest recorded concurrent-viewer count.
+// 0 when the series holds none — an empty table, or a platform that has never
+// had a number reported.
+func storedPeak(ctx context.Context, platform string) (int, error) {
+	var peak int
+	err := database.GormDB().WithContext(ctx).Model(&ViewerSample{}).
+		Where("platform = ?", platform).
+		Select("COALESCE(MAX(viewers), 0)").Scan(&peak).Error
+	return peak, err
+}
+
+// checkPeak emits a viewer_record event when this tick's audience beats the
+// platform's all-time high. Called before the sample row is written, so the
+// high it compares against is the history this reading is about to join rather
+// than one that already includes it.
+//
+// An unreported or zero count can't set a record: NULL means nobody counted,
+// and nobody watching is not a milestone.
+func checkPeak(ctx context.Context, cfg *c.TripbotConfig, audience Audience) {
+	if !audience.Reported || audience.Count <= 0 {
+		return
+	}
+
+	peakMu.Lock()
+	previous, seeded := peaks[cfg.Platform]
+	if !seeded {
+		var err error
+		previous, err = storedPeak(ctx, cfg.Platform)
+		if err != nil {
+			// Leave the platform unseeded so the next tick retries the read.
+			// This costs at most one missed record announcement; seeding from
+			// the failed read would set the bar at this tick's count and
+			// announce false records against it.
+			peakMu.Unlock()
+			slog.ErrorContext(ctx, "error reading peak viewer count", "err", err, "platform", cfg.Platform)
+			return
+		}
+	}
+	beaten := audience.Count > previous
+	if beaten || !seeded {
+		peaks[cfg.Platform] = max(previous, audience.Count)
+	}
+	peakMu.Unlock()
+
+	if !beaten {
+		return
+	}
+	if previous == 0 {
+		// Nothing to beat. Announcing "a new all-time high" against an empty
+		// series would make the first number ever reported a milestone, so the
+		// bar gets set silently and the next reading that clears it is the
+		// first real record.
+		return
+	}
+	if err := events.ViewerRecord(ctx, cfg, audience.Count, previous); err != nil {
+		slog.ErrorContext(ctx, "error recording viewer record", "err", err,
+			"viewers", audience.Count, "previous", previous)
+	}
+}
+
 // RecordSample writes a viewer_samples row for one viewer-count tick.
 // chatters is the in-chat total; audience is the watching total, which the two
 // columns keep apart because they answer different questions and only one of
@@ -150,6 +300,7 @@ func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audie
 	if cfg.ReadOnly {
 		return
 	}
+	checkPeak(ctx, cfg, audience)
 	var vid *int
 	if videoID != 0 {
 		vid = &videoID

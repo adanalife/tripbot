@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
@@ -32,6 +33,15 @@ type Scoreboards interface {
 	// MilesMonth is the display name of the month the miles board covers
 	// ("July") — the overlay title, not a lookup key.
 	MilesMonth() string
+	// LastMonthMiles and LastMonthGuesses are the two boards as they stood when
+	// the previous month ended, in the same shapes as TopMiles and TopGuesses.
+	// They read the month-end snapshot the rollup tick freezes once per board,
+	// so both come back empty until that tick has run.
+	LastMonthMiles(ctx context.Context, size int) [][]string
+	LastMonthGuesses(ctx context.Context, size int) [][]string
+	// LastMonth is a time inside the month those boards cover, for the caller
+	// to format as a title or as a lookup key.
+	LastMonth() time.Time
 	// CreditGuess records one correct state guess for u, on both the lifetime
 	// and the current month's board. Errors are logged rather than returned:
 	// the guesser has already been told they were right, and failing the
@@ -55,6 +65,18 @@ func (r realScoreboards) TopGuesses(ctx context.Context, size int) [][]string {
 
 func (r realScoreboards) MilesMonth() string {
 	return scoreboards.CurrentMilesMonth()
+}
+
+func (r realScoreboards) LastMonthMiles(ctx context.Context, size int) [][]string {
+	return scoreboards.SnapshotTopUsers(ctx, r.cfg, scoreboards.PreviousMilesScoreboard(), size)
+}
+
+func (r realScoreboards) LastMonthGuesses(ctx context.Context, size int) [][]string {
+	return scoreboards.GuessRows(scoreboards.SnapshotTopUsers(ctx, r.cfg, scoreboards.PreviousGuessScoreboard(), size))
+}
+
+func (r realScoreboards) LastMonth() time.Time {
+	return scoreboards.PreviousMonth()
 }
 
 // CreditGuess writes both boards. The pairing lives here rather than at the

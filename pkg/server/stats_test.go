@@ -1,20 +1,79 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"gorm.io/gorm"
 )
+
+// resetLifetimeCache clears the lifetime cache so a test sees its own seeded
+// data rather than whatever the previous test left cached.
+func resetLifetimeCache() {
+	lifetimeCache.Lock()
+	defer lifetimeCache.Unlock()
+	lifetimeCache.stats, lifetimeCache.builtAt = lifetimeStatsResponse{}, time.Time{}
+}
+
+// The lifetime figures are whole-table scans over an append-only log: a page
+// load must not re-run them once the answer is cached.
+func TestLifetimeStatsHandler_CachesTheGatheredStats(t *testing.T) {
+	gathers := 0
+	saved := lifetimeStatsSource
+	t.Cleanup(func() { lifetimeStatsSource = saved; resetLifetimeCache() })
+	lifetimeStatsSource = func(context.Context) (lifetimeStatsResponse, error) {
+		gathers++
+		return lifetimeStatsResponse{EventsTotal: 7, EventKinds: []eventKindCount{}}, nil
+	}
+	resetLifetimeCache()
+
+	for range 3 {
+		rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
+		if !strings.Contains(rec.Body.String(), `"events_total":7`) {
+			t.Fatalf("body = %s, want the gathered stats", rec.Body.String())
+		}
+	}
+	if gathers != 1 {
+		t.Errorf("gathered the stats %d times, want 1", gathers)
+	}
+}
+
+// A failed gather must not be cached, or one DB blip pins a 500 for the whole
+// TTL.
+func TestLifetimeStatsHandler_ErrorIsNotCached(t *testing.T) {
+	gathers := 0
+	saved := lifetimeStatsSource
+	t.Cleanup(func() { lifetimeStatsSource = saved; resetLifetimeCache() })
+	lifetimeStatsSource = func(context.Context) (lifetimeStatsResponse, error) {
+		gathers++
+		return lifetimeStatsResponse{}, errors.New("db is down")
+	}
+	resetLifetimeCache()
+
+	for range 2 {
+		if rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler); rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", rec.Code)
+		}
+	}
+	if gathers != 2 {
+		t.Errorf("gathered the stats %d times, want 2 (a failed gather isn't cached)", gathers)
+	}
+}
 
 // The empty-data contract for the stats page: arrays are [], the nullable
 // scalars (since, hours, peak_chatters) are null, counters are zero.
 func TestLifetimeStatsHandler_EmptyDataShape(t *testing.T) {
 	testdb.New(t)
+	resetLifetimeCache()
+	t.Cleanup(resetLifetimeCache)
 	rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
@@ -46,7 +105,7 @@ func TestPlaybackStatsHandler_EmptyDataShape(t *testing.T) {
 
 func TestCommunityStatsHandler_EmptyDataShape(t *testing.T) {
 	testdb.New(t)
-	rec := insightsGET(t, "/api/stats/community", communityStatsHandler)
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -68,7 +127,7 @@ func TestStatsHandlers_ClampDays(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"days":90`) {
 		t.Errorf("playback days=500 should clamp to 90: %s", rec.Body.String())
 	}
-	rec = insightsGET(t, "/api/stats/community?days=0", communityStatsHandler)
+	rec = insightsGET(t, "/api/stats/community?days=0", communityServer.communityStatsHandler)
 	if !strings.Contains(rec.Body.String(), `"days":1`) {
 		t.Errorf("community days=0 should clamp to 1: %s", rec.Body.String())
 	}
@@ -100,7 +159,7 @@ func TestLifetimeStatsHandler_Aggregates(t *testing.T) {
 	// Postgres stores microseconds; truncate so the round trip compares equal.
 	base := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Microsecond)
 
-	// A sentinel-dated row from the old insert bug: counted in the census,
+	// A zero-time (0001-01-01) row: counted in the census,
 	// ignored by since.
 	sentinel := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
 	seedPlainEvent(t, db, "stats_alice", "login", sentinel)
@@ -126,6 +185,8 @@ func TestLifetimeStatsHandler_Aggregates(t *testing.T) {
 	seedSample(t, db, vid, 9, peakAt)
 	seedSample(t, db, vid, 9, peakAt.Add(time.Minute)) // tie: the earlier peak wins
 
+	resetLifetimeCache()
+	t.Cleanup(resetLifetimeCache)
 	rec := insightsGET(t, "/api/stats/lifetime", lifetimeStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
@@ -212,6 +273,78 @@ func TestPlaybackStatsHandler_Aggregates(t *testing.T) {
 	}
 }
 
+func TestPlaybackDailySince(t *testing.T) {
+	now := time.Date(2026, 10, 14, 23, 30, 0, 0, time.UTC)
+	if got := playbackDailySince(1, now); !got.Equal(time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("one day = today's midnight, got %v", got)
+	}
+	if got := playbackDailySince(7, now); !got.Equal(time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("seven days end today, got %v", got)
+	}
+}
+
+// One row per day of the window, oldest first, zeros where nothing happened;
+// events outside the window and bots' events count toward nothing.
+func TestPlaybackDailyHandler_Buckets(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "daily_alice", false)
+	seedUser(t, db, "daily_bot", true)
+	in := time.Now().Add(-1 * time.Hour)
+	earlier := time.Now().Add(-3 * 24 * time.Hour)
+	out := time.Now().Add(-40 * 24 * time.Hour)
+
+	vid := seedVideo(t, db, "stats_clip_daily", "Utah", "", nil)
+	seedPlay(t, db, vid, in)
+	seedPlay(t, db, vid, out)
+	seedEvent(t, db, "", "state_crossing", `{"sequential":true}`, earlier)
+	seedEvent(t, db, "daily_alice", "timewarp", `{}`, earlier)
+	seedEvent(t, db, "daily_alice", "guess_submitted", `{"correct":true}`, in)
+	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!guess"}`, in)
+	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!miles"}`, in)
+	seedEvent(t, db, "daily_bot", "command_run", `{"command":"!miles"}`, in)
+	seedEvent(t, db, "daily_alice", "command_run", `{"command":"!miles"}`, out)
+	seedSession(t, db, "twitch", "daily_alice", earlier, 10)
+	seedSession(t, db, "twitch", "daily_alice", earlier.Add(time.Hour), 30)
+	seedSession(t, db, "twitch", "daily_bot", earlier, 500)
+	seedSession(t, db, "twitch", "daily_alice", out, 45)
+
+	rec := insightsGET(t, "/api/stats/playback/daily?days=7", playbackDailyHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got playbackDailyResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if got.Days != 7 || len(got.Buckets) != 7 {
+		t.Fatalf("days = %d, buckets = %d, want 7 and 7: %s", got.Days, len(got.Buckets), rec.Body.String())
+	}
+	var sum playbackDay
+	busy := 0
+	for i, b := range got.Buckets {
+		if i > 0 && b.Day <= got.Buckets[i-1].Day {
+			t.Errorf("buckets out of order at %d: %s after %s", i, b.Day, got.Buckets[i-1].Day)
+		}
+		sum.Plays += b.Plays
+		sum.Crossings += b.Crossings
+		sum.Timewarps += b.Timewarps
+		sum.Guesses += b.Guesses
+		sum.Commands += b.Commands
+		sum.Visits += b.Visits
+		sum.MedianMinutes += b.MedianMinutes
+		if b.Commands > 0 {
+			busy++
+		}
+	}
+	want := playbackDay{Plays: 1, Crossings: 1, Timewarps: 1, Guesses: 1, Commands: 2, Visits: 2, MedianMinutes: 20}
+	if sum != want {
+		t.Errorf("window totals = %+v, want %+v", sum, want)
+	}
+	if busy != 1 {
+		t.Errorf("commands landed on %d days, want 1", busy)
+	}
+}
+
 // seedMilesUser writes a users row with a display-miles total and leaderboard
 // eligibility flags.
 func seedMilesUser(t *testing.T, db *gorm.DB, username string, miles float64, isBot, optedOut bool) {
@@ -225,8 +358,13 @@ func seedMilesUser(t *testing.T, db *gorm.DB, username string, miles float64, is
 
 func seedSnapshot(t *testing.T, db *gorm.DB, board string, rank int, username string, value float64) {
 	t.Helper()
+	seedSnapshotOn(t, db, "twitch", board, rank, username, value)
+}
+
+func seedSnapshotOn(t *testing.T, db *gorm.DB, platform, board string, rank int, username string, value float64) {
+	t.Helper()
 	err := db.Exec(`INSERT INTO scoreboard_snapshots (scoreboard_name, platform, rank, username, value)
-	                VALUES (?, 'twitch', ?, ?, ?)`, board, rank, username, value).Error
+	                VALUES (?, ?, ?, ?, ?)`, board, platform, rank, username, value).Error
 	if err != nil {
 		t.Fatalf("insert snapshot %s rank %d: %v", board, rank, err)
 	}
@@ -260,7 +398,7 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	seedSnapshot(t, db, "guess_state_2026_07", 1, "comm_bob", 12)
 	seedSnapshot(t, db, "guess_state_2026_07", 2, "comm_alice", 3)
 
-	rec := insightsGET(t, "/api/stats/community", communityStatsHandler)
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -302,5 +440,83 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	}
 	if miles.Rows[4].Rank != 5 || miles.Rows[4].Username != "g5" {
 		t.Errorf("miles rows[4] = %+v, want rank 5 g5", miles.Rows[4])
+	}
+}
+
+// communityServer answers /api/stats/community as the twitch instance.
+var communityServer = New(&c.TripbotConfig{Environment: "testing", Platform: "twitch"})
+
+// Snapshots rank each platform separately, so the boards carry only the
+// asking instance's platform: one player per rank, and a newer month frozen
+// on another platform doesn't hide this one's latest.
+func TestCommunityStatsHandler_BoardsAreThisPlatforms(t *testing.T) {
+	db := testdb.New(t)
+	seedSnapshotOn(t, db, "twitch", "miles_2026_07", 1, "alice", 70)
+	seedSnapshotOn(t, db, "twitch", "miles_2026_07", 2, "carol", 50)
+	seedSnapshotOn(t, db, "kick", "miles_2026_07", 1, "bob", 90)
+	seedSnapshotOn(t, db, "kick", "miles_2026_08", 1, "dave", 10)
+
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got communityStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	want := []boardRow{{Rank: 1, Username: "alice", Value: 70}, {Rank: 2, Username: "carol", Value: 50}}
+	if len(got.Boards) != 1 || got.Boards[0].Board != "miles_2026_07" || !slices.Equal(got.Boards[0].Rows, want) {
+		t.Fatalf("boards = %+v, want only twitch's miles_2026_07 rows %+v", got.Boards, want)
+	}
+}
+
+// seedSongRun writes a command_run row for !song carrying the track it named;
+// an empty title writes a run that named nothing.
+func seedSongRun(t *testing.T, db *gorm.DB, username, title, artist string, at time.Time) {
+	t.Helper()
+	meta := `{"command":"!song"}`
+	if title != "" {
+		b, _ := json.Marshal(map[string]any{"command": "!song",
+			"detail": map[string]string{"bed": "radio", "title": title, "artist": artist}})
+		meta = string(b)
+	}
+	err := db.Exec(`INSERT INTO events (platform, username, event, meta, date_created)
+	                VALUES ('twitch', ?, 'command_run', ?::jsonb, ?)`, username, meta, at).Error
+	if err != nil {
+		t.Fatalf("insert !song run for %s: %v", username, err)
+	}
+}
+
+func TestSongStatsHandler_RanksTheNamedTracks(t *testing.T) {
+	db := testdb.New(t)
+	seedMilesUser(t, db, "song_alice", 0, false, false)
+	seedMilesUser(t, db, "song_bob", 0, false, false)
+	seedMilesUser(t, db, "song_bot", 0, true, false)
+	in := time.Now().Add(-1 * time.Hour)
+
+	seedSongRun(t, db, "song_alice", "Big Wow", "Steve Cobby", in)
+	seedSongRun(t, db, "song_alice", "Big Wow", "Steve Cobby", in.Add(time.Minute))
+	seedSongRun(t, db, "song_bob", "Big Wow", "Steve Cobby", in.Add(2*time.Minute))
+	seedSongRun(t, db, "song_bob", "Colorado Sunrise", "Fifty Horizons", in)
+	seedSongRun(t, db, "song_bot", "Colorado Sunrise", "Fifty Horizons", in)             // bot: not counted
+	seedSongRun(t, db, "song_bob", "", "", in)                                           // named nothing
+	seedSongRun(t, db, "song_bob", "Stale", "Nobody", time.Now().Add(-100*24*time.Hour)) // outside the window
+
+	rec := insightsGET(t, "/api/stats/songs", songStatsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got songStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if got.Days != 90 || len(got.Songs) != 2 {
+		t.Fatalf("got %+v, want days 90 and two songs", got)
+	}
+	if s := got.Songs[0]; s.Title != "Big Wow" || s.Artist != "Steve Cobby" || s.Count != 3 || s.Askers != 2 {
+		t.Errorf("songs[0] = %+v, want Big Wow ×3 by 2 askers", s)
+	}
+	if s := got.Songs[1]; s.Title != "Colorado Sunrise" || s.Count != 1 || s.Askers != 1 {
+		t.Errorf("songs[1] = %+v, want Colorado Sunrise ×1 (bot excluded)", s)
 	}
 }

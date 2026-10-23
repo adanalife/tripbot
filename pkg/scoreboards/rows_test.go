@@ -38,6 +38,13 @@ func TestGuessRows(t *testing.T) {
 			want:  nil,
 		},
 		{
+			// A pair short of its value cell: skipped rather than panicking on
+			// the index, since these rows come back from a DB scan.
+			name:  "drops a pair with no value cell",
+			pairs: [][]string{{"viewer1"}, {"viewer2", "3.0"}},
+			want:  [][]string{{"viewer2", "3"}},
+		},
+		{
 			// A malformed value shouldn't render as a blank-scored row.
 			name:  "value with no decimal point survives",
 			pairs: [][]string{{"viewer1", "4"}, {"viewer2", ""}},
@@ -45,8 +52,8 @@ func TestGuessRows(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := guessRows(tt.pairs); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("guessRows(%v) = %v, want %v", tt.pairs, got, tt.want)
+			if got := GuessRows(tt.pairs); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GuessRows(%v) = %v, want %v", tt.pairs, got, tt.want)
 			}
 		})
 	}

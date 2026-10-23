@@ -10,7 +10,7 @@ data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
   COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
-  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local
+  DATABASE_HOST: pg-rw.prod-1-data.svc.cluster.local.
   ENV: production
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
@@ -28,7 +28,6 @@ data:
   STREAM_PLATFORM: youtube
   TRIPBOT_SERVER_PORT: "8080"
   YOUTUBE_API_URL: http://gateway-youtube.prod-1.svc.cluster.local:8080
-  YOUTUBE_INBOUND_ENABLED: "false"
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -66,7 +65,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 1ce1890672
+        adanalife.dev/config-hash: aa460a5746
       labels:
         app: tripbot-youtube
     spec:
@@ -81,7 +80,7 @@ spec:
                 name: tripbot-database-creds
             - secretRef:
                 name: sentry-tripbot
-                optional: true
+                optional: false
             - secretRef:
                 name: tripbot-google-maps-api-key
             - secretRef:
@@ -92,7 +91,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:5.11.0
+          image: adanalife/tripbot:6.1.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -123,6 +122,9 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - mountPath: /opt/tripbot/assets/radio
+              name: radio-stations
+              readOnly: true
             - mountPath: /opt/tripbot/assets/music-index
               name: music-index
               readOnly: true
@@ -140,10 +142,12 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.11.0
+          image: adanalife/tripbot:6.1.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
+            limits:
+              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
@@ -160,6 +164,10 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       volumes:
+        - name: radio-stations
+          secret:
+            optional: true
+            secretName: tripbot-radio-stations
         - configMap:
             name: obs-music-index
             optional: true
@@ -188,7 +196,7 @@ spec:
       containers:
         - args:
             - manifest
-            - adanalife/tripbot:5.11.0
+            - adanalife/tripbot:6.1.0
           image: gcr.io/go-containerregistry/crane:v0.21.7
           name: image-gate
           resources:
@@ -228,3 +236,29 @@ spec:
   selector:
     app: tripbot-youtube
   type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-youtube
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-youtube
+  namespace: prod-1
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: prod-1
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: tripbot-youtube
+  policyTypes:
+    - Ingress

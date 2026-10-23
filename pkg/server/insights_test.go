@@ -1,7 +1,11 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -10,9 +14,30 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
+
+func TestLogQueryFailure_LevelFollowsTheCaller(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	logQueryFailure(context.Background(), "q failed", errors.New("boom"), "days", 7)
+	if got := buf.String(); !strings.Contains(got, "level=ERROR") || !strings.Contains(got, "days=7") {
+		t.Errorf("live caller: got %q, want level=ERROR with days=7", got)
+	}
+
+	buf.Reset()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	logQueryFailure(ctx, "q failed", errors.New("pq: canceling statement due to user request"))
+	if got := buf.String(); !strings.Contains(got, "level=WARN") {
+		t.Errorf("caller gone: got %q, want level=WARN", got)
+	}
+}
 
 func TestInsightsDays(t *testing.T) {
 	cases := []struct {
@@ -37,6 +62,38 @@ func TestInsightsDays(t *testing.T) {
 		if got := insightsDays(r, c.def); got != c.want {
 			t.Errorf("insightsDays(%q, %d) = %d, want %d", c.query, c.def, got, c.want)
 		}
+	}
+}
+
+func TestInsightsWindowDays_ZeroIsAllTime(t *testing.T) {
+	cases := []struct {
+		query string
+		want  int
+	}{
+		{"", 7},        // absent -> default
+		{"days=0", 0},  // all time
+		{"days=-5", 0}, // below range -> all time, not a one-day window
+		{"days=30", 30},
+		{"days=500", 90},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest(http.MethodGet, "/api/insights/footage?"+c.query, nil)
+		if got := insightsWindowDays(r, 7); got != c.want {
+			t.Errorf("insightsWindowDays(%q) = %d, want %d", c.query, got, c.want)
+		}
+	}
+}
+
+func TestInsightsSince(t *testing.T) {
+	if got := insightsSince(0); !got.Equal(time.Unix(0, 0)) {
+		t.Errorf("all time should start at the epoch, got %v", got)
+	}
+	since := insightsSince(7)
+	if d := time.Since(since); d < 7*24*time.Hour-time.Minute || d > 7*24*time.Hour+time.Minute {
+		t.Errorf("a 7-day window should start a week ago, got %v ago", d)
+	}
+	if !insightsSince(90).After(insightsSince(0)) {
+		t.Error("a bounded window must start after the epoch")
 	}
 }
 
@@ -353,9 +410,122 @@ func TestFootageInsightsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("clips = %+v, want %+v", got.Clips, want)
 	}
 	for i := range want {
-		if got.Clips[i] != want[i] {
-			t.Errorf("clips[%d] = %+v, want %+v", i, got.Clips[i], want[i])
+		// The seeds above carry none of the later columns, so every pointer
+		// field must come back null — a 0 there would claim nobody watched.
+		if !sameClip(got.Clips[i], want[i]) {
+			t.Errorf("clips[%d] = %s, want %s", i, clipJSON(t, got.Clips[i]), clipJSON(t, want[i]))
 		}
+	}
+}
+
+// days=0 reads the whole history: a clip whose every sample predates any
+// bounded window still reports, and the response says which window it is.
+func TestFootageInsightsHandler_AllTime(t *testing.T) {
+	db := testdb.New(t)
+	old := time.Now().Add(-200 * 24 * time.Hour)
+	clip := seedVideo(t, db, "insights_clip_old", "Oregon", "", nil)
+	for i, n := range []int{2, 3, 4} {
+		seedSample(t, db, clip, n, old.Add(time.Duration(i)*time.Minute))
+	}
+	seedPlay(t, db, clip, old)
+
+	decode := func(rec *httptest.ResponseRecorder) footageInsightsResponse {
+		t.Helper()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+		}
+		var got footageInsightsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+		}
+		return got
+	}
+
+	bounded := decode(insightsGET(t, "/api/insights/footage?days=90", footageInsightsHandler))
+	if bounded.Days != 90 || len(bounded.Clips) != 0 {
+		t.Errorf("90d: days = %d, clips = %+v; want 90 and none", bounded.Days, bounded.Clips)
+	}
+	all := decode(insightsGET(t, "/api/insights/footage?days=0", footageInsightsHandler))
+	if all.Days != 0 {
+		t.Errorf("all time: days = %d, want 0", all.Days)
+	}
+	if len(all.Clips) != 1 || all.Clips[0].VideoID != clip || all.Clips[0].Plays != 1 {
+		t.Errorf("all time: clips = %s, want the 200-day-old clip with its one play", clipJSON(t, all.Clips[0]))
+	}
+}
+
+// sameClip compares two clips through their JSON, since the pointer fields
+// make == compare addresses.
+func sameClip(a, b clipInsight) bool {
+	aj, _ := json.Marshal(a)
+	bj, _ := json.Marshal(b)
+	return string(aj) == string(bj)
+}
+
+func clipJSON(t *testing.T, c clipInsight) string {
+	t.Helper()
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestFootageInsightsHandler_AudienceColumns covers the columns that arrived
+// after the table: viewers and live (migration 047), chat_messages (051) and
+// ended_at (050). An offline tick's viewers stay out of the average, a tick
+// with no chat counter stays out of the rate, and an open play — a restart
+// mid-clip — stays out of the mean airing rather than reading as endless.
+func TestFootageInsightsHandler_AudienceColumns(t *testing.T) {
+	db := testdb.New(t)
+	in := time.Now().Add(-1 * time.Hour)
+	clip := seedVideo(t, db, "insights_clip_audience", "Utah", "", nil)
+
+	live, offline := true, false
+	ten, twenty, huge := 10, 20, 999
+	seedSampleFull(t, db, clip, 2, &ten, &live, in)
+	seedSampleFull(t, db, clip, 2, &twenty, &live, in.Add(time.Minute))
+	seedSampleFull(t, db, clip, 2, &huge, &offline, in.Add(2*time.Minute))
+	// Two ticks carried a chat counter (3 and 5 messages); the third did not.
+	if err := db.Exec(`UPDATE viewer_samples SET chat_messages = 3 WHERE video_id = ? AND sampled_at = ?`, clip, in).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`UPDATE viewer_samples SET chat_messages = 5 WHERE video_id = ? AND sampled_at = ?`, clip, in.Add(time.Minute)).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Two closed plays of 120s and 180s, and one left open by a restart.
+	e1, e2 := in.Add(120*time.Second), in.Add(10*time.Minute+180*time.Second)
+	seedClosedPlay(t, db, clip, in, &e1)
+	seedClosedPlay(t, db, clip, in.Add(10*time.Minute), &e2)
+	seedClosedPlay(t, db, clip, in.Add(20*time.Minute), nil)
+
+	rec := insightsGET(t, "/api/insights/footage", footageInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got footageInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if len(got.Clips) != 1 {
+		t.Fatalf("clips = %+v, want one", got.Clips)
+	}
+	c := got.Clips[0]
+	if c.AvgViewers == nil || *c.AvgViewers != 15 {
+		t.Errorf("avg_viewers = %v, want 15 — the offline 999 must be excluded", c.AvgViewers)
+	}
+	if c.MaxViewers == nil || *c.MaxViewers != 20 {
+		t.Errorf("max_viewers = %v, want 20", c.MaxViewers)
+	}
+	if c.ChatPerMin == nil || *c.ChatPerMin != 4 {
+		t.Errorf("chat_per_min = %v, want 4 — the tick with no counter must not count", c.ChatPerMin)
+	}
+	if c.Plays != 3 || c.ClosedPlays != 2 {
+		t.Errorf("plays = %d closed = %d, want 3 and 2", c.Plays, c.ClosedPlays)
+	}
+	if c.AvgPlayedSeconds == nil || *c.AvgPlayedSeconds != 150 {
+		t.Errorf("avg_played_seconds = %v, want 150 — the open play must stay out", c.AvgPlayedSeconds)
 	}
 }
 
@@ -735,4 +905,90 @@ func pointsDiff(got, want []viewerPoint) string {
 		return "got " + string(g) + ", want " + string(w)
 	}
 	return ""
+}
+
+// seedSession inserts a login and, when minutes >= 0, the logout sharing its
+// session_id. A negative minutes leaves the login open.
+func seedSession(t *testing.T, db *gorm.DB, platform, username string, at time.Time, minutes float64) {
+	t.Helper()
+	id := uuid.New()
+	insert := `INSERT INTO events (platform, username, event, session_id, date_created) VALUES (?, ?, ?, ?, ?)`
+	if err := db.Exec(insert, platform, username, "login", id, at).Error; err != nil {
+		t.Fatalf("insert login: %v", err)
+	}
+	if minutes < 0 {
+		return
+	}
+	out := at.Add(time.Duration(minutes * float64(time.Minute)))
+	if err := db.Exec(insert, platform, username, "logout", id, out).Error; err != nil {
+		t.Fatalf("insert logout: %v", err)
+	}
+}
+
+func TestSessionInsightsHandler_EmptyDataShape(t *testing.T) {
+	testdb.New(t)
+	rec := insightsGET(t, "/api/insights/sessions", sessionInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	for _, want := range []string{`"days":7`, `"platforms":[]`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body missing %s: %s", want, rec.Body.String())
+		}
+	}
+}
+
+func TestSessionInsightsHandler_Aggregates(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "ses_alice", false)
+	seedUser(t, db, "ses_bob", false)
+	seedUser(t, db, "ses_bot", true)
+	if err := db.Exec(`INSERT INTO users (username, platform, is_bot) VALUES ('ses_yt', 'youtube', false)`).Error; err != nil {
+		t.Fatalf("insert youtube user: %v", err)
+	}
+	day := time.Now().Add(-24 * time.Hour)
+
+	// Five twitch visits, one per bucket boundary side: 2, 10, 20, 60, 180 min.
+	for i, m := range []float64{2, 10, 20, 60, 180} {
+		who := "ses_alice"
+		if i%2 == 1 {
+			who = "ses_bob"
+		}
+		seedSession(t, db, "twitch", who, day.Add(time.Duration(i)*time.Hour), m)
+	}
+	// Left out: a bot's visit, an open login, a 26h missed logout, and a visit
+	// older than the window.
+	seedSession(t, db, "twitch", "ses_bot", day, 500)
+	seedSession(t, db, "twitch", "ses_alice", day, -1)
+	seedSession(t, db, "twitch", "ses_bob", day.Add(-3*24*time.Hour), 26*60)
+	seedSession(t, db, "twitch", "ses_alice", time.Now().Add(-10*24*time.Hour), 45)
+	// A second platform keeps its own row.
+	seedSession(t, db, "youtube", "ses_yt", day, 30)
+
+	rec := insightsGET(t, "/api/insights/sessions", sessionInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got sessionInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	want := sessionInsightsResponse{Days: 7, Platforms: []sessionStats{
+		{Platform: "twitch", Sessions: 5, MedianMinutes: 20, MeanMinutes: 54.4, P90Minutes: 132,
+			Under5m: 1, Under30m: 2, Under2h: 1, TwoHoursUp: 1},
+		{Platform: "youtube", Sessions: 1, MedianMinutes: 30, MeanMinutes: 30, P90Minutes: 30,
+			Under2h: 1},
+	}}
+	if !slices.Equal(got.Platforms, want.Platforms) || got.Days != want.Days {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+
+	// The window reaches back to the ten-day-old visit once asked to.
+	rec = insightsGET(t, "/api/insights/sessions?days=14", sessionInsightsHandler)
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Platforms[0].Sessions != 6 {
+		t.Errorf("14-day twitch sessions = %d, want 6", got.Platforms[0].Sessions)
+	}
 }

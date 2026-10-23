@@ -1,8 +1,8 @@
 // Package audiowatchdog keeps audible background music on the Twitch stream
-// when SomaFM drops. The Twitch music bed is the "Groove Salad Classic"
-// ffmpeg_source (a SomaFM internet-radio stream); the 2026-06-23 outage showed
+// when the radio drops. The radio bed is an ffmpeg_source playing an
+// internet-radio stream; the 2026-06-23 outage showed
 // it can go silent for minutes with no self-heal — OBS wedges on a clean EOF
-// and stops retrying, a single edge feeds a stalling stream, or SomaFM's whole
+// and stops retrying, a single edge feeds a stalling stream, or the station's whole
 // edge tier goes down. None of these recover without a manual nudge.
 //
 // The watchdog watches the source's media state + output level and, when audio
@@ -10,12 +10,13 @@
 // the stream isn't silent: the album on the mounted share, or the Car Hum FLAC
 // baked into the OBS image when the share has no tracks. An outage lasts hours,
 // and a music stream degraded to music beats one degraded to a drone. It probes
-// SomaFM in the background and swaps back once an edge is serving bytes again.
+// the station in the background and swaps back once it is serving bytes again.
 // All of it is the OBS-side analogue of the silent-disconnect stream watchdog
 // in pkg/obs/watchdog — same injectable-deps shape so the decision loop
 // unit-tests without a real OBS WebSocket. cmd/tripbot is the sole consumer,
-// and runs one per platform: any platform can select any bed, so neither the
-// fallback nor the album advance is Twitch-specific. Every series the loop
+// and runs one per platform: every platform boots on the album fallback and
+// selects the radio, so neither the fallback nor the album advance is
+// Twitch-specific. Every series the loop
 // writes carries the platform it was started for.
 package audiowatchdog
 
@@ -39,17 +40,17 @@ const (
 	// one source, so the watchdog reads the same input whichever is selected.
 	BackgroundAudioInputName = beds.InputName
 
-	// somaFMProbeUserAgent overrides Go's default User-Agent on the probe.
-	// SomaFM's ICEcast edges reject "Go-http-client/1.1" outright — the
+	// radioProbeUserAgent overrides Go's default User-Agent on the probe.
+	// Some Icecast servers reject "Go-http-client/1.1" outright — the
 	// connection is closed before any response (the probe saw a bare EOF), so
 	// the probe always reported unreachable and the stream could never swap
 	// back off the fallback bed. Any non-default UA is accepted; confirmed on
 	// stage 2026-06-24. (OBS's own player sends an Lavf/ffmpeg UA, which is why
 	// playback itself was never affected.)
-	somaFMProbeUserAgent = "tripbot-audio-watchdog"
+	radioProbeUserAgent = "tripbot-audio-watchdog"
 )
 
-// Deps are the OBS + SomaFM hooks the watchdog calls. Injectable so the loop
+// Deps are the OBS + radio hooks the watchdog calls. Injectable so the loop
 // unit-tests without a real OBS WebSocket, meter, or network. DefaultDeps
 // wires the production implementations.
 type Deps struct {
@@ -58,25 +59,24 @@ type Deps struct {
 	// Level returns the latest peak output level (dBFS) and whether it is
 	// fresh enough to trust.
 	Level func() (db float64, fresh bool)
-	// SomaFMReachable reports whether the SomaFM edge served bytes just now.
-	SomaFMReachable func(context.Context) bool
+	// RadioReachable reports whether the radio stream served bytes just now.
+	RadioReachable func(context.Context) bool
 	// SwapToFallback points the source at a local bed for the outage: the album
 	// when the share has tracks, the car-hum drone when it doesn't.
 	SwapToFallback func(context.Context) error
-	// SwapToSomaFM points the source back at its SomaFM network stream.
-	SwapToSomaFM func(context.Context) error
+	// SwapToRadio points the source back at its radio network stream.
+	SwapToRadio func(context.Context) error
 	// ActiveBed reports which bed the stream is meant to be playing. Only the
-	// SomaFM bed needs the outage machinery below: a local bed that plays has
-	// nothing to ride out, and the one that doesn't — an album with no play
-	// order — is rescued by AdvanceAlbum instead.
+	// radio bed needs the outage machinery below: the car hum loops and has
+	// nothing to ride out.
 	ActiveBed func() beds.Bed
 	// SourceIsLocal reports whether the background-audio source is pointed at a
 	// local file right now. Read from OBS every tick rather than remembered
 	// from the last swap: the console and chat repoint the same source, so
 	// remembered state goes stale the moment an operator switches a bed.
 	SourceIsLocal func(context.Context) (bool, error)
-	// AdvanceAlbum queues the next album track. Called when OBS reports the
-	// media ended while the album bed is live.
+	// AdvanceAlbum queues the next fallback album track. Called when OBS
+	// reports the media ended while the fallback is on air.
 	AdvanceAlbum func(context.Context) error
 	// Resync re-reads the live bed off OBS. Called on the first tick OBS
 	// answers after it didn't: a restarted OBS boots onto its own default bed,
@@ -102,14 +102,14 @@ type Config struct {
 // audible music) is worth trading for two orders of magnitude fewer requests.
 // A day stuck on the fallback is ~12k connections at every tick and ~400 here.
 //
-// It is also self-defence. SomaFM's edge has firewalled us before, and the
+// It is also self-defence. A station's server has firewalled us before, and the
 // state that gets us blocked is the state that probes hardest: blocked means
 // stranded on the fallback, and stranded means probing forever.
 const maxProbeSkip = 31
 
 // DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down audio
 // before falling back (3 × 7s ≈ a clear signal, not a momentary reconnect),
-// ~30s of SomaFM-healthy before swapping back, and a 2-minute cooldown so a
+// ~30s of radio-healthy before swapping back, and a 2-minute cooldown so a
 // flapping edge can't whipsaw the bed.
 func DefaultConfig() Config {
 	return Config{
@@ -122,7 +122,7 @@ func DefaultConfig() Config {
 }
 
 // DefaultDeps wires Watch's hooks to the real OBS WebSocket helpers, the live
-// volume meter, and an HTTP SomaFM probe.
+// volume meter, and an HTTP radio probe.
 func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 	return Deps{
 		ActiveBed: func() beds.Bed {
@@ -131,11 +131,15 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		},
 		AdvanceAlbum: store.Advance,
 		Resync:       store.Detect,
+		// Both OBS reads go over the meter's connection, which is already open
+		// and subscribed: asked every tick, a fresh dial per call would spend
+		// tens of thousands of connect + auth handshakes a day on two answers
+		// the meter's socket can carry for free.
 		MediaState: func(ctx context.Context) (string, error) {
-			return obs.GetMediaInputState(ctx, BackgroundAudioInputName)
+			return meter.MediaInputState(ctx, BackgroundAudioInputName)
 		},
 		SourceIsLocal: func(ctx context.Context) (bool, error) {
-			settings, err := obs.GetInputSettings(ctx, BackgroundAudioInputName)
+			settings, err := meter.InputSettings(ctx, BackgroundAudioInputName)
 			if err != nil {
 				return false, err
 			}
@@ -146,33 +150,39 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		// Both hooks read the station at call time rather than closing over it:
 		// the console or chat can retune mid-outage, and swapping back to the
 		// station we left would undo that.
-		SomaFMReachable: func(ctx context.Context) bool {
-			return defaultSomaFMReachable(ctx, beds.StreamURL(store.Station()))
+		RadioReachable: func(ctx context.Context) bool {
+			// No station to tune is the designed degraded state — the stream stays
+			// on the fallback — not a probe failure worth a warning each attempt.
+			url := beds.StreamURL(store.Station())
+			if url == "" {
+				return false
+			}
+			return defaultRadioReachable(ctx, url)
 		},
 		// Both swaps go through the Store: picking the fallback bed means
 		// scanning the share and building a play order, and the Store is what
 		// owns both. Neither touches the selected bed, so the outage machinery
-		// keeps running and the stream comes back to SomaFM.
+		// keeps running and the stream comes back to the radio.
 		SwapToFallback: store.SwapToFallback,
-		SwapToSomaFM:   store.SwapToSomaFM,
+		SwapToRadio:    store.SwapToRadio,
 	}
 }
 
-// somaFMProbeClient is dedicated to the reachability probe. DisableKeepAlives
+// radioProbeClient is dedicated to the reachability probe. DisableKeepAlives
 // forces a fresh connection every probe: a periodic liveness check must not
-// reuse a pooled connection, since a half-dead pooled conn to SomaFM would make
+// reuse a pooled connection, since a half-dead pooled conn to the radio would make
 // a perfectly healthy edge look unreachable and strand us on the fallback bed.
 // The explicit Timeout bounds the whole request as a backstop to the per-call
 // context deadline.
-var somaFMProbeClient = &http.Client{
+var radioProbeClient = &http.Client{
 	Timeout:   6 * time.Second,
 	Transport: &http.Transport{DisableKeepAlives: true},
 }
 
-// defaultSomaFMReachable opens the SomaFM edge and reads a byte: success means
+// defaultRadioReachable opens the radio stream and reads a byte: success means
 // the edge is serving stream data. During an outage the connect hangs and the
 // timeout trips, so this returns false. Distinct from "the website is up" —
-// somafm.com can 200 while every ICEcast edge is dead.
+// a station's site can 200 while its stream servers are dead.
 //
 // url is the live station's stream — the exact URL OBS is playing, so a station
 // that is down on its own is caught, not masked by a healthy sibling channel.
@@ -181,30 +191,30 @@ var somaFMProbeClient = &http.Client{
 // the fallback bed, so in steady state it's silent; the logging is what makes a
 // stuck-on-fallback state diagnosable instead of an unexplained silence (the
 // original swallowed every error — see the 2026-06-24 stage test).
-func defaultSomaFMReachable(ctx context.Context, url string) bool {
+func defaultRadioReachable(ctx context.Context, url string) bool {
 	cctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet, url, nil)
 	if err != nil {
-		slog.WarnContext(ctx, "somafm probe: build request failed", "err", err)
+		slog.WarnContext(ctx, "radio probe: build request failed", "err", err)
 		return false
 	}
-	req.Header.Set("User-Agent", somaFMProbeUserAgent) // SomaFM rejects Go's default UA
-	resp, err := somaFMProbeClient.Do(req)
+	req.Header.Set("User-Agent", radioProbeUserAgent) // some Icecast servers reject Go's default UA
+	resp, err := radioProbeClient.Do(req)
 	if err != nil {
-		slog.WarnContext(ctx, "somafm probe: request failed", "err", err)
+		slog.WarnContext(ctx, "radio probe: request failed", "err", err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		slog.WarnContext(ctx, "somafm probe: unexpected status", "status", resp.StatusCode)
+		slog.WarnContext(ctx, "radio probe: unexpected status", "status", resp.StatusCode)
 		return false
 	}
 	// Read a single byte — a live stream yields one immediately; a stalled
 	// edge that completed the handshake but sends nothing trips the timeout.
 	buf := make([]byte, 1)
 	if _, err := io.ReadFull(resp.Body, buf); err != nil {
-		slog.WarnContext(ctx, "somafm probe: no stream bytes", "err", err)
+		slog.WarnContext(ctx, "radio probe: no stream bytes", "err", err)
 		return false
 	}
 	return true
@@ -213,8 +223,8 @@ func defaultSomaFMReachable(ctx context.Context, url string) bool {
 // Watch evaluates the background-audio source every cfg.Interval and keeps
 // audible music on the stream: it swaps to the local bed after cfg.FailThreshold
 // consecutive down ticks and swaps back after cfg.RecoverThreshold consecutive
-// ticks of SomaFM being reachable, with cfg.Cooldown between any two swaps.
-// Records the playing / level / on-fallback gauges every tick; somafm_reachable
+// ticks of the radio being reachable, with cfg.Cooldown between any two swaps.
+// Records the playing / level / on-fallback gauges every tick; radio_reachable
 // only on the ticks that probe — which back off as an outage wears on, so it
 // reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is cancelled.
 func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
@@ -269,40 +279,23 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			playing := state == obs.MediaStatePlaying
 			instrumentation.OBSBackgroundAudio.SetPlaying(platform, playing)
 
-			// The SomaFM outage machinery below only makes sense while SomaFM is
+			// The radio outage machinery below only makes sense while the radio is
 			// the selected bed. On a local bed there's nothing to fall back
 			// *to* and nothing to recover, so hold the counters at zero rather
 			// than letting a quiet passage accumulate misses toward a swap that
 			// would stomp the operator's choice.
-			if bed := deps.ActiveBed(); bed != beds.SomaFM {
+			if deps.ActiveBed() != beds.Radio {
 				failMisses, recoverHits = 0, 0
-				// "On fallback" is a statement about the SomaFM bed: a local bed
+				// "On fallback" is a statement about the radio bed: a local bed
 				// the operator chose is not a fallback, however local it is.
 				instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
-				// The album plays one track at a time, unlooped, so OBS ends the
-				// media between tracks — that's the cue to queue the next one.
-				// The meter's playback-ended subscription normally gets there
-				// first, in milliseconds; this is the backstop for an ending
-				// that landed while the subscription was down, where the cost is
-				// one gap of up to Interval instead of a bed that never advances
-				// again. The Store drops whichever arrives second.
-				//
-				// It is also the one path that rescues an album with no play
-				// order, which the Store cannot advance and which would
-				// otherwise hold the stream silent: down media on that bed
-				// never clears on its own, so this tick is what reaches it.
-				if bed == beds.Album && obs.MediaStateDown(state) {
-					if err := deps.AdvanceAlbum(ctx); err != nil {
-						slog.ErrorContext(ctx, "audio watchdog: album advance failed", "err", err)
-					}
-				}
 				continue
 			}
 
-			// On the SomaFM bed, a local file on the source means an earlier
+			// On the radio bed, a local file on the source means an earlier
 			// fallback is still in place. Reading it off OBS rather than
 			// remembering the last swap is what makes a bed switch made behind
-			// the watchdog's back — the console reselecting SomaFM mid-outage —
+			// the watchdog's back — the console reselecting the radio mid-outage —
 			// visible: the source goes back to the dead stream, so the next tick
 			// sees silence again instead of waiting out a recovery that already
 			// happened.
@@ -320,7 +313,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				// full rate rather than inheriting the last one's backoff.
 				probeSkip, skipped = 0, 0
 
-				// On the real SomaFM source: watch for the audio going down.
+				// On the real radio source: watch for the audio going down.
 				silent := fresh && db <= cfg.SilenceDB
 				if !obs.MediaStateDown(state) && !silent {
 					failMisses = 0
@@ -338,7 +331,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 						"since_last_swap", time.Since(lastSwap), "cooldown", cfg.Cooldown)
 					continue
 				}
-				slog.ErrorContext(ctx, "audio watchdog: SomaFM down, swapping to local bed",
+				slog.ErrorContext(ctx, "audio watchdog: radio down, swapping to local bed",
 					"state", state)
 				if err := deps.SwapToFallback(ctx); err != nil {
 					slog.ErrorContext(ctx, "audio watchdog: swap to fallback failed", "err", err)
@@ -352,22 +345,24 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				continue
 			}
 
-			// The fallback album plays unlooped like the selected one, so OBS
-			// ends the media between tracks and each ending is the cue to queue
-			// the next. Same backstop as the selected album bed gets above, for
-			// the same reason — and it matters more here, since the subscription
-			// that normally advances first is down exactly when OBS is unwell.
-			// A no-op on the drone, which loops, and off the album entirely.
+			// The fallback album plays one track at a time, unlooped, so OBS ends
+			// the media between tracks and each ending is the cue to queue the
+			// next. The meter's playback-ended subscription normally gets there
+			// first, in milliseconds; this is the backstop for an ending that
+			// landed while the subscription was down, and the Store drops
+			// whichever arrives second. It is also the one path that rescues a
+			// fallback album with no play order onto the drone: down media there
+			// never clears on its own. A no-op on the drone, which loops.
 			if obs.MediaStateDown(state) {
 				if err := deps.AdvanceAlbum(ctx); err != nil {
 					slog.ErrorContext(ctx, "audio watchdog: fallback album advance failed", "err", err)
 				}
 			}
 
-			// On the local fallback bed: wait for SomaFM to come back. This is the
+			// On the local fallback bed: wait for the radio to come back. This is the
 			// only state whose outcome depends on the edge being up, so it's the
 			// only state that probes: a connection opened on a tick that could
-			// not act on the answer is load on SomaFM's edge for nothing, and
+			// not act on the answer is load on the radio stream for nothing, and
 			// enough of them across the fleet reads as abuse from one IP.
 			//
 			// Even here it backs off. An outage lasts hours and the fallback is
@@ -379,8 +374,8 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				continue
 			}
 			skipped = 0
-			reachable := deps.SomaFMReachable(ctx)
-			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(platform, reachable)
+			reachable := deps.RadioReachable(ctx)
+			instrumentation.OBSBackgroundAudio.SetRadioReachable(platform, reachable)
 			if !reachable {
 				recoverHits = 0
 				probeSkip = min(2*probeSkip+1, maxProbeSkip)
@@ -392,7 +387,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			// the fallback for minutes after the edge came back.
 			probeSkip = 0
 			recoverHits++
-			slog.InfoContext(ctx, "audio watchdog: SomaFM reachable again",
+			slog.InfoContext(ctx, "audio watchdog: radio reachable again",
 				"hits", recoverHits, "threshold", cfg.RecoverThreshold)
 			if recoverHits < cfg.RecoverThreshold {
 				continue
@@ -402,15 +397,15 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 					"since_last_swap", time.Since(lastSwap), "cooldown", cfg.Cooldown)
 				continue
 			}
-			slog.InfoContext(ctx, "audio watchdog: SomaFM recovered, swapping back")
-			if err := deps.SwapToSomaFM(ctx); err != nil {
-				slog.ErrorContext(ctx, "audio watchdog: swap back to SomaFM failed", "err", err)
+			slog.InfoContext(ctx, "audio watchdog: radio recovered, swapping back")
+			if err := deps.SwapToRadio(ctx); err != nil {
+				slog.ErrorContext(ctx, "audio watchdog: swap back to radio failed", "err", err)
 				continue
 			}
 			lastSwap = time.Now()
 			recoverHits = 0
 			instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
-			instrumentation.OBSBackgroundAudio.IncSwap(platform, "to_somafm")
+			instrumentation.OBSBackgroundAudio.IncSwap(platform, "to_radio")
 		}
 	}
 }

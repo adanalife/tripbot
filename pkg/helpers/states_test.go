@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
@@ -166,6 +167,30 @@ func TestStateCentroids_TableHygiene(t *testing.T) {
 		// the south and west edges, Alaska the north).
 		if c[0] < 20 || c[0] > 62 || c[1] < -158 || c[1] > -66 {
 			t.Errorf("centroid %q (%f, %f) is outside the US", abbrev, c[0], c[1])
+		}
+	}
+}
+
+// The precomputed tables must agree with stateAbbrevs: every name present,
+// sorted, and lowercased at matching indices.
+func TestStateNameTables(t *testing.T) {
+	names := StateNames()
+	if len(names) != len(stateAbbrevs) {
+		t.Fatalf("got %d names, want %d", len(names), len(stateAbbrevs))
+	}
+	if !sort.StringsAreSorted(names) {
+		t.Error("StateNames is not sorted")
+	}
+	lowered := LowercaseStateNames()
+	if len(lowered) != len(names) {
+		t.Fatalf("got %d lowercased names, want %d", len(lowered), len(names))
+	}
+	for i, name := range names {
+		if lowered[i] != strings.ToLower(name) {
+			t.Errorf("LowercaseStateNames()[%d] = %q, want %q", i, lowered[i], strings.ToLower(name))
+		}
+		if StateToStateAbbrev(name) == "" {
+			t.Errorf("%q does not resolve to an abbreviation", name)
 		}
 	}
 }

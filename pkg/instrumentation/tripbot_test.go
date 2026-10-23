@@ -291,3 +291,48 @@ func TestCronObserve_StampsCronJobNotJob(t *testing.T) {
 		t.Errorf("checked %d cron datapoints, want 4 (runs, panics, last-run, duration)", seen)
 	}
 }
+
+// ChannelLive.Set is the funnel every liveness source writes through, so the
+// transition latch lives there: the first write per platform only seeds it
+// (booting mid-stream is not a stream going up), a repeated value is not a
+// transition, a flip fires OnTransition once with the new state, and the
+// latch is per platform so one instance's flip never reads as another's.
+func TestChannelLiveSet_FiresOnTransitionOnly(t *testing.T) {
+	g := &channelLiveGauge{gauge: channelLive, last: map[string]bool{}}
+	type call struct {
+		platform string
+		live     bool
+	}
+	var got []call
+	g.OnTransition = func(platform string, live bool) { got = append(got, call{platform, live}) }
+
+	g.Set(true, "twitch")   // seed: no callback
+	g.Set(true, "twitch")   // unchanged
+	g.Set(false, "twitch")  // down
+	g.Set(false, "twitch")  // unchanged
+	g.Set(true, "twitch")   // up
+	g.Set(false, "youtube") // seed for another platform: no callback
+	g.Set(true, "youtube")  // up, independently of twitch's state
+
+	want := []call{{"twitch", false}, {"twitch", true}, {"youtube", true}}
+	if len(got) != len(want) {
+		t.Fatalf("transitions = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("transition %d = %v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+// With no callback wired (every binary but tripbot, and tripbot before
+// startup wires it) the latch still tracks state and Set is a plain gauge
+// write.
+func TestChannelLiveSet_NilCallbackIsSafe(t *testing.T) {
+	g := &channelLiveGauge{gauge: channelLive, last: map[string]bool{}}
+	g.Set(true, "twitch")
+	g.Set(false, "twitch")
+	if g.last["twitch"] {
+		t.Error("last[twitch] = true, want false after Set(false)")
+	}
+}

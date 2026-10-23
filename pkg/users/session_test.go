@@ -14,8 +14,8 @@ import (
 
 // TestSessions_ConcurrentAccess hammers the session map and the leaderboard
 // cache from multiple goroutines, mirroring production: the UpdateLeaderboard
-// cron rebuilds the board while command dispatch reads it and the IRC-side
-// calls poke the login map. Under -race this fails if Sessions loses its
+// cron rebuilds the board while command dispatch reads it and the inbound
+// chat handlers poke the login map. Under -race this fails if Sessions loses its
 // locking.
 func TestSessions_ConcurrentAccess(t *testing.T) {
 	const iterations = 50
@@ -206,7 +206,7 @@ func TestCorrectMiles(t *testing.T) {
 		seedUsers(t, db, User{Username: "offline", Miles: 10})
 
 		s := New(testConf, noopChatterSource{})
-		got, err := s.CorrectMiles(ctx, "offline", -4)
+		got, _, err := s.CorrectMiles(ctx, "offline", -4)
 		if err != nil {
 			t.Fatalf("CorrectMiles: %v", err)
 		}
@@ -233,7 +233,7 @@ func TestCorrectMiles(t *testing.T) {
 		cancel()
 
 		s := New(testConf, noopChatterSource{})
-		got, err := s.CorrectMiles(ctx, "unreadable", -4)
+		got, _, err := s.CorrectMiles(ctx, "unreadable", -4)
 		if !errors.Is(err, ErrLookupFailed) {
 			t.Fatalf("want ErrLookupFailed, got %v", err)
 		}
@@ -256,7 +256,7 @@ func TestCorrectMiles(t *testing.T) {
 
 		s := New(testConf, noopChatterSource{})
 		s.LoginIfNecessary(ctx, "online")
-		if _, err := s.CorrectMiles(ctx, "online", 12); err != nil {
+		if _, _, err := s.CorrectMiles(ctx, "online", 12); err != nil {
 			t.Fatalf("CorrectMiles: %v", err)
 		}
 
@@ -318,6 +318,58 @@ func TestCorrectMiles(t *testing.T) {
 			t.Errorf("expected the monthly board floored at 0, got %v", got)
 		}
 	})
+
+	t.Run("a clawback larger than the lifetime total is clamped at zero", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "overdrawn", Miles: 30})
+
+		s := New(testConf, noopChatterSource{})
+		total, applied, err := s.CorrectMiles(ctx, "overdrawn", -50)
+		if err != nil {
+			t.Fatalf("CorrectMiles: %v", err)
+		}
+		if total != 0 || applied != -30 {
+			t.Errorf("got total %v applied %v, want 0 and -30", total, applied)
+		}
+		stored, err := Find(ctx, testConf.Platform, "overdrawn")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 0 {
+			t.Errorf("expected 0 miles persisted, got %v", stored.Miles)
+		}
+	})
+
+	t.Run("a balance already below zero is not credited by a clawback", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "negative", Miles: -5})
+
+		s := New(testConf, noopChatterSource{})
+		total, applied, err := s.CorrectMiles(ctx, "negative", -10)
+		if err != nil {
+			t.Fatalf("CorrectMiles: %v", err)
+		}
+		if total != -5 || applied != 0 {
+			t.Errorf("got total %v applied %v, want -5 and 0", total, applied)
+		}
+	})
+}
+
+func TestClampClawback(t *testing.T) {
+	for _, tc := range []struct{ balance, delta, want float32 }{
+		{100, 20, 20},   // a credit is never clamped
+		{100, -20, -20}, // a clawback within the balance lands whole
+		{30, -50, -30},  // a larger one removes exactly the balance
+		{0, -10, 0},     // nothing to remove
+		{-5, -10, 0},    // a negative balance must not turn into a credit
+		{-5, 10, 10},    // a credit to a negative balance lands whole
+	} {
+		if got := clampClawback(tc.balance, tc.delta); got != tc.want {
+			t.Errorf("clampClawback(%v, %v) = %v, want %v", tc.balance, tc.delta, got, tc.want)
+		}
+	}
 }
 
 // CheckpointMiles banks the session's accrual mid-session so a crash can't take
@@ -421,5 +473,69 @@ func TestUpdateSession_OnlyLogsInNewChatters(t *testing.T) {
 	}
 	if regular.NumVisits != 7 {
 		t.Errorf("visits = %d, want 7 (a second login would have counted another)", regular.NumVisits)
+	}
+}
+
+// logout works from the live session entry, not the caller's copy: the
+// UpdateSession tick and Shutdown hand it a snapshot that a checkpoint (or a
+// correction) can overtake before logout runs, and saving the snapshot's miles
+// would overwrite what the checkpoint banked.
+func TestLogout_StaleSnapshotDoesNotUndoACheckpoint(t *testing.T) {
+	testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "overtaken")
+	s.mu.Lock()
+	s.loggedIn["overtaken"].LoggedIn = time.Now().Add(-10 * time.Hour)
+	s.mu.Unlock()
+
+	stale, _ := s.get("overtaken")
+	s.CheckpointMiles(ctx)
+	banked, err := Find(ctx, testConf.Platform, "overtaken")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+
+	s.logout(ctx, stale.Username)
+
+	final, err := Find(ctx, testConf.Platform, "overtaken")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if banked.Miles < 15 || banked.Miles-final.Miles > 0.1 {
+		t.Errorf("logout undid the checkpoint: banked %v, saved %v", banked.Miles, final.Miles)
+	}
+}
+
+// Two logouts racing for one session (Shutdown against a reconcile tick) close
+// it once: one logout event, one addition to the monthly board.
+func TestLogout_TwiceClosesTheSessionOnce(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	s := New(testConf, noopChatterSource{})
+	s.LoginIfNecessary(ctx, "twice")
+	s.mu.Lock()
+	s.loggedIn["twice"].LoggedIn = time.Now().Add(-10 * time.Hour)
+	s.mu.Unlock()
+
+	stale, _ := s.get("twice")
+	s.logout(ctx, stale.Username)
+	s.logout(ctx, stale.Username)
+
+	var logoutEvents []events.Event
+	if err := db.Where("username = ? AND event = ?", "twice", "logout").Find(&logoutEvents).Error; err != nil {
+		t.Fatalf("reading events: %v", err)
+	}
+	if len(logoutEvents) != 1 {
+		t.Errorf("expected 1 logout event, got %d", len(logoutEvents))
+	}
+	stored, err := Find(ctx, testConf.Platform, "twice")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if score := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); score < 15 || score > 25 {
+		t.Errorf("expected ~20 miles on the monthly board once, got %v", score)
 	}
 }

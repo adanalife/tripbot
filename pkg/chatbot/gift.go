@@ -62,7 +62,7 @@ type giftTier struct {
 // Every rung is a timewarp today. It is the only effect that reads as a payoff
 // on a stream with no chat reply: the other argument-free effects are !daytime
 // (a no-op in daylight footage) and !skip / !back (too small to notice), and
-// the argument-taking ones (!goto, !find) have nothing to take an argument
+// the argument-taking ones (!jump, !find) have nothing to take an argument
 // from — a TikTok gift carries no message. The ladder is here so that changing
 // what a rung does is an edit to this table rather than a refactor of the
 // dispatch below.

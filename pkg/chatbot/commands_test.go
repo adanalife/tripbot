@@ -2,8 +2,11 @@ package chatbot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,13 +51,19 @@ func newTestUser(name string) *users.User {
 	return &users.User{Username: name}
 }
 
+// newAdminUser is the channel owner as the gateway delivers them: flagged
+// Broadcaster off the platform user id. The name alone grants nothing.
+func newAdminUser() *users.User {
+	return &users.User{Username: adminUser, Broadcaster: true}
+}
+
 // newTestVideo returns a non-flagged Video with the given fields set.
 func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 	return video.Video{State: state, Lat: lat, Lng: lng, DateFilmed: date}
 }
 
 // newTestApp returns an App whose Video reports vid as the currently-playing
-// video, plus no-op Onscreens, Playout, IRC, and Sessions fakes. For commands
+// video, plus no-op Onscreens, Playout, Chat, and Sessions fakes. For commands
 // that don't read Video, pass a zero-value video.Video. To assert on any of
 // those surfaces, replace the corresponding field with a recording fake
 // (recordingOnscreens / recordingPlayout / recordingVideo / recordingChat /
@@ -68,7 +77,6 @@ func newTestApp(vid video.Video) *App {
 		Chat:        noopChat{},
 		Sessions:    noopSessions{},
 		Flags:       noopFlags{},
-		NATS:        noopNATS{},
 		Cron:        noopCron{},
 		Geocoder:    noopGeocoder{},
 		Weather:     noopWeather{},
@@ -126,6 +134,32 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 	if !strings.Contains(rec.Says[0], "Thank you") {
 		t.Errorf("expected ack message via IRC, got %q", rec.Says[0])
+	}
+}
+
+// A report's text is the viewer's, so the Discord post must not let it ping
+// the server: "!report @everyone stream dead" reaches Discord as plain text.
+func TestPostReportToDiscord_SuppressesMentions(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode webhook body: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	postReportToDiscord(srv.URL, "viewer1", "@everyone stream dead")
+
+	if !strings.Contains(fmt.Sprint(body["content"]), "@everyone stream dead") {
+		t.Errorf("content = %v, want the report text", body["content"])
+	}
+	am, ok := body["allowed_mentions"].(map[string]any)
+	if !ok {
+		t.Fatalf("allowed_mentions missing from payload: %v", body)
+	}
+	if parse, ok := am["parse"].([]any); !ok || len(parse) != 0 {
+		t.Errorf("allowed_mentions.parse = %v, want an empty list", am["parse"])
 	}
 }
 
@@ -590,6 +624,21 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	}
 }
 
+func TestStateCmd_UnknownStateSaysSo(t *testing.T) {
+	vid := newTestVideo("", 39.5, -105.0, time.Now())
+	app := newTestApp(vid)
+	out, says := captureSay(t, app)
+
+	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if got := out(); got != "I don't know what state this is, sorry!" {
+		t.Errorf("expected the don't-know reply, got %q", got)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
 // --- dateCmd ---
 
 func TestDateCmd_SaysThisMomentWas(t *testing.T) {
@@ -929,7 +978,9 @@ func TestGuessCmd_StatelessVideo_RecordsNoGuess(t *testing.T) {
 
 // --- middleCmd ---
 
-// adminUser matches CHANNEL_NAME in .env.testing, satisfying c.UserIsAdmin.
+// adminUser is the channel owner's login (CHANNEL_NAME in .env.testing). On
+// its own it is just a name; newAdminUser carries the Broadcaster flag that
+// actually opens the admin gate.
 const adminUser = "test"
 
 // --- refreshOverlaysCmd ---
@@ -939,7 +990,7 @@ func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
 	app.OBS = &recordingOBS{Refreshed: 3}
 	out, says := captureSay(t, app)
 
-	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+	app.refreshOverlaysCmd(context.Background(), newAdminUser(), nil)
 
 	if !strings.Contains(out(), "Refreshed 3 overlay") {
 		t.Errorf("expected refreshed-count report, got %q", out())
@@ -954,7 +1005,7 @@ func TestRefreshOverlaysCmd_ErrorIsReported(t *testing.T) {
 	app.OBS = &recordingOBS{refreshErr: errors.New("obs unreachable")}
 	out, says := captureSay(t, app)
 
-	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+	app.refreshOverlaysCmd(context.Background(), newAdminUser(), nil)
 
 	if !strings.Contains(out(), "Couldn't refresh") {
 		t.Errorf("expected failure message, got %q", out())
@@ -968,7 +1019,7 @@ func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 	app := newTestApp(video.Video{})
 	out, says := captureSay(t, app)
 
-	app.middleCmd(context.Background(), newTestUser(adminUser), nil)
+	app.middleCmd(context.Background(), newAdminUser(), nil)
 
 	if !strings.Contains(out(), "What do you want to say") {
 		t.Errorf("expected prompt, got %q", out())
@@ -985,7 +1036,7 @@ func TestMiddleCmd_Hide_DrivesHideOverlay(t *testing.T) {
 
 	out, says := captureSay(t, app)
 
-	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hide"})
+	app.middleCmd(context.Background(), newAdminUser(), []string{"hide"})
 
 	if !strings.Contains(out(), "Hiding the message") {
 		t.Errorf("expected hide confirmation in chat, got %q", out())
@@ -1004,7 +1055,7 @@ func TestMiddleCmd_Hide_CaseInsensitive(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"HIDE"})
+	app.middleCmd(context.Background(), newAdminUser(), []string{"HIDE"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
 		t.Errorf("expected one HideMiddleText overlay call for 'HIDE', got %v", rec.Calls)
@@ -1017,7 +1068,7 @@ func TestMiddleCmd_Text_DrivesShowOverlay(t *testing.T) {
 	app.Onscreens = rec
 
 	// Multiple words get joined with a space into the overlay text.
-	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hello", "everyone"})
+	app.middleCmd(context.Background(), newAdminUser(), []string{"hello", "everyone"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != `ShowMiddleText("hello everyone")` {
 		t.Errorf("expected ShowMiddleText with joined text, got %v", rec.Calls)
@@ -1394,14 +1445,14 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 // --- makeBotCmd / unBotCmd ---
 
 func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
-	// missing amount, then non-numeric amount — both must bail before touching
+	// missing amount, then non-numeric amounts (NaN and ±Inf included) — both must bail before touching
 	// Sessions (Find/CorrectMiles), so no correction is applied.
-	for _, params := range [][]string{{"target"}, {"target", "notanumber"}} {
+	for _, params := range [][]string{{"target"}, {"target", "notanumber"}, {"target", "nan"}, {"target", "inf"}, {"target", "-Infinity"}} {
 		app := newTestApp(video.Video{})
 		rec := &recordingSessions{}
 		app.Sessions = rec
 
-		app.giveMilesCmd(context.Background(), newTestUser(adminUser), params)
+		app.giveMilesCmd(context.Background(), newAdminUser(), params)
 
 		if len(rec.Calls) != 0 {
 			t.Errorf("params %v: expected no Sessions calls, got %v", params, rec.Calls)
@@ -1422,7 +1473,7 @@ func TestGiveMilesCmd_CorrectMilesFails_SaysFailureNotANumber(t *testing.T) {
 
 	out, says := captureSay(t, app)
 
-	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+	app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "50"})
 
 	msg := out()
 	if !strings.Contains(msg, "try again in a bit") {
@@ -1456,7 +1507,7 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		app.Events = rec
 		out, says := captureSay(t, app)
 
-		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+		app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "50"})
 
 		if msg := out(); msg != "@target now has 60.00mi" {
 			t.Errorf("expected the running total in the reply, got %q", msg)
@@ -1481,7 +1532,7 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 		app.Events = rec
 		out, says := captureSay(t, app)
 
-		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+		app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "50"})
 
 		if msg := out(); strings.Contains(msg, "now has") {
 			t.Errorf("expected no total in the reply, got %q", msg)
@@ -1495,12 +1546,40 @@ func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
 	})
 }
 
+// A clawback larger than the balance is clamped, so the event records what was
+// removed (keeping the rollup in step with users.miles) and the issuer hears
+// that less came off than asked.
+func TestGiveMilesCmd_ClampedClawback_RecordsAppliedDelta(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.Sessions = &recordingSessions{
+		FindResult: users.User{ID: 7, Username: "target"},
+		Miles:      0,
+		Applied:    -30,
+	}
+	rec := &recordingEvents{}
+	app.Events = rec
+	out, says := captureSay(t, app)
+
+	app.giveMilesCmd(context.Background(), newAdminUser(), []string{"target", "-50"})
+
+	if msg := out(); msg != "@target only had 30.00mi to remove, now has 0.00mi" {
+		t.Errorf("expected the clamp in the reply, got %q", msg)
+	}
+	want := []recordedCorrection{{Username: "target", Delta: -30}}
+	if !slices.Equal(rec.Corrections, want) {
+		t.Errorf("corrections = %+v, want %+v", rec.Corrections, want)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
 func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), nil)
+	app.makeBotCmd(context.Background(), newAdminUser(), nil)
 
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no Sessions calls without target, got %v", rec.Calls)
@@ -1512,7 +1591,7 @@ func TestMakeBotCmd_Admin_FlipsToTrue(t *testing.T) {
 	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "tripbot4000"}}
 	app.Sessions = rec
 
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"tripbot4000"})
+	app.makeBotCmd(context.Background(), newAdminUser(), []string{"tripbot4000"})
 
 	want := `SetBot("tripbot4000", true)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1525,7 +1604,7 @@ func TestMakeBotCmd_Admin_StripsAtAndLowercases(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"@TripBot4000"})
+	app.makeBotCmd(context.Background(), newAdminUser(), []string{"@TripBot4000"})
 
 	want := `SetBot("tripbot4000", true)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1539,7 +1618,7 @@ func TestMakeBotCmd_UnknownUser_SwallowsError(t *testing.T) {
 	app.Sessions = rec
 
 	// Must not panic — the handler logs and returns.
-	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"ghost"})
+	app.makeBotCmd(context.Background(), newAdminUser(), []string{"ghost"})
 
 	want := `SetBot("ghost", true)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1552,7 +1631,7 @@ func TestUnBotCmd_Admin_FlipsToFalse(t *testing.T) {
 	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "innocent"}}
 	app.Sessions = rec
 
-	app.unBotCmd(context.Background(), newTestUser(adminUser), []string{"innocent"})
+	app.unBotCmd(context.Background(), newAdminUser(), []string{"innocent"})
 
 	want := `SetBot("innocent", false)`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -1586,5 +1665,149 @@ func TestChatter_AdvancesThroughTheRotation(t *testing.T) {
 	want := []string{"/me first tip", "/me second tip", "/me first tip"}
 	if !slices.Equal(rec.Says, want) {
 		t.Errorf("posts = %q, want %q", rec.Says, want)
+	}
+}
+
+// --- guessStatsCmd ---
+
+func TestGuessStatsCmd(t *testing.T) {
+	cases := []struct {
+		name           string
+		total, correct int64
+		want           string
+	}{
+		{"no guesses yet", 0, 0, "hasn't guessed a state yet"},
+		// The leading zero is trimmed, baseball-style.
+		{"a partial record", 120, 47, "batting .392 on state guesses: 47 right out of 120."},
+		// A perfect record is the one average that keeps its leading digit.
+		{"perfect", 3, 3, "batting 1.000 on state guesses: 3 right out of 3."},
+		{"never right", 5, 0, "batting .000 on state guesses: 0 right out of 5."},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			app.Events = &recordingEvents{GuessTotal: tc.total, GuessCorrect: tc.correct}
+
+			out, says := captureSay(t, app)
+			app.guessStatsCmd(context.Background(), newTestUser("viewer1"), nil)
+
+			if !strings.Contains(out(), tc.want) {
+				t.Errorf("expected reply containing %q, got %q", tc.want, out())
+			}
+			if says() != 1 {
+				t.Errorf("expected exactly one Say() call, got %d", says())
+			}
+		})
+	}
+}
+
+// --- lastMonthCmd ---
+//
+// The frozen boards come from App.Scoreboards and the game's board from the
+// guessr endpoint, so these stage both and assert on the one line chat gets.
+
+// All three boards, each cut to the podium: the miles board is staged four
+// deep to prove the chat line stops at three while the overlay keeps more.
+func TestLastMonthCmd_PodiumOfThreeBoards(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("board"); got != "monthly" {
+			t.Errorf("expected the monthly board, got %q", got)
+		}
+		if got := r.URL.Query().Get("month"); got != "2026-08" {
+			t.Errorf("expected month=2026-08, got %q", got)
+		}
+		fmt.Fprint(w, `{"board":"monthly","period":"2026-08","rows":[["Endless Roadside",17163],["Cedar Glacier",900]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	app.Scoreboards = &recordingScoreboards{
+		LastMiles:   [][]string{{"a", "12.0"}, {"b", "11.0"}, {"c", "9.5"}, {"d", "1.0"}},
+		LastGuesses: [][]string{{"x", "5"}, {"y", "4"}},
+	}
+	out, says := captureSay(t, app)
+
+	app.lastMonthCmd(context.Background(), newTestUser("caller"), nil)
+
+	want := "August final boards — Miles: 1. a (12.0mi), 2. b (11.0mi), 3. c (9.5mi); Guesses: 1. x (5), 2. y (4); Guessr: 1. Endless Roadside (17163), 2. Cedar Glacier (900)"
+	if got := out(); got != want {
+		t.Errorf("chat said\n%q\nwant\n%q", got, want)
+	}
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August Miles (final)", 4 rows)`) {
+		t.Errorf("expected one final-miles overlay call with 4 rows, got %v", rec.Calls)
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
+}
+
+// Before the rollup tick has frozen the month there is no final result, and
+// the command says so instead of showing the running boards — or asking the
+// game, which is why the server fails the test if it is reached.
+func TestLastMonthCmd_NoSnapshotYet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fetched the guessr board with no frozen boards to show")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	app.Scoreboards = &recordingScoreboards{}
+	out, _ := captureSay(t, app)
+
+	app.lastMonthCmd(context.Background(), newTestUser("caller"), nil)
+
+	if want := "No final boards for August yet — they're frozen shortly after the month ends."; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call, got %v", rec.Calls)
+	}
+}
+
+// With the guessr flag off the game is never asked and the line carries only
+// tripbot's own boards.
+func TestLastMonthCmd_FlagOff_SkipsGuessr(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fetched the guessr board with the flag off")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	app.Onscreens = &recordingOnscreens{}
+	app.Flags = &recordingFlags{} // every key false
+	app.Scoreboards = &recordingScoreboards{LastMiles: [][]string{{"a", "12.0"}}}
+	out, _ := captureSay(t, app)
+
+	app.lastMonthCmd(context.Background(), newTestUser("caller"), nil)
+
+	if want := "August final boards — Miles: 1. a (12.0mi)"; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
+	}
+}
+
+func TestTimeCmd_ReadsThePlayheadAtTheClipsSpeed(t *testing.T) {
+	// 18:30 on the camera; 10 clip-minutes into a 6x clip is an hour of road.
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Date(2026, 6, 15, 18, 30, 0, 0, time.UTC))
+	vid.Speed = 6
+	app := newTestApp(vid)
+	app.Video.(*recordingVideo).Elapsed = 10 * time.Minute
+	out, _ := captureSay(t, app)
+
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	// date_filmed is the camera's wall clock, so the hour later reads 7:30pm
+	// local — not 1:30pm, which is that clock misread as UTC.
+	if got := out(); !strings.Contains(got, "7:30pm") {
+		t.Errorf("expected the playhead's 7:30pm, got %q", got)
 	}
 }

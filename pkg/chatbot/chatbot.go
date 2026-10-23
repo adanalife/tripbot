@@ -65,11 +65,6 @@ type App struct {
 	// before cmd/tripbot assigns the Postgres-backed client once the DB
 	// connection is up.
 	Flags feature.FlagClient
-	// NATS is the fire-and-forget pubsub surface. Tests inject a
-	// recordingNATS to assert on publishes; production uses realNATS
-	// which delegates to the pkg/natsclient singleton (no-op when
-	// NATS_URL is empty).
-	NATS NATS
 	// Cron stops the background scheduler during !shutdown. Defaults to
 	// noopCron{} (set in New(), also what tests use); cmd/tripbot assigns the
 	// constructed gocron.Scheduler — which satisfies Cron directly — once
@@ -150,12 +145,11 @@ func New(version string, cfg *c.TripbotConfig) *App {
 		Version:     version,
 		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform), platform: cfg.Platform},
 		Video:       realVideo{},
 		Chat:        disconnectedChat{},
 		Sessions:    realSessions{},
 		Flags:       feature.NewInMemoryClient(nil),
-		NATS:        realNATS{},
 		Cron:        noopCron{},
 		Geocoder:    realGeocoder{},
 		Weather:     realWeather,

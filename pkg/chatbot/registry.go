@@ -21,7 +21,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!audio",
-			Help:    "What's playing on the background audio; admins switch the bed or tune a SomaFM channel",
+			Help:    "What's playing on the background audio; admins switch the bed or tune a radio station",
 			Aliases: []string{"!bed", "!carsound", "!carhum", "!radio"},
 			Handler: a.audioCmd,
 		},
@@ -49,16 +49,15 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!goto",
-			Help:           "Jump to footage from a specific state: !goto [state]",
-			Aliases:        []string{"!jump"},
+			Trigger:        "!jump",
+			Help:           "Jump to footage from a specific state: !jump [state]",
 			Handler:        a.jumpCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:            "!find",
 			Help:               "Search the footage for a scene and jump to it: !find <a tunnel at sunset>",
-			Aliases:            []string{"!search"},
+			Aliases:            []string{"!search", "!goto"},
 			Handler:            a.findCmd,
 			RequiresSubscriber: true,
 		},
@@ -99,61 +98,61 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!socialmedia",
 			Help:    "All the places to find me off-stream",
 			Aliases: []string{"!social", "!socials"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky — or play the dashcam guessing game at " + guessrGameURL)
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky — or play the dashcam guessing game at "+guessrGameURL)
 			},
 		},
 		{
 			Trigger: "!discord",
 			Help:    "The Discord invite link",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Join us on Discord: https://discord.gg/hKvNgZrk52")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Join us on Discord: https://discord.gg/hKvNgZrk52")
 			},
 		},
 		{
 			Trigger: "!twitter",
 			Help:    "The Twitter link",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Twitter: https://twitter.com/adanalife_")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Twitter: https://twitter.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!instagram",
 			Help:    "The Instagram link",
 			Aliases: []string{"!ig", "!insta"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Instagram: https://instagram.com/adanalife_")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Instagram: https://instagram.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!facebook",
 			Help:    "The Facebook link",
 			Aliases: []string{"!fb"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
 			},
 		},
 		{
 			Trigger: "!youtube",
 			Help:    "The YouTube channel link",
 			Aliases: []string{"!yt"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
 			},
 		},
 		{
 			Trigger: "!tiktok",
 			Help:    "The TikTok link",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on TikTok: https://tiktok.com/@adanalife")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on TikTok: https://tiktok.com/@adanalife")
 			},
 		},
 		{
 			Trigger: "!bluesky",
 			Help:    "The Bluesky link",
 			Aliases: []string{"!bsky"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Bluesky: https://bsky.app/profile/dana.lol")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "Follow on Bluesky: https://bsky.app/profile/dana.lol")
 			},
 		},
 		{
@@ -217,7 +216,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!state",
-			Help:           "The state the van is in right now",
+			Help:           "The state the van is in right now, or jump to one: !state [state]",
 			Handler:        a.stateCmd,
 			RequiresFollow: true,
 		},
@@ -231,8 +230,8 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!gas",
 			Help:    "How's the tank?",
 			Aliases: []string{"!fuel", "!petrol"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("About full, thanks for asking")
+			Handler: func(ctx context.Context, _ *users.User, _ []string) {
+				a.Reply(ctx, "About full, thanks for asking")
 			},
 		},
 		{
@@ -281,6 +280,20 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!direction",
+			Help:           "Which way the van is heading right now",
+			Aliases:        []string{"!heading", "!compass", "!bearing"},
+			Handler:        a.directionCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:     "!speed",
+			Help:        "How fast the van is going right now",
+			Aliases:     []string{"!velocity", "!speedometer"},
+			Handler:     a.speedCmd,
+			RequiresMod: true,
+		},
+		{
 			Trigger: "!location",
 			Help:    "Where the van is: the town and state, with a map link",
 			// "!loclistion" stays: 3 edits from !location, beyond
@@ -309,10 +322,24 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:            "!guessstats",
+			Help:               "Your state-guess batting average, a subscriber perk: how many you got right, out of how many you answered",
+			Aliases:            []string{"!guessrecord", "!battingaverage"},
+			Handler:            a.guessStatsCmd,
+			RequiresSubscriber: true,
+		},
+		{
 			Trigger:        "!guessleaderboard",
 			Help:           "This month's top 10 by correct state guesses",
 			Aliases:        []string{"!glb", "!guesslb"},
 			Handler:        a.monthlyGuessLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!lastmonth",
+			Help:           "Last month's final boards: the podium for miles, correct guesses and guessr",
+			Aliases:        []string{"!lastleaderboard", "!lastlb"},
+			Handler:        a.lastMonthCmd,
 			RequiresFollow: true,
 		},
 		{
@@ -335,19 +362,11 @@ func (a *App) buildRegistry() []Command {
 			Aliases: []string{"!music"},
 			Handler: a.songCmd,
 		},
-		{
-			Trigger: "!somafm",
-			Help:    "The SomaFM link, whose channels are the background audio",
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Stream music by SomaFM — https://somafm.com")
-			},
-		},
 	}
 }
 
 // Platform names for App.Platform. Add a constant here when a new streaming
-// platform (Kick, …) comes online; platform-specific commands then reference
-// it via Command.Platforms.
+// platform (Kick, …) comes online.
 const (
 	platformTwitch    = "twitch"
 	platformYouTube   = "youtube"
@@ -373,8 +392,7 @@ func (a *App) platform() string {
 // control" subset, plus the !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
-// !unbot) are excluded: those are per-user identity/score state. !somafm is
-// excluded too — it credits a bed that only Twitch defaults to. Aliases come
+// !unbot) are excluded: those are per-user identity/score state. Aliases come
 // along with their trigger, so only triggers are listed.
 var v1Commands = map[string]bool{
 	"!version": true, "!uptime": true, "!commands": true,
@@ -383,9 +401,9 @@ var v1Commands = map[string]bool{
 	"!song": true, "!audio": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
-	"!state": true, "!location": true,
+	"!state": true, "!location": true, "!direction": true, "!speed": true,
 	// playback control (drives this platform's playout pipeline)
-	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
+	"!timewarp": true, "!jump": true, "!skip": true, "!back": true, "!daytime": true,
 	"!find": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
@@ -455,21 +473,12 @@ var platformHasSubscribers = map[string]bool{
 }
 
 // commandEnabled reports whether cmd should be indexed for dispatch on this
-// App's platform. Two orthogonal concerns, in order:
-//
-//  1. Platform-specific commands declare their scope via Command.Platforms. A
-//     command with a non-nil Platforms is governed solely by it — indexed on
-//     exactly the listed platforms, on every platform. This is symmetric: no
-//     platform is special, and a new Kick/TikTok-only command just lists itself.
-//  2. Cross-platform commands (Platforms == nil) are gated by the platform's
-//     declared commandScope: a scopeFull platform (Twitch today) runs them all;
-//     every other platform runs only the vetted v1Commands allowlist. The
-//     conservative default (scopeV1 for any undeclared platform) means a new
-//     platform is restricted to the allowlist, never handed the full surface.
+// App's platform, gated by the platform's declared commandScope: a scopeFull
+// platform (Twitch today) runs them all; every other platform runs only the
+// vetted v1Commands allowlist. The conservative default (scopeV1 for any
+// undeclared platform) means a new platform is restricted to the allowlist,
+// never handed the full surface.
 func (a *App) commandEnabled(cmd *Command) bool {
-	if len(cmd.Platforms) > 0 {
-		return slices.Contains(cmd.Platforms, a.platform())
-	}
 	if platformCommandScope[a.platform()] == scopeFull {
 		return true
 	}

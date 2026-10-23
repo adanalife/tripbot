@@ -3,8 +3,11 @@ package chatbot
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/adanalife/tripbot"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
@@ -32,8 +35,8 @@ func TestNoDuplicateTriggersOrAliases(t *testing.T) {
 
 func TestLookupMapsContainAllTriggers(t *testing.T) {
 	for _, cmd := range builtTestApp.commands {
-		// builtTestApp is a Twitch App; commands scoped to other platforms via
-		// Command.Platforms aren't indexed here.
+		// builtTestApp is a Twitch App; commands its gate disables aren't
+		// indexed here.
 		if !builtTestApp.commandEnabled(&cmd) {
 			continue
 		}
@@ -55,8 +58,8 @@ func TestLookupMapsContainAllTriggers(t *testing.T) {
 func TestLookupMapsPointToCorrectCommand(t *testing.T) {
 	for i := range builtTestApp.commands {
 		cmd := &builtTestApp.commands[i]
-		// Skip commands scoped to other platforms via Command.Platforms — they
-		// aren't in builtTestApp's (Twitch) lookup maps by design.
+		// Skip commands the gate disables — they aren't in builtTestApp's
+		// (Twitch) lookup maps by design.
 		if !builtTestApp.commandEnabled(cmd) {
 			continue
 		}
@@ -99,7 +102,7 @@ func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
 			t.Errorf("expected %q to be available on Facebook, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown"} {
 		if cmd, _, _ := fb.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on Facebook, got %q", token, cmd.Trigger)
 		}
@@ -116,7 +119,7 @@ func TestInstagramPlatformIndexesOnlyAllowlist(t *testing.T) {
 			t.Errorf("expected %q to be available on Instagram, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown"} {
 		if cmd, _, _ := ig.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on Instagram, got %q", token, cmd.Trigger)
 		}
@@ -139,9 +142,8 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 		}
 	}
 
-	// excluded: identity/miles, Twitch-only, admin, and the SomaFM credit line
-	// do not resolve
-	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!somafm"} {
+	// excluded: identity/miles, Twitch-only, and admin commands do not resolve
+	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello"} {
 		if cmd, _, _ := yt.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on YouTube, got %q", token, cmd.Trigger)
 		}
@@ -158,7 +160,7 @@ func TestTikTokPlatformIndexesOnlyAllowlist(t *testing.T) {
 			t.Errorf("expected %q to be available on TikTok, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown"} {
 		if cmd, _, _ := tk.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on TikTok, got %q", token, cmd.Trigger)
 		}
@@ -212,7 +214,7 @@ func TestCommandsCmdFiltersByPlatform(t *testing.T) {
 	yt.Chat = ytChat
 	yt.commandsCmd(context.Background(), nil, nil)
 	ytOut := ytChat.Output()
-	for _, absent := range []string{"!guess", "!miles", "!leaderboard", "!somafm"} {
+	for _, absent := range []string{"!guess", "!miles", "!leaderboard"} {
 		if strings.Contains(ytOut, absent) {
 			t.Errorf("YouTube !commands should not advertise %q: %q", absent, ytOut)
 		}
@@ -270,3 +272,21 @@ func TestBotlessHelpMessagesAdvertiseNoCommands(t *testing.T) {
 // commandToken matches a chat-command token ("!" followed by a letter, e.g.
 // !location) without matching a bare "!" used as punctuation.
 var commandToken = regexp.MustCompile(`![a-zA-Z]`)
+
+// The platform constants are named so per-command gating reads well, but the
+// set itself is platform-gateway's. A platform synced into platforms.json with
+// no scope here would run with whatever the lookup's zero value grants, and a
+// scope for a platform the fleet dropped is dead config.
+func TestPlatformCommandScopeCoversTheSyncedPlatforms(t *testing.T) {
+	supported := tripbot.Platforms()
+	for _, p := range supported {
+		if _, ok := platformCommandScope[p]; !ok {
+			t.Errorf("platforms.json lists %q but platformCommandScope has no entry for it", p)
+		}
+	}
+	for p := range platformCommandScope {
+		if !slices.Contains(supported, p) {
+			t.Errorf("platformCommandScope has %q, which platforms.json does not list", p)
+		}
+	}
+}

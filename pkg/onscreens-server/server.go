@@ -2,28 +2,20 @@ package onscreensServer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
-	"github.com/slok/go-http-metrics/middleware"
-	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
-	"github.com/unrolled/secure"
-	"github.com/urfave/negroni/v3"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Config bundles what cmd/onscreens-server passes into New.
@@ -54,6 +46,18 @@ type Server struct {
 	// live pools.
 	left  *rotator
 	right *rotator
+
+	// timewarpNoBackground is the last warp's "strip the opaque cover" choice,
+	// carried on timewarp.show and served in state.json for the browser source
+	// to apply. Server-level rather than a field on the Onscreen: it's styling
+	// for one overlay, not state every overlay has.
+	timewarpNoBackground atomic.Bool
+
+	// middleExpiry is the pending auto-hide for the middle text, when the show
+	// that set it asked for one. Held so the next show can cancel it —
+	// otherwise the previous message's timer hides the new one early.
+	middleExpiryMu sync.Mutex
+	middleExpiry   *time.Timer
 
 	http *http.Server
 }
@@ -103,20 +107,20 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/", tagged("/health/", healthHandler))
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/", httpmw.Tagged("/health/", healthHandler))
+	hp.Handle("/live", httpmw.Tagged("/health/live", healthHandler))
+	hp.Handle("/ready", httpmw.Tagged("/health/ready", healthHandler))
 
 	// version endpoint — returns build metadata as JSON
-	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
+	r.Handle("/version", httpmw.Tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
 	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps)
 	// arrive over NATS now (see nats.go); only the browser-source feeds
 	// remain on HTTP: state JSON, per-onscreen HTML pages, and image assets.
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.Handle("/state.json", tagged("/onscreens/state.json", s.onscreensStateHandler))
-	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
-	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
+	osc.Handle("/state.json", httpmw.Tagged("/onscreens/state.json", s.onscreensStateHandler))
+	osc.Handle("/render/{name}", httpmw.Tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
+	osc.Handle("/asset/{name}", httpmw.Tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
 
 	// admin actions — no app-layer auth gate. onscreens-server publishes no
 	// Ingress, so this is reachable only in-cluster (Service DNS) or through a
@@ -124,39 +128,19 @@ func (s *Server) Start(ctx context.Context) error {
 	// onscreens-server" surface; the shared handler SIGTERMs the process and
 	// k8s restartPolicy: Always brings the pod back.
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
-	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
+	admin.Handle("/shutdown", httpmw.Tagged("/admin/shutdown", httpmw.ShutdownHandler()))
 
 	// prometheus metrics endpoint
-	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
+	r.Path("/metrics").Handler(httpmw.Tagged("/metrics", promhttp.Handler().ServeHTTP))
 
 	// catch everything else
-	r.Handle("/", tagged("/", catchAllHandler))
+	r.Handle("/", httpmw.Tagged("/", catchAllHandler))
 
 	if s.cfg.Verbose {
 		helpers.PrintAllRoutes(r)
 	}
 
-	// negroni.New + explicit middleware so we can swap negroni's stdlib
-	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
-	// middleware from negroni.Classic is dropped (no public/ directory).
-	app := negroni.New(
-		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
-		httpmw.NewSlogLogger(),
-	)
-
-	metricsMw := middleware.New(middleware.Config{
-		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  s.cfg.ServerType,
-	})
-	app.Use(negronimiddleware.Handler("", metricsMw))
-
-	secureMw := secure.New(secure.Options{
-		FrameDeny:     true,
-		IsDevelopment: s.cfg.IsDevelopment(),
-	})
-	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
-
-	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
+	app := httpmw.NewChain(s.cfg.ServerType, s.cfg.IsDevelopment(), func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) })
 
 	app.UseHandler(r)
 
@@ -203,69 +187,25 @@ func (s *Server) RestoreFromJetStream(ctx context.Context) {
 	s.RestoreRotatorCopy(ctx)
 }
 
-// Shutdown gracefully stops the HTTP listener, allowing in-flight
+// Shutdown ends every overlay's background loops (the expiry sweepers and the
+// two rotators), then gracefully stops the HTTP listener, allowing in-flight
 // requests up to ctx's deadline to complete before closing connections.
 // Returns the error from http.Server.Shutdown so callers can log or act
-// on a timeout. Safe to call once Start has returned (or concurrently
-// while Start is blocked on ctx.Done()); calling on a zero-value Server
-// (Start never ran) is a no-op.
+// on a timeout. Safe to call more than once, once Start has returned (or
+// concurrently while Start is blocked on ctx.Done()); on a Server whose Start
+// never ran, only the loops are stopped.
 func (s *Server) Shutdown(ctx context.Context) error {
+	for _, osc := range s.all() {
+		osc.stop()
+	}
 	if s.http == nil {
 		return nil
 	}
 	return s.http.Shutdown(ctx)
 }
 
-// versionHandler returns build metadata as JSON. The tag comes from the
-// build-time ldflag (threaded through Config{Version} into the Server);
-// sha + built_at are read from the binary's embedded VCS info (Go's
-// automatic -buildvcs). started_at is when the process began so callers
-// can derive uptime themselves.
+// versionHandler returns build metadata as JSON; see httpmw.WriteVersion.
+// The tag comes from Config{Version}, threaded into the Server.
 func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
-	resp := struct {
-		Tag       string `json:"tag"`
-		Sha       string `json:"sha"`
-		BuiltAt   string `json:"built_at"`
-		StartedAt string `json:"started_at"`
-	}{Tag: s.Version, StartedAt: startedAt.UTC().Format(time.RFC3339)}
-
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, set := range info.Settings {
-			switch set.Key {
-			case "vcs.revision":
-				resp.Sha = set.Value
-			case "vcs.time":
-				resp.BuiltAt = set.Value
-			}
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
-	}
-}
-
-// startedAt marks process start so /version can report uptime. Set at
-// package load; close enough to process start for a human-readable "up Xh".
-var startedAt = time.Now()
-
-// tagged wraps a HandlerFunc so the http.route attribute is set on metrics
-// (via otelhttp.Labeler) and traces (via the active span), and overrides
-// the span name with the route template so spans group by route in Tempo
-// instead of all collapsing under the operation name passed to
-// otelhttp.NewHandler. Negroni doesn't surface the underlying mux route
-// template to the otelhttp middleware, so each registration declares it.
-func tagged(route string, h http.HandlerFunc) http.Handler {
-	attr := semconv.HTTPRoute(route)
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		ctx := req.Context()
-		if labeler, ok := otelhttp.LabelerFromContext(ctx); ok {
-			labeler.Add(attr)
-		}
-		span := trace.SpanFromContext(ctx)
-		span.SetAttributes(attr)
-		span.SetName(route)
-		h(w, req)
-	})
+	httpmw.WriteVersion(w, r, s.Version)
 }

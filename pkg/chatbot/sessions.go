@@ -13,7 +13,7 @@ import (
 // graceful shutdown of in-memory session state) plus the inbound-side session
 // lifecycle and access-check reads the handlers and dispatch need. Tests
 // inject a fake; production uses the realSessions adapter built by
-// NewSessionsAdapter. Mirrors the Onscreens/Playout/Video/IRC injection pattern.
+// NewSessionsAdapter. Mirrors the Onscreens/Playout/Video/Chat injection pattern.
 type Sessions interface {
 	// Find looks up a user by username. Returns gorm.ErrRecordNotFound for
 	// an unknown user (mirrors pkg/users.Find's contract); any other error
@@ -32,10 +32,11 @@ type Sessions interface {
 	BonusMiles(u users.User) float32
 	// CorrectMiles applies a manual miles delta (may be negative) to a user's
 	// lifetime total and current monthly scoreboard, persisting immediately,
-	// and returns the new lifetime total. Backs !givemiles. An error means
+	// and returns the new lifetime total and the delta applied to it (a
+	// clawback is clamped at the lifetime balance). Backs !givemiles. An error means
 	// nothing was persisted and the returned total is meaningless — don't
 	// report it, and don't record a correction event.
-	CorrectMiles(ctx context.Context, username string, delta float32) (float32, error)
+	CorrectMiles(ctx context.Context, username string, delta float32) (total, applied float32, err error)
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.
 	Shutdown(ctx context.Context)
@@ -66,7 +67,7 @@ type Sessions interface {
 // realSessions delegates to its *users.Sessions, plus pkg/users' standalone DB
 // helper (Find, which is not session state). cmd/tripbot builds it around the
 // process-wide *users.Sessions via NewSessionsAdapter so commands read the same
-// session state the IRC handlers mutate. s is nil in New()'s default adapter
+// session state the inbound chat handlers mutate. s is nil in New()'s default adapter
 // until cmd assigns App.Sessions, so the nil guards below cover that brief
 // startup window. Tests inject their own Sessions fake rather than realSessions,
 // so the guards only ever fire pre-install.
@@ -114,11 +115,11 @@ func (r realSessions) BonusMiles(u users.User) float32 {
 	return r.s.BonusMiles(u)
 }
 
-func (r realSessions) CorrectMiles(ctx context.Context, username string, delta float32) (float32, error) {
+func (r realSessions) CorrectMiles(ctx context.Context, username string, delta float32) (total, applied float32, err error) {
 	if r.s == nil {
 		// The read-only guards above can fall back to a zero value, but a
 		// correction that never reached a session can't report a total.
-		return 0, errors.New("chatbot: sessions adapter has no session state")
+		return 0, 0, errors.New("chatbot: sessions adapter has no session state")
 	}
 	return r.s.CorrectMiles(ctx, username, delta)
 }

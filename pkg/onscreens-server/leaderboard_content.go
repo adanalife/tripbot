@@ -36,6 +36,11 @@ func renderLeaderboard(title string, leaderboard [][]string) string {
 	//nolint:staticcheck // SA1019: see above
 	fmt.Fprintf(&b, `<div class="lb-title">%s</div>`, html.EscapeString(strings.Title(title)))
 	for _, row := range leaderboard {
+		// Rows arrive over NATS from a sender this binary can't trust; a short
+		// one would panic the subscription callback and take the process down.
+		if len(row) < 2 {
+			continue
+		}
 		fmt.Fprintf(
 			&b,
 			`<span class="lb-score">%s</span><span class="lb-user">%s</span>`,

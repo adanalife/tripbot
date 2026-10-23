@@ -44,9 +44,14 @@ const reconnectWait = 2 * time.Second
 // on connect; publishes buffer up to the client's reconnect buffer and are
 // otherwise dropped, matching the fire-and-forget contract.
 //
-// onConnect callbacks run once, when the connection is first established
-// (immediately or after retries) — the place for JetStream stream declares
-// and anything else that needs a live server.
+// onConnect callbacks run when the connection is first established
+// (immediately or after retries) and again after every reconnect — the place
+// for JetStream stream declares and anything else that needs a live server. A
+// NATS restart that wiped its storage comes back without the streams, and a
+// publish no stream covers is silently uncaptured, so the declares have to be
+// re-run on reconnect rather than trusted from boot. Callbacks must be safe to
+// repeat. They run on their own goroutine, one run at a time, so a slow or
+// retrying callback never stalls the client's event dispatch.
 func Connect(url string, name string, onConnect ...func(*nats.Conn)) *nats.Conn {
 	mu.Lock()
 	defer mu.Unlock()
@@ -57,6 +62,16 @@ func Connect(url string, name string, onConnect ...func(*nats.Conn)) *nats.Conn 
 		slog.Info("nats disabled (NATS_URL unset); pubsub publishes will no-op")
 		return nil
 	}
+	var runMu sync.Mutex
+	runCallbacks := func(nc *nats.Conn) {
+		go func() {
+			runMu.Lock()
+			defer runMu.Unlock()
+			for _, f := range onConnect {
+				f(nc)
+			}
+		}()
+	}
 	c, err := nats.Connect(url,
 		nats.Name(name),
 		nats.MaxReconnects(-1),
@@ -64,12 +79,11 @@ func Connect(url string, name string, onConnect ...func(*nats.Conn)) *nats.Conn 
 		nats.ReconnectWait(reconnectWait),
 		nats.ConnectHandler(func(nc *nats.Conn) {
 			slog.Info("nats connected", "url", nc.ConnectedUrl(), "name", name)
-			for _, f := range onConnect {
-				f(nc)
-			}
+			runCallbacks(nc)
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			slog.Info("nats reconnected", "url", nc.ConnectedUrl(), "name", name)
+			runCallbacks(nc)
 		}),
 	)
 	if err != nil {

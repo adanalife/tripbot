@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -257,8 +258,8 @@ func TestFindCommand_WithParams(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
-	if cmd.Trigger != "!goto" {
-		t.Errorf("got trigger %q, want !goto", cmd.Trigger)
+	if cmd.Trigger != "!find" {
+		t.Errorf("got trigger %q, want !find (!goto is its alias)", cmd.Trigger)
 	}
 	if len(params) != 1 || params[0] != "42" {
 		t.Errorf("unexpected params: %v", params)
@@ -349,7 +350,7 @@ func TestRunCommand_MiddleTextKeepsCapitalization(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	app.runCommand(context.Background(), newTestUser(adminUser), " !MIDDLE Hello World ")
+	app.runCommand(context.Background(), newAdminUser(), " !MIDDLE Hello World ")
 
 	want := `ShowMiddleText("Hello World")`
 	if len(rec.Calls) != 1 || rec.Calls[0] != want {
@@ -365,7 +366,7 @@ func TestRunCommand_MiddleHideStillHides(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	app.runCommand(context.Background(), newTestUser(adminUser), "!middle HIDE")
+	app.runCommand(context.Background(), newAdminUser(), "!middle HIDE")
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
 		t.Errorf("overlay calls = %v, want [HideMiddleText()]", rec.Calls)
@@ -387,7 +388,7 @@ func TestRunCommand_UnknownCommandStaysBelowError(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	defer slog.SetDefault(restore)
 
-	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime")
+	app.runCommand(context.Background(), newAdminUser(), "!watchtime")
 
 	if strings.Contains(buf.String(), "level=ERROR") {
 		t.Errorf("unknown command logged at ERROR (reaches Sentry); log = %q", buf.String())
@@ -415,8 +416,8 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 	app.Events = rec
 	out, says := captureSay(t, app)
 
-	// !somafm is in the registry but outside the v1 allowlist Facebook runs.
-	app.runCommand(context.Background(), newTestUser(adminUser), "!somafm")
+	// !miles is in the registry but outside the v1 allowlist Facebook runs.
+	app.runCommand(context.Background(), newAdminUser(), "!miles")
 
 	if len(rec.Refusals) != 1 {
 		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
@@ -425,8 +426,8 @@ func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
 		t.Errorf("reason = %q, want %q", got, events.RefusedWrongPlatform)
 	}
 	// The viewer typed a real trigger, so they hear why nothing happened.
-	if !strings.Contains(out(), "!somafm") {
-		t.Errorf("say = %q, want it to name !somafm", out())
+	if !strings.Contains(out(), "!miles") {
+		t.Errorf("say = %q, want it to name !miles", out())
 	}
 	if says() != 1 {
 		t.Errorf("expected exactly one Say() call, got %d", says())
@@ -456,7 +457,7 @@ func TestRunCommand_RefusalStampsAiringClip(t *testing.T) {
 	rec := &recordingEvents{}
 	app.Events = rec
 
-	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime extra args")
+	app.runCommand(context.Background(), newAdminUser(), "!watchtime extra args")
 
 	if len(rec.Refusals) != 1 {
 		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
@@ -645,11 +646,13 @@ type fakeUser struct {
 	follower   bool
 	subscriber bool
 	admin      bool
+	mod        bool
 }
 
 func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
 func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
 func (f *fakeUser) IsAdmin() bool                              { return f.admin }
+func (f *fakeUser) IsMod() bool                                { return f.admin || f.mod }
 
 // sessionUser (a *users.User + the installed *Sessions) is the production
 // chatUser; this asserts it satisfies the seam.
@@ -878,5 +881,85 @@ func TestFindCommand_BareCommandWordsNeedTheWholeMessage(t *testing.T) {
 func TestFindCommand_UnlistedBareWordStillMisses(t *testing.T) {
 	if cmd, _, _ := builtTestApp.findCommand("location"); cmd != nil {
 		t.Errorf("bare \"location\" dispatched to %q, want no command", cmd.Trigger)
+	}
+}
+
+// The mod gate admits the broadcaster and moderators, declines everyone else
+// in silence, and names itself on the refusal event.
+func TestCheckAccess_RequiresMod(t *testing.T) {
+	cmd := &Command{Trigger: "!test", RequiresMod: true}
+	for _, tc := range []struct {
+		name string
+		user *fakeUser
+		want bool
+	}{
+		{"viewer", &fakeUser{follower: true, subscriber: true}, false},
+		{"mod", &fakeUser{mod: true}, true},
+		{"admin", &fakeUser{admin: true}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var said string
+			ok, refused := cmd.checkAccess(context.Background(), platformTwitch, tc.user, func(msg string) { said = msg })
+			if ok != tc.want {
+				t.Errorf("ok = %v, want %v", ok, tc.want)
+			}
+			if said != "" {
+				t.Errorf("said %q, want silence", said)
+			}
+			if !tc.want && refused != events.RefusedModGate {
+				t.Errorf("refused = %q, want %q", refused, events.RefusedModGate)
+			}
+		})
+	}
+}
+
+// The moderator flag arrives on the message, not the user row, so HandleMessage
+// has to carry it across for the mod gate to ever open for a moderator.
+func TestSessionUser_IsModReadsTheMessageFlag(t *testing.T) {
+	cfg := testConf
+	if (sessionUser{cfg: cfg, u: &users.User{Username: "viewer1"}}).IsMod() {
+		t.Error("a plain viewer reads as a mod")
+	}
+	if !(sessionUser{cfg: cfg, u: &users.User{Username: "viewer1", Moderator: true}}).IsMod() {
+		t.Error("a flagged moderator does not read as a mod")
+	}
+	if !(sessionUser{cfg: cfg, u: newAdminUser()}).IsMod() {
+		t.Error("the broadcaster does not read as a mod")
+	}
+}
+
+// The admin gate is the platform's broadcaster flag, set from the sender's
+// user id. A viewer whose display name happens to match the channel name —
+// free to pick on YouTube, Facebook and TikTok — must not pass it.
+func TestSessionUser_IsAdminReadsTheBroadcasterFlagNotTheName(t *testing.T) {
+	cfg := testConf
+	if (sessionUser{cfg: cfg, u: &users.User{Username: adminUser}}).IsAdmin() {
+		t.Error("a viewer named after the channel reads as admin")
+	}
+	if (sessionUser{cfg: cfg, u: &users.User{Username: adminUser, Moderator: true}}).IsAdmin() {
+		t.Error("a moderator named after the channel reads as admin")
+	}
+	if !(sessionUser{cfg: cfg, u: &users.User{Username: "anything", Broadcaster: true}}).IsAdmin() {
+		t.Error("the flagged broadcaster does not read as admin")
+	}
+}
+
+// A chat line going out on the bus carries the clip on screen and the
+// playhead into it — what the console's "what did they see" reads.
+func TestStampAiring(t *testing.T) {
+	app := newTestApp(video.Video{ID: 77, Slug: "2018_0514_224801_013"})
+	var line eventbus.ChatMessage
+	app.stampAiring(&line)
+	if line.VideoID != 77 || line.VideoFile != "2018_0514_224801_013.MP4" {
+		t.Errorf("stamp = %d %q, want 77 2018_0514_224801_013.MP4", line.VideoID, line.VideoFile)
+	}
+	if line.VideoTsSec == nil {
+		t.Error("video_ts_sec = nil, want the playhead stamped")
+	}
+	app.Video = nil
+	var bare eventbus.ChatMessage
+	app.stampAiring(&bare)
+	if bare.VideoID != 0 || bare.VideoFile != "" || bare.VideoTsSec != nil {
+		t.Errorf("no video source should leave the line unstamped: %+v", bare)
 	}
 }

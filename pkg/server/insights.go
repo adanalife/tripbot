@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
 )
@@ -26,10 +27,15 @@ import (
 // pkg/rollups' snapshot read applies.
 
 // Insights windows are clamped so an arbitrary ?days can't turn a window scan
-// into a table scan.
+// into a table scan. The insight endpoints themselves also take days=0, "all
+// time": footage and regions only settle over many plays, and the tables
+// behind them grow by a sample a minute per platform — a few hundred thousand
+// rows a year, which a whole-table aggregate reads in well under the
+// console's budget. The stats and presence reads keep the clamp.
 const (
 	insightsMinDays = 1
 	insightsMaxDays = 90
+	insightsAllTime = 0
 
 	commandInsightsDefaultDays = 7
 	guessInsightsDefaultDays   = 30
@@ -38,12 +44,30 @@ const (
 	// state needs many plays before its churn settles, and a week of airtime
 	// spread over ~50 states rarely gets there.
 	regionInsightsDefaultDays = 30
+	// Sessions are counted per visit, so a week is plenty of them.
+	sessionInsightsDefaultDays = 7
 )
 
 // insightsDays parses ?days, falling back to def when absent or unparseable
 // and clamping to [insightsMinDays, insightsMaxDays].
 func insightsDays(r *http.Request, def int) int {
 	return queryInt(r, "days", def, insightsMinDays, insightsMaxDays)
+}
+
+// insightsWindowDays is insightsDays for the insight endpoints, where 0 (or
+// anything below the minimum) asks for all time.
+func insightsWindowDays(r *http.Request, def int) int {
+	return queryInt(r, "days", def, insightsAllTime, insightsMaxDays)
+}
+
+// insightsSince is the window's lower bound as a timestamp: `days` ago, or the
+// epoch for all time. A timestamp rather than an interval in the SQL keeps the
+// predicate a plain range the date indexes scan, whichever the window is.
+func insightsSince(days int) time.Time {
+	if days <= insightsAllTime {
+		return time.Unix(0, 0).UTC()
+	}
+	return time.Now().AddDate(0, 0, -days)
 }
 
 // queryInt parses the named integer query parameter, falling back to def when
@@ -105,7 +129,7 @@ WITH runs AS (
     FROM events e
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_run'
-      AND e.date_created >= now() - make_interval(days => @days)
+      AND e.date_created >= @since
       AND u.is_bot = false
     GROUP BY 1
 ),
@@ -115,7 +139,7 @@ refused AS (
     FROM events e
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_refused'
-      AND e.date_created >= now() - make_interval(days => @days)
+      AND e.date_created >= @since
       AND u.is_bot = false
     GROUP BY 1
 )
@@ -134,7 +158,7 @@ SELECT COALESCE(e.meta->>'reason', '') AS reason,
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_refused'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY count DESC, reason`
@@ -151,7 +175,7 @@ FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_refused'
   AND e.meta->>'reason' = 'unknown'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY count DESC, typed
@@ -165,13 +189,13 @@ func gatherCommandInsights(ctx context.Context, days int) (commandInsightsRespon
 		UnknownCommands: []unknownCommand{},
 	}
 	db := database.GormDB().WithContext(ctx)
-	if err := db.Raw(commandUsageSQL, sql.Named("days", days)).Scan(&out.Commands).Error; err != nil {
+	if err := db.Raw(commandUsageSQL, sql.Named("since", insightsSince(days))).Scan(&out.Commands).Error; err != nil {
 		return out, fmt.Errorf("command usage: %w", err)
 	}
-	if err := db.Raw(refusalReasonsSQL, sql.Named("days", days)).Scan(&out.RefusalReasons).Error; err != nil {
+	if err := db.Raw(refusalReasonsSQL, sql.Named("since", insightsSince(days))).Scan(&out.RefusalReasons).Error; err != nil {
 		return out, fmt.Errorf("refusal reasons: %w", err)
 	}
-	if err := db.Raw(unknownCommandsSQL, sql.Named("days", days)).Scan(&out.UnknownCommands).Error; err != nil {
+	if err := db.Raw(unknownCommandsSQL, sql.Named("since", insightsSince(days))).Scan(&out.UnknownCommands).Error; err != nil {
 		return out, fmt.Errorf("unknown commands: %w", err)
 	}
 	return out, nil
@@ -203,7 +227,7 @@ SELECT COUNT(*) AS total,
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'guess_submitted'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false`
 
 const guessStatesSQL = `
@@ -213,7 +237,7 @@ SELECT COALESCE(e.meta->>'actual', '') AS state,
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'guess_submitted'
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY guesses DESC, state
@@ -227,11 +251,11 @@ func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, 
 		Correct int64
 		Players int64
 	}
-	if err := db.Raw(guessTotalsSQL, sql.Named("days", days)).Scan(&totals).Error; err != nil {
+	if err := db.Raw(guessTotalsSQL, sql.Named("since", insightsSince(days))).Scan(&totals).Error; err != nil {
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
-	if err := db.Raw(guessStatesSQL, sql.Named("days", days)).Scan(&out.States).Error; err != nil {
+	if err := db.Raw(guessStatesSQL, sql.Named("since", insightsSince(days))).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
 	}
 	return out, nil
@@ -240,7 +264,9 @@ func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, 
 // clipInsight is one clip's in-window footage performance. AvgChatters /
 // MaxChatters aggregate viewer_samples.count — the number of people who've
 // spoken in chat while the clip aired, sampled every ~61s — which is an
-// engagement signal, not a concurrent-viewer count.
+// engagement signal, not a concurrent-viewer count. The pointer fields are
+// the columns that arrived after the table did, and are null when no
+// in-window row carried them, for the same reasons regionInsight gives.
 type clipInsight struct {
 	VideoID     int     `json:"video_id"`
 	Label       string  `json:"label"`
@@ -248,6 +274,21 @@ type clipInsight struct {
 	AvgChatters float64 `json:"avg_chatters"`
 	MaxChatters int64   `json:"max_chatters"`
 	Samples     int64   `json:"samples"`
+	// AvgViewers and MaxViewers aggregate viewer_samples.viewers, the
+	// platform's own concurrent-viewer number, over ticks not positively
+	// reported offline.
+	AvgViewers *float64 `json:"avg_viewers"`
+	MaxViewers *int64   `json:"max_viewers"`
+	// ChatPerMin is chat messages per sampled minute: viewer_samples.
+	// chat_messages is the count for the ~61s tick ending at the row, so
+	// averaging it over the ticks that carried one is a per-minute rate.
+	ChatPerMin *float64 `json:"chat_per_min"`
+	// ClosedPlays is the subset of Plays whose end was observed;
+	// AvgPlayedSeconds is their mean airing, and is null when none closed. A
+	// play with no ended_at is a restart mid-clip, not a clip still airing, so
+	// it stays out of the mean rather than reading as infinitely long.
+	ClosedPlays      int64    `json:"closed_plays"`
+	AvgPlayedSeconds *float64 `json:"avg_played_seconds"`
 }
 
 // footageInsightsResponse is the wire shape of GET /api/insights/footage.
@@ -270,30 +311,46 @@ const footageMinSamples = 3
 // play counts and the clip's place columns for a label. samples is the
 // driving side so a clip whose plays all predate the window (it was already
 // airing when the window opened) still reports.
+//
+// live IS NOT FALSE on the viewer figures, as in regionsSQL: the column
+// postdates the table, and a NULL says nobody reported, not offline. AVG
+// skips NULLs on its own, so chat_per_min and avg_played_seconds come back
+// NULL — not 0 — when no row in the window carried the column.
 const footageSQL = `
 WITH samples AS (
     SELECT video_id,
            AVG(count) AS avg_chatters,
            MAX(count) AS max_chatters,
-           COUNT(*)   AS samples
+           COUNT(*)   AS samples,
+           AVG(viewers) FILTER (WHERE live IS NOT FALSE) AS avg_viewers,
+           MAX(viewers) FILTER (WHERE live IS NOT FALSE) AS max_viewers,
+           AVG(chat_messages) AS chat_per_min
     FROM viewer_samples
     WHERE video_id IS NOT NULL
-      AND sampled_at >= now() - make_interval(days => @days)
+      AND sampled_at >= @since
     GROUP BY video_id
     HAVING COUNT(*) >= @min_samples
 ),
 plays AS (
-    SELECT video_id, COUNT(*) AS plays
+    SELECT video_id,
+           COUNT(*)         AS plays,
+           COUNT(ended_at)  AS closed_plays,
+           AVG(EXTRACT(EPOCH FROM (ended_at - started_at))) AS avg_played_seconds
     FROM video_plays
     WHERE video_id IS NOT NULL
-      AND started_at >= now() - make_interval(days => @days)
+      AND started_at >= @since
     GROUP BY video_id
 )
 SELECT s.video_id,
        COALESCE(p.plays, 0)                       AS plays,
+       COALESCE(p.closed_plays, 0)                AS closed_plays,
+       ROUND(p.avg_played_seconds::numeric, 0)::float8 AS avg_played_seconds,
        ROUND(s.avg_chatters::numeric, 1)::float8  AS avg_chatters,
        s.max_chatters,
        s.samples,
+       ROUND(s.avg_viewers::numeric, 1)::float8   AS avg_viewers,
+       s.max_viewers,
+       ROUND(s.chat_per_min::numeric, 1)::float8  AS chat_per_min,
        COALESCE(v.state, '') AS state,
        COALESCE(v.city, '')  AS city,
        v.city_m
@@ -311,7 +368,7 @@ const footagePlatformsSQL = `
 SELECT DISTINCT platform
 FROM viewer_samples
 WHERE video_id IS NOT NULL
-  AND sampled_at >= now() - make_interval(days => @days)
+  AND sampled_at >= @since
 ORDER BY platform`
 
 // clipLabelNearLimitM matches pkg/video's nearPlaceLimit: beyond 10 km the
@@ -337,33 +394,43 @@ func clipLabel(state, city string, cityM *float64) string {
 func gatherFootageInsights(ctx context.Context, days int) (footageInsightsResponse, error) {
 	out := footageInsightsResponse{Days: days, Clips: []clipInsight{}, Platforms: []string{}}
 	var rows []struct {
-		VideoID     int
-		Plays       int64
-		AvgChatters float64
-		MaxChatters int64
-		Samples     int64
-		State       string
-		City        string
-		CityM       *float64
+		VideoID          int
+		Plays            int64
+		ClosedPlays      int64
+		AvgPlayedSeconds *float64
+		AvgChatters      float64
+		MaxChatters      int64
+		Samples          int64
+		AvgViewers       *float64
+		MaxViewers       *int64
+		ChatPerMin       *float64
+		State            string
+		City             string
+		CityM            *float64
 	}
 	err := database.GormDB().WithContext(ctx).
-		Raw(footageSQL, sql.Named("days", days), sql.Named("min_samples", footageMinSamples)).
+		Raw(footageSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", footageMinSamples)).
 		Scan(&rows).Error
 	if err != nil {
 		return out, fmt.Errorf("footage: %w", err)
 	}
 	for _, r := range rows {
 		out.Clips = append(out.Clips, clipInsight{
-			VideoID:     r.VideoID,
-			Label:       clipLabel(r.State, r.City, r.CityM),
-			Plays:       r.Plays,
-			AvgChatters: r.AvgChatters,
-			MaxChatters: r.MaxChatters,
-			Samples:     r.Samples,
+			VideoID:          r.VideoID,
+			Label:            clipLabel(r.State, r.City, r.CityM),
+			Plays:            r.Plays,
+			AvgChatters:      r.AvgChatters,
+			MaxChatters:      r.MaxChatters,
+			Samples:          r.Samples,
+			AvgViewers:       r.AvgViewers,
+			MaxViewers:       r.MaxViewers,
+			ChatPerMin:       r.ChatPerMin,
+			ClosedPlays:      r.ClosedPlays,
+			AvgPlayedSeconds: r.AvgPlayedSeconds,
 		})
 	}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(footagePlatformsSQL, sql.Named("days", days)).
+		Raw(footagePlatformsSQL, sql.Named("since", insightsSince(days))).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("footage platforms: %w", err)
 	}
@@ -380,6 +447,19 @@ func writeInsights(w http.ResponseWriter, r *http.Request, payload any) {
 	}
 }
 
+// logQueryFailure logs a failed read query. It logs at error level, or at warn
+// when the request's context is already done: a caller that hangs up cancels
+// the query mid-flight (lib/pq reports it as 57014, "canceling statement due
+// to user request"), and that is the caller's timeout, not a fault here. Warn
+// still reaches the logs but stays out of Sentry's event stream.
+func logQueryFailure(ctx context.Context, msg string, err error, args ...any) {
+	level := slog.LevelError
+	if ctx.Err() != nil {
+		level = slog.LevelWarn
+	}
+	slog.Log(ctx, level, msg, append([]any{"err", err}, args...)...)
+}
+
 // insightsError reports a failed insights query as a JSON 500. The message
 // stays generic — the detail goes to the log, not to the wire.
 func insightsError(w http.ResponseWriter, msg string) {
@@ -392,10 +472,10 @@ func insightsError(w http.ResponseWriter, msg string) {
 // distinct-user / refusal counts, refusal reasons, and the top unknown tokens
 // over the ?days window.
 func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, commandInsightsDefaultDays)
+	days := insightsWindowDays(r, commandInsightsDefaultDays)
 	payload, err := gatherCommandInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "command insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "command insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather command insights")
 		return
 	}
@@ -406,10 +486,10 @@ func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
 // accuracy, distinct players, and the per-state breakdown over the ?days
 // window.
 func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, guessInsightsDefaultDays)
+	days := insightsWindowDays(r, guessInsightsDefaultDays)
 	payload, err := gatherGuessInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "guess insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather guess insights")
 		return
 	}
@@ -417,12 +497,13 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // footageInsightsHandler serves GET /api/insights/footage: per-clip play
-// counts and chatter-sample aggregates over the ?days window.
+// counts and airing, chatter, viewer and chat-rate aggregates over the ?days
+// window.
 func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, footageInsightsDefaultDays)
+	days := insightsWindowDays(r, footageInsightsDefaultDays)
 	payload, err := gatherFootageInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "footage insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "footage insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather footage insights")
 		return
 	}
@@ -470,8 +551,8 @@ type regionInsight struct {
 	AvgChatters float64 `json:"avg_chatters"`
 	// Joins and Leaves are non-bot session starts and ends stamped with a
 	// clip in this state, so Net is the audience the state gained while it
-	// held the screen. This is the "best performing" figure the design
-	// settled on: raw viewer count is dominated by time-of-day, raids and
+	// held the screen. Net is the "best performing" figure because raw
+	// viewer count is dominated by time-of-day, raids and
 	// day-of-week, which churn differences out.
 	Joins  int64 `json:"joins"`
 	Leaves int64 `json:"leaves"`
@@ -520,7 +601,7 @@ WITH samples AS (
     JOIN videos v ON v.id = s.video_id
     WHERE s.video_id IS NOT NULL
       AND v.state <> ''
-      AND s.sampled_at >= now() - make_interval(days => @days)
+      AND s.sampled_at >= @since
     GROUP BY v.state
     HAVING COUNT(*) >= @min_samples
 ),
@@ -533,7 +614,7 @@ airtime AS (
     JOIN videos v ON v.id = p.video_id
     WHERE p.video_id IS NOT NULL
       AND v.state <> ''
-      AND p.started_at >= now() - make_interval(days => @days)
+      AND p.started_at >= @since
     GROUP BY v.state
 ),
 churn AS (
@@ -547,7 +628,7 @@ churn AS (
       AND e.video_id IS NOT NULL
       AND v.state <> ''
       AND u.is_bot = false
-      AND e.date_created >= now() - make_interval(days => @days)
+      AND e.date_created >= @since
     GROUP BY v.state
 )
 SELECT s.state,
@@ -579,19 +660,19 @@ FROM viewer_samples s
 JOIN videos v ON v.id = s.video_id
 WHERE s.video_id IS NOT NULL
   AND v.state <> ''
-  AND s.sampled_at >= now() - make_interval(days => @days)
+  AND s.sampled_at >= @since
 ORDER BY s.platform`
 
 func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse, error) {
 	out := regionInsightsResponse{Days: days, Regions: []regionInsight{}, Platforms: []string{}}
 	err := database.GormDB().WithContext(ctx).
-		Raw(regionsSQL, sql.Named("days", days), sql.Named("min_samples", regionMinSamples)).
+		Raw(regionsSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", regionMinSamples)).
 		Scan(&out.Regions).Error
 	if err != nil {
 		return out, fmt.Errorf("regions: %w", err)
 	}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(regionPlatformsSQL, sql.Named("days", days)).
+		Raw(regionPlatformsSQL, sql.Named("since", insightsSince(days))).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("region platforms: %w", err)
 	}
@@ -601,10 +682,10 @@ func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse
 // regionInsightsHandler serves GET /api/insights/regions: per-state airtime,
 // audience and join/leave churn over the ?days window.
 func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
-	days := insightsDays(r, regionInsightsDefaultDays)
+	days := insightsWindowDays(r, regionInsightsDefaultDays)
 	payload, err := gatherRegionInsights(r.Context(), days)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "region insights query failed", "err", err, "days", days)
+		logQueryFailure(r.Context(), "region insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather region insights")
 		return
 	}
@@ -705,8 +786,99 @@ func viewerSeriesHandler(w http.ResponseWriter, r *http.Request) {
 	hours := queryInt(r, "hours", viewerSeriesDefaultHours, viewerSeriesMinHours, viewerSeriesMaxHours)
 	payload, err := gatherViewerSeries(r.Context(), hours)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "viewer series query failed", "err", err, "hours", hours)
+		logQueryFailure(r.Context(), "viewer series query failed", err, "hours", hours)
 		insightsError(w, "couldn't gather the viewer series")
+		return
+	}
+	writeInsights(w, r, payload)
+}
+
+// sessionStats is one platform's row in GET /api/insights/sessions: how long a
+// human stays once they arrive, the number that says whether ambient viewing
+// is working at all.
+type sessionStats struct {
+	Platform string `json:"platform"`
+	// Sessions is the closed visits in the window: a login paired with the
+	// logout carrying its session_id.
+	Sessions      int     `json:"sessions"`
+	MedianMinutes float64 `json:"median_minutes"`
+	MeanMinutes   float64 `json:"mean_minutes"`
+	P90Minutes    float64 `json:"p90_minutes"`
+	// The buckets split Sessions, so they sum to it: a glance, not a
+	// histogram. Under five minutes is roughly one chatter-list tick either
+	// side of a visit, the drive-bys.
+	Under5m    int `json:"under_5m"`
+	Under30m   int `json:"under_30m"`
+	Under2h    int `json:"under_2h"`
+	TwoHoursUp int `json:"two_hours_up"`
+}
+
+// sessionInsightsResponse is the wire shape of GET /api/insights/sessions.
+type sessionInsightsResponse struct {
+	Days      int            `json:"days"`
+	Platforms []sessionStats `json:"platforms"`
+}
+
+// visitsCTE pairs each login since @since with the logout sharing its
+// session_id, one row per closed human visit with its platform, its login day
+// and its length in minutes. Both sides are windowed, as orphanedSessionsSQL
+// does it: a logout for a login in the window can only be at or after the
+// window's start. Logins with no logout (an ungraceful exit, or a viewer still
+// here) and pairs over 24h (missed logouts, the rollups' rule) are left out
+// rather than guessed at. The all-zero UUID is what a row without a session
+// writes. Shared by sessionsSQL and playbackDailySQL.
+const visitsCTE = `visits AS (
+    SELECT l.platform,
+           l.date_created::date AS day,
+           EXTRACT(EPOCH FROM (o.date_created - l.date_created)) / 60.0 AS minutes
+    FROM events l
+    JOIN events o ON o.session_id = l.session_id
+                 AND o.event = 'logout'
+                 AND o.date_created >= @since
+    JOIN users u  ON u.platform = l.platform AND u.username = l.username
+    WHERE l.event = 'login'
+      AND l.session_id IS NOT NULL
+      AND l.session_id <> '00000000-0000-0000-0000-000000000000'
+      AND l.date_created >= @since
+      AND u.is_bot = false
+      AND o.date_created >= l.date_created
+      AND o.date_created - l.date_created <= interval '24 hours'
+)`
+
+// sessionsSQL summarises the visits per platform.
+const sessionsSQL = `
+WITH ` + visitsCTE + `
+SELECT platform,
+       COUNT(*) AS sessions,
+       ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes)::numeric, 1)::float8 AS median_minutes,
+       ROUND(AVG(minutes)::numeric, 1)::float8                                         AS mean_minutes,
+       ROUND(percentile_cont(0.9) WITHIN GROUP (ORDER BY minutes)::numeric, 1)::float8 AS p90_minutes,
+       COUNT(*) FILTER (WHERE minutes < 5)                     AS under5m,
+       COUNT(*) FILTER (WHERE minutes >= 5  AND minutes < 30)  AS under30m,
+       COUNT(*) FILTER (WHERE minutes >= 30 AND minutes < 120) AS under2h,
+       COUNT(*) FILTER (WHERE minutes >= 120)                  AS two_hours_up
+FROM visits
+GROUP BY platform
+ORDER BY platform`
+
+func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsResponse, error) {
+	out := sessionInsightsResponse{Days: days, Platforms: []sessionStats{}}
+	if err := database.GormDB().WithContext(ctx).
+		Raw(sessionsSQL, sql.Named("since", insightsSince(days))).
+		Scan(&out.Platforms).Error; err != nil {
+		return out, fmt.Errorf("sessions: %w", err)
+	}
+	return out, nil
+}
+
+// sessionInsightsHandler serves GET /api/insights/sessions: per-platform
+// human session length over the ?days window.
+func sessionInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	days := insightsWindowDays(r, sessionInsightsDefaultDays)
+	payload, err := gatherSessionInsights(r.Context(), days)
+	if err != nil {
+		logQueryFailure(r.Context(), "session insights query failed", err, "days", days)
+		insightsError(w, "couldn't gather session insights")
 		return
 	}
 	writeInsights(w, r, payload)

@@ -130,7 +130,12 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-			slog.ErrorContext(ctx, "gateway inbound poll failed", "err", err)
+			if errors.Is(err, gateway.ErrUpstreamUnavailable) {
+				// The platform declined to answer; the retry is the recovery.
+				slog.WarnContext(ctx, "gateway inbound poll unavailable", "err", err)
+			} else {
+				slog.ErrorContext(ctx, "gateway inbound poll failed", "err", err)
+			}
 			if p.setChatConnected != nil {
 				p.setChatConnected(false)
 			}
@@ -176,6 +181,9 @@ func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMess
 			Broadcaster: m.Broadcaster,
 			Badges:      m.Badges,
 			Emotes:      emotes(m.Emotes),
+			Reply:       reply(m.Reply),
+			MessageType: m.MessageType,
+			Color:       m.Color,
 		})
 	case gateway.KindGift:
 		if m.Gift == nil {
@@ -208,6 +216,19 @@ func emotes(in []gateway.Emote) []eventbus.Emote {
 		out[i] = eventbus.Emote{ID: e.ID, Start: e.Start, End: e.End}
 	}
 	return out
+}
+
+// reply retypes the gateway's parent as the event-bus shape, nil for nil.
+func reply(in *gateway.InboundReply) *eventbus.ChatReply {
+	if in == nil {
+		return nil
+	}
+	return &eventbus.ChatReply{
+		ParentMessageID: in.ParentMessageID,
+		ParentUsername:  in.ParentAuthor,
+		ParentUserID:    in.ParentAuthorID,
+		ParentText:      in.ParentText,
+	}
 }
 
 // sleepCtx waits d or until ctx is done; false means ctx ended first.

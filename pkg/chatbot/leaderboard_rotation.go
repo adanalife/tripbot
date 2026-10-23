@@ -126,7 +126,7 @@ func (a *App) fetchLeaderboard(ctx context.Context, kind leaderboardKind) (strin
 func (a *App) guessrLeaderboard(ctx context.Context, board, parse, display string) (string, [][]string) {
 	period, rows, err := guessrBoard(ctx, board)
 	if err != nil {
-		slog.ErrorContext(ctx, "could not fetch guessr leaderboard", "err", err, "board", board)
+		slog.WarnContext(ctx, "could not fetch guessr leaderboard", "err", err, "board", board)
 		return "", nil
 	}
 	title := "Guessr"

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/video"
 )
@@ -14,18 +15,21 @@ import (
 // no hits.
 type noopSearch struct{}
 
-func (noopSearch) Find(_ context.Context, _ string) ([]SearchHit, error) { return nil, nil }
+func (noopSearch) Find(_ context.Context, _, _ string) ([]SearchHit, error) { return nil, nil }
 
-// recordingSearch returns canned hits / error and records the queries it saw,
-// so command tests can assert !find behavior without NATS or a model.
+// recordingSearch returns canned hits / error and records the queries and
+// corpora it saw, so command tests can assert !find behavior without NATS or
+// a model.
 type recordingSearch struct {
 	Hits    []SearchHit
 	Err     error
 	Queries []string
+	Corpora []string
 }
 
-func (r *recordingSearch) Find(_ context.Context, query string) ([]SearchHit, error) {
+func (r *recordingSearch) Find(_ context.Context, query, corpus string) ([]SearchHit, error) {
 	r.Queries = append(r.Queries, query)
+	r.Corpora = append(r.Corpora, corpus)
 	return r.Hits, r.Err
 }
 
@@ -50,7 +54,7 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"snowy", "mountains"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"snowy", "mountains"})
 	})
 
 	if len(search.Queries) != 1 || search.Queries[0] != "snowy mountains" {
@@ -72,7 +76,7 @@ func TestFindCmd_NoHits(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Hits: nil})
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"unicorns"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"unicorns"})
 	})
 
 	if len(recPlayout.Calls) != 0 {
@@ -91,7 +95,7 @@ func TestFindCmd_DistanceTooFarIsAMiss(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"something"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"something"})
 	})
 
 	if len(recPlayout.Calls) != 0 {
@@ -107,7 +111,7 @@ func TestFindCmd_SearchError(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Err: errors.New("responder down")})
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), []string{"anything"})
+		app.findCmd(context.Background(), newAdminUser(), []string{"anything"})
 	})
 
 	if len(recPlayout.Calls) != 0 {
@@ -124,7 +128,7 @@ func TestFindCmd_NoArgsShowsUsage(t *testing.T) {
 	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
-		app.findCmd(context.Background(), newTestUser(adminUser), nil)
+		app.findCmd(context.Background(), newAdminUser(), nil)
 	})
 
 	if len(search.Queries) != 0 {
@@ -148,7 +152,7 @@ func TestSearchFrameEmbeddings_ScansRows(t *testing.T) {
 			AddRow("2018_0601_000000_001", 12.0, "Utah", 0.55))
 
 	hits, err := searchFrameEmbeddings(context.Background(), database.GormDB(),
-		[]float32{0.1, 0.2, 0.3}, "model-x", nil, nil, 5)
+		[]float32{0.1, 0.2, 0.3}, "model-x", video.CorpusS1, nil, nil, 5)
 	if err != nil {
 		t.Fatalf("searchFrameEmbeddings: %v", err)
 	}
@@ -175,7 +179,7 @@ func TestSearchFrameEmbeddings_WithStateAndMonthFilters(t *testing.T) {
 			AddRow("2018_0514_224801_013", 5.0, "Nevada", 0.3))
 
 	hits, err := searchFrameEmbeddings(context.Background(), database.GormDB(),
-		[]float32{0.1, 0.2}, "model-x", []string{"Nevada"}, []int{5}, 5)
+		[]float32{0.1, 0.2}, "model-x", video.CorpusS1, []string{"Nevada"}, []int{5}, 5)
 	if err != nil {
 		t.Fatalf("searchFrameEmbeddings: %v", err)
 	}
@@ -187,8 +191,41 @@ func TestSearchFrameEmbeddings_WithStateAndMonthFilters(t *testing.T) {
 	}
 }
 
+func TestSearchFrameEmbeddings_FiltersToCorpus(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`AND v\.corpus = \$3\s+AND v\.reviewed_at IS NOT NULL`).
+		WithArgs(sqlmock.AnyArg(), "model-x", video.CorpusS2, sqlmock.AnyArg(), 5).
+		WillReturnRows(mock.NewRows([]string{"slug", "ts_sec", "state", "distance"}))
+
+	if _, err := searchFrameEmbeddings(context.Background(), database.GormDB(),
+		[]float32{0.1}, "model-x", video.CorpusS2, nil, nil, 5); err != nil {
+		t.Fatalf("searchFrameEmbeddings: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestFindCmd_SearchesTheCorpusOnScreen(t *testing.T) {
+	enablePlayback(t)
+	for _, tc := range []struct{ onScreen, want string }{
+		{"", video.CorpusS1},
+		{video.CorpusS2, video.CorpusS2},
+	} {
+		search := &recordingSearch{}
+		app, _, _ := newFindTestApp(t, search)
+		app.Video = &recordingVideo{Vid: video.Video{Corpus: tc.onScreen}}
+		runAsAdmin(t, func() {
+			app.findCmd(context.Background(), newAdminUser(), []string{"a", "bridge"})
+		})
+		if len(search.Corpora) != 1 || search.Corpora[0] != tc.want {
+			t.Errorf("on screen %q: searched %v, want [%s]", tc.onScreen, search.Corpora, tc.want)
+		}
+	}
+}
+
 func TestSearchFrameEmbeddings_EmptyVector(t *testing.T) {
-	if _, err := searchFrameEmbeddings(context.Background(), nil, nil, "model-x", nil, nil, 5); err == nil {
+	if _, err := searchFrameEmbeddings(context.Background(), nil, nil, "model-x", video.CorpusS1, nil, nil, 5); err == nil {
 		t.Error("expected an error for an empty query vector")
 	}
 }
@@ -241,5 +278,47 @@ func TestVectorLiteral(t *testing.T) {
 	}
 	if got := vectorLiteral(nil); got != "[]" {
 		t.Errorf("vectorLiteral(nil) = %q, want []", got)
+	}
+}
+
+// Find is the operator path: same search and jump as !find, silent in chat,
+// with a verdict that names the state.
+func TestFind_OperatorVerdicts(t *testing.T) {
+	cases := []struct {
+		name       string
+		query      string
+		search     *recordingSearch
+		wantOK     bool
+		wantDetail string
+		wantJump   bool
+	}{
+		{"jumps", "a sailboat", &recordingSearch{Hits: []SearchHit{{Slug: "2018_0514_224801_013", TsSec: 60, State: "Oregon", Distance: 0.2}}},
+			true, "Found a sailboat in Oregon. Jumping there.", true},
+		{"miss", "unicorns", &recordingSearch{Hits: []SearchHit{{Slug: "x", Distance: 0.99}}},
+			false, "Couldn't find anything like unicorns.", false},
+		{"search down", "rain", &recordingSearch{Err: errors.New("responder down")},
+			false, "Search isn't available right now.", false},
+		{"empty", "  ", &recordingSearch{}, false, "Find what?", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			enablePlayback(t)
+			pinFindRandIntn(t, 0)
+			app, recPlayout, recChat := newFindTestApp(t, c.search)
+
+			var ok bool
+			var detail string
+			runAsAdmin(t, func() { ok, detail = app.Find(context.Background(), c.query) })
+
+			if ok != c.wantOK || detail != c.wantDetail {
+				t.Errorf("Find(%q) = %v, %q; want %v, %q", c.query, ok, detail, c.wantOK, c.wantDetail)
+			}
+			if jumped := len(recPlayout.Calls) > 0; jumped != c.wantJump {
+				t.Errorf("jumped = %v, want %v (calls %v)", jumped, c.wantJump, recPlayout.Calls)
+			}
+			if got := recChat.Output(); got != "" {
+				t.Errorf("Find should say nothing in chat, got %q", got)
+			}
+		})
 	}
 }
