@@ -220,6 +220,9 @@ func TestSourceHandler(t *testing.T) {
 		 ('20260501120000_000123_s0000', '{"verdict":"keep"}', NULL),
 		 ('20260501120000_000123_s0300', '{"verdict":"drop"}', '{"verdict":"drop"}'),
 		 ('20260502080000_000124_s0000', '{"verdict":"drop"}', NULL)`,
+		`INSERT INTO piece_tracks (slug, confidence, points) VALUES
+		 ('20260501120000_000123_s0300', 0.9, '[[0, 35.3, -106.8], [10, 35.4, -106.9]]'),
+		 ('20260501120000_000123_s0000', 0.5, '[[0, 1, 1]]')`,
 	} {
 		if err := db.Exec(q).Error; err != nil {
 			t.Fatal(err)
@@ -252,6 +255,11 @@ func TestSourceHandler(t *testing.T) {
 	}
 	if string(cuts[0].Ruling) != "null" || !strings.Contains(string(cuts[1].Ruling), `"drop"`) {
 		t.Errorf("rulings = %s, %s", cuts[0].Ruling, cuts[1].Ruling)
+	}
+	// A dropped piece carries its own track; one below the confidence bar
+	// carries none.
+	if string(cuts[0].Track) != "[]" || strings.ReplaceAll(string(cuts[1].Track), " ", "") != "[[0,35.3,-106.8],[10,35.4,-106.9]]" {
+		t.Errorf("tracks = %s, %s", cuts[0].Track, cuts[1].Track)
 	}
 	// Every piece of a source dropped: no clips, still its cuts.
 	if rec := sourceGET(t, "20260502080000_000124"); rec.Code != http.StatusOK {

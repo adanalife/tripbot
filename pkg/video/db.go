@@ -331,7 +331,7 @@ ORDER BY v.corpus`
 func CorpusStats(ctx context.Context) ([]CorpusStat, error) {
 	out := []CorpusStat{}
 	err := database.GormDB().WithContext(ctx).
-		Raw(corpusStatsQuery, sql.Named("minConfidence", minCoordConfidence)).
+		Raw(corpusStatsQuery, sql.Named("minConfidence", MinCoordConfidence)).
 		Scan(&out).Error
 	return out, err
 }

@@ -223,11 +223,20 @@ func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
 // sourceCut is one piece of an original as auto-trim proposed it and, once
 // someone has, as the reviewer ruled it — video_cuts' row, passed through as
 // the pipeline wrote it (the proposal and ruling shapes are video-pipeline's).
+// Track is a piece with no clip's own track, [[sec, lat, lng], ...] on the
+// piece's clock, and [] when it has none worth believing; a piece that aired
+// has its track on its clip instead.
 type sourceCut struct {
 	Slug     string          `json:"slug"`
 	Proposal json.RawMessage `json:"proposal"`
 	Ruling   json.RawMessage `json:"ruling"`
+	Track    json.RawMessage `json:"track"`
 }
+
+const sourceCutsSQL = `SELECT c.slug, c.proposal, c.ruling, COALESCE(t.points, '[]'::jsonb) AS track
+FROM video_cuts c
+LEFT JOIN piece_tracks t ON t.slug = c.slug AND t.confidence >= @min
+WHERE c.slug LIKE @pattern ORDER BY c.slug`
 
 // sourceResponse is the wire shape of GET /api/sources/{stem}: the clips the
 // pipeline ingested from that original, in offset order, the ingested
@@ -291,7 +300,7 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	cuts := []sourceCut{}
 	if err == nil {
 		err = database.GormDB().WithContext(r.Context()).
-			Raw(`SELECT slug, proposal, ruling FROM video_cuts WHERE slug LIKE ? ORDER BY slug`, pattern).
+			Raw(sourceCutsSQL, sql.Named("pattern", pattern), sql.Named("min", video.MinCoordConfidence)).
 			Scan(&cuts).Error
 	}
 	if err != nil {
