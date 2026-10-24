@@ -17,7 +17,7 @@ import (
 )
 
 type User struct {
-	ID       uint16 `gorm:"primaryKey"`
+	ID       int `gorm:"primaryKey"`
 	Username string
 	Platform string
 	// PlatformUserID is the chatter's platform-native user id — the stable half

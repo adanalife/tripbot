@@ -454,3 +454,18 @@ func TestSetLastLocationTime(t *testing.T) {
 		t.Fatalf("lastLocation %v not in [%v, %v]", u.lastLocation, before, after)
 	}
 }
+
+// users.id is a SERIAL, so ids pass 65,535 as the table grows; a user there
+// must still load.
+func TestFind_IDAboveUint16(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db, User{ID: 70000, Username: "latecomer"})
+
+	u, err := Find(context.Background(), testConf.Platform, "latecomer")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if u.ID != 70000 {
+		t.Errorf("ID = %d, want 70000", u.ID)
+	}
+}
