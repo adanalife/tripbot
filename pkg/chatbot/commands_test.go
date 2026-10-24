@@ -137,6 +137,32 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 }
 
+// A chatter repeating !report inside the cooldown gets one ack and one
+// refusal; another chatter, or the same one after the cooldown, still reports.
+func TestReportCmd_PerUserCooldown(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingChat{}
+	app.Chat = rec
+	evs := &recordingEvents{}
+	app.Events = evs
+	ctx := context.Background()
+
+	app.reportCmd(ctx, newTestUser("viewer1"), []string{"frozen"})
+	app.reportCmd(ctx, newTestUser("viewer1"), []string{"frozen", "again"})
+	app.reportCmd(ctx, newTestUser("viewer2"), []string{"no", "audio"})
+
+	if len(rec.Says) != 2 {
+		t.Errorf("acks = %d (%v), want 2: the repeat is dropped", len(rec.Says), rec.Says)
+	}
+	if len(evs.Refusals) != 1 || evs.Refusals[0].Username != "viewer1" {
+		t.Errorf("refusals = %+v, want one for viewer1's repeat", evs.Refusals)
+	}
+
+	if !app.reportAllowed("viewer1", time.Now().Add(reportCooldown)) {
+		t.Error("viewer1 still refused once the cooldown has passed")
+	}
+}
+
 // A report's text is the viewer's, so the Discord post must not let it ping
 // the server: "!report @everyone stream dead" reaches Discord as plain text.
 func TestPostReportToDiscord_SuppressesMentions(t *testing.T) {

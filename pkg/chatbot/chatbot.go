@@ -131,6 +131,11 @@ type App struct {
 	// cleaned up — a timewarp resets every hint trail for free.
 	guessMissesMu sync.Mutex
 	guessMisses   map[string]guessMiss
+
+	// reportedAt is when each chatter's last !report went out, so a repeat
+	// inside reportCooldown can't spam Discord and Sentry.
+	reportedAtMu sync.Mutex
+	reportedAt   map[string]time.Time
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
