@@ -611,6 +611,15 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 	correct := strings.EqualFold(guess, state)
 
+	// The bare "guess" alias matches any line starting with the word, so
+	// "guess what, I'm back" lands here. Text that names no state isn't a
+	// guess: answer with the usage line and record nothing, so it can't count
+	// against the viewer's !guessstats.
+	if !correct && helpers.StateToStateAbbrev(guess) == "" {
+		a.Reply(ctx, "That's not a state I know! Try something like: !guess CA")
+		return
+	}
+
 	// Record the guess before a correct one warps the playhead, so the airing
 	// context is the footage the guess was about, not wherever the warp lands.
 	a.recordGuess(ctx, events.GuessSubmission{
