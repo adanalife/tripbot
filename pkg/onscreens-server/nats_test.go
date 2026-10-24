@@ -213,3 +213,38 @@ func TestHandleMiddleShow_AutoHides(t *testing.T) {
 		t.Error("MiddleText still showing after its auto-hide fired")
 	}
 }
+
+// A timer that fires as a newer show arrives must not hide the newer message:
+// Stop can't recall a timer whose callback is already running.
+func TestHandleMiddleShow_StaleTimerKeepsNewerMessage(t *testing.T) {
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	show := func(body string) {
+		s.handleMiddleShow(&nats.Msg{Subject: "tripbot.test.onscreens.middle.show", Data: []byte(body)})
+	}
+
+	show(`{"msg":"first","emitted_at":"2026-05-28T16:00:00Z","hide_after_seconds":60}`)
+	stale := s.middleExpiry
+	show(`{"msg":"second","emitted_at":"2026-05-28T16:00:00Z","hide_after_seconds":60}`)
+
+	expire := func(t *time.Timer) {
+		s.middleExpiryMu.Lock()
+		defer s.middleExpiryMu.Unlock()
+		s.expireMiddle(t)
+	}
+
+	// The first show's timer fires late, after the second show replaced it.
+	expire(stale)
+	if !s.MiddleText.IsShowing() || s.MiddleText.Content() != "second" {
+		t.Errorf("stale timer hid the newer message (showing=%v, content=%q)",
+			s.MiddleText.IsShowing(), s.MiddleText.Content())
+	}
+	if s.middleExpiry == nil {
+		t.Error("stale timer cancelled the newer message's auto-hide")
+	}
+
+	// The current timer still hides.
+	expire(s.middleExpiry)
+	if s.MiddleText.IsShowing() {
+		t.Error("the current timer did not hide the message")
+	}
+}
