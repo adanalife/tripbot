@@ -315,6 +315,13 @@ func (t *Tripbot) Run() {
 	t.sessions.InitLeaderboard(context.Background())
 	t.startFeatureFlags(ctx)
 	t.startRotatorEditing()
+	// Install the outbound chat client before anything that can post through
+	// it: EventSub's follow/sub announcements, the cron's rotators, and the
+	// chat.send subscriber all start below.
+	chat := t.gatewayPlatform()
+	if chat.apiURL != "" {
+		chat.connect()
+	}
 	if t.platformIsTwitch() {
 		if t.gateway == nil {
 			// There is no in-process Helix fallback, so audience polls, the
@@ -355,7 +362,7 @@ func (t *Tripbot) Run() {
 		t.startChatSendSubscriber(ctx) // after startNATS: needs the conn and t.app.Chat
 		t.startDiscord(ctx)            // Discord stays Twitch-side for v1
 	}
-	t.connectViaGateway(ctx, t.gatewayPlatform()) // blocks until shutdown
+	t.connectViaGateway(ctx, chat) // blocks until shutdown
 	t.shutdown(httpDone)
 }
 
@@ -455,7 +462,8 @@ func (t *Tripbot) gatewayPlatform() gatewayPlatform {
 	}
 }
 
-// connectViaGateway brings up p's chat and blocks until shutdown.
+// connectViaGateway starts p's inbound chat and blocks until shutdown. Boot
+// installs p's outbound client earlier, before anything that posts.
 //
 // The gateway URL is required — without it there's no way to reach the platform
 // — but a missing one is not fatal: the instance comes up Ready with everything
@@ -468,8 +476,6 @@ func (t *Tripbot) connectViaGateway(ctx context.Context, p gatewayPlatform) {
 		<-ctx.Done()
 		return
 	}
-
-	p.connect()
 
 	if p.skipInbound {
 		// Outbound posting (rotators) and the background jobs stay up, but no
