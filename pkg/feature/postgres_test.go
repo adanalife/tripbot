@@ -2,6 +2,7 @@ package feature
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -172,8 +173,8 @@ func TestPostgresClient_SetEnabledUnknownKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
-	if err := c.SetEnabled(ctx, "test.missing", true); err == nil {
-		t.Error("expected an error when toggling a key that doesn't exist")
+	if err := c.SetEnabled(ctx, "test.missing", true); !errors.Is(err, ErrFlagNotFound) {
+		t.Errorf("SetEnabled(unknown key) = %v, want ErrFlagNotFound", err)
 	}
 }
 

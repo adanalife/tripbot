@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -51,8 +52,9 @@ func (s *Server) flagsHandler(w http.ResponseWriter, r *http.Request) {
 // flagToggleHandler flips a flag's global-default enabled state. The console
 // POSTs {"enabled": bool} to /api/flags/{key}. Requires the wired client to
 // implement feature.FlagToggler (the Postgres client does; the in-memory
-// fallback doesn't), so a toggle before the DB client loads returns 503. An
-// unknown key returns 404 (SetEnabled errors). Internal-only, like the rest of
+// fallback doesn't), so a toggle before the DB client loads returns 503. A
+// body without "enabled" is a 400 rather than a silent off, an unknown key a
+// 404, and any other SetEnabled failure a 500. Internal-only, like the rest of
 // the /api surface — the console reaches it over the in-namespace Service.
 func (s *Server) flagToggleHandler(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
@@ -62,19 +64,24 @@ func (s *Server) flagToggleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Enabled bool `json:"enabled"`
+		Enabled *bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request body", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Enabled == nil {
+		http.Error(w, `body must be {"enabled": true|false}`, http.StatusBadRequest)
 		return
 	}
-	if err := toggler.SetEnabled(r.Context(), key, body.Enabled); err != nil {
+	enabled := *body.Enabled
+	if err := toggler.SetEnabled(r.Context(), key, enabled); err != nil {
 		slog.WarnContext(r.Context(), "feature flag toggle failed", "flag", key, "err", err)
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, feature.ErrFlagNotFound) {
+			http.Error(w, "unknown flag", http.StatusNotFound)
+		} else {
+			http.Error(w, "flag toggle failed", http.StatusInternalServerError)
+		}
 		return
 	}
 	slog.InfoContext(r.Context(), "feature flag toggled via console",
-		"flag", key, "enabled", body.Enabled)
+		"flag", key, "enabled", enabled)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "key": key, "enabled": body.Enabled})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "key": key, "enabled": enabled})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -116,7 +117,7 @@ func TestFlagToggleHandler_TogglesViaToggler(t *testing.T) {
 }
 
 func TestFlagToggleHandler_UnknownKeyIs404(t *testing.T) {
-	fc := &fakeFlags{setErr: errors.New("feature flag \"nope\" not found")}
+	fc := &fakeFlags{setErr: fmt.Errorf("%w: %q", feature.ErrFlagNotFound, "nope")}
 	s := New(testConf)
 	s.SetFlags(fc)
 
@@ -143,5 +144,46 @@ func TestFlagToggleHandler_NonTogglerIs503(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", rec.Code)
+	}
+}
+
+// A body that doesn't say which way to flip the flag is refused rather than
+// read as false, so a typo'd key can't switch a flag off.
+func TestFlagToggleHandler_MissingEnabledIs400(t *testing.T) {
+	for _, body := range []string{`{}`, `{"enable":true}`, `not json`} {
+		t.Run(body, func(t *testing.T) {
+			fc := &fakeFlags{}
+			s := New(testConf)
+			s.SetFlags(fc)
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/flags/ascii_video", strings.NewReader(body))
+			flagsRouter(s).ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", rec.Code)
+			}
+			if len(fc.setCalls) != 0 {
+				t.Errorf("setCalls = %+v, want none", fc.setCalls)
+			}
+		})
+	}
+}
+
+func TestFlagToggleHandler_DBErrorIs500(t *testing.T) {
+	fc := &fakeFlags{setErr: errors.New("connection refused")}
+	s := New(testConf)
+	s.SetFlags(fc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/flags/ascii_video",
+		strings.NewReader(`{"enabled":false}`))
+	flagsRouter(s).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "connection refused") {
+		t.Errorf("body leaks the raw error: %q", rec.Body.String())
 	}
 }
