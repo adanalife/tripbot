@@ -607,9 +607,9 @@ func TestRunCommand_CooldownRefusalRecordsNoRun(t *testing.T) {
 	// The cooldown is live when the user's last answer is newer than the last
 	// timewarp; pin the warp clock into the past so this test doesn't depend
 	// on package state left by other tests.
-	prevWarp := lastTimewarpTime
-	lastTimewarpTime = time.Now().Add(-time.Hour)
-	t.Cleanup(func() { lastTimewarpTime = prevWarp })
+	prevWarp := lastTimewarpTime()
+	setLastTimewarpTime(time.Now().Add(-time.Hour))
+	t.Cleanup(func() { setLastTimewarpTime(prevWarp) })
 
 	user := newTestUser("viewer1")
 	user.SetLastLocationTime()

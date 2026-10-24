@@ -557,7 +557,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// don't let people guess if they already know the answer
-	if !user.HasGuessCommandAvailable(ctx, lastTimewarpTime) {
+	if !user.HasGuessCommandAvailable(ctx, lastTimewarpTime()) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
@@ -724,7 +724,7 @@ func (a *App) guessHint(username, guess string, s spot) string {
 	a.guessMisses[username] = guessMiss{miles: miles, at: time.Now()}
 	a.guessMissesMu.Unlock()
 
-	if !hadPrev || !prev.at.After(lastTimewarpTime) {
+	if !hadPrev || !prev.at.After(lastTimewarpTime()) {
 		return noHint
 	}
 	switch {

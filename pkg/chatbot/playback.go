@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -31,10 +32,21 @@ const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 // gap the playhead jump causes, so losing it by accident is visible on stream.
 const timewarpNoBackgroundFlagKey = "chatbot.timewarp_no_background"
 
-// lastTimewarpTime is used to rate-limit users so they can't
+// lastTimewarp is used to rate-limit users so they can't
 // over-do the time-skip features (including !skip and !back)
-// plus it's also used to reset peoples lastLocation time
-var lastTimewarpTime time.Time
+// plus it's also used to reset peoples lastLocation time.
+// Atomic because the NATS find subscriber writes it off the chat goroutine.
+var lastTimewarp atomic.Pointer[time.Time]
+
+// lastTimewarpTime is when the playhead last jumped; zero before the first jump.
+func lastTimewarpTime() time.Time {
+	if t := lastTimewarp.Load(); t != nil {
+		return *t
+	}
+	return time.Time{}
+}
+
+func setLastTimewarpTime(t time.Time) { lastTimewarp.Store(&t) }
 
 // runningOnDarwin gates every command that hands the playhead to playout.
 // Playout runs beside the stream on Linux; on a Mac dev box there is nothing
@@ -104,7 +116,7 @@ func (a *App) timewarp(ctx context.Context, username, source string) {
 	// update the currently-playing video
 	to := a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
-	lastTimewarpTime = time.Now()
+	setLastTimewarpTime(time.Now())
 
 	a.recordTimewarp(ctx, events.Warp{
 		Username:  username,
@@ -138,7 +150,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// rate-limit the number of times this can run
 	if !user.Broadcaster {
-		if time.Since(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime()) < 20*time.Second {
 			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
@@ -165,7 +177,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 
 	// rate-limit the number of times this can run
 	if !user.Broadcaster {
-		if time.Since(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime()) < 20*time.Second {
 			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
@@ -218,7 +230,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
-	lastTimewarpTime = time.Now()
+	setLastTimewarpTime(time.Now())
 }
 
 // daytimeCmd skips the stream ahead to the next morning's daylight footage —
@@ -237,7 +249,7 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// rate-limit the number of times this can run
 	if !user.Broadcaster {
-		if time.Since(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime()) < 20*time.Second {
 			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
@@ -264,7 +276,7 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
-	lastTimewarpTime = time.Now()
+	setLastTimewarpTime(time.Now())
 }
 
 // parseSeekSpan turns a !skip/!back argument into a footage duration.
@@ -312,7 +324,7 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 
 	// rate-limit the number of times this can run
 	if !user.Broadcaster {
-		if time.Since(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime()) < 20*time.Second {
 			a.Reply(ctx, "Not yet; enjoy the moment!")
 			return
 		}
@@ -351,5 +363,5 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
-	lastTimewarpTime = time.Now()
+	setLastTimewarpTime(time.Now())
 }
