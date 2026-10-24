@@ -2,9 +2,11 @@
 // the events table and optionally writes them back to users.miles.
 //
 // The events table is the ground truth: miles are derived by pairing each
-// user's login events with their corresponding logout events (by row number)
-// and summing the session durations. Sessions longer than 24 hours are capped
-// to exclude cases where a logout was missed across a server restart.
+// user's login events with their logout events and summing the session
+// durations, the same pairing pkg/rollups uses. A login pairs with the logout
+// carrying its session_id; legacy rows from before session_id existed pair by
+// row number. Sessions longer than 24 hours are dropped to exclude cases where
+// a logout was missed across a server restart.
 //
 // Bots (users.is_bot = true) are always excluded — they accumulate events
 // continuously but should never appear on the leaderboard.
@@ -44,24 +46,47 @@ import (
 
 // Only considers non-bot users. Bots are in channel 24/7 and accumulate
 // enormous event counts that would dominate the leaderboard.
+//
+// The pairing CTEs mirror pkg/rollups' reconcileSQL without its dirty-user
+// filter; keep the two in step.
 const computeMilesSQL = `
 WITH login_rn AS (
     SELECT platform, username, date_created AS login_time,
            ROW_NUMBER() OVER (PARTITION BY platform, username ORDER BY date_created) AS rn
-    FROM events WHERE event = 'login'
+    FROM events
+    WHERE event = 'login'
+      AND COALESCE(session_id, '00000000-0000-0000-0000-000000000000') = '00000000-0000-0000-0000-000000000000'
 ),
 logout_rn AS (
     SELECT platform, username, date_created AS logout_time,
            ROW_NUMBER() OVER (PARTITION BY platform, username ORDER BY date_created) AS rn
-    FROM events WHERE event = 'logout'
+    FROM events
+    WHERE event = 'logout'
+      AND COALESCE(session_id, '00000000-0000-0000-0000-000000000000') = '00000000-0000-0000-0000-000000000000'
 ),
-sessions AS (
-    SELECT l.platform, l.username,
-           EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 60.0 AS minutes
+-- MIN collapses a session_id that was logged out twice into one session.
+keyed AS (
+    SELECT platform, username, session_id,
+           MIN(date_created) FILTER (WHERE event = 'login') AS login_time,
+           MIN(date_created) FILTER (WHERE event = 'logout') AS logout_time
+    FROM events
+    WHERE event IN ('login', 'logout')
+      AND session_id <> '00000000-0000-0000-0000-000000000000'
+    GROUP BY platform, username, session_id
+),
+pairs AS (
+    SELECT l.platform, l.username, l.login_time, lo.logout_time
     FROM login_rn l
     JOIN logout_rn lo ON lo.platform = l.platform AND lo.username = l.username AND lo.rn = l.rn
-    WHERE lo.logout_time > l.login_time
-      AND EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 3600.0 < 24
+    UNION ALL
+    SELECT platform, username, login_time, logout_time FROM keyed
+),
+sessions AS (
+    SELECT platform, username,
+           EXTRACT(EPOCH FROM (logout_time - login_time)) / 60.0 AS minutes
+    FROM pairs
+    WHERE logout_time > login_time
+      AND EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600.0 < 24
 ),
 computed AS (
     SELECT platform, username, SUM(0.1 * minutes / 3.0)::real AS miles
