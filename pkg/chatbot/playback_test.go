@@ -36,9 +36,9 @@ func enablePlayback(t *testing.T) {
 // (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
-	prevWarp := lastTimewarpTime
-	lastTimewarpTime = time.Time{}
-	t.Cleanup(func() { lastTimewarpTime = prevWarp })
+	prevWarp := lastTimewarpTime()
+	setLastTimewarpTime(time.Time{})
+	t.Cleanup(func() { setLastTimewarpTime(prevWarp) })
 	fn()
 }
 

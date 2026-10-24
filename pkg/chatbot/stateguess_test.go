@@ -206,9 +206,9 @@ func TestGuessCmd_NonState_RecordsNothing(t *testing.T) {
 func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
 	// Pin the round start in the past and restore it after: entries stamped
 	// before lastTimewarpTime belong to a previous round.
-	saved := lastTimewarpTime
-	lastTimewarpTime = time.Now().Add(-time.Hour)
-	t.Cleanup(func() { lastTimewarpTime = saved })
+	saved := lastTimewarpTime()
+	setLastTimewarpTime(time.Now().Add(-time.Hour))
+	t.Cleanup(func() { setLastTimewarpTime(saved) })
 
 	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
 	out, says := captureSay(t, app)
@@ -252,7 +252,7 @@ func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
 	}
 
 	// A timewarp starts a new round: the trail is stale, so no hint.
-	lastTimewarpTime = time.Now()
+	setLastTimewarpTime(time.Now())
 	app.guessCmd(context.Background(), user, []string{"Nevada"})
 	if got := out(); !strings.Contains(got, "EarthDay") {
 		t.Errorf("first miss after a timewarp should show EarthDay, got %q", got)
