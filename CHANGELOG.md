@@ -9,6 +9,30 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.3.0] — 2026-10-24
+
+### Chatbot
+
+- A `!guess` (or a line starting with "guess") that names no state answers with the usage line instead of counting as a wrong guess. ([#1752](https://github.com/adanalife/tripbot/pull/1752))
+- A follow or subscription during boot is announced in chat instead of racing the chat client's setup, and the timewarp rate limit is safe to read while a console find jumps the playhead. ([#1754](https://github.com/adanalife/tripbot/pull/1754))
+- `!report` (and its "frozen"/"no audio" aliases) goes out once a minute per chatter, so a repeating viewer can't spam the alerts channel. ([#1759](https://github.com/adanalife/tripbot/pull/1759))
+
+### Onscreens
+
+- A middle-text message's auto-hide timer can no longer hide the next message when the two cross. ([#1757](https://github.com/adanalife/tripbot/pull/1757))
+
+### Console / API
+
+- The live leaderboards on /api/leaderboards carry each viewer's place at the start of the day (prev_rank), so the console can show who moved since then. ([#1751](https://github.com/adanalife/tripbot/pull/1751))
+
+### Fixes
+
+- The once-a-day limit for non-followers on gated commands is recorded on the viewer's live session, so it applies when follower gating is on. ([#1750](https://github.com/adanalife/tripbot/pull/1750))
+- The clip on screen is read under a lock, so a command or cron that reads it during a clip switch no longer mixes one clip's name with another's id or coordinates. ([#1753](https://github.com/adanalife/tripbot/pull/1753))
+- Viewers whose user id is above 65,535 load and log in instead of being skipped every session tick. ([#1755](https://github.com/adanalife/tripbot/pull/1755))
+- `POST /api/flags/{key}` refuses a body without `enabled` (400) instead of switching the flag off, and answers 500 rather than 404 when the database write fails. ([#1756](https://github.com/adanalife/tripbot/pull/1756))
+- `cmd/backfill-miles` pairs sessions by session_id the way the rollups do, so a re-run can't shift sessions after an orphaned login. ([#1758](https://github.com/adanalife/tripbot/pull/1758))
+
 ## [v6.2.0] — 2026-10-23
 
 ### Chatbot
