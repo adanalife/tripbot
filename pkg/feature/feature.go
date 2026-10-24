@@ -10,6 +10,7 @@ package feature
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sort"
 	"time"
@@ -39,9 +40,14 @@ type FlagClient interface {
 type FlagToggler interface {
 	// SetEnabled persists the new global-default state for key and refreshes
 	// the in-memory snapshot so the change takes effect without waiting for
-	// the next background poll. Returns an error if key doesn't exist.
+	// the next background poll. Returns an error wrapping ErrFlagNotFound if
+	// key doesn't exist.
 	SetEnabled(ctx context.Context, key string, enabled bool) error
 }
+
+// ErrFlagNotFound is what SetEnabled wraps when no flag has the key, so a
+// caller can tell an unknown key from a database failure.
+var ErrFlagNotFound = errors.New("feature flag not found")
 
 // EvalContext carries the targeting attributes a flag is evaluated against.
 // The App is responsible for populating it (Channel, Env from config;

@@ -81,7 +81,7 @@ func (r *repository) SetEnabled(ctx context.Context, key string, enabled bool) e
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return fmt.Errorf("feature flag %q not found", key)
+		return fmt.Errorf("%w: %q", ErrFlagNotFound, key)
 	}
 	return nil
 }
