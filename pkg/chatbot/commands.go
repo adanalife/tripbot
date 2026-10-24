@@ -801,6 +801,18 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	reporter := reportReporter(a.platform(), user.Username)
 	slog.InfoContext(ctx, "ran !report", "username", reporter)
 	message := strings.Join(params, " ")
+	// A repeat inside the cooldown is dropped without a reply: the first
+	// report already reached Discord and Sentry, and answering each repeat
+	// would spam chat instead.
+	if !a.reportAllowed(user.Username, time.Now()) {
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  "!report",
+			Args:     message,
+			Reason:   events.RefusedCooldown,
+		})
+		return
+	}
 	// Always log to slog (→ stderr + Sentry via the slog→Sentry handler)
 	// as the durable audit trail.
 	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", reporter, message))
@@ -820,6 +832,30 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 		}
 	}
 	a.Reply(ctx, "Thank you, I will look into this ASAP!")
+}
+
+// reportCooldown is how long a chatter waits between reports that go out.
+const reportCooldown = time.Minute
+
+// reportAllowed reports whether username may send a report at now, and if so
+// records it. Expired entries are pruned on the way, so the map holds only
+// chatters who reported in the last reportCooldown.
+func (a *App) reportAllowed(username string, now time.Time) bool {
+	a.reportedAtMu.Lock()
+	defer a.reportedAtMu.Unlock()
+	if last, ok := a.reportedAt[username]; ok && now.Sub(last) < reportCooldown {
+		return false
+	}
+	if a.reportedAt == nil {
+		a.reportedAt = make(map[string]time.Time)
+	}
+	for u, at := range a.reportedAt {
+		if now.Sub(at) >= reportCooldown {
+			delete(a.reportedAt, u)
+		}
+	}
+	a.reportedAt[username] = now
+	return true
 }
 
 // reportWebhookWarnOnce bounds the misconfigured-webhook warning to one line
