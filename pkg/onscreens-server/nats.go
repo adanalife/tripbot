@@ -70,10 +70,14 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 		slog.Warn("nats: middle.show missing msg", "subject", m.Subject)
 		return
 	}
+	// The show and its timer change together, under the lock an expiring
+	// timer takes, so an earlier message's timer can't hide this one.
+	s.middleExpiryMu.Lock()
+	defer s.middleExpiryMu.Unlock()
 	s.MiddleText.Show(ev.Msg)
 	// Persist the new state so the overlay survives a server restart.
 	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, ev.Msg, true)
-	s.scheduleMiddleHide(time.Duration(ev.HideAfterSeconds) * time.Second)
+	s.armMiddleHide(time.Duration(ev.HideAfterSeconds) * time.Second)
 }
 
 // scheduleMiddleHide arms the auto-hide a middle.show asked for, replacing any
@@ -87,6 +91,12 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 func (s *Server) scheduleMiddleHide(after time.Duration) {
 	s.middleExpiryMu.Lock()
 	defer s.middleExpiryMu.Unlock()
+	s.armMiddleHide(after)
+}
+
+// armMiddleHide is scheduleMiddleHide for a caller already holding
+// middleExpiryMu.
+func (s *Server) armMiddleHide(after time.Duration) {
 	if s.middleExpiry != nil {
 		s.middleExpiry.Stop()
 		s.middleExpiry = nil
@@ -94,14 +104,39 @@ func (s *Server) scheduleMiddleHide(after time.Duration) {
 	if after <= 0 {
 		return
 	}
-	s.middleExpiry = time.AfterFunc(after, func() { s.handleMiddleHide(nil) })
+	// The callback reads t only under the lock held here, so it sees t assigned.
+	var t *time.Timer
+	t = time.AfterFunc(after, func() {
+		s.middleExpiryMu.Lock()
+		defer s.middleExpiryMu.Unlock()
+		s.expireMiddle(t)
+	})
+	s.middleExpiry = t
+}
+
+// expireMiddle hides the middle text for timer t, unless a later show or hide
+// already replaced t. Stop can't recall a timer that has already fired, so the
+// callback checks for itself. The caller holds middleExpiryMu.
+func (s *Server) expireMiddle(t *time.Timer) {
+	if s.middleExpiry != t {
+		return
+	}
+	s.hideMiddle()
 }
 
 // handleMiddleHide hides the middle text. Hide retains the overlay's Content,
 // so the persisted state keeps the text (showing=false) — a restart restores
 // it hidden, matching the live state rather than blanking it.
 func (s *Server) handleMiddleHide(_ *nats.Msg) {
-	s.scheduleMiddleHide(0)
+	s.middleExpiryMu.Lock()
+	defer s.middleExpiryMu.Unlock()
+	s.hideMiddle()
+}
+
+// hideMiddle cancels any pending auto-hide, hides the middle text and persists
+// it hidden. The caller holds middleExpiryMu.
+func (s *Server) hideMiddle() {
+	s.armMiddleHide(0)
 	s.MiddleText.Hide()
 	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, s.MiddleText.Content(), false)
 }
