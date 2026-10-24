@@ -376,21 +376,34 @@ func isUniqueViolation(err error) bool {
 
 // HasCommandAvailable lets users run a command once a day,
 // unless they are a follower in which case they can run
-// as many as they like
+// as many as they like.
+//
+// u is usually a copy handed out by get, so the grant is recorded on the
+// live session entry too; otherwise the next message starts from the
+// login-time timestamp again and the daily limit never applies.
 func (s *Sessions) HasCommandAvailable(ctx context.Context, u *User) bool {
 	// followers get unlimited commands
 	if s.IsFollower(*u) {
 		return true
 	}
-	// check if they ran a command in the last 24 hrs
 	now := time.Now()
-	if now.Sub(u.lastCmd) > 24*time.Hour {
-		slog.InfoContext(ctx, "letting user run a command", "username", u.Username)
-		// update their lastCmd time
-		u.lastCmd = now
-		return true
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	live, ok := s.loggedIn[u.Username]
+	last := u.lastCmd
+	if ok {
+		last = live.lastCmd
 	}
-	return false
+	// check if they ran a command in the last 24 hrs
+	if now.Sub(last) <= 24*time.Hour {
+		return false
+	}
+	slog.InfoContext(ctx, "letting user run a command", "username", u.Username)
+	u.lastCmd = now
+	if ok {
+		live.lastCmd = now
+	}
+	return true
 }
 
 // GuessCooldownRemaining returns the amount of time a user needs to

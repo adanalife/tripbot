@@ -539,3 +539,21 @@ func TestLogout_TwiceClosesTheSessionOnce(t *testing.T) {
 		t.Errorf("expected ~20 miles on the monthly board once, got %v", score)
 	}
 }
+
+// TestHasCommandAvailable_PersistsAcrossCopies drives the gate the way chat
+// does: each message works on a fresh copy from get, so a grant only counts if
+// it reaches the live session entry.
+func TestHasCommandAvailable_PersistsAcrossCopies(t *testing.T) {
+	s := New(testConf, noopChatterSource{})
+	s.loggedIn["lurker"] = &User{Username: "lurker", lastCmd: time.Now().AddDate(0, 0, -1)}
+	ctx := context.Background()
+
+	first, _ := s.get("lurker")
+	if !s.HasCommandAvailable(ctx, &first) {
+		t.Fatal("first command of the day was refused")
+	}
+	second, _ := s.get("lurker")
+	if s.HasCommandAvailable(ctx, &second) {
+		t.Fatal("second command within 24h was granted")
+	}
+}
