@@ -18,6 +18,7 @@ package rollups
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
@@ -138,10 +139,39 @@ WHERE ranked.rank <= 50
   AND NOT EXISTS (SELECT 1 FROM scoreboard_snapshots ss WHERE ss.scoreboard_name = ?)
 `
 
+// dailySnapshotSQL records the day's first look at a live monthly board into
+// scoreboard_daily_snapshots, top 50 per platform — the baseline the
+// leaderboards measure "since the start of the day" against. The same
+// idempotent shape as snapshotSQL: nothing if the board has no scores yet, and
+// the NOT EXISTS guard makes it once-only per board per day. b.platform =
+// u.platform matches the live read (scoreboards.TopUsers), so a legacy score
+// hanging off the other platform's same-named board can't put a viewer on the
+// board twice.
+const dailySnapshotSQL = `
+INSERT INTO scoreboard_daily_snapshots (day, scoreboard_name, platform, rank, username, value)
+SELECT ?, ?, ranked.platform, ranked.rank, ranked.username, ranked.value
+FROM (
+    SELECT u.platform, u.username, s.value,
+           ROW_NUMBER() OVER (PARTITION BY u.platform ORDER BY s.value DESC, u.username ASC) AS rank
+    FROM scores s
+    JOIN scoreboards b ON b.id = s.scoreboard_id
+    JOIN users u ON u.id = s.user_id
+    WHERE b.name = ? AND b.platform = u.platform
+      AND u.is_bot = false AND u.exclude_from_leaderboard = false
+) ranked
+WHERE ranked.rank <= 50
+  AND NOT EXISTS (SELECT 1 FROM scoreboard_daily_snapshots ds WHERE ds.day = ? AND ds.scoreboard_name = ?)
+`
+
+// dailySnapshotRetention is how long a daily snapshot is kept. Only today's is
+// read; the rest is a short history for looking back at by hand.
+const dailySnapshotRetention = 40 * 24 * time.Hour
+
 // Reconcile is the rollup tick, registered as a background job on the twitch
 // instance (it scans every platform's events regardless of which instance
 // runs it). One transaction per tick: snapshot any just-finished monthly
-// boards, then recompute aggregates for users with events past the watermark
+// boards, take the day's first snapshot of the live ones (pruning old days),
+// then recompute aggregates for users with events past the watermark
 // and advance it. The watermark keys on events.id — never date_created, which
 // is zero-valued on historical rows.
 func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
@@ -161,6 +191,25 @@ func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
 				slog.InfoContext(ctx, "froze monthly scoreboard snapshot",
 					"scoreboard", board, "count", res.RowsAffected)
 			}
+		}
+
+		// The day is named on the same clock the leaderboards handler names
+		// the current month with, so the two agree on what "today" is.
+		now := time.Now()
+		day := now.Format("2006-01-02")
+		for _, board := range []string{scoreboards.CurrentMilesScoreboard(), scoreboards.CurrentGuessScoreboard()} {
+			res := tx.Exec(dailySnapshotSQL, day, board, board, day, board)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected > 0 {
+				slog.InfoContext(ctx, "took daily scoreboard snapshot",
+					"scoreboard", board, "count", res.RowsAffected)
+			}
+		}
+		if err := tx.Exec(`DELETE FROM scoreboard_daily_snapshots WHERE day < ?`,
+			now.Add(-dailySnapshotRetention).Format("2006-01-02")).Error; err != nil {
+			return err
 		}
 
 		// FOR UPDATE serializes overlapping ticks (belt-and-suspenders on

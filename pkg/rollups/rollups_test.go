@@ -442,3 +442,86 @@ func TestReconcile_SnapshotCapsAtTopFifty(t *testing.T) {
 		t.Errorf("bottom-5 scores should be cut by the top-50 cap, got %d", n)
 	}
 }
+
+// dailyRow mirrors a scoreboard_daily_snapshots placement.
+type dailyRow struct {
+	Rank     int
+	Username string
+	Value    float64
+}
+
+func dailyRows(t *testing.T, db *gorm.DB, day, board string) []dailyRow {
+	t.Helper()
+	var rows []dailyRow
+	err := db.Raw(`SELECT rank, username, value FROM scoreboard_daily_snapshots
+	               WHERE day = ? AND scoreboard_name = ? ORDER BY rank`, day, board).Scan(&rows).Error
+	if err != nil {
+		t.Fatalf("read daily snapshots: %v", err)
+	}
+	return rows
+}
+
+func TestReconcile_DailySnapshotIsOncePerDay(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+	today := time.Now().Format("2006-01-02")
+
+	board := scoreboards.CurrentMilesScoreboard()
+	boardID := addBoard(t, db, board)
+	addScore(t, db, boardID, "daily_silver", false, 30)
+	addScore(t, db, boardID, "daily_gold", false, 60)
+	addScore(t, db, boardID, "daily_bot", true, 999)
+	addOptedOutScore(t, db, boardID, "daily_optout", 998)
+
+	Reconcile(context.Background(), testConf)
+
+	want := []dailyRow{{1, "daily_gold", 60}, {2, "daily_silver", 30}}
+	got := dailyRows(t, db, today, board)
+	if len(got) != len(want) {
+		t.Fatalf("daily snapshot: got %+v, want %+v (bots and opted-out accounts are excluded)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("daily row %d: got %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// The day's first snapshot is the baseline: a later tick the same day
+	// leaves it alone, even after the board moves.
+	addScore(t, db, boardID, "daily_latecomer", false, 100)
+	Reconcile(context.Background(), testConf)
+	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_daily_snapshots WHERE day = ? AND scoreboard_name = ?`,
+		today, board); n != 2 {
+		t.Errorf("daily snapshot re-ran the same day: got %d rows, want 2", n)
+	}
+
+	// The month list reads scoreboard_snapshots only; a daily snapshot must
+	// not freeze the live month into it.
+	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_snapshots WHERE scoreboard_name = ?`, board); n != 0 {
+		t.Errorf("daily snapshot leaked %d rows into scoreboard_snapshots", n)
+	}
+}
+
+func TestReconcile_PrunesOldDailySnapshots(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+
+	old := time.Now().AddDate(0, 0, -41).Format("2006-01-02")
+	recent := time.Now().AddDate(0, 0, -39).Format("2006-01-02")
+	for _, day := range []string{old, recent} {
+		err := db.Exec(`INSERT INTO scoreboard_daily_snapshots (day, scoreboard_name, platform, rank, username, value)
+		                VALUES (?, 'miles_2026_01', 'twitch', 1, 'pruned_viewer', 5)`, day).Error
+		if err != nil {
+			t.Fatalf("seed daily snapshot %s: %v", day, err)
+		}
+	}
+
+	Reconcile(context.Background(), testConf)
+
+	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_daily_snapshots WHERE day = ?`, old); n != 0 {
+		t.Errorf("41-day-old snapshot survived the prune: %d rows", n)
+	}
+	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_daily_snapshots WHERE day = ?`, recent); n != 1 {
+		t.Errorf("39-day-old snapshot was pruned: %d rows, want 1", n)
+	}
+}
