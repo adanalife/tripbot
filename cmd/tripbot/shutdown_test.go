@@ -27,8 +27,7 @@ func TestLogLastPlayed(t *testing.T) {
 			var buf bytes.Buffer
 			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
-			tb := &Tripbot{player: &video.Player{CurrentlyPlaying: video.Video{Slug: tc.slug}}}
-			tb.logLastPlayed()
+			logLastPlayed(video.Video{Slug: tc.slug})
 
 			got := buf.String()
 			if !strings.Contains(got, tc.wantSubstr) {

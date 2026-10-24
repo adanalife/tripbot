@@ -1233,8 +1233,7 @@ func (t *Tripbot) getCurrentUsers() {
 // logLastPlayed records the clip that was on screen when the bot stopped. An
 // empty Slug means the player never resolved a clip, so there is no filename
 // to report — a run that died during boot says so rather than naming a file.
-func (t *Tripbot) logLastPlayed() {
-	cur := t.player.Current()
+func logLastPlayed(cur video.Video) {
 	if cur.Slug == "" {
 		slog.Info("no video played this run")
 		return
@@ -1248,7 +1247,7 @@ func (t *Tripbot) logLastPlayed() {
 // Sentry and telemetry flush afterwards, in bootstrap's deferred flush.
 func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 	slog.Warn("shutting down")
-	t.logLastPlayed()
+	logLastPlayed(t.player.Current())
 	// Shutdown cancels in-flight job contexts, so any ctx-aware work in those
 	// jobs unwinds rather than running to completion. Cron jobs here are short
 	// idempotent ticks that retry on the next interval, so losing an in-flight
