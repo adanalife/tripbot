@@ -28,12 +28,20 @@ type onscreens interface {
 // drive the Playout playback + onscreens overlays. Construct via NewPlayer; the
 // single process-wide instance lives on cmd/tripbot's Tripbot struct.
 type Player struct {
-	CurrentlyPlaying Video // exported because external callers read the current video off it
-	curVid, preVid   string
-	timeStarted      time.Time
-	cfg              *c.TripbotConfig
-	onscreens        onscreens
-	playout          *playoutClient.Client
+	// pollMu serializes GetCurrentlyPlaying: the cron and the chat commands
+	// that move the playhead both call it, and curVid/preVid are its own.
+	pollMu         sync.Mutex
+	curVid, preVid string
+
+	// mu guards playing and timeStarted, which the poll writes while the
+	// crons and chat commands read them through Current and CurrentProgress.
+	mu          sync.RWMutex
+	playing     Video
+	timeStarted time.Time
+
+	cfg       *c.TripbotConfig
+	onscreens onscreens
+	playout   *playoutClient.Client
 	// OnChange, when set, is called with the new Video after each clip
 	// transition (including ones where LoadOrCreate failed — handlers check
 	// v.ID). Set once during boot, before the cron starts ticking.
@@ -66,7 +74,8 @@ func NewPlayer(cfg *c.TripbotConfig, onscreens onscreens, playout *playoutClient
 // so the underlying Playout poll and GPS-image toggles don't nest as children).
 // TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
-	var err error
+	p.pollMu.Lock()
+	defer p.pollMu.Unlock()
 
 	// figure out what's currently playing; a failed poll keeps the previous
 	// video rather than reading as a switch to nothing
@@ -81,12 +90,12 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
-		// reset the stopwatch
-		p.timeStarted = time.Now()
-
-		// share the Video with the system
-		prev := p.CurrentlyPlaying
-		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
+		// share the Video with the system, resetting the stopwatch with it
+		cur, err := LoadOrCreate(ctx, p.curVid)
+		p.mu.Lock()
+		prev := p.playing
+		p.playing, p.timeStarted = cur, time.Now()
+		p.mu.Unlock()
 		if err != nil {
 			// Downstream of playout.CurrentlyPlaying; the wrapper there already
 			// logged the root cause at Error. Debug-level keeps the breadcrumb
@@ -95,29 +104,29 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		}
 
 		slog.InfoContext(ctx, "now playing",
-			"file", p.CurrentlyPlaying.File(),
-			"state", helpers.StateToStateAbbrev(p.CurrentlyPlaying.State),
+			"file", cur.File(),
+			"state", helpers.StateToStateAbbrev(cur.State),
 		)
 
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		p.emitVideoChanged(ctx, 0)
+		p.emitVideoChanged(ctx, cur, 0)
 
 		// Persist the switch as a video_plays row — the durable half of the
 		// emission above (NATS core is fire-and-forget). The first tick after a
 		// restart records a fresh play for the clip already on screen, since its
 		// true start time wasn't observed.
-		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
-			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng,
-			p.switchCause(prev))
+		viewstats.RecordPlay(ctx, p.cfg, cur.ID, cur.State,
+			cur.Flagged, cur.Lat, cur.Lng,
+			p.switchCause(prev, cur))
 
 		if p.OnChange != nil {
-			p.OnChange(ctx, p.CurrentlyPlaying)
+			p.OnChange(ctx, cur)
 		}
 
 		// show the no-GPS image
-		if p.CurrentlyPlaying.Flagged {
+		if cur.Flagged {
 			// the duration is ignored — the server owns the GPS overlay's duration
 			p.onscreens.ShowGPSImage(ctx, 60*time.Second)
 		} else {
@@ -131,13 +140,13 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 // the clip already up; a clip that follows the previous one in corpus order
 // advanced naturally; anything else is a jump this process did not send.
 // Unknown ("") when either clip has no DB row to compare.
-func (p *Player) switchCause(prev Video) string {
+func (p *Player) switchCause(prev, cur Video) string {
 	switch {
 	case p.preVid == "":
 		return viewstats.CauseResume
-	case prev.ID == 0 || p.CurrentlyPlaying.ID == 0:
+	case prev.ID == 0 || cur.ID == 0:
 		return ""
-	case prev.NextVid.Valid && int(prev.NextVid.Int64) == p.CurrentlyPlaying.ID:
+	case prev.NextVid.Valid && int(prev.NextVid.Int64) == cur.ID:
 		return viewstats.CauseNatural
 	default:
 		return viewstats.CauseExternal
@@ -198,7 +207,16 @@ func (p *Player) TrackState(ctx context.Context) {
 // CurrentProgress represents how long the video has been playing
 // it will be useful eventually for choosing the exact right screenshot
 func (p *Player) CurrentProgress() time.Duration {
-	return time.Since(p.timeStarted)
+	_, progress := p.snapshot()
+	return progress
+}
+
+// snapshot reads the clip on screen and how long it has played in one lock,
+// so the pair always describes the same clip.
+func (p *Player) snapshot() (Video, time.Duration) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.playing, time.Since(p.timeStarted)
 }
 
 // Playhead returns the clip on screen and how far into it the stream is.
@@ -211,25 +229,29 @@ func (p *Player) CurrentProgress() time.Duration {
 // is the answer whenever it's readable; the Player's own state is the fallback
 // for when it isn't.
 func (p *Player) Playhead(ctx context.Context) (Video, time.Duration) {
+	cur, progress := p.snapshot()
 	file, pos, ok := p.playout.Playhead(ctx)
 	if !ok {
-		return p.CurrentlyPlaying, p.CurrentProgress()
+		return cur, progress
 	}
-	if slug(file) == p.CurrentlyPlaying.Slug {
-		return p.CurrentlyPlaying, pos
+	if slug(file) == cur.Slug {
+		return cur, pos
 	}
 	// playout has moved on and the cron hasn't caught up yet. Answer for the
 	// clip actually on screen rather than the one that stopped playing.
 	vid, err := LoadOrCreate(ctx, file)
 	if err != nil {
 		slog.DebugContext(ctx, "playhead clip lookup failed", "err", err, "file", file)
-		return p.CurrentlyPlaying, p.CurrentProgress()
+		return cur, progress
 	}
 	return vid, pos
 }
 
 // Current returns the currently-playing video.
-func (p *Player) Current() Video { return p.CurrentlyPlaying }
+func (p *Player) Current() Video {
+	cur, _ := p.snapshot()
+	return cur
+}
 
 // EmitCurrentVideo re-publishes the current clip as a video.changed without a
 // transition. cmd calls this once right after the live-console hub subscribes
@@ -238,26 +260,26 @@ func (p *Player) Current() Video { return p.CurrentlyPlaying }
 // nothing is playing yet. A periodic re-emit for a separately-started console
 // is the tripbot-console split's concern, not this.
 func (p *Player) EmitCurrentVideo(ctx context.Context) {
-	if p.CurrentlyPlaying.Slug == "" {
+	cur, progress := p.snapshot()
+	if cur.Slug == "" {
 		return
 	}
-	p.emitVideoChanged(ctx, p.CurrentProgress())
+	p.emitVideoChanged(ctx, cur, progress)
 }
 
-// emitVideoChanged publishes the current clip with the van's velocity `at`
-// into it, so the console can point its marker and glide it between clips.
+// emitVideoChanged publishes cur with the van's velocity `at` into it, so the console can point its marker and glide it between clips.
 // A clip with no track publishes without one; a stopped van publishes a
 // speed of 0 and no heading.
-func (p *Player) emitVideoChanged(ctx context.Context, at time.Duration) {
+func (p *Player) emitVideoChanged(ctx context.Context, cur Video, at time.Duration) {
 	ev := eventbus.VideoChanged{
 		Platform: p.cfg.Platform,
-		File:     p.CurrentlyPlaying.File(),
-		State:    p.CurrentlyPlaying.State,
-		Flagged:  p.CurrentlyPlaying.Flagged,
-		Lat:      p.CurrentlyPlaying.Lat,
-		Lng:      p.CurrentlyPlaying.Lng,
+		File:     cur.File(),
+		State:    cur.State,
+		Flagged:  cur.Flagged,
+		Lat:      cur.Lat,
+		Lng:      cur.Lng,
 	}
-	if v, ok := VelocityAt(ctx, p.CurrentlyPlaying, at); ok {
+	if v, ok := VelocityAt(ctx, cur, at); ok {
 		ev.SpeedMPS = &v.SpeedMPS
 		if v.Moving {
 			ev.Heading = &v.Bearing

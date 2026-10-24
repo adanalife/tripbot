@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -82,7 +83,7 @@ func airingPlayer(t *testing.T, vid Video, at time.Duration) *Player {
 }
 
 func (p *Player) show(vid Video, at time.Duration) {
-	p.CurrentlyPlaying = vid
+	p.playing = vid
 	p.timeStarted = time.Now().Add(-at)
 }
 
@@ -452,10 +453,41 @@ func TestSwitchCause(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Player{preVid: tt.preVid, CurrentlyPlaying: tt.cur}
-			if got := p.switchCause(tt.prev); got != tt.want {
+			p := &Player{preVid: tt.preVid}
+			if got := p.switchCause(tt.prev, tt.cur); got != tt.want {
 				t.Errorf("switchCause = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// The cron polls while chat commands both poll and read the clip on screen.
+// Under -race this fails if the Player's state loses its locks.
+func TestPlayer_ConcurrentPollAndRead(t *testing.T) {
+	db := testdb.New(t)
+	playoutCurrent := "2019_0615_183000_001.MP4"
+	p := NewPlayer(testConf, &recordingOnscreens{}, fakePlayoutServer(t, &playoutCurrent))
+	insertVideo(t, db, Video{Slug: "2019_0615_183000_001", State: "Oregon", Lat: 45.5, Lng: -122.6})
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for _, fn := range []func(){
+		func() { p.GetCurrentlyPlaying(ctx) },
+		func() { p.GetCurrentlyPlaying(ctx) },
+		func() { _ = p.Current() },
+		func() { _ = p.CurrentProgress() },
+		func() { _, _ = p.Playhead(ctx) },
+		func() { p.EmitCurrentVideo(ctx) },
+	} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fn()
+		}()
+	}
+	wg.Wait()
+
+	if got := p.Current().Slug; got != "2019_0615_183000_001" {
+		t.Errorf("Current().Slug = %q, want the polled clip", got)
 	}
 }
