@@ -170,25 +170,33 @@ func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
 	}
 }
 
-// A two-letter guess that isn't a state code survives to the comparison as
-// typed instead of being blanked, matching what pkg/video's FindRandomByState
-// does with the same lookup.
-func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
-	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
-	recScores := &recordingScoreboards{}
-	app.Scoreboards = recScores
-	out, says := captureSay(t, app)
+// Text that names no state, such as a non-state pair or ordinary chat caught
+// by the bare "guess" alias, gets the usage line and records no guess.
+func TestGuessCmd_NonState_RecordsNothing(t *testing.T) {
+	for _, params := range [][]string{{"zz"}, {"what,", "I'm", "back"}} {
+		t.Run(strings.Join(params, " "), func(t *testing.T) {
+			app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
+			recScores := &recordingScoreboards{}
+			app.Scoreboards = recScores
+			rec := &recordingEvents{}
+			app.Events = rec
+			out, says := captureSay(t, app)
 
-	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"zz"})
+			app.guessCmd(context.Background(), newTestUser("viewer1"), params)
 
-	if !strings.Contains(out(), "Try again") {
-		t.Errorf("expected try-again for a non-state pair, got %q", out())
-	}
-	if len(recScores.Credited) != 0 {
-		t.Errorf("credited = %v, want nobody", recScores.Credited)
-	}
-	if says() != 1 {
-		t.Errorf("expected exactly one Say() call, got %d", says())
+			if !strings.Contains(out(), "not a state") {
+				t.Errorf("expected the not-a-state reply, got %q", out())
+			}
+			if len(rec.Guesses) != 0 {
+				t.Errorf("guesses = %+v, want none recorded", rec.Guesses)
+			}
+			if len(recScores.Credited) != 0 {
+				t.Errorf("credited = %v, want nobody", recScores.Credited)
+			}
+			if says() != 1 {
+				t.Errorf("expected exactly one Say() call, got %d", says())
+			}
+		})
 	}
 }
 
