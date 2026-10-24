@@ -57,6 +57,40 @@ func SnapshotTopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName 
 	return leaderboardRows(results)
 }
 
+// DailySnapshotTopUsers reads the day's first snapshot of a live monthly board
+// out of scoreboard_daily_snapshots, which the rollup tick takes once per day
+// (top 50 per platform, bots and opted-out accounts already excluded). The rows
+// come back in the order and shape TopUsers returns, so ranking them with Ranks
+// compares like with like. ok is false when the day has no snapshot of the
+// board on any platform — or the read failed — meaning there is nothing to
+// compare against; an empty slice with ok true means the board was taken and
+// this platform simply had nobody on it.
+func DailySnapshotTopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName, day string, size int) (rows [][]string, ok bool) {
+	db := database.GormDB().WithContext(ctx)
+	var taken bool
+	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM scoreboard_daily_snapshots WHERE day = ? AND scoreboard_name = ?)`,
+		day, scoreboardName).Scan(&taken).Error; err != nil {
+		slog.ErrorContext(ctx, "error checking daily snapshot", "err", err, "scoreboard", scoreboardName)
+		return nil, false
+	}
+	if !taken {
+		return nil, false
+	}
+	var results []topUserResult
+	result := db.
+		Table("scoreboard_daily_snapshots").
+		Select("username, value").
+		Where("day = ? AND scoreboard_name = ? AND platform = ? AND username != ?", day, scoreboardName, cfg.Platform, cfg.ChannelName).
+		Order("value DESC, username ASC").
+		Limit(size).
+		Scan(&results)
+	if result.Error != nil {
+		slog.ErrorContext(ctx, "error fetching daily snapshot top users", "err", result.Error, "scoreboard", scoreboardName)
+		return nil, false
+	}
+	return leaderboardRows(results), true
+}
+
 // leaderboardRows renders query rows as the [username, value] pairs every
 // leaderboard surface consumes, with the value at one decimal.
 func leaderboardRows(results []topUserResult) [][]string {

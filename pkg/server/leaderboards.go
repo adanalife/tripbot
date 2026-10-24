@@ -19,6 +19,10 @@ import (
 // snapshot the rollup tick wrote at rollover. The all-time miles board is not
 // here — /api/stats/community already serves it.
 //
+// The live month also carries each row's place at the start of today, read
+// from the daily snapshot the same tick takes, so the console can show who
+// moved since then.
+//
 // Boards are per-platform, like every other scoreboard read: the instance
 // answers for its own cfg.Platform.
 
@@ -26,6 +30,11 @@ import (
 // 50; a console pane shows a screenful, and the console can't ask for more
 // because nothing has wanted to.
 const leaderboardSize = 25
+
+// prevRankDepth is how much of the day's snapshot the previous ranks are read
+// from: all of it, so a viewer who climbs into the top 25 from further down
+// still shows where they started.
+const prevRankDepth = 50
 
 // leaderboardBoard is one board for one month. Rows are ordered best-first and
 // Ranks[i] is Rows[i]'s place, sharing the place across a tie.
@@ -43,6 +52,11 @@ type leaderboardRank struct {
 	// and re-parsing it client-side is how two surfaces start disagreeing
 	// about a tie.
 	Value string `json:"value"`
+	// PrevRank is the place the viewer held on this board at the start of
+	// today, ranked the same way Rank is. 0 means the day's snapshot exists
+	// but the viewer wasn't on it (new to the board today); nil means there is
+	// nothing to compare against — a frozen month, or no snapshot taken yet.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 type leaderboardsResponse struct {
@@ -64,7 +78,8 @@ type leaderboardsResponse struct {
 // bad value means a stale client, not a request worth failing.
 func (s *Server) leaderboardsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	current := time.Now().Format("2006-01")
+	now := time.Now()
+	current := now.Format("2006-01")
 
 	months, err := snapshotMonths(ctx)
 	if err != nil {
@@ -83,15 +98,23 @@ func (s *Server) leaderboardsHandler(w http.ResponseWriter, r *http.Request) {
 		topUsers = scoreboards.TopUsers
 	}
 
+	miles := rankedBoard("miles", "Miles", topUsers(ctx, s.cfg, "miles_"+suffix, leaderboardSize))
+	guesses := rankedBoard("guesses", "Correct Guesses",
+		scoreboards.GuessRows(topUsers(ctx, s.cfg, "guess_state_"+suffix, leaderboardSize)))
+	if live {
+		// The rollup tick names the day on this same clock.
+		day := now.Format("2006-01-02")
+		prev, ok := scoreboards.DailySnapshotTopUsers(ctx, s.cfg, "miles_"+suffix, day, prevRankDepth)
+		withPrevRanks(&miles, prev, ok)
+		prev, ok = scoreboards.DailySnapshotTopUsers(ctx, s.cfg, "guess_state_"+suffix, day, prevRankDepth)
+		withPrevRanks(&guesses, scoreboards.GuessRows(prev), ok)
+	}
+
 	payload := leaderboardsResponse{
 		Month:  month,
 		Live:   live,
 		Months: months,
-		Boards: []leaderboardBoard{
-			rankedBoard("miles", "Miles", topUsers(ctx, s.cfg, "miles_"+suffix, leaderboardSize)),
-			rankedBoard("guesses", "Correct Guesses",
-				scoreboards.GuessRows(topUsers(ctx, s.cfg, "guess_state_"+suffix, leaderboardSize))),
-		},
+		Boards: []leaderboardBoard{miles, guesses},
 	}
 	writeInsights(w, r, payload)
 }
@@ -123,6 +146,27 @@ func rankedBoard(name, label string, pairs [][]string) leaderboardBoard {
 			leaderboardRank{Rank: ranks[i], Username: pair[0], Value: pair[1]})
 	}
 	return board
+}
+
+// withPrevRanks fills each row's PrevRank from the day's snapshot pairs, ranked
+// with the same Ranks the live rows were so a tie reads as the same place on
+// both sides. A viewer missing from the snapshot gets 0. With no snapshot to
+// compare against (ok false) every PrevRank stays nil.
+func withPrevRanks(board *leaderboardBoard, prev [][]string, ok bool) {
+	if !ok {
+		return
+	}
+	ranks := scoreboards.Ranks(prev)
+	byUser := make(map[string]int, len(prev))
+	for i, pair := range prev {
+		if len(pair) > 0 {
+			byUser[pair[0]] = ranks[i]
+		}
+	}
+	for i := range board.Rows {
+		rank := byUser[board.Rows[i].Username]
+		board.Rows[i].PrevRank = &rank
+	}
 }
 
 // snapshotMonthsSQL lists the months scoreboard_snapshots holds, newest first.
