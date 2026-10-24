@@ -16,9 +16,9 @@ import (
 // testConf is the config the scoreboard queries under test are scoped to.
 var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch", ChannelName: "test"}
 
-func createUser(t *testing.T, db *gorm.DB, username, platform string, isBot bool) uint16 {
+func createUser(t *testing.T, db *gorm.DB, username, platform string, isBot bool) int {
 	t.Helper()
-	var id uint16
+	var id int
 	row := db.Raw(
 		`INSERT INTO users (username, platform, is_bot) VALUES (?, ?, ?) RETURNING id`,
 		username, platform, isBot,
@@ -31,9 +31,9 @@ func createUser(t *testing.T, db *gorm.DB, username, platform string, isBot bool
 
 // createOptedOutUser inserts a viewer who is not a bot but has asked to stay
 // off the leaderboards, and returns its ID.
-func createOptedOutUser(t *testing.T, db *gorm.DB, username, platform string) uint16 {
+func createOptedOutUser(t *testing.T, db *gorm.DB, username, platform string) int {
 	t.Helper()
-	var id uint16
+	var id int
 	row := db.Raw(
 		`INSERT INTO users (username, platform, exclude_from_leaderboard) VALUES (?, ?, TRUE) RETURNING id`,
 		username, platform,
@@ -47,9 +47,9 @@ func createOptedOutUser(t *testing.T, db *gorm.DB, username, platform string) ui
 // createScoreboardOn inserts a scoreboard for an arbitrary platform, which the
 // package's own lookups can't do (they always scope to this instance's
 // platform).
-func createScoreboardOn(t *testing.T, db *gorm.DB, name, platform string) uint16 {
+func createScoreboardOn(t *testing.T, db *gorm.DB, name, platform string) int {
 	t.Helper()
-	var id uint16
+	var id int
 	row := db.Raw(
 		`INSERT INTO scoreboards (name, platform) VALUES (?, ?) RETURNING id`,
 		name, platform,
@@ -60,7 +60,7 @@ func createScoreboardOn(t *testing.T, db *gorm.DB, name, platform string) uint16
 	return id
 }
 
-func insertScore(t *testing.T, db *gorm.DB, userID, scoreboardID uint16, value float32) {
+func insertScore(t *testing.T, db *gorm.DB, userID, scoreboardID int, value float32) {
 	t.Helper()
 	err := db.Exec(
 		`INSERT INTO scores (user_id, scoreboard_id, value) VALUES (?, ?, ?)`,
@@ -99,7 +99,7 @@ func TestTopUsers(t *testing.T) {
 	optedOutID := createOptedOutUser(t, db, "optedout", testConf.Platform)
 	ownerID := createUser(t, db, testConf.ChannelName, testConf.Platform, false)
 	otherPlatformID := createUser(t, db, "carol", "youtube", false)
-	for _, id := range []uint16{botID, optedOutID, ownerID, otherPlatformID} {
+	for _, id := range []int{botID, optedOutID, ownerID, otherPlatformID} {
 		insertScore(t, db, id, sb, 999)
 	}
 
@@ -175,7 +175,7 @@ func TestAddToScoreByName_CreatesBoardPerPlatform(t *testing.T) {
 	}
 
 	var boards []struct {
-		ID          uint16
+		ID          int
 		DateCreated time.Time
 	}
 	if err := db.Raw(
