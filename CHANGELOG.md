@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.4.0] — 2026-10-25
+
+### Console / API
+
+- The whole-route map overlay tags each segment with its season (s1 or s2), so the console can draw each trip on its own. ([#1761](https://github.com/adanalife/tripbot/pull/1761))
+
 ## [v6.3.0] — 2026-10-24
 
 ### Chatbot
