@@ -250,12 +250,12 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 // came from. It is the clip's, repeated on every one of that clip's points,
 // which is what makes a band a contiguous run rather than a per-point property.
 const corpusRouteQuery = `
-SELECT lat, lng, coord_confidence FROM (
-    SELECT c.lat, c.lng, v.coord_confidence, v.date_filmed, c.ts_sec
+SELECT lat, lng, coord_confidence, corpus FROM (
+    SELECT c.lat, c.lng, v.coord_confidence, v.corpus, v.date_filmed, c.ts_sec
     FROM video_coords c JOIN videos v ON v.id = c.video_id
     WHERE NOT v.flagged AND v.coord_confidence >= @minConfidence AND c.ts_sec IS NOT NULL
   UNION ALL
-    SELECT v.lat, v.lng, v.coord_confidence, v.date_filmed, 0
+    SELECT v.lat, v.lng, v.coord_confidence, v.corpus, v.date_filmed, 0
     FROM videos v
     WHERE NOT v.flagged AND (v.lat != 0 OR v.lng != 0)
       AND (v.coord_confidence IS NULL OR v.coord_confidence < @minConfidence)
@@ -270,7 +270,8 @@ SELECT lat, lng, coord_confidence FROM (
 // Returns nil on error.
 //
 // Each point carries the band its clip falls in, so the caller can draw the
-// bridged stretches differently from the read ones. A synthetic track is drawn
+// bridged stretches differently from the read ones, and its season, so the
+// caller can draw each trip on its own. A synthetic track is drawn
 // because the map wants the road's shape, which it has; it is still far too
 // coarse to answer a question with, which is why CoordAt keeps the higher bar.
 //
@@ -281,6 +282,7 @@ func CorpusRoute(ctx context.Context) []RoutePoint {
 		Lat             float64
 		Lng             float64
 		CoordConfidence *float64
+		Corpus          string
 	}
 	var rows []coord
 	err := database.GormDB().WithContext(ctx).
@@ -292,7 +294,7 @@ func CorpusRoute(ctx context.Context) []RoutePoint {
 	}
 	out := make([]RoutePoint, len(rows))
 	for i, r := range rows {
-		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: RouteBand(r.CoordConfidence)}
+		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: RouteBand(r.CoordConfidence), Season: Season(r.Corpus)}
 	}
 	return out
 }

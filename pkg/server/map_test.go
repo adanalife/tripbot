@@ -107,6 +107,26 @@ func TestSplitOnGaps_SplitsWhereTheBandChanges(t *testing.T) {
 	}
 }
 
+// The seasons are separate trips: where one ends and the next begins is a new
+// segment carrying its own season, with no shared point bridging the two.
+func TestSplitOnGaps_SplitsWhereTheSeasonChanges(t *testing.T) {
+	pts := []video.RoutePoint{
+		{Lat: 41.50, Lng: -110.20, Band: video.BandTrusted, Season: video.CorpusS1},
+		{Lat: 41.51, Lng: -110.21, Band: video.BandTrusted, Season: video.CorpusS1},
+		{Lat: 41.52, Lng: -110.22, Band: video.BandTrusted, Season: video.CorpusS2},
+	}
+	segs := splitOnGaps(pts, maxRouteGapMiles)
+	if len(segs) != 2 {
+		t.Fatalf("got %d segments, want 2: %v", len(segs), segs)
+	}
+	if segs[0].Season != video.CorpusS1 || segs[1].Season != video.CorpusS2 {
+		t.Errorf("seasons = %q,%q, want s1,s2", segs[0].Season, segs[1].Season)
+	}
+	if len(segs[0].Points) != 2 || len(segs[1].Points) != 1 {
+		t.Errorf("segment sizes = %d,%d, want 2,1", len(segs[0].Points), len(segs[1].Points))
+	}
+}
+
 func TestSplitOnGaps(t *testing.T) {
 	// Two clusters of nearby points separated by a cross-country jump should
 	// split into two segments.

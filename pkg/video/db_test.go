@@ -353,6 +353,8 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	earlier := insertVideo(t, db, Video{Slug: "2018_0514_224801_050", Lat: earlyCoord[0], Lng: earlyCoord[1]})
 	insertVideo(t, db, Video{Slug: "2018_0514_224801_052", Lat: flagCoord[0], Lng: flagCoord[1], Flagged: true})
 	insertVideo(t, db, Video{Slug: "2018_0514_224801_053"}) // 0/0: excluded
+	fastCoord := [2]float64{44.44, -74.44}
+	insertVideo(t, db, Video{Slug: "20260605144519_000001_s0180", Corpus: CorpusS2Fast, Speed: 6, Lat: fastCoord[0], Lng: fastCoord[1]})
 
 	// date_filmed drives the ordering; insert order deliberately doesn't match.
 	backdate := func(v Video, iso string) {
@@ -379,6 +381,13 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	}
 	if early > late {
 		t.Errorf("CorpusRoute() not ordered by date_filmed: earlier clip at %d, later at %d", early, late)
+	}
+	if s := route[early].Season; s != CorpusS1 {
+		t.Errorf("season-1 clip season = %q, want %q", s, CorpusS1)
+	}
+	// Time-lapse footage is still season 2.
+	if i := indexOf(route, fastCoord); i < 0 || route[i].Season != CorpusS2 {
+		t.Errorf("s2fast clip missing or mis-seasoned at %d in %v", i, route)
 	}
 	if i := indexOf(route, flagCoord); i >= 0 {
 		t.Errorf("CorpusRoute() included a flagged clip at %d", i)
