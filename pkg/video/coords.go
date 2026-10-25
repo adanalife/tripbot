@@ -54,10 +54,20 @@ const minRouteConfidence = SynthConfidence
 const SynthConfidence = 0.5
 
 // RoutePoint is one point of the drawn route, tagged with where its clip's
-// coordinates came from.
+// coordinates came from and which season of the trip filmed it.
 type RoutePoint struct {
 	Lat, Lng float64
 	Band     string
+	Season   string
+}
+
+// Season names the trip a corpus belongs to: "s1" (2018) or "s2" (2026).
+// s2fast is season 2 shot in the camera's time-lapse mode, so it folds into s2.
+func Season(corpus string) string {
+	if corpus == CorpusS2 || corpus == CorpusS2Fast {
+		return CorpusS2
+	}
+	return CorpusS1
 }
 
 // RouteBand names the confidence tier a clip's coordinates come from.

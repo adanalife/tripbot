@@ -88,12 +88,12 @@ func corpusBody(ctx context.Context) []byte {
 }
 
 // mapCorpusHandler serves GET /admin/map/corpus: the full dashcam route as JSON
-// [{"band":…,"points":[[lat,lng],…]},…] — a list of segments, broken wherever
-// consecutive points jump more than maxRouteGapMiles (trip boundaries) or the
-// band changes. One band per segment is what lets Leaflet colour it: a polyline
-// is a single colour, so the split does the work a gradient would otherwise.
-// Loaded lazily by the map's "show full route" toggle, cached an hour (the
-// corpus rarely changes).
+// [{"band":…,"season":…,"points":[[lat,lng],…]},…] — a list of segments, broken
+// wherever consecutive points jump more than maxRouteGapMiles (trip boundaries)
+// or the band or season changes. One band and season per segment is what lets
+// Leaflet colour it: a polyline is a single colour, so the split does the work
+// a gradient would otherwise. Loaded lazily by the map's per-season route
+// toggles, cached an hour (the corpus rarely changes).
 func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
 	body := corpusBody(r.Context())
 	if body == nil {
@@ -131,15 +131,17 @@ func corpusStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // routeSegment is one drawable run of the route: points that are contiguous in
-// space and share a band, so the whole thing renders as one coloured polyline.
+// space and share a band and a season, so the whole thing renders as one
+// coloured polyline.
 type routeSegment struct {
 	Band   string       `json:"band"`
+	Season string       `json:"season"`
 	Points [][2]float64 `json:"points"`
 }
 
 // splitOnGaps breaks an ordered point list into contiguous segments, starting a
 // new segment whenever the great-circle distance between consecutive points
-// exceeds maxMiles, or the band changes. Returns an empty (non-nil) slice for
+// exceeds maxMiles, or the band or season changes. Returns an empty (non-nil) slice for
 // empty input so the JSON is [] rather than null.
 //
 // A band change repeats the boundary point in both segments. Without it the
@@ -150,19 +152,20 @@ func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
 	if len(pts) == 0 {
 		return segs
 	}
-	cur := routeSegment{Band: pts[0].Band, Points: [][2]float64{{pts[0].Lat, pts[0].Lng}}}
+	cur := routeSegment{Band: pts[0].Band, Season: pts[0].Season, Points: [][2]float64{{pts[0].Lat, pts[0].Lng}}}
 	for i := 1; i < len(pts); i++ {
 		prev, p := pts[i-1], pts[i]
 		xy := [2]float64{p.Lat, p.Lng}
 		switch {
-		case helpers.MilesBetween(prev.Lat, prev.Lng, p.Lat, p.Lng) > maxMiles:
+		case helpers.MilesBetween(prev.Lat, prev.Lng, p.Lat, p.Lng) > maxMiles, p.Season != cur.Season:
+			// A season change is a different trip, so the two never join.
 			segs = append(segs, cur)
-			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
+			cur = routeSegment{Band: p.Band, Season: p.Season, Points: [][2]float64{xy}}
 		case p.Band != cur.Band:
 			// Carry the shared point across so the two colours meet.
 			cur.Points = append(cur.Points, xy)
 			segs = append(segs, cur)
-			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
+			cur = routeSegment{Band: p.Band, Season: p.Season, Points: [][2]float64{xy}}
 		default:
 			cur.Points = append(cur.Points, xy)
 		}
