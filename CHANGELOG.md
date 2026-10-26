@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.5.0] — 2026-10-26
+
+### Console / API
+
+- The event bus carries each platform's AutoMod held queue as a retained last value, so the console and tempomat can show holds made before they connected. ([#1763](https://github.com/adanalife/tripbot/pull/1763))
+
 ## [v6.4.0] — 2026-10-25
 
 ### Console / API
