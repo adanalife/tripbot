@@ -249,6 +249,20 @@ var (
 		{"unique_only", boolType(), true},
 		{"emitted_at", dateType(), true},
 	}
+	chatHeldFields = []field{
+		{"platform", strType(), true},
+		{"held", arrayType(refType("HeldMessage")), true},
+		{"emitted_at", dateType(), true},
+	}
+	heldMessageFields = []field{
+		{"message_id", strType(), true},
+		{"author", strType(), true},
+		{"author_id", strType(), true},
+		{"text", strType(), true},
+		{"category", strType(), true},
+		{"level", intType(), true},
+		{"held_at", dateType(), true},
+	}
 	featureFlagsFields = []field{
 		{"platform", strType(), true},
 		{"flags", arrayType(refType("FeatureFlag")), true},
@@ -300,6 +314,8 @@ var envelopeFields = map[string][]field{
 	"AudioBed":          audioBedFields,
 	"AudioBedSwitch":    audioBedSwitchFields,
 	"ChatMode":          chatModeFields,
+	"ChatHeld":          chatHeldFields,
+	"HeldMessage":       heldMessageFields,
 	"FeatureFlags":      featureFlagsFields,
 	"FeatureFlag":       featureFlagFields,
 	"YoutubeBroadcast":  youtubeBroadcastFields,
@@ -377,6 +393,13 @@ func eventbusContract() orderedObject {
 				{"stream", "TRIPBOT_CHAT_MODE"},
 				{"schema", objectSchema("ChatMode", chatModeFields)},
 			}},
+			{"chat_held", orderedObject{
+				{"subject", "tripbot.{env}.chat.held.{platform}"},
+				{"wildcard", "tripbot.{env}.chat.held.*"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_CHAT_HELD"},
+				{"schema", objectSchema("ChatHeld", chatHeldFields)},
+			}},
 			{"flags_snapshot", orderedObject{
 				{"subject", "tripbot.{env}.flags.snapshot.{platform}"},
 				{"wildcard", "tripbot.{env}.flags.snapshot.*"},
@@ -403,6 +426,7 @@ func eventbusContract() orderedObject {
 			{"ChatReply", objectSchema("ChatReply", chatReplyFields)},
 			{"AudioBedSwitch", objectSchema("AudioBedSwitch", audioBedSwitchFields)},
 			{"FeatureFlag", objectSchema("FeatureFlag", featureFlagFields)},
+			{"HeldMessage", objectSchema("HeldMessage", heldMessageFields)},
 		}},
 	}
 }

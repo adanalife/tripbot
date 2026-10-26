@@ -415,6 +415,36 @@
         ]
       }
     },
+    "chat_held": {
+      "subject": "tripbot.{env}.chat.held.{platform}",
+      "wildcard": "tripbot.{env}.chat.held.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT_HELD",
+      "schema": {
+        "type": "object",
+        "title": "ChatHeld",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "held": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/HeldMessage"
+            }
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "held",
+          "emitted_at"
+        ]
+      }
+    },
     "flags_snapshot": {
       "subject": "tripbot.{env}.flags.snapshot.{platform}",
       "wildcard": "tripbot.{env}.flags.snapshot.*",
@@ -635,6 +665,43 @@
         "key",
         "description",
         "enabled"
+      ]
+    },
+    "HeldMessage": {
+      "type": "object",
+      "title": "HeldMessage",
+      "properties": {
+        "message_id": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "author_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "level": {
+          "type": "integer"
+        },
+        "held_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "message_id",
+        "author",
+        "author_id",
+        "text",
+        "category",
+        "level",
+        "held_at"
       ]
     }
   }

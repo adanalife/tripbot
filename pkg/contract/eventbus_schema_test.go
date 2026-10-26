@@ -38,6 +38,8 @@ func TestEventbusSchemaMatchesStructs(t *testing.T) {
 		"ChatMode":          reflect.TypeOf(eventbus.ChatMode{}),
 		"FeatureFlags":      reflect.TypeOf(eventbus.FeatureFlags{}),
 		"FeatureFlag":       reflect.TypeOf(eventbus.FeatureFlag{}),
+		"ChatHeld":          reflect.TypeOf(eventbus.ChatHeld{}),
+		"HeldMessage":       reflect.TypeOf(eventbus.HeldMessage{}),
 		"YoutubeBroadcast":  reflect.TypeOf(eventbus.YoutubeBroadcast{}),
 		"FacebookBroadcast": reflect.TypeOf(eventbus.FacebookBroadcast{}),
 	}

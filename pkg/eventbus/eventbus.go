@@ -622,6 +622,38 @@ type ChatMode struct {
 // mode in env.
 func ChatModeWildcard(env string) string { return subject(env, "chat", "mode") + ".*" }
 
+// --- chat.held --------------------------------------------------------------
+
+// ChatHeld is the wire format for tripbot.<env>.chat.held.<platform> — every
+// chat message AutoMod is holding for a moderator's ruling, as the gateway last
+// saw them. Twitch has no read of the held queue, so the gateway follows
+// automod.message.hold and automod.message.update and publishes the whole list
+// on each change; the stream retains it, so a client that connects after a hold
+// still sees it. Held is empty, not absent, once the queue clears.
+//
+// platform-gateway is the only publisher, so there is no Emit helper here.
+type ChatHeld struct {
+	Platform  string        `json:"platform"`
+	Held      []HeldMessage `json:"held"`
+	EmittedAt string        `json:"emitted_at"`
+}
+
+// HeldMessage is one message in ChatHeld. Category and Level are AutoMod's
+// reason for holding it (e.g. "swearing", 1–4).
+type HeldMessage struct {
+	MessageID string `json:"message_id"`
+	Author    string `json:"author"`
+	AuthorID  string `json:"author_id"`
+	Text      string `json:"text"`
+	Category  string `json:"category"`
+	Level     int    `json:"level"`
+	HeldAt    string `json:"held_at"`
+}
+
+// ChatHeldWildcard returns the subscribe pattern covering every platform's held
+// queue in env.
+func ChatHeldWildcard(env string) string { return subject(env, "chat", "held") + ".*" }
+
 // --- chat.subscriber --------------------------------------------------------
 
 // SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
@@ -686,6 +718,7 @@ const (
 	audioStreamName    = "TRIPBOT_AUDIO"
 	flagsStreamName    = "TRIPBOT_FLAGS"
 	chatModeStreamName = "TRIPBOT_CHAT_MODE"
+	chatHeldStreamName = "TRIPBOT_CHAT_HELD"
 )
 
 // Retention caps sized so a console restart's backfill refills its in-memory
@@ -788,6 +821,15 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			Name:              chatModeStreamName,
 			Description:       "Last-known chat mode per platform (last-value cache); published by platform-gateway.",
 			Subjects:          []string{ChatModeWildcard(env)},
+			Storage:           jetstream.FileStorage,
+			Retention:         jetstream.LimitsPolicy,
+			Discard:           jetstream.DiscardOld,
+			MaxMsgsPerSubject: 1,
+		},
+		{
+			Name:              chatHeldStreamName,
+			Description:       "Last-known AutoMod held queue per platform (last-value cache); published by platform-gateway.",
+			Subjects:          []string{ChatHeldWildcard(env)},
 			Storage:           jetstream.FileStorage,
 			Retention:         jetstream.LimitsPolicy,
 			Discard:           jetstream.DiscardOld,
