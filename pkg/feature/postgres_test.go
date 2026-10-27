@@ -104,7 +104,7 @@ func TestPostgresClient_LoadsSeededFlags(t *testing.T) {
 }
 
 // TestPostgresClient_RefreshFailureRetainsCache: a failed refresh must not
-// clear the last-known-good snapshot. The failure is induced with a cancelled
+// clear the last-known-good snapshot. The failure is induced with a canceled
 // context — a real query error, not a synthetic driver one.
 func TestPostgresClient_RefreshFailureRetainsCache(t *testing.T) {
 	db := testdb.New(t)

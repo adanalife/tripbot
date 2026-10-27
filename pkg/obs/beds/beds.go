@@ -48,7 +48,7 @@ const (
 	// our IP — so it boots on the Album fallback and the audio watchdog brings
 	// it onto the radio once the station answers.
 	Radio Bed = "radio"
-	// CarHum is the synthesized, licence-clean car-interior drone baked into the
+	// CarHum is the synthesized, license-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
 	CarHum Bed = "carhum"
 	// Album is the radio's fallback: tracks from FallbackAlbums on the mounted
@@ -695,7 +695,7 @@ func (s *Store) rescueEmptyAlbum(ctx context.Context) error {
 
 // SwapToFallback points the source at the bed the audio watchdog rides out a
 // radio outage on: the album when the share has FallbackAlbums tracks, the
-// car-hum drone when it doesn't. The album is licence-clean (it was made for
+// car-hum drone when it doesn't. The album is license-clean (it was made for
 // this stream) and is actual music, so it's the better degraded state; the
 // drone covers an empty or unmounted share, where it's the only bed left.
 //

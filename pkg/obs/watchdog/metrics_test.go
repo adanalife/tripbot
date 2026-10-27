@@ -69,7 +69,7 @@ func restartsDuring(t *testing.T, body func()) map[string]int64 {
 //
 // pkg/instrumentation builds its instruments at package init from otel.Meter,
 // which returns a global-delegating meter, so installing a provider here makes
-// those already-constructed instruments record into this reader. OTel honours
+// those already-constructed instruments record into this reader. OTel honors
 // exactly one SetMeterProvider per process — a second install is silently
 // ignored and its reader would collect nothing — hence the Once and the shared
 // reader.

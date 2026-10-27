@@ -53,7 +53,7 @@ func TestAnalyze_CleanTrackAllKept(t *testing.T) {
 }
 
 // A single digit-flipped point (longitude off by ~1 degree, ~53 miles in 5s)
-// is rejected, then interpolated back from its neighbours.
+// is rejected, then interpolated back from its neighbors.
 func TestAnalyze_DigitFlipRejectedThenInterpolated(t *testing.T) {
 	clips := []clip{
 		at("a", 0, 40.0000, -111.0000),
@@ -127,7 +127,7 @@ func TestAnalyze_ParkedGapRecoveryNotRejected(t *testing.T) {
 
 // Two eastward spikes where the smaller one (earlier in film order) is masked
 // on the first detection pass — its detour looks normal only because its
-// neighbour is also displaced. Once the bigger spike is corrected, the smaller
+// neighbor is also displaced. Once the bigger spike is corrected, the smaller
 // one is exposed and caught on a later pass. Verifies analyze converges rather
 // than needing repeated runs.
 func TestAnalyze_ConvergesOnMaskedOutlier(t *testing.T) {

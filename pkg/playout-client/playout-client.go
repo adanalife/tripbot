@@ -30,7 +30,7 @@ import (
 // matching playout-<platform> server acts on it — a Twitch-triggered !find never
 // seeks the YouTube stream.
 // requestTimeout bounds the one HTTP call this client makes
-// (CurrentlyPlaying). playout is an in-cluster neighbour answering from
+// (CurrentlyPlaying). playout is an in-cluster neighbor answering from
 // in-memory playback state rather than proxying anything, so a healthy read
 // is sub-millisecond and 5s is already far into "playout is broken"
 // territory. The bound has to exist because no caller supplies a deadline:

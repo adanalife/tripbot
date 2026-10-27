@@ -272,7 +272,7 @@ func fakeOBS(t *testing.T, stopErr error) *obsCalls {
 		defer c.mu.Unlock()
 		c.calls = append(c.calls, "start")
 		c.startCtx = ctx
-		// A real start dials OBS, which a cancelled context refuses.
+		// A real start dials OBS, which a canceled context refuses.
 		return ctx.Err()
 	}
 	return c
@@ -385,7 +385,7 @@ func TestRestartOBSOutputStartsAfterAnUnconfirmedStop(t *testing.T) {
 	})
 }
 
-// A caller cancelled mid-restart still gets the output back, on a context of
+// A caller canceled mid-restart still gets the output back, on a context of
 // its own that startTimeout bounds.
 func TestRestartOBSOutputStartsAfterTheCallerCancels(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

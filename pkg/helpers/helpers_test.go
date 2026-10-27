@@ -62,7 +62,7 @@ func TestStripAtSign(t *testing.T) {
 }
 
 func TestActualDate(t *testing.T) {
-	// date_filmed holds the dashcam's wall clock labelled UTC: noon on the
+	// date_filmed holds the dashcam's wall clock labeled UTC: noon on the
 	// camera in New York is 12:00 EDT, which is 16:00Z.
 	filmed := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
 	got := ActualDate(filmed, 40.7128, -74.0060)

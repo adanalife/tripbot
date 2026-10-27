@@ -6,7 +6,7 @@
 // user-access-token + Twitch user ID and wraps
 // github.com/joeyak/go-twitch-eventsub/v3.
 //
-// Lifecycle: Run blocks until the context is cancelled or the WebSocket
+// Lifecycle: Run blocks until the context is canceled or the WebSocket
 // session terminates fatally. The library handles session_reconnect
 // frames transparently, but an outright socket close returns an error —
 // so Run is one connection attempt, and the caller owns redialing it
@@ -108,7 +108,7 @@ type Config struct {
 }
 
 // Run dials the EventSub WebSocket, subscribes to the events for which
-// Handlers has non-nil callbacks, and blocks until ctx is cancelled or
+// Handlers has non-nil callbacks, and blocks until ctx is canceled or
 // the connection terminates. Returns nil on graceful ctx-driven
 // shutdown; an error on connection failure or fatal protocol error.
 func Run(ctx context.Context, cfg Config, h Handlers) error {
@@ -176,7 +176,7 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	}
 
 	// The library runs OnWelcome on a goroutine of its own, so the socket can
-	// close — or ctx be cancelled — while a subscribe round is still running.
+	// close — or ctx be canceled — while a subscribe round is still running.
 	// round serializes the two: the callback holds it for the whole round, and
 	// Run takes it after ConnectWithContext returns, so the counts it reads are
 	// a finished round's and a round still pending skips itself (ended) rather
@@ -274,7 +274,7 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	// caller redials. denied stays as the round recorded it — see the gauge's doc.
 	instrumentation.EventSubSubscriptions.Set(0, int(denied))
 	instrumentation.EventSubSubscriptions.SetSession(false)
-	// A cancelled ctx is shutdown, whichever of the library's goroutines noticed
+	// A canceled ctx is shutdown, whichever of the library's goroutines noticed
 	// it first — one reports nil, another "use of closed network connection".
 	if ctx.Err() != nil {
 		return nil

@@ -168,7 +168,7 @@ type Tripbot struct {
 	// slash commands. Nil when Discord stays gated off.
 	discordSession *discord.Session
 
-	// flagClient is the process-wide feature flag evaluator. Initialised to an
+	// flagClient is the process-wide feature flag evaluator. Initialized to an
 	// empty in-memory client so unknown keys evaluate to false during the brief
 	// startup window before startFeatureFlags swaps in the Postgres-backed
 	// client — same fail-closed contract as pkg/feature.
@@ -777,7 +777,7 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 // reports outputActive.
 //
 // Two distinct faults land here — the broadcast sits waiting on an encoder it
-// didn't recognise, or no broadcast exists at all — and recoverYouTubeEgress
+// didn't recognize, or no broadcast exists at all — and recoverYouTubeEgress
 // covers both without having to tell them apart.
 //
 // Ticks at BroadcastDiscovery's 2m cadence rather than the Twitch leg's 60s.

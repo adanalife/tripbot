@@ -845,7 +845,7 @@ const visitsCTE = `visits AS (
       AND o.date_created - l.date_created <= interval '24 hours'
 )`
 
-// sessionsSQL summarises the visits per platform.
+// sessionsSQL summarizes the visits per platform.
 const sessionsSQL = `
 WITH ` + visitsCTE + `
 SELECT platform,

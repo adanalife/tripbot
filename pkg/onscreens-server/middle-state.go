@@ -26,7 +26,7 @@ const middleStateStreamName = "TRIPBOT_ONSCREENS_MIDDLE"
 // publish to a subject no stream covers is silently uncaptured, so the stream
 // has to exist before the first command for restore-on-restart to have
 // anything to read. No-op when js is nil (NATS off / JetStream unavailable);
-// the overlay then degrades to its previous behaviour (text lost on restart).
+// the overlay then degrades to its previous behavior (text lost on restart).
 func EnsureMiddleStateStream(ctx context.Context, js jetstream.JetStream, env string) error {
 	if js == nil {
 		return nil

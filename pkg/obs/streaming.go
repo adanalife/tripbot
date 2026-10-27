@@ -150,7 +150,7 @@ func streamStateFromEvent(ev any) (active, isStreamState bool) {
 	return e.OutputActive, true
 }
 
-// poll connects once and loops until the context is cancelled or the
+// poll connects once and loops until the context is canceled or the
 // connection drops, publishing gauges off both the Outputs event stream and
 // the interval tick. failures is how many consecutive dials have already
 // failed, which decides how loudly another failure is logged. It reports

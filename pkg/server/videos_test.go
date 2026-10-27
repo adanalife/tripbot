@@ -25,7 +25,7 @@ func videoGET(t *testing.T, id string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// One clip's record: its place, its neighbours and their tracks, every airing
+// One clip's record: its place, its neighbors and their tracks, every airing
 // on every platform, counted, and its filming time both as the dashcam's clock
 // read it and as the real UTC instant — 22:48 in Moab in May is MDT, UTC-6.
 func TestVideoHandler(t *testing.T) {
@@ -265,7 +265,7 @@ func TestSourceHandler(t *testing.T) {
 	if rec := sourceGET(t, "20260502080000_000124"); rec.Code != http.StatusOK {
 		t.Errorf("all-dropped source: status = %d, want 200", rec.Code)
 	}
-	// The first original has nothing before it; season 1 is never a neighbour.
+	// The first original has nothing before it; season 1 is never a neighbor.
 	rec = sourceGET(t, "20260430090000_000001")
 	got = sourceResponse{}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {

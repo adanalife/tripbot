@@ -40,7 +40,7 @@ func TestRecoverYouTubeEgress_MintsBeforeBouncingOBS(t *testing.T) {
 }
 
 // A failed mint must still bounce the output. The fault that hit prod twice —
-// a broadcast waiting on an encoder it hasn't recognised — is fixed by the
+// a broadcast waiting on an encoder it hasn't recognized — is fixed by the
 // bounce alone, so skipping it on a gateway error would give up the recovery
 // that actually works. The error is still reported, because a permanently
 // broken egress path is worth surfacing.

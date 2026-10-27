@@ -26,7 +26,7 @@ const coordWindow = 10.0
 
 // ocrWindow is how far from the moment asked about, in seconds, a row read off
 // the frame may be and still beat a nearer interpolated one. Inside it both
-// rows describe the same few metres of road and the measured one is worth
+// rows describe the same few meters of road and the measured one is worth
 // more; outside it, proximity wins.
 const ocrWindow = 1.5
 
@@ -34,10 +34,10 @@ const ocrWindow = 1.5
 // the map can say which parts are read and which are inferred. They come from
 // the two thresholds the pipeline already writes against, not from a new scale:
 // 0.8 is the trusted gate every consumer applies, and 0.5 is exactly what the
-// synth pass stamps on a clip it bridged from its neighbours.
+// synth pass stamps on a clip it bridged from its neighbors.
 const (
 	BandTrusted   = "trusted"   // the clip's own OCR track, believed
-	BandSynthetic = "synthetic" // interpolated across the clip from trusted neighbours
+	BandSynthetic = "synthetic" // interpolated across the clip from trusted neighbors
 	BandUntrusted = "untrusted" // no track worth drawing; one point for the whole clip
 )
 
@@ -99,7 +99,7 @@ type Moment struct {
 
 	State string
 	City  string
-	// CityM is how far the coordinate is from City, in metres; 0 means inside
+	// CityM is how far the coordinate is from City, in meters; 0 means inside
 	// its limits. Meaningless when City is empty.
 	CityM float64
 }

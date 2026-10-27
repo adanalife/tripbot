@@ -117,7 +117,7 @@ const (
 // fixes a half-open socket, but a platform can resume a broadcast across a
 // gap that short.
 //
-// Once OBS has accepted the stop, the start runs even if ctx is cancelled or
+// Once OBS has accepted the stop, the start runs even if ctx is canceled or
 // the stop is never seen to finish. A pod shutting down mid-restart must not
 // leave OBS stopped, because nothing else starts it again.
 func RestartBroadcast(ctx context.Context, live func(context.Context) (bool, error)) error {

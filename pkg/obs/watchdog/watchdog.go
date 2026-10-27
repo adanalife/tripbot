@@ -84,7 +84,7 @@ func DefaultWatchdogDeps() WatchdogDeps {
 // wedged — which is the whole reason this runs.
 //
 // Once OBS has accepted the stop, the start always runs, even when the stop is
-// never seen to finish or ctx is cancelled: the watchdog reads a stopped output
+// never seen to finish or ctx is canceled: the watchdog reads a stopped output
 // as one the operator stopped and stands down, so a restart that ended there
 // would leave the stream dark with nothing left to start it.
 func RestartOBSOutput(ctx context.Context) error {

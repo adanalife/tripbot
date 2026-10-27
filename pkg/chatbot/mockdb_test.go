@@ -16,7 +16,7 @@ import (
 // It is for tests whose subject *is* the query — searchFrameEmbeddings and its
 // pgvector clauses. A command test wants a fake on the App instead
 // (recordingScoreboards, recordingSessions, …): asserting a command's
-// behaviour through the SQL it happens to cause makes the test fail on
+// behavior through the SQL it happens to cause makes the test fail on
 // refactors that changed nothing a viewer can see.
 //
 // SkipDefaultTransaction stops GORM from wrapping every write in BEGIN/COMMIT,

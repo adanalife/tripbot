@@ -108,7 +108,7 @@ func TestUpdateLeaderboard_KeepsCacheOnError(t *testing.T) {
 	s := New(testConf, noopChatterSource{})
 	s.lifetimeLeaderboard = [][]string{{"alice", "100.0"}}
 
-	// A cancelled context is the cheapest real query failure.
+	// A canceled context is the cheapest real query failure.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	s.UpdateLeaderboard(ctx)

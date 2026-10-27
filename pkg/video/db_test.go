@@ -277,7 +277,7 @@ func TestFindNextDaytime(t *testing.T) {
 	// Denver (UTC-6 in May); date_filmed drives the walk. Use far-future dates
 	// so no seed/2018 rows fall after the current clip and skew the query.
 	// backdate sets each clip's date_filmed, which holds the camera's wall
-	// clock (here, the clock in the slug) labelled UTC.
+	// clock (here, the clock in the slug) labeled UTC.
 	lat, lng := 39.7392, -104.9903
 	backdate := func(v Video, iso string) {
 		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {

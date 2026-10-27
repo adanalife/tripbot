@@ -91,7 +91,7 @@ func corpusBody(ctx context.Context) []byte {
 // [{"band":…,"season":…,"points":[[lat,lng],…]},…] — a list of segments, broken
 // wherever consecutive points jump more than maxRouteGapMiles (trip boundaries)
 // or the band or season changes. One band and season per segment is what lets
-// Leaflet colour it: a polyline is a single colour, so the split does the work
+// Leaflet color it: a polyline is a single color, so the split does the work
 // a gradient would otherwise. Loaded lazily by the map's per-season route
 // toggles, cached an hour (the corpus rarely changes).
 func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +132,7 @@ func corpusStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // routeSegment is one drawable run of the route: points that are contiguous in
 // space and share a band and a season, so the whole thing renders as one
-// coloured polyline.
+// colored polyline.
 type routeSegment struct {
 	Band   string       `json:"band"`
 	Season string       `json:"season"`
@@ -162,7 +162,7 @@ func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
 			segs = append(segs, cur)
 			cur = routeSegment{Band: p.Band, Season: p.Season, Points: [][2]float64{xy}}
 		case p.Band != cur.Band:
-			// Carry the shared point across so the two colours meet.
+			// Carry the shared point across so the two colors meet.
 			cur.Points = append(cur.Points, xy)
 			segs = append(segs, cur)
 			cur = routeSegment{Band: p.Band, Season: p.Season, Points: [][2]float64{xy}}
@@ -175,7 +175,7 @@ func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
 
 // simplify drops the points that don't change the shape of the line:
 // Ramer–Douglas–Peucker, keeping every point that would otherwise sit more than
-// epsilon metres from the simplified path. Endpoints are always kept, so a
+// epsilon meters from the simplified path. Endpoints are always kept, so a
 // segment never shortens.
 //
 // This is the opposite trade to downsample. An evenly-spaced sample spends the
@@ -221,8 +221,8 @@ func simplify(pts [][2]float64, epsilon float64) [][2]float64 {
 	return out
 }
 
-// perpMeters is the distance in metres from p to the segment a–b. Degrees are
-// scaled to metres about a's latitude and treated as flat — over the
+// perpMeters is the distance in meters from p to the segment a–b. Degrees are
+// scaled to meters about a's latitude and treated as flat — over the
 // kilometre-scale spans this is asked about, the error from ignoring curvature
 // is far below the epsilon it's compared against.
 func perpMeters(p, a, b [2]float64) float64 {

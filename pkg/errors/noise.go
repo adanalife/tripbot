@@ -8,7 +8,7 @@ import (
 
 // noiseTagKey is the Sentry tag carrying an event's environment class. A tagged
 // event is one whose text describes the cluster rather than a defect in this
-// code — a neighbour pod restarting, a platform refusing the call, the database
+// code — a neighbor pod restarting, a platform refusing the call, the database
 // cycling. Tagged rather than dropped: the first event of a real outage looks
 // exactly like the hundredth event of routine churn, so silencing the pattern
 // would silence the outage too. `!noise:*` in Sentry search is the defect-only
@@ -21,7 +21,7 @@ const (
 	noisePeerUnavailable = "peer-unavailable" // nothing listening: refused, reset, EOF
 	noiseTimeout         = "timeout"          // accepted and never answered
 	noiseDNS             = "dns"              // the name did not resolve
-	noiseUpstream        = "upstream"         // a neighbour answered, its own upstream had not
+	noiseUpstream        = "upstream"         // a neighbor answered, its own upstream had not
 )
 
 // noisePatterns maps a substring of an error's text to its class. Matched

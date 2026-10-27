@@ -14,7 +14,7 @@ import (
 // migration 020 and cmd/backfill-coords.
 const (
 	CoordSourceOCR          = "ocr"          // original dashcam-overlay OCR fix
-	CoordSourceInterpolated = "interpolated" // synthesized from neighbouring clips
+	CoordSourceInterpolated = "interpolated" // synthesized from neighboring clips
 	CoordSourceRejected     = "rejected"     // OCR outlier discarded (coords cleared)
 	CoordSourceMissing      = "missing"      // no GPS fix, none recoverable
 )
@@ -50,7 +50,7 @@ type Video struct {
 	// City and CityM are the clip's own coordinate named offline by the pipeline,
 	// the same way a Moment is. They are what answers a clip whose per-moment
 	// track isn't trustworthy enough to read from; empty until the geocode pass
-	// has reached the row. CityM is metres from City, 0 meaning inside it.
+	// has reached the row. CityM is meters from City, 0 meaning inside it.
 	City        string
 	CityM       *float64
 	CoordSource string

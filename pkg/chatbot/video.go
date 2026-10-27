@@ -29,7 +29,7 @@ type Video interface {
 	Playhead(ctx context.Context) (video.Video, time.Duration)
 	// SetMark writes a viewer's mark on a moment (a star or a trim report).
 	SetMark(ctx context.Context, m video.Mark) error
-	// PlayheadVelocity reports which way and how fast the van is travelling at
+	// PlayheadVelocity reports which way and how fast the van is traveling at
 	// the playhead. v.Moving is false when the van is sitting still, so the
 	// caller says so instead of naming a direction; ok is false when the clip
 	// has no track to measure along.

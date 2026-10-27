@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Inline-markdown markers recognised by renderInlineMarkdown. Deliberately a
+// Inline-markdown markers recognized by renderInlineMarkdown. Deliberately a
 // tiny subset — these overlays are single lines over video, not documents, so
 // only the inline emphasis that reads at a glance is supported. html.EscapeString
 // leaves these marker bytes (`, *) untouched, so matching the escaped string is

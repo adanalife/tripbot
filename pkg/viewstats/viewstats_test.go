@@ -511,7 +511,7 @@ func TestRecordSample_FailedPeakReadLeavesTheBarUnset(t *testing.T) {
 	sample(t, 40)
 	resetPeaks()
 
-	// A DB blip on the tick that would seed the bar: a cancelled context is
+	// A DB blip on the tick that would seed the bar: a canceled context is
 	// the cheapest real query failure. The reading can't be judged, so it
 	// must not become the bar either.
 	failing, cancel := context.WithCancel(context.Background())

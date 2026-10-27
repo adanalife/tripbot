@@ -255,7 +255,7 @@ func (s *Sessions) SubscriberTier(u User) int {
 // User.String is the user's name. Both callers are slog attribute values, so
 // it has to stay plain text: an escape sequence in an attribute is shipped
 // verbatim to Loki and OTLP, where it makes the field unmatchable rather than
-// colored. Colouring belongs in the handler, which knows whether it is writing
+// colored. Coloring belongs in the handler, which knows whether it is writing
 // to a terminal.
 func (u User) String() string { return u.Username }
 
