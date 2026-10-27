@@ -422,7 +422,7 @@ type playbackDay struct {
 }
 
 // The daily series defaults to the whole clamp: a trend wants the long view,
-// and 90 rows of six integers is a small payload.
+// and 90 small rows is a small payload.
 const playbackDailyDefaultDays = insightsMaxDays
 
 // playbackDailySQL counts each kind per day and joins the counts onto a
