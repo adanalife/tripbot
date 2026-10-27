@@ -64,7 +64,7 @@ import (
 // duplicated here so this command stays standalone (raw database/sql, no
 // pkg/video import and its config init side effects) like cmd/backfill-miles.
 const (
-	sourceInterpolated = "interpolated" // synthesized from neighbouring clips
+	sourceInterpolated = "interpolated" // synthesized from neighboring clips
 	sourceMissing      = "missing"      // no GPS fix, none recoverable
 	// "ocr" (original fix) and "rejected" (manually discarded) are the other
 	// videos.coord_source values (see migration 020); this tool emits only the
@@ -106,12 +106,12 @@ type decision struct {
 	newSource string
 	// wasOutlier records that the clip's original OCR fix was rejected as an
 	// impossible jump. Such a clip is then interpolated (action interpolate) if
-	// it has good neighbours, or cleared (action reject) if it doesn't — either
+	// it has good neighbors, or cleared (action reject) if it doesn't — either
 	// way the bad coordinate is gone, but the flag keeps it visible in the
 	// report.
 	wasOutlier bool
 	// implied speeds (mph) into and out of this clip, for the report. NaN when
-	// there is no neighbouring fix to measure against.
+	// there is no neighboring fix to measure against.
 	inboundSpeed  float64
 	outboundSpeed float64
 }
@@ -217,13 +217,13 @@ func byCorpus(clips []clip) [][]clip {
 // It iterates a detect→interpolate cycle to a fixed point: rejecting a bad fix
 // and replacing it with an interpolated one can unmask a second bad fix that
 // was previously hidden between two outliers (its detour looked normal only
-// because a neighbour was also wrong). Looping until a pass finds no new
+// because a neighbor was also wrong). Looping until a pass finds no new
 // outliers means one run fully converges, rather than needing repeated --apply.
 func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxInterpGap time.Duration) []decision {
 	n := len(clips)
 	// Working state, mutated across iterations. cur* are the current best
 	// coordinates (originals, then interpolated as holes get filled); fix marks
-	// points that currently carry a usable coordinate (anchor for neighbours).
+	// points that currently carry a usable coordinate (anchor for neighbors).
 	curLat := make([]float64, n)
 	curLng := make([]float64, n)
 	curState := make([]string, n)
@@ -239,7 +239,7 @@ func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxI
 
 	for {
 		// Detection: reject digit-flip outliers by their geometric signature. A
-		// bad OCR reading juts far from BOTH neighbouring fixes and snaps back,
+		// bad OCR reading juts far from BOTH neighboring fixes and snaps back,
 		// so the detour through it (prev→point→next) is much longer than the
 		// direct path (prev→next). A genuine fast stretch or one-sided position
 		// change is roughly collinear (detour ≈ direct) and is left alone. Three
@@ -257,7 +257,7 @@ func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxI
 			if prev < 0 || next < 0 {
 				continue // an endpoint fix has nothing to bracket it
 			}
-			// Only judge a clip against neighbours in the same recording
+			// Only judge a clip against neighbors in the same recording
 			// session. If the nearest fix on either side is more than the interp
 			// window away, this is a trip/session boundary, not a within-drive
 			// jump — a real position change we can't (and shouldn't) second-guess.
@@ -319,7 +319,7 @@ func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxI
 			out[i].newSource = sourceInterpolated
 		case wasOutlier[i]:
 			// A suspected bad fix we couldn't replace from good in-session
-			// neighbours. Never destroy a coordinate we're unsure about — keep
+			// neighbors. Never destroy a coordinate we're unsure about — keep
 			// the original and leave it flagged for manual review.
 			out[i].action = actionKeep
 		case !c.hasFix():

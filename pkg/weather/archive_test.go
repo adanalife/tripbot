@@ -194,7 +194,7 @@ func TestHistorical_RequestsTheFilmedDateAndCoordinates(t *testing.T) {
 	}
 }
 
-// A cancelled context has to come back as an error rather than a blank
+// A canceled context has to come back as an error rather than a blank
 // forecast, so a shutting-down chat handler doesn't render an empty overlay.
 func TestHistorical_CancelledContext(t *testing.T) {
 	temps, codes := dayOfSamples(0)

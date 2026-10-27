@@ -120,7 +120,7 @@ func GetStreamStatus(ctx context.Context) (bool, error) {
 }
 
 // StreamState is OBS's streaming output as three distinct states rather than a
-// boolean. Reconnecting is deliberately not folded into either neighbour: it is
+// boolean. Reconnecting is deliberately not folded into either neighbor: it is
 // neither healthy nor idle, and a caller that collapses it into "not streaming"
 // stands down on the one state where OBS has already admitted something is
 // wrong.

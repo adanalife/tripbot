@@ -25,7 +25,7 @@ func TopGuessRows(ctx context.Context, cfg *c.TripbotConfig, size int) [][]strin
 // Ranks returns the 1-based place of each row, sharing the best place across a
 // tie: two viewers on the same score are both second, and the next viewer down
 // is fourth. Rows must already be sorted best-first, which every board this
-// package hands out is; a tie is two neighbouring rows whose value cell reads
+// package hands out is; a tie is two neighboring rows whose value cell reads
 // the same, so it compares the rendered string rather than re-parsing it —
 // what the boards agree on is the printed score.
 //

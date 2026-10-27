@@ -15,7 +15,7 @@ import (
 const headingLookback = 10 * time.Second
 
 // stoppedMetres is the distance below which the two samples are treated as the
-// same place. GPS scatter alone moves a parked van several metres, so a bearing
+// same place. GPS scatter alone moves a parked van several meters, so a bearing
 // computed under this is noise with a number attached.
 const stoppedMetres = 15
 
@@ -41,7 +41,7 @@ type Velocity struct {
 	// Bearing is the direction of travel in degrees clockwise from north.
 	// Meaningless when Moving is false.
 	Bearing float64
-	// SpeedMPS is the ground speed in metres per second, averaged over the
+	// SpeedMPS is the ground speed in meters per second, averaged over the
 	// headingLookback baseline. 0 when Moving is false.
 	SpeedMPS float64
 	// Moving is false when the two samples sit closer together than
@@ -50,7 +50,7 @@ type Velocity struct {
 	Moving bool
 }
 
-// VelocityAt reports which way and how fast the van was travelling at `at`
+// VelocityAt reports which way and how fast the van was traveling at `at`
 // into vid.
 //
 // It reads the per-moment track twice — once at `at` and once a
@@ -109,7 +109,7 @@ func bearingDeg(a, b Moment) float64 {
 	return math.Mod(deg(math.Atan2(y, x))+360, 360)
 }
 
-// distanceM is the great-circle distance between two moments, in metres.
+// distanceM is the great-circle distance between two moments, in meters.
 func distanceM(a, b Moment) float64 {
 	return helpers.MilesBetween(a.Lat, a.Lng, b.Lat, b.Lng) * 1609.344
 }

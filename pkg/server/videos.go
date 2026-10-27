@@ -20,7 +20,7 @@ import (
 )
 
 // videoDetail is one clip's record for the console's video page: the file,
-// where and when it was filmed, its neighbours in the corpus, and how often it
+// where and when it was filmed, its neighbors in the corpus, and how often it
 // has aired.
 type videoDetail struct {
 	ID      int      `json:"id"`
@@ -44,7 +44,7 @@ type videoDetail struct {
 	Plays        int64  `json:"plays"`
 	LastPlayedAt string `json:"last_played_at"`
 	// Track is the clip's route as [sec, lat, lng] in clip order, and
-	// PrevTrack / NextTrack are its neighbours' — the road into and out of it.
+	// PrevTrack / NextTrack are its neighbors' — the road into and out of it.
 	// Each is empty when that clip has no track worth believing. SourceTrack
 	// is the route of the whole recording the clip was cut from, sec on the
 	// recording's clock, so a trimmed clip's cut stretches can be drawn too.
@@ -58,7 +58,7 @@ type videoDetail struct {
 
 // filmedTimes is when v was filmed, RFC 3339, twice. local is date_filmed as
 // stored: the dashcam's own wall clock, as its HUD and file name show it,
-// labelled UTC. utc is the real instant: that wall clock read in the time zone
+// labeled UTC. utc is the real instant: that wall clock read in the time zone
 // at the clip's fix. Both are "" when the clip has no date; utc is also ""
 // when there is no fix or it falls in no zone.
 func filmedTimes(v video.Video) (local, utc string) {
@@ -101,7 +101,7 @@ func triples(pts []video.TrackPoint) [][3]float64 {
 }
 
 // neighbourTrack is the track of the clip id names, empty when there is no
-// neighbour or it can't be read: a missing side road is not worth a 500.
+// neighbor or it can't be read: a missing side road is not worth a 500.
 func neighbourTrack(ctx context.Context, db *gorm.DB, id *int64) [][3]float64 {
 	var v video.Video
 	if id == nil || db.First(&v, *id).Error != nil {

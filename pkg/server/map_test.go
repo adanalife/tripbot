@@ -75,9 +75,9 @@ func TestMapCorpusHandler(t *testing.T) {
 	}
 }
 
-// A bridged stretch has to arrive as its own segment, or the map cannot colour
-// it: a Leaflet polyline is one colour, so the split is what carries the band.
-// The boundary point belongs to both, so the two colours meet rather than
+// A bridged stretch has to arrive as its own segment, or the map cannot color
+// it: a Leaflet polyline is one color, so the split is what carries the band.
+// The boundary point belongs to both, so the two colors meet rather than
 // leaving a hole in a line the van never stopped driving.
 func TestSplitOnGaps_SplitsWhereTheBandChanges(t *testing.T) {
 	pts := []video.RoutePoint{

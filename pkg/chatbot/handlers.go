@@ -608,7 +608,7 @@ type IncomingMessage struct {
 	// MessageType is the platform's word for a line it singles out (Twitch's
 	// "user_intro" for a first-timer), carried onto the event bus for display.
 	MessageType string
-	// Color is the sender's chosen name colour ("#RRGGBB"), carried onto the
+	// Color is the sender's chosen name color ("#RRGGBB"), carried onto the
 	// event bus for display; empty when the platform reports none.
 	Color string
 	// Moderator, Subscriber, and Broadcaster are the sender's role in this

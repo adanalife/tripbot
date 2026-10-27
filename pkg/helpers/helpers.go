@@ -109,7 +109,7 @@ func pluralize(n int, unit string) string {
 
 // SunsetAt returns the moment the sun set on the day filmed was filmed, in the
 // timezone of the filming location — so formatting it yields a clock time a
-// viewer of that footage would recognise. Backs the rotators' $sunset variable,
+// viewer of that footage would recognize. Backs the rotators' $sunset variable,
 // where a clock time reads better than SunsetStr's relative phrasing.
 func SunsetAt(filmed time.Time, lat, lon float64) time.Time {
 	_, sunset := sunriseSunset(ActualDate(filmed, lat, lon), lat, lon)

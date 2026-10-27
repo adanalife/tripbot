@@ -4,7 +4,7 @@
 // first consumer. Every emit is fire-and-forget; when NATS is unconfigured
 // (natsclient.Conn() is nil) each emit is a silent no-op.
 //
-// This is deliberately distinct from two neighbours:
+// This is deliberately distinct from two neighbors:
 //   - pkg/events — the Postgres-backed append-only session log (login/logout
 //     rows). That's durable state; this is ephemeral pub/sub.
 //   - onscreens *commands* (ShowMiddleText, ShowTimewarp, …) — imperatives aimed at
@@ -136,7 +136,7 @@ type ChatMessage struct {
 	// the rest of Twitch's list. Empty for an ordinary line, the bot's own
 	// sends, and every other platform.
 	MessageType string `json:"message_type,omitempty"`
-	// Color is the name colour the sender picked on their platform, as
+	// Color is the name color the sender picked on their platform, as
 	// "#RRGGBB". Empty for a chatter who never picked one, the bot's own
 	// sends, and every platform that has no such setting — a renderer then
 	// falls back to its own palette.
@@ -243,7 +243,7 @@ type VideoChanged struct {
 	Lat      float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
 	Lng      float64 `json:"lng"`
 	// Heading is the direction of travel at the playhead in degrees clockwise
-	// from north, and SpeedMPS the ground speed in metres per second, both
+	// from north, and SpeedMPS the ground speed in meters per second, both
 	// read off the clip's per-moment coordinate track. Heading is absent when
 	// the van is stopped or the clip has no track; SpeedMPS is absent only
 	// without a track, so a stopped van reports 0 with no heading.

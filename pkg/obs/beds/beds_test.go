@@ -431,7 +431,7 @@ func TestAdvance_EmptyAlbumRescuesOnlyOnce(t *testing.T) {
 }
 
 // The bed the audio watchdog rides a radio outage out on. An outage lasts
-// hours, so the album — licence-clean, and actual music — is a better degraded
+// hours, so the album — license-clean, and actual music — is a better degraded
 // state than the drone whenever the share can supply it.
 func TestSwapToFallback_PrefersTheAlbumOverTheDrone(t *testing.T) {
 	dir := shareDir(t, 3)

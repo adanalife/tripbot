@@ -27,7 +27,7 @@ func TestFind_NotFoundVsDBError(t *testing.T) {
 		db := testdb.New(t)
 		seedUsers(t, db, User{Username: "somebody", Miles: 1})
 
-		// A cancelled context is the cheapest real query failure: the row is
+		// A canceled context is the cheapest real query failure: the row is
 		// there, so a not-found return would mean the error got swallowed.
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -134,7 +134,7 @@ func TestCreate_SurfacesFailure(t *testing.T) {
 	t.Run("the underlying DB error is wrapped, not replaced", func(t *testing.T) {
 		testdb.New(t)
 
-		// A cancelled context is the cheapest real query failure.
+		// A canceled context is the cheapest real query failure.
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -171,7 +171,7 @@ func TestFindOrCreate_SurfacesFailure(t *testing.T) {
 		db := testdb.New(t)
 		seedUsers(t, db, User{Username: "unreadable", Miles: 1})
 
-		// A cancelled context is the cheapest real query failure: the row
+		// A canceled context is the cheapest real query failure: the row
 		// exists, so this can only be the Find half failing.
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()

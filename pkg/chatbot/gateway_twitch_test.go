@@ -93,7 +93,7 @@ func TestNewTwitch_NoURLIsNoop(t *testing.T) {
 //
 // A failed poll must record 0: whatever the cause, the bot is not receiving
 // chat, which is what the gauge means. Reporting nothing (the liveness hook's
-// behaviour, where an unreachable gateway genuinely says nothing about whether
+// behavior, where an unreachable gateway genuinely says nothing about whether
 // the channel is streaming) would leave the gauge stuck at its last value and
 // the alert blind.
 func TestGatewayChatPollerReportsChatConnection(t *testing.T) {

@@ -100,7 +100,7 @@ func TestLogin_SelfHealsAfterFindOrCreateFailure(t *testing.T) {
 
 	s := New(testConf, noopChatterSource{})
 
-	// A cancelled context stands in for a transient DB outage.
+	// A canceled context stands in for a transient DB outage.
 	failing, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -227,7 +227,7 @@ func TestCorrectMiles(t *testing.T) {
 		db := testdb.New(t)
 		seedUsers(t, db, User{Username: "unreadable", Miles: 10})
 
-		// A cancelled context is the cheapest real query failure: the row
+		// A canceled context is the cheapest real query failure: the row
 		// exists, so FindOrCreate can only be failing on the lookup.
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()

@@ -47,7 +47,7 @@ type chatHistoryPage struct {
 
 // Newest first within the WHERE, then flipped in Go so a page reads top-down
 // like the log it extends. @before = 0 means "from the newest"; @until is the
-// jump-to-date cutoff (endOfLog when none was asked for); @platform = ”
+// jump-to-date cutoff (endOfLog when none was asked for); an empty @platform
 // means every platform. The clip join is LEFT: a line with no stamp still
 // has its text.
 const chatHistorySQL = `

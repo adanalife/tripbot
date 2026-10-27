@@ -80,7 +80,7 @@ func TestRunEventSubLoop_RetriesAfterTokenRejection(t *testing.T) {
 	}
 }
 
-// A cancelled context is a shutdown, not a failure: the loop returns without
+// A canceled context is a shutdown, not a failure: the loop returns without
 // scheduling another dial.
 func TestRunEventSubLoop_StopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

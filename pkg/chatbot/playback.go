@@ -32,9 +32,9 @@ const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 // gap the playhead jump causes, so losing it by accident is visible on stream.
 const timewarpNoBackgroundFlagKey = "chatbot.timewarp_no_background"
 
-// lastTimewarp is used to rate-limit users so they can't
-// over-do the time-skip features (including !skip and !back)
-// plus it's also used to reset peoples lastLocation time.
+// lastTimewarp is when the playhead last jumped. It rate-limits the time-skip
+// commands (!timewarp, !skip, !back, !find), and a jump also lifts every
+// viewer's guess cooldown and restarts the warmer/colder baseline.
 // Atomic because the NATS find subscriber writes it off the chat goroutine.
 var lastTimewarp atomic.Pointer[time.Time]
 

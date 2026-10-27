@@ -102,7 +102,7 @@ type Config struct {
 // audible music) is worth trading for two orders of magnitude fewer requests.
 // A day stuck on the fallback is ~12k connections at every tick and ~400 here.
 //
-// It is also self-defence. A station's server has firewalled us before, and the
+// It is also self-defense. A station's server has firewalled us before, and the
 // state that gets us blocked is the state that probes hardest: blocked means
 // stranded on the fallback, and stranded means probing forever.
 const maxProbeSkip = 31
@@ -226,7 +226,7 @@ func defaultRadioReachable(ctx context.Context, url string) bool {
 // ticks of the radio being reachable, with cfg.Cooldown between any two swaps.
 // Records the playing / level / on-fallback gauges every tick; radio_reachable
 // only on the ticks that probe — which back off as an outage wears on, so it
-// reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is cancelled.
+// reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is canceled.
 func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()

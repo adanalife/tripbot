@@ -27,7 +27,7 @@ import (
 )
 
 // defaultTimeout bounds every gateway call. The gateway is an in-cluster
-// neighbour, but it proxies the platform call synchronously and some platform
+// neighbor, but it proxies the platform call synchronously and some platform
 // writes are genuinely slow — facebook comment creation regularly takes
 // 3.5–5s+, which a 5s bound turned into spurious context-canceled 502s for
 // sends Graph had already accepted (a double-post hazard should sends ever
@@ -99,7 +99,7 @@ func New(baseURL string) *Client {
 	}
 }
 
-// BaseURL returns the normalised gateway base URL (trailing slash trimmed).
+// BaseURL returns the normalized gateway base URL (trailing slash trimmed).
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // FollowedAt asks when login followed the channel (GET /v1/followed-at/{login}).
@@ -369,7 +369,7 @@ type InboundChatMessage struct {
 	// for a chatter's first message in the channel,
 	// "channel_points_highlighted" — and empty for an ordinary line.
 	MessageType string `json:"message_type,omitempty"`
-	// Color is the sender's chosen name colour as "#RRGGBB"; empty when they
+	// Color is the sender's chosen name color as "#RRGGBB"; empty when they
 	// never picked one, and on every platform but Twitch.
 	Color string `json:"color,omitempty"`
 }

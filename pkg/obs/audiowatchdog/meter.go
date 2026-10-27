@@ -79,7 +79,7 @@ func (m *VolumeMeter) Level() (db float64, fresh bool) {
 }
 
 // Run maintains the OBS WebSocket connection and updates the latest level
-// until ctx is cancelled. On any disconnect it waits meterReconnectDelay and
+// until ctx is canceled. On any disconnect it waits meterReconnectDelay and
 // reconnects. Intended to run as its own goroutine.
 func (m *VolumeMeter) Run(ctx context.Context) {
 	slog.InfoContext(ctx, "obs volume meter started", "input", m.inputName)
@@ -97,7 +97,7 @@ func (m *VolumeMeter) Run(ctx context.Context) {
 }
 
 // connectAndConsume opens one subscribed connection and drains its event
-// stream until the connection drops or ctx is cancelled. Returns so Run can
+// stream until the connection drops or ctx is canceled. Returns so Run can
 // reconnect.
 func (m *VolumeMeter) connectAndConsume(ctx context.Context) {
 	client, err := obs.Dial(ctx, goobs.WithEventSubscriptions(

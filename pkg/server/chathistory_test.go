@@ -103,7 +103,7 @@ func TestChatHistoryHandler_Until(t *testing.T) {
 }
 
 // A line the platform removed comes back flagged deleted, so the console
-// strikes it; its neighbours don't.
+// strikes it; its neighbors don't.
 func TestChatHistoryHandler_StruckLine(t *testing.T) {
 	testdb.New(t)
 	ctx := context.Background()

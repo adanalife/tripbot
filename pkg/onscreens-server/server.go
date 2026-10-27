@@ -62,7 +62,7 @@ type Server struct {
 	http *http.Server
 }
 
-// New constructs a *Server with all six onscreens initialised and
+// New constructs a *Server with all six onscreens initialized and
 // their background loops (rotators, expiry sweepers) running. It does
 // not bind any sockets — Start does that.
 func New(cfg Config) *Server {
