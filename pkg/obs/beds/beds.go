@@ -5,9 +5,8 @@
 // adanalife/obs repo's config/Tripbot.json.tmpl). Its settings decide the bed:
 // a network stream for the radio, a looping local FLAC for the car-hum drone, a
 // non-looping local track for the album the radio falls back to. Switching a
-// bed is therefore just a
-// SetInputSettings overlay onto that one source — the same mechanism the audio
-// watchdog has used since 2026-06-23 to swap the radio out for the local bed.
+// bed is therefore just a SetInputSettings overlay onto that one source — the
+// same mechanism the audio watchdog uses to swap the radio out for a local bed.
 //
 // Which bed is live is process state, not database state: it's a property of
 // the OBS container this tripbot is paired with, and it dies with the pod. The
