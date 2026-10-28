@@ -72,6 +72,11 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExp),
 		sdktrace.WithResource(res),
+		// Sample 10% of standalone roots; honor propagated parent decisions
+		// end-to-end (a sampled HTTP trace stays sampled across tripbot →
+		// vlc-server → onscreens-server). Conservative ratio to keep us well
+		// under Grafana Cloud's free-tier trace budget; bump later if needed.
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(0.1))),
 	)
 	otel.SetTracerProvider(tp)
 
