@@ -100,9 +100,9 @@ func triples(pts []video.TrackPoint) [][3]float64 {
 	return out
 }
 
-// neighbourTrack is the track of the clip id names, empty when there is no
+// neighborTrack is the track of the clip id names, empty when there is no
 // neighbor or it can't be read: a missing side road is not worth a 500.
-func neighbourTrack(ctx context.Context, db *gorm.DB, id *int64) [][3]float64 {
+func neighborTrack(ctx context.Context, db *gorm.DB, id *int64) [][3]float64 {
 	var v video.Video
 	if id == nil || db.First(&v, *id).Error != nil {
 		return [][3]float64{}
@@ -149,8 +149,8 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	if v.NextVid.Valid {
 		d.NextID = &v.NextVid.Int64
 	}
-	d.PrevTrack = neighbourTrack(ctx, db, d.PrevID)
-	d.NextTrack = neighbourTrack(ctx, db, d.NextID)
+	d.PrevTrack = neighborTrack(ctx, db, d.PrevID)
+	d.NextTrack = neighborTrack(ctx, db, d.NextID)
 	moments, err := momentsOf(ctx, db, id)
 	if err != nil {
 		return videoDetail{}, err
@@ -257,22 +257,22 @@ type sourceResponse struct {
 // hot path. An index on video_id if it shows.
 const sourcePlaysSQL = `SELECT COUNT(*) FROM video_plays WHERE video_id IN @ids`
 
-// neighbourSourceSQL finds the nearest other ingested original before or after
+// neighborSourceSQL finds the nearest other ingested original before or after
 // a stem. A stem leads with the camera's clock, so slug order is film order;
 // left(slug, 21) is a piece's stem. ponytail: a scan of videos per page view,
 // a few thousand rows; an expression index on left(slug, 21) if it shows.
-const neighbourSourceSQL = `SELECT left(slug, 21) FROM videos
+const neighborSourceSQL = `SELECT left(slug, 21) FROM videos
 WHERE slug ~ '^[0-9]{14}_[0-9]{6}_s' AND left(slug, 21) %s @stem
 ORDER BY slug %s LIMIT 1`
 
-func neighbourSource(ctx context.Context, stem string, after bool) (string, error) {
+func neighborSource(ctx context.Context, stem string, after bool) (string, error) {
 	op, dir := "<", "DESC"
 	if after {
 		op, dir = ">", "ASC"
 	}
 	var out []string
 	err := database.GormDB().WithContext(ctx).
-		Raw(fmt.Sprintf(neighbourSourceSQL, op, dir), sql.Named("stem", stem)).
+		Raw(fmt.Sprintf(neighborSourceSQL, op, dir), sql.Named("stem", stem)).
 		Scan(&out).Error
 	if err != nil || len(out) == 0 {
 		return "", err
@@ -323,13 +323,13 @@ func sourceHandler(w http.ResponseWriter, r *http.Request) {
 	err = database.GormDB().WithContext(r.Context()).
 		Raw(sourcePlaysSQL, sql.Named("ids", ids)).Scan(&resp.Plays).Error
 	if err == nil {
-		resp.Prev, err = neighbourSource(r.Context(), stem, false)
+		resp.Prev, err = neighborSource(r.Context(), stem, false)
 	}
 	if err == nil {
-		resp.Next, err = neighbourSource(r.Context(), stem, true)
+		resp.Next, err = neighborSource(r.Context(), stem, true)
 	}
 	if err != nil {
-		logQueryFailure(r.Context(), "source plays or neighbours failed", err, "stem", stem)
+		logQueryFailure(r.Context(), "source plays or neighbors failed", err, "stem", stem)
 		http.Error(w, `{"error":"couldn't read source"}`, http.StatusInternalServerError)
 		return
 	}

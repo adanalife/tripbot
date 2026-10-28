@@ -40,10 +40,9 @@ type gatewayChat struct {
 	// want; Twitch has both a bot and a broadcaster identity, so it names one.
 	identity string
 
-	// keepActions leaves a leading "/me " in place. Only Twitch understands it
-	// as an action command — and only because its gateway sends over IRC, where
-	// chat commands are interpreted. Everywhere else it would post as literal
-	// text, so it's stripped.
+	// keepActions leaves a leading "/me " in place for Twitch, where the
+	// gateway passes it through to Helix verbatim so it can read as an action.
+	// Everywhere else it would post as literal text, so it's stripped.
 	keepActions bool
 }
 
