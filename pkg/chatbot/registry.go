@@ -62,6 +62,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresSubscriber: true,
 		},
 		{
+			Trigger: "!wrapped",
+			Help:    "Your month of the guessing game in one line: guesses, hits, your place on the board, the state that gets you (!wrapped last for last month)",
+			Aliases: []string{"!recap", "!mymonth"},
+			Handler: a.wrappedCmd,
+		},
+		{
 			Trigger:        "!skip",
 			Help:           "Skip to the next video",
 			Handler:        a.skipCmd,
