@@ -1,0 +1,1 @@
+**`!similar` asks "seen this before?"** — it jumps to a moment from another day that looks like the one on screen (aliases `!seenthis`, `!lookalike`, `!dejavu`). The frame on screen is the query, so there is no model hop; followers can run it, on the same 20-second playback rate-limit as `!find`.
