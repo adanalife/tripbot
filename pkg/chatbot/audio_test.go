@@ -50,6 +50,21 @@ type fakeBeds struct {
 	pending  *beds.Switch // a switch waiting out the delay; nil = none
 	feeds    int
 	err      error
+	// the tuned station's library and what !request queued from it
+	tracks     []string
+	tracksErr  error
+	trackLists int
+	pushed     []string
+}
+
+func (f *fakeBeds) Tracks(context.Context) ([]string, error) {
+	f.trackLists++
+	return f.tracks, f.tracksErr
+}
+
+func (f *fakeBeds) Push(_ context.Context, file string) error {
+	f.pushed = append(f.pushed, file)
+	return nil
 }
 
 const testTrack = "/opt/tripbot/assets/music/fifty-horizons/Colorado Sunrise.mp3"

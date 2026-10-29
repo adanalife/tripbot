@@ -372,6 +372,13 @@
       ]
     },
     {
+      "trigger": "!request",
+      "requires_admin": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!secretinfo",
       "requires_admin": true,
       "platforms": [
