@@ -285,6 +285,12 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	if tokenRejected(attempted, unauthorized) {
 		return fmt.Errorf("%w (connection ended: %v)", ErrUnauthorized, err)
 	}
+	// The library reports a normal close (1000) outside a reconnect as no
+	// error, but the session is just as gone: the caller reads nil as a clean
+	// shutdown and would stop redialing.
+	if err == nil {
+		return errors.New("eventsub: socket closed")
+	}
 	return err
 }
 
