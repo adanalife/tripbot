@@ -26,6 +26,12 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.audioCmd,
 		},
 		{
+			Trigger:       "!request",
+			Help:          "Queue a song from the tuned radio station's library to play next",
+			Handler:       a.requestCmd,
+			RequiresAdmin: true,
+		},
+		{
 			Trigger: "!version",
 			Help:    "The bot's build version",
 			Handler: a.versionCmd,
