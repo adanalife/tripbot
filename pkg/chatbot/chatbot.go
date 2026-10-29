@@ -151,7 +151,7 @@ func New(version string, cfg *c.TripbotConfig) *App {
 		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform), platform: cfg.Platform},
-		Video:       realVideo{},
+		Video:       realVideo{corpora: cfg.Corpora},
 		Chat:        disconnectedChat{},
 		Sessions:    realSessions{},
 		Flags:       feature.NewInMemoryClient(nil),
@@ -159,7 +159,7 @@ func New(version string, cfg *c.TripbotConfig) *App {
 		Geocoder:    realGeocoder{},
 		Weather:     realWeather,
 		OBS:         realOBS{},
-		Search:      realSearch{env: cfg.Environment},
+		Search:      realSearch{env: cfg.Environment, corpora: cfg.Corpora},
 		Scoreboards: realScoreboards{cfg: cfg},
 		Events:      realEvents{cfg: cfg},
 	}
