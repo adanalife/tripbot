@@ -179,7 +179,7 @@ func TestFindRandomByState(t *testing.T) {
 
 	// Abbrev and long form both resolve to the stored title-cased state.
 	for _, state := range []string{"OR", "oregon"} {
-		got, err := FindRandomByState(ctx, state, Video{})
+		got, err := FindRandomByState(ctx, state, s1Live)
 		if err != nil {
 			t.Fatalf("FindRandomByState(%q): %v", state, err)
 		}
@@ -202,7 +202,7 @@ func TestFindRandomByState_SpreadsAcrossTheStatesClips(t *testing.T) {
 	// more than one of them unless the pick is stuck on a fixed row.
 	got := map[int]bool{}
 	for range 20 {
-		vid, err := FindRandomByState(ctx, "WY", Video{})
+		vid, err := FindRandomByState(ctx, "WY", s1Live)
 		if err != nil {
 			t.Fatalf("FindRandomByState(\"WY\"): %v", err)
 		}
@@ -221,16 +221,19 @@ func TestFindRandomByState_NoClipsForState(t *testing.T) {
 
 	insertVideo(t, db, Video{Slug: "2018_0514_224801_060", State: "Wyoming"})
 
-	_, err := FindRandomByState(context.Background(), "Alaska", Video{})
+	_, err := FindRandomByState(context.Background(), "Alaska", s1Live)
 	if !errors.Is(err, terrors.ErrNoFootageForState) {
 		t.Errorf("FindRandomByState(\"Alaska\") error = %v, want %v", err, terrors.ErrNoFootageForState)
 	}
 }
 
-// A pick stays in the corpus of the clip on screen: a season-2 clip in the
-// same state is invisible from a season-1 clip (its file is parked, playout
-// would refuse it) and vice versa, and nothing on screen reads as season 1.
-func TestFindRandomByState_StaysInTheAiringCorpus(t *testing.T) {
+// s1Live is the live set every deployed env airs today: season 1 alone.
+var s1Live = []string{CorpusS1}
+
+// A pick stays inside the live corpora: with only season 1 live, a season-2
+// clip in the same state is invisible (its file is parked, playout would
+// refuse it); once season 2 is live too, either clip can come up.
+func TestFindRandomByState_StaysInTheLiveCorpora(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
@@ -238,35 +241,41 @@ func TestFindRandomByState_StaysInTheAiringCorpus(t *testing.T) {
 	s2 := insertVideo(t, db, Video{Slug: "20260605144519_000001_s0180", State: "Utah", Corpus: CorpusS2})
 
 	for range 10 {
-		got, err := FindRandomByState(ctx, "UT", Video{})
+		got, err := FindRandomByState(ctx, "UT", s1Live)
 		if err != nil || got.ID != s1.ID {
-			t.Fatalf("from nothing: FindRandomByState = id %d, %v; want the s1 clip %d", got.ID, err, s1.ID)
+			t.Fatalf("s1 live: FindRandomByState = id %d, %v; want the s1 clip %d", got.ID, err, s1.ID)
 		}
-		got, err = FindRandomByState(ctx, "UT", s2)
+		got, err = FindRandomByState(ctx, "UT", []string{CorpusS2})
 		if err != nil || got.ID != s2.ID {
-			t.Fatalf("from s2: FindRandomByState = id %d, %v; want the s2 clip %d", got.ID, err, s2.ID)
+			t.Fatalf("s2 live: FindRandomByState = id %d, %v; want the s2 clip %d", got.ID, err, s2.ID)
 		}
+	}
+	seen := map[int]bool{}
+	for range 40 {
+		got, err := FindRandomByState(ctx, "UT", []string{CorpusS1, CorpusS2})
+		if err != nil {
+			t.Fatalf("both live: FindRandomByState: %v", err)
+		}
+		seen[got.ID] = true
+	}
+	if !seen[s1.ID] || !seen[s2.ID] {
+		t.Errorf("both live: 40 draws saw %v, want both %d and %d", seen, s1.ID, s2.ID)
 	}
 }
 
-// An unreviewed clip is never picked, and a state with only unreviewed
-// footage has none to offer.
-func TestFindRandomByState_SkipsUnreviewedClips(t *testing.T) {
+// A clip airs whether or not anyone has ruled on it: reviewed_at is a fact
+// about the clip, not a gate, so a state whose only footage is unreviewed
+// still has it to offer.
+func TestFindRandomByState_AirsUnreviewedClips(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	want := insertVideo(t, db, Video{Slug: "2018_0514_224801_080", State: "Idaho"})
-	unreview(t, db, insertVideo(t, db, Video{Slug: "2018_0514_224801_081", State: "Idaho"}))
-	unreview(t, db, insertVideo(t, db, Video{Slug: "2018_0514_224801_082", State: "Montana"}))
+	want := insertVideo(t, db, Video{Slug: "2018_0514_224801_082", State: "Montana"})
+	unreview(t, db, want)
 
-	for range 10 {
-		got, err := FindRandomByState(ctx, "ID", Video{})
-		if err != nil || got.ID != want.ID {
-			t.Fatalf("FindRandomByState(\"ID\") = id %d, %v; want the reviewed clip %d", got.ID, err, want.ID)
-		}
-	}
-	if _, err := FindRandomByState(ctx, "MT", Video{}); !errors.Is(err, terrors.ErrNoFootageForState) {
-		t.Errorf("FindRandomByState(\"MT\") error = %v, want %v", err, terrors.ErrNoFootageForState)
+	got, err := FindRandomByState(ctx, "MT", s1Live)
+	if err != nil || got.ID != want.ID {
+		t.Fatalf("FindRandomByState(\"MT\") = id %d, %v; want the unreviewed clip %d", got.ID, err, want.ID)
 	}
 }
 
@@ -291,20 +300,18 @@ func TestFindNextDaytime(t *testing.T) {
 	nextNight := insertVideo(t, db, Video{Slug: "2099_0515_030000_002", Lat: lat, Lng: lng})
 	lateDay := insertVideo(t, db, Video{Slug: "2099_0515_150000_004", Lat: lat, Lng: lng})
 	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
-	// An earlier daytime clip from another corpus: parked, so not an answer.
+	// An earlier daytime clip from a corpus that isn't live: parked, so not an answer.
 	other := insertVideo(t, db, Video{Slug: "20990515160000_000001_s0000", Lat: lat, Lng: lng, Corpus: CorpusS2})
-	// An earlier daytime clip nobody has reviewed: not an answer either.
-	unreviewed := insertVideo(t, db, Video{Slug: "2099_0515_110000_005", Lat: lat, Lng: lng})
-	unreview(t, db, unreviewed)
+	// Nobody has ruled on the morning clip; it airs all the same.
+	unreview(t, db, morning)
 
-	backdate(current, "2099-05-14T22:00:00Z")    // 22:00 MDT May 14 — night, day May 14
-	backdate(nextNight, "2099-05-15T03:00:00Z")  // 03:00 MDT May 15 — night, day May 15
-	backdate(other, "2099-05-15T10:00:00Z")      // 10:00 MDT May 15 — daytime, but s2
-	backdate(unreviewed, "2099-05-15T11:00:00Z") // 11:00 MDT May 15 — daytime, but unreviewed
-	backdate(morning, "2099-05-15T12:00:00Z")    // 12:00 MDT May 15 — daytime, day May 15
-	backdate(lateDay, "2099-05-15T15:00:00Z")    // 15:00 MDT May 15 — daytime, day May 15
+	backdate(current, "2099-05-14T22:00:00Z")   // 22:00 MDT May 14 — night, day May 14
+	backdate(nextNight, "2099-05-15T03:00:00Z") // 03:00 MDT May 15 — night, day May 15
+	backdate(other, "2099-05-15T10:00:00Z")     // 10:00 MDT May 15 — daytime, but s2
+	backdate(morning, "2099-05-15T12:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
+	backdate(lateDay, "2099-05-15T15:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
 
-	got, err := FindNextDaytime(ctx, reload(t, current.ID))
+	got, err := FindNextDaytime(ctx, reload(t, current.ID), s1Live)
 	if err != nil {
 		t.Fatalf("FindNextDaytime: %v", err)
 	}
@@ -332,7 +339,7 @@ func TestFindNextDaytime_NoDaytimeAhead(t *testing.T) {
 	backdate(current, "2099-06-14T22:00:00Z")   // 22:00 MDT June 14 — night
 	backdate(onlyNight, "2099-06-15T03:00:00Z") // 03:00 MDT June 15 — night
 
-	_, err := FindNextDaytime(ctx, reload(t, current.ID))
+	_, err := FindNextDaytime(ctx, reload(t, current.ID), s1Live)
 	if !errors.Is(err, terrors.ErrNoDaytimeFound) {
 		t.Fatalf("FindNextDaytime err = %v, want terrors.ErrNoDaytimeFound", err)
 	}

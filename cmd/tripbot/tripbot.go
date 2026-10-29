@@ -297,7 +297,7 @@ func (t *Tripbot) Run() {
 	t.recordDeploy(ctx)
 	instrumentation.ChannelLive.OnTransition = t.streamTransitionHook() // before any liveness poll starts below
 	go t.reportOrphanedSessions(ctx, time.Now())
-	t.app.Video = chatbot.NewVideoAdapter(t.player)                         // commands read the same Player the cron refreshes
+	t.app.Video = chatbot.NewVideoAdapter(t.player, t.cfg.Corpora)          // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.cfg.Platform, t.sessions) // command-time queries
 	if t.platformIsTwitch() {
 		// Award viewer achievements on each clip transition. Twitch-only:
