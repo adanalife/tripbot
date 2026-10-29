@@ -45,7 +45,7 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 	// The voicings travel for the same reason the stations do: the renders are
 	// baked into the OBS image this tripbot is paired with, so the picker is
 	// built from what will actually play rather than a list the console repeats.
-	body := map[string]any{"ok": false, "beds": options, "stations": beds.Stations, "voicings": beds.Voicings}
+	body := map[string]any{"ok": false, "beds": options, "stations": beds.StationList(), "voicings": beds.Voicings}
 	if store != nil {
 		bed, _ := store.Current()
 		playing, track := store.Playing()

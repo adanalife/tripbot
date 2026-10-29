@@ -208,7 +208,7 @@ func bedNameList() []string {
 // names. Private stations are left out: chat can't select them.
 func stationIDs() []string {
 	var ids []string
-	for _, st := range beds.Stations {
+	for _, st := range beds.StationList() {
 		if !st.Private {
 			ids = append(ids, st.ID)
 		}
