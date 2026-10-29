@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestReadStations(t *testing.T) {
@@ -103,5 +104,48 @@ func TestPrivateStation_ListedButNotSelectable(t *testing.T) {
 	}
 	if o.url != "https://radio.example/lofi" || s.Station() != "lofi" {
 		t.Errorf("Set(radio) from a private station tuned %q (%q); want lofi", o.url, s.Station())
+	}
+}
+
+// The list follows its file: a rewrite (the kubelet refreshing the mounted
+// Secret, or a list that only became valid after startup) is read on the next
+// lookup, and a rewrite that doesn't parse keeps the list already loaded.
+func TestStationList_FollowsTheFile(t *testing.T) {
+	t.Cleanup(func() { Stations = testStations; stationsSrc.path = "" })
+	p := filepath.Join(t.TempDir(), "stations.json")
+	write := func(body string, at time.Time) {
+		t.Helper()
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// Same-second rewrites would stat alike on a coarse filesystem.
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	base := time.Now().Add(-time.Hour)
+
+	write(`{"not": "a list"}`, base) // the v1 shape the 2026-10-21 bot parsed
+	LoadStations(p)
+	if len(StationList()) != 0 {
+		t.Fatalf("an object parses as no stations, got %+v", Stations)
+	}
+
+	write(`[{"id":"lofi","name":"Lo-Fi","url":"https://radio.example/lofi"}]`, base.Add(time.Minute))
+	if got := StationList(); len(got) != 1 || got[0].ID != "lofi" {
+		t.Fatalf("after the rewrite StationList = %+v, want lofi", got)
+	}
+	if DefaultStation() != "lofi" {
+		t.Errorf("DefaultStation = %q, want lofi", DefaultStation())
+	}
+
+	write(`[{"id":"lofi","name":"Lo-Fi","url":"https://radio.example/lofi"},{"id":"jazz","name":"Jazz","url":"https://radio.example/jazz"}]`, base.Add(2*time.Minute))
+	if got := StationList(); len(got) != 2 || !SelectableStation("jazz") {
+		t.Fatalf("after the second rewrite StationList = %+v, want lofi + jazz", got)
+	}
+
+	write(`not json`, base.Add(3*time.Minute))
+	if got := StationList(); len(got) != 2 {
+		t.Fatalf("a corrupt rewrite should keep the last list, got %+v", got)
 	}
 }
