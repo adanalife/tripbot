@@ -20,6 +20,12 @@ type TripbotConfig struct {
 	// subscriber-only commands without an actual sub (comped friends/VIPs).
 	// Comma-separated, case-insensitive. Empty by default.
 	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
+	// Corpora is the set of corpora this instance airs, the same CORPORA key
+	// and default playout boots from. A clip is on playout's playlist exactly
+	// when its corpus is live, so the pickers draw only from this set and never
+	// land on a clip playout would refuse. reviewed_at is a fact about a clip,
+	// not an airing gate.
+	Corpora []string `default:"s1" envconfig:"CORPORA"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps.
 	// Optional — when unset, geocoder + static-map calls are skipped and
 	// callers fall back gracefully (no city/state lookups, no generated

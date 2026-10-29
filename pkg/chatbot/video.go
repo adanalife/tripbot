@@ -35,7 +35,7 @@ type Video interface {
 	// has no track to measure along.
 	PlayheadVelocity(ctx context.Context) (v video.Velocity, ok bool)
 	// FindRandomByState returns a random video filmed in the given US state,
-	// from the corpus on screen. Returns terrors.ErrNoFootageForState when no
+	// from the live corpora. Returns terrors.ErrNoFootageForState when no
 	// rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
 	// FindNextDaytime returns the next daytime clip filmed on a later day than
@@ -52,11 +52,18 @@ type Video interface {
 // App.Video, so the nil guards below cover that brief startup window. Tests
 // inject their own Video fake rather than realVideo, so the guards only ever
 // fire pre-install.
-type realVideo struct{ player *video.Player }
+type realVideo struct {
+	player *video.Player
+	// corpora is the live set the pickers draw from (cfg.Corpora).
+	corpora []string
+}
 
-// NewVideoAdapter builds the production Video adapter around p. cmd/tripbot
-// assigns the result onto App.Video once the Player is constructed.
-func NewVideoAdapter(p *video.Player) Video { return realVideo{player: p} }
+// NewVideoAdapter builds the production Video adapter around p, drawing picks
+// from the live corpora. cmd/tripbot assigns the result onto App.Video once
+// the Player is constructed.
+func NewVideoAdapter(p *video.Player, corpora []string) Video {
+	return realVideo{player: p, corpora: corpora}
+}
 
 func (r realVideo) Current() video.Video {
 	if r.player == nil {
@@ -109,9 +116,9 @@ func (r realVideo) PlayheadVelocity(ctx context.Context) (video.Velocity, bool) 
 }
 
 func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
-	return video.FindRandomByState(ctx, state, r.player.Current())
+	return video.FindRandomByState(ctx, state, r.corpora)
 }
 
 func (r realVideo) FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error) {
-	return video.FindNextDaytime(ctx, after)
+	return video.FindNextDaytime(ctx, after, r.corpora)
 }
