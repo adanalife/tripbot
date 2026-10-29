@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"sync"
+	"time"
 )
 
 // Station is one internet-radio stream the radio bed can play: an id the
@@ -30,16 +32,64 @@ type Station struct {
 // unschedulable.
 const RadioStationsFile = "/opt/tripbot/assets/radio/stations.json"
 
-// Stations is the radio bed's station list in display order, set once at
-// startup by LoadStations. Empty means the radio bed has nothing to play.
+// Stations is the radio bed's station list in display order, loaded by
+// LoadStations and refreshed by StationList. Empty means the radio bed has
+// nothing to play. Read it through StationList; tests set it directly.
 var Stations []Station
+
+// stationsSrc is the file Stations came from and the stat it was read at, so
+// StationList can tell a refreshed mount from the one it already parsed.
+var stationsSrc struct {
+	mu      sync.Mutex
+	path    string
+	modTime time.Time
+	size    int64
+}
 
 // LoadStations reads the station list from path into Stations. A missing,
 // empty or invalid file logs one warning and leaves the radio bed without
 // stations; the other beds don't depend on it, so it never fails startup.
+// The list is re-read whenever the file changes — the kubelet refreshes the
+// mounted Secret on its own, so a list that lands after the bot starts, or
+// one that was unparseable when it did, is picked up without a restart.
 func LoadStations(path string) {
+	stationsSrc.mu.Lock()
+	defer stationsSrc.mu.Unlock()
+	stationsSrc.path = path
+	Stations = nil // a startup load that fails leaves no stations, not a stale list
+	loadStationsLocked()
+}
+
+// StationList is the current station list, re-read from its file when the
+// file has changed since the last read (keyed on mtime and size, like the
+// album index). A rewrite that fails to parse keeps the list already loaded.
+func StationList() []Station {
+	stationsSrc.mu.Lock()
+	defer stationsSrc.mu.Unlock()
+	if stationsSrc.path == "" {
+		return Stations
+	}
+	fi, err := os.Stat(stationsSrc.path)
+	if err != nil || (fi.ModTime().Equal(stationsSrc.modTime) && fi.Size() == stationsSrc.size) {
+		return Stations
+	}
+	loadStationsLocked()
+	return Stations
+}
+
+func loadStationsLocked() {
+	path := stationsSrc.path
+	if fi, err := os.Stat(path); err == nil {
+		stationsSrc.modTime, stationsSrc.size = fi.ModTime(), fi.Size()
+	} else {
+		stationsSrc.modTime, stationsSrc.size = time.Time{}, 0
+	}
 	stations, err := readStations(path)
 	if err != nil {
+		if Stations != nil {
+			slog.Warn("background audio: keeping the last radio station list", "path", path, "err", err)
+			return
+		}
 		slog.Warn("background audio: radio bed has no stations", "path", path, "err", err)
 	}
 	Stations = stations
@@ -76,7 +126,7 @@ func readStations(path string) ([]Station, error) {
 // DefaultStation is the station the radio bed plays when nothing has chosen
 // one: the first selectable one in the list, or "" when there are none.
 func DefaultStation() string {
-	for _, s := range Stations {
+	for _, s := range StationList() {
 		if !s.Private {
 			return s.ID
 		}
@@ -85,7 +135,7 @@ func DefaultStation() string {
 }
 
 func station(id string) (Station, bool) {
-	for _, s := range Stations {
+	for _, s := range StationList() {
 		if s.ID == id {
 			return s, true
 		}
@@ -104,7 +154,7 @@ func StreamURL(id string) string {
 // Store can read the live station back off OBS at startup rather than guessing.
 // Only an exact match counts; an unrecognized URL yields "".
 func stationFromURL(u string) string {
-	for _, s := range Stations {
+	for _, s := range StationList() {
 		if s.URL == u {
 			return s.ID
 		}
