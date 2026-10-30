@@ -29,6 +29,9 @@ type Video interface {
 	Playhead(ctx context.Context) (video.Video, time.Duration)
 	// SetMark writes a viewer's mark on a moment (a star or a trim report).
 	SetMark(ctx context.Context, m video.Mark) error
+	// PreviousPlay returns the clip that aired on platform before the one on
+	// screen and how many seconds of it aired; ok is false when unknown.
+	PreviousPlay(ctx context.Context, platform string) (id int, aired float64, ok bool, err error)
 	// PlayheadVelocity reports which way and how fast the van is traveling at
 	// the playhead. v.Moving is false when the van is sitting still, so the
 	// caller says so instead of naming a direction; ok is false when the clip
@@ -98,6 +101,10 @@ func (r realVideo) Playhead(ctx context.Context) (video.Video, time.Duration) {
 
 func (r realVideo) SetMark(ctx context.Context, m video.Mark) error {
 	return video.SetMark(ctx, m)
+}
+
+func (r realVideo) PreviousPlay(ctx context.Context, platform string) (int, float64, bool, error) {
+	return video.PreviousPlay(ctx, platform)
 }
 
 func (r realVideo) PlayheadVelocity(ctx context.Context) (video.Velocity, bool) {
