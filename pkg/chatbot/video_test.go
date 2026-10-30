@@ -45,6 +45,13 @@ type recordingVideo struct {
 	// Marks records every SetMark; MarkErr fails them.
 	Marks   []video.Mark
 	MarkErr error
+	// PrevID / PrevAired stage PreviousPlay; a zero PrevID reports none.
+	PrevID    int
+	PrevAired float64
+}
+
+func (r *recordingVideo) PreviousPlay(_ context.Context, _ string) (int, float64, bool, error) {
+	return r.PrevID, r.PrevAired, r.PrevID != 0, nil
 }
 
 func (r *recordingVideo) SetMark(_ context.Context, m video.Mark) error {
