@@ -30,6 +30,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # `statuses: write` for the coverage figure below; only this job posts it.
+    permissions:
+      contents: read
+      statuses: write
     steps:
     - uses: actions/checkout@v7
     - uses: arduino/setup-task@v3
@@ -49,6 +53,17 @@ jobs:
       run: |
         echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
         tail -1 coverage.txt >> "$GITHUB_STEP_SUMMARY"
+    # The total as a `coverage` commit status on each main push, which is where
+    # the console's main-CI row reads it from. A status, not a check run: the
+    # console's fine-grained token has no Checks permission to read one with.
+    - name: Post the coverage figure
+      if: github.event_name == 'push'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        figure=$(tail -1 coverage.txt | awk '{print $NF}')
+        gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+          -f state=success -f context=coverage -f description="$figure"
     # Convert Go's coverage.out to lcov so coveralls.io can ingest it.
     - name: Convert coverage to lcov
       uses: jandelgado/gcov2lcov-action@v1.2.0
