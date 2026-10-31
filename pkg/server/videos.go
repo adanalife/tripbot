@@ -385,6 +385,42 @@ func footageDroppedHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, cuts)
 }
 
+// trimReport is one viewer's !trim, as GET /api/footage/trims lists them: the
+// clip and the moment in it (Sec, as the clip airs now), the same moment in
+// the uncut recording the clip was rendered from (SourceSec, the clock a
+// season-2 piece's trims are in), and who reported it, when, and why.
+type trimReport struct {
+	VideoID   int       `json:"video_id"`
+	Slug      string    `json:"slug"`
+	Sec       float64   `json:"sec"`
+	SourceSec float64   `json:"source_sec"`
+	Note      string    `json:"note"`
+	By        string    `json:"by"`
+	Platform  string    `json:"platform"`
+	At        time.Time `json:"at"`
+}
+
+// trimsSQL is the newest trim reports first; each clip's offset is the same
+// one video.ClipOffset reads.
+const trimsSQL = `SELECT m.video_id, v.slug, m.source_ts_sec AS source_sec,
+  m.source_ts_sec - COALESCE((SELECT c.source_ts_sec - c.ts_sec FROM video_coords c
+    WHERE c.video_id = m.video_id AND c.ts_sec IS NOT NULL LIMIT 1), 0) AS sec,
+  m.note, m.username AS by, m.platform, m.created_at AS at
+FROM video_moments m JOIN videos v ON v.id = m.video_id
+WHERE m.kind = 'trim' ORDER BY m.created_at DESC LIMIT 200`
+
+// footageTrimsHandler serves GET /api/footage/trims: the newest 200 trim
+// reports viewers sent from chat, for the console's trim queue.
+func footageTrimsHandler(w http.ResponseWriter, r *http.Request) {
+	trims := []trimReport{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(trimsSQL).Scan(&trims).Error; err != nil {
+		logQueryFailure(r.Context(), "trim reports failed", err)
+		http.Error(w, `{"error":"couldn't read trim reports"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, trims)
+}
+
 // footageDaysHandler serves GET /api/footage/days: every day with footage,
 // oldest first, for the console's calendar.
 // ponytail: a scan of videos per call, a few thousand rows.
