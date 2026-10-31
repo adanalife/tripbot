@@ -346,6 +346,16 @@
       ]
     },
     {
+      "trigger": "!realmiles",
+      "aliases": [
+        "!odometer"
+      ],
+      "requires_subscriber": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!refreshoverlays",
       "aliases": [
         "!refreshoverlay"
