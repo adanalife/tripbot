@@ -173,6 +173,8 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/footage/days/{day}", httpmw.Tagged("/api/footage/days/{day}", footageDayHandler)).Methods("GET")
 	// every season-2 piece auto-trim or a reviewer dropped whole.
 	r.Handle("/api/footage/dropped", httpmw.Tagged("/api/footage/dropped", footageDroppedHandler)).Methods("GET")
+	// viewers' !trim reports, newest first, for the console's trim queue.
+	r.Handle("/api/footage/trims", httpmw.Tagged("/api/footage/trims", footageTrimsHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", httpmw.Tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
