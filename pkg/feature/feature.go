@@ -10,6 +10,8 @@ package feature
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"sort"
 	"time"
 )
@@ -27,6 +29,25 @@ type FlagClient interface {
 	Bool(ctx context.Context, key string, evalCtx EvalContext) bool
 	Snapshot(ctx context.Context) []Flag
 }
+
+// FlagToggler is the admin write surface: flip a flag's global default on or
+// off and make the change live immediately. It's kept separate from
+// FlagClient so the read path stays OpenFeature-shaped (a future SDK swap
+// only has to satisfy Bool/Snapshot); only the Postgres-backed client
+// implements it. Callers that want the toggle surface type-assert their
+// FlagClient to FlagToggler and degrade gracefully when it's absent (e.g.
+// the in-memory fallback used before the DB client is wired).
+type FlagToggler interface {
+	// SetEnabled persists the new global-default state for key and refreshes
+	// the in-memory snapshot so the change takes effect without waiting for
+	// the next background poll. Returns an error wrapping ErrFlagNotFound if
+	// key doesn't exist.
+	SetEnabled(ctx context.Context, key string, enabled bool) error
+}
+
+// ErrFlagNotFound is what SetEnabled wraps when no flag has the key, so a
+// caller can tell an unknown key from a database failure.
+var ErrFlagNotFound = errors.New("feature flag not found")
 
 // EvalContext carries the targeting attributes a flag is evaluated against.
 // The App is responsible for populating it (Channel, Env from config;
@@ -64,10 +85,8 @@ func sortFlags(fs []Flag) {
 // against a username-targeted flag falls through to roles/default).
 func evaluate(f Flag, ctx EvalContext) bool {
 	if ctx.Username != "" {
-		for _, u := range f.EnabledForUsernames {
-			if u == ctx.Username {
-				return true
-			}
+		if slices.Contains(f.EnabledForUsernames, ctx.Username) {
+			return true
 		}
 	}
 	for _, want := range f.EnabledForRoles {

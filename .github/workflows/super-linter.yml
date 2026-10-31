@@ -1,82 +1,19 @@
 ---
-name: Super Linter
+name: super-linter
 
+# Weekly sweep + on-demand, not a per-PR gate: pre-commit and the reviewdog
+# linting workflow already cover the per-PR lint surface; super-linter catches
+# the long-tail validators on a schedule instead of gating every push.
 on:
-  pull_request:
-  push:
-    branches:
-      - develop
-      - master
+  schedule:
+    - cron: '7 9 * * 1' # Mondays 09:07 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The sweep reports each linter as its own commit status.
+  statuses: write
 
 jobs:
-  build:
-    name: Run Linters
-    runs-on: ubuntu-latest
-
-    steps:
-      # fetch-depth: 0 is required by super-linter v6+: it diffs against
-      # the default branch (develop) to figure out which files changed,
-      # which means develop has to be present in the local checkout.
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: run-linters
-        uses: super-linter/super-linter@v8
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # don't post a "Super-linter summary" comment on every PR run
-          # (the Actions step summary tab still gets the same content)
-          ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
-          # Excluded paths:
-          #   - go.sum: module hashes contain random base64 substrings that
-          #     codespell mistakes for typos. Skip globally — nothing else
-          #     lints it. handlers.go's intentional misspellings are
-          #     allowlisted by word in .codespellrc instead.
-          #   - pkg/server/static/: vendored third-party frontend assets
-          #     (htmx + its SSE extension) — not ours to lint/format.
-          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*'
-          # disabled because it's not working with C libs
-          VALIDATE_GO: false
-          # disabled — none of the in-tree Dockerfiles have been
-          # audited against hadolint yet.
-          VALIDATE_DOCKERFILE_HADOLINT: false
-          # disabled cause they dont support CRDs rn
-          VALIDATE_KUBERNETES_KUBECONFORM: false
-          # disabled until we go through and fix the issues
-          VALIDATE_JSCPD: false
-          VALIDATE_ENV: false
-          # disabled until we can resolve their issues
-          VALIDATE_BIOME_FORMAT: false
-          VALIDATE_CHECKOV: false
-          VALIDATE_GITHUB_ACTIONS_ZIZMOR: false
-          VALIDATE_GO_MODULES: false
-          VALIDATE_GO_RELEASER: false
-          VALIDATE_JSON_PRETTIER: false
-          # The only JavaScript in the repo is vendored third-party
-          # (pkg/server/static/ — htmx + its SSE extension). Biome stays as
-          # the single JS linter and ignores that dir via biome.json;
-          # ESLint + Prettier-JS are redundant with Biome (super-linter
-          # warns when both run for JS) and have no ignore for the vendored
-          # files, so disable them rather than carry duplicate ignore config.
-          VALIDATE_JAVASCRIPT_ES: false
-          VALIDATE_JAVASCRIPT_PRETTIER: false
-          VALIDATE_MARKDOWN_PRETTIER: false
-          VALIDATE_NATURAL_LANGUAGE: false
-          VALIDATE_SHELL_SHFMT: false
-          VALIDATE_SQLFLUFF: false
-          VALIDATE_TRIVY: false
-          VALIDATE_YAML_PRETTIER: false
-          # Python formatting + lint live in .pre-commit-config.yaml (Ruff).
-          # Disable the super-linter Python formatters/checkers that overlap
-          # with that pre-commit job:
-          #   - BLACK: dueling-formatter problem with Ruff
-          #   - RUFF_FORMAT: same Ruff version disagrees with our local Ruff
-          #     for reasons we haven't tracked down — pre-commit catches
-          #     format issues before they hit CI, so the duplicate gate isn't
-          #     buying us anything
-          #   - MYPY: only Python in the repo is two standalone bin/ scripts
-          #     (no importable package, no type-check value); mypy also
-          #     complains they both register as `__main__`
-          VALIDATE_PYTHON_BLACK: false
-          VALIDATE_PYTHON_RUFF_FORMAT: false
-          VALIDATE_PYTHON_MYPY: false
+  super-linter:
+    uses: adanalife/infra/.github/workflows/lint-sweep.yml@main

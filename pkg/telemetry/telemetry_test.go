@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 func TestInit_DisabledViaEnv(t *testing.T) {
@@ -41,6 +43,29 @@ func TestInit_DisabledViaMissingEndpoint(t *testing.T) {
 	if err := shutdown(context.Background()); err != nil {
 		t.Fatalf("shutdown() unexpected error: %v", err)
 	}
+}
+
+// TestResourceCarriesInstanceID pins the attribute that gives each instance its
+// own series. Drop it and every metric recorded without an explicit platform
+// attribute collapses onto one shared series across all the per-platform pods,
+// reporting whichever of them pushed last.
+func TestResourceCarriesInstanceID(t *testing.T) {
+	t.Setenv("HOSTNAME", "tripbot-twitch-8b446df8c-hrc6s")
+
+	res, err := newResource(t.Context(), "tripbot", "0.0.0")
+	if err != nil {
+		t.Fatalf("newResource() unexpected error: %v", err)
+	}
+
+	for _, attr := range res.Attributes() {
+		if attr.Key == semconv.ServiceInstanceIDKey {
+			if got := attr.Value.AsString(); got != "tripbot-twitch-8b446df8c-hrc6s" {
+				t.Fatalf("service.instance.id = %q, want the pod name from HOSTNAME", got)
+			}
+			return
+		}
+	}
+	t.Fatal("resource carries no service.instance.id; per-instance series would collide")
 }
 
 func TestDisabled(t *testing.T) {

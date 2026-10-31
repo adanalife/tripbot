@@ -1,0 +1,42 @@
+# The per-PR gates: the org's reusable `gates` job (adanalife/infra,
+# .github/workflows/gates.yml), configured for this repo.
+name: pr-gates
+
+on:
+  pull_request:
+    # Every PR, whatever it targets. Filtering to `branches: [main]` would leave a
+    # PR stacked on another feature branch running no gates at all — the review
+    # that most wants them, since its diff is against a branch nobody has looked
+    # at rather than against main.
+    #
+    # `edited` re-runs the title check when a title is fixed; `labeled` /
+    # `unlabeled` the same for the skip-changelog escape hatch.
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+concurrency:
+  group: pr-gates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# What the shared gates job reads: the checkout, the PR (title check) and GHCR
+# (the pinned-tag check); `statuses: write` is for the per-gate commit statuses
+# it posts on the PR head. Without a block every job here would get the repo's
+# default token.
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  statuses: write
+
+jobs:
+  gates:
+    uses: adanalife/infra/.github/workflows/gates.yml@main
+    with:
+      platforms: true
+      cdk8s: true
+      cdk8s-tests: true
+      # The release job is the only thing that runs the fragment-numbering
+      # scripts, and it runs on main after merge, so a break there would first
+      # show up as a release PR with mis-numbered entries.
+      checks: |
+        scripts/number-fragment-test.sh
+    secrets: inherit

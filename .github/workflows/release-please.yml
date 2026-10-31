@@ -1,0 +1,38 @@
+name: release-please
+# Trunk-based release flow, run by infra's shared release-please workflow: a
+# standing release PR on main (the next version + prod pins), with the
+# towncrier changelog built onto its branch and cdk8s/dist re-synthed to match
+# the prod pins release-please bumped. The re-synthed prod dist IS the deploy
+# diff: prod-1 autosyncs from main, so merging the release PR deploys tripbot
+# and onscreens-server (tripbot restarts only the chat bot; onscreens restarts
+# only blip the overlays — the stream itself stays up).
+#
+# Merging the release PR creates the vX.Y.Z tag + GitHub Release, and the tag
+# fires release.yml on its own.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    uses: adanalife/infra/.github/workflows/release-please.yml@main
+    with:
+      runs-on: ubuntu-latest
+      mise-dir: cdk8s
+      # release-please bumped the prod pins in cdk8s/versions.yaml; a full
+      # (unfrozen) re-synth regenerates the prod-1 app manifests, so the dist diff
+      # on the release PR shows the complete deploy — the image tags AND any
+      # manifest/config change this release introduced. (The freeze in
+      # `task cdk8s:synth` is for BETWEEN releases; release time is exactly when
+      # the prod dist regenerates.)
+      stage: |
+        cd cdk8s
+        uv sync
+        mise exec -- npm ci
+        mise exec -- uv run npx cdk8s import
+        mise exec -- uv run npx cdk8s synth
+    secrets: inherit

@@ -1,0 +1,26 @@
+# Post-merge sweep verifying the committed cdk8s/dist/ deploy units are in sync
+# with the authoring code. The PR-time check is a step of the `gates` job in
+# pr-gates.yml; this is the main-branch backstop, catching a desync that lands
+# some way other than a PR.
+name: cdk8s-synth
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cdk8s/**'
+      - 'pkg/contract/contract.json'
+      - '.github/workflows/cdk8s-synth.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  synth:
+    uses: adanalife/infra/.github/workflows/cdk8s.yml@main
+    with:
+      tests: true

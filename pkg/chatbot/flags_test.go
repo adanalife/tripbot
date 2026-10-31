@@ -9,7 +9,7 @@ import (
 // noopFlags satisfies feature.FlagClient for tests that don't care which
 // flags get evaluated. Every key returns false — matches the unknown-key
 // contract from pkg/feature, so a test that doesn't pre-set a flag sees
-// the same behaviour the bot does on a fresh deploy.
+// the same behavior the bot does on a fresh deploy.
 type noopFlags struct{}
 
 func (noopFlags) Bool(_ context.Context, _ string, _ feature.EvalContext) bool {

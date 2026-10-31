@@ -1,0 +1,12 @@
+# Ruff config for the weekly super-linter sweep only: super-linter passes this
+# file with --config, and ruff's own discovery never reaches it from the code.
+#
+# super-linter's bundled template sets no `select`, so the sweep lints with
+# whatever ruff's default rule set is. ruff 0.16 (bundled in super-linter v9)
+# widened that from 59 rules to 413 and dropped E402, which turned the sweep
+# red on rules this repo never adopted. This pins the pre-0.16 default.
+cache-dir = "/tmp/.ruff_cache"
+line-length = 120
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

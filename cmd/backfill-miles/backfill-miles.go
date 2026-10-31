@@ -2,9 +2,11 @@
 // the events table and optionally writes them back to users.miles.
 //
 // The events table is the ground truth: miles are derived by pairing each
-// user's login events with their corresponding logout events (by row number)
-// and summing the session durations. Sessions longer than 24 hours are capped
-// to exclude cases where a logout was missed across a server restart.
+// user's login events with their logout events and summing the session
+// durations, the same pairing pkg/rollups uses. A login pairs with the logout
+// carrying its session_id; legacy rows from before session_id existed pair by
+// row number. Sessions longer than 24 hours are dropped to exclude cases where
+// a logout was missed across a server restart.
 //
 // Bots (users.is_bot = true) are always excluded — they accumulate events
 // continuously but should never appear on the leaderboard.
@@ -35,39 +37,64 @@ import (
 	"log"
 	"log/slog"
 	"math"
+	"net/url"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
 
 // Only considers non-bot users. Bots are in channel 24/7 and accumulate
 // enormous event counts that would dominate the leaderboard.
+//
+// The pairing CTEs mirror pkg/rollups' reconcileSQL without its dirty-user
+// filter; keep the two in step.
 const computeMilesSQL = `
 WITH login_rn AS (
-    SELECT username, date_created AS login_time,
-           ROW_NUMBER() OVER (PARTITION BY username ORDER BY date_created) AS rn
-    FROM events WHERE event = 'login'
+    SELECT platform, username, date_created AS login_time,
+           ROW_NUMBER() OVER (PARTITION BY platform, username ORDER BY date_created) AS rn
+    FROM events
+    WHERE event = 'login'
+      AND COALESCE(session_id, '00000000-0000-0000-0000-000000000000') = '00000000-0000-0000-0000-000000000000'
 ),
 logout_rn AS (
-    SELECT username, date_created AS logout_time,
-           ROW_NUMBER() OVER (PARTITION BY username ORDER BY date_created) AS rn
-    FROM events WHERE event = 'logout'
+    SELECT platform, username, date_created AS logout_time,
+           ROW_NUMBER() OVER (PARTITION BY platform, username ORDER BY date_created) AS rn
+    FROM events
+    WHERE event = 'logout'
+      AND COALESCE(session_id, '00000000-0000-0000-0000-000000000000') = '00000000-0000-0000-0000-000000000000'
+),
+-- MIN collapses a session_id that was logged out twice into one session.
+keyed AS (
+    SELECT platform, username, session_id,
+           MIN(date_created) FILTER (WHERE event = 'login') AS login_time,
+           MIN(date_created) FILTER (WHERE event = 'logout') AS logout_time
+    FROM events
+    WHERE event IN ('login', 'logout')
+      AND session_id <> '00000000-0000-0000-0000-000000000000'
+    GROUP BY platform, username, session_id
+),
+pairs AS (
+    SELECT l.platform, l.username, l.login_time, lo.logout_time
+    FROM login_rn l
+    JOIN logout_rn lo ON lo.platform = l.platform AND lo.username = l.username AND lo.rn = l.rn
+    UNION ALL
+    SELECT platform, username, login_time, logout_time FROM keyed
 ),
 sessions AS (
-    SELECT l.username,
-           EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 60.0 AS minutes
-    FROM login_rn l
-    JOIN logout_rn lo ON lo.username = l.username AND lo.rn = l.rn
-    WHERE lo.logout_time > l.login_time
-      AND EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 3600.0 < 24
+    SELECT platform, username,
+           EXTRACT(EPOCH FROM (logout_time - login_time)) / 60.0 AS minutes
+    FROM pairs
+    WHERE logout_time > login_time
+      AND EXTRACT(EPOCH FROM (logout_time - login_time)) / 3600.0 < 24
 ),
 computed AS (
-    SELECT username, SUM(0.1 * minutes / 3.0)::real AS miles
-    FROM sessions GROUP BY username
+    SELECT platform, username, SUM(0.1 * minutes / 3.0)::real AS miles
+    FROM sessions GROUP BY platform, username
 )
-SELECT u.id, u.username, u.miles AS stored, COALESCE(c.miles, 0) AS computed,
+SELECT u.id, u.platform, u.username, u.miles AS stored, COALESCE(c.miles, 0) AS computed,
        COALESCE(c.miles, 0) - u.miles AS delta
-FROM users u LEFT JOIN computed c ON c.username = u.username
+FROM users u LEFT JOIN computed c ON c.platform = u.platform AND c.username = u.username
 WHERE u.is_bot = false
 ORDER BY ABS(COALESCE(c.miles, 0) - u.miles) DESC
 `
@@ -75,11 +102,18 @@ ORDER BY ABS(COALESCE(c.miles, 0) - u.miles) DESC
 const updateMilesSQL = `UPDATE users SET miles = $1 WHERE id = $2`
 
 // Used with --output-sql: safe to run against a target DB that may not have
-// the same user IDs as the source. Matches by username and only raises miles.
-const upsertMilesSQLFmt = "UPDATE users SET miles = GREATEST(miles, %.4f) WHERE username = '%s';\n"
+// the same user IDs as the source. Matches by platform + username and only
+// raises miles.
+const upsertMilesSQLFmt = "UPDATE users SET miles = GREATEST(miles, %.4f) WHERE platform = '%s' AND username = '%s';\n"
+
+// sqlQuote escapes single quotes for inlined SQL string literals.
+func sqlQuote(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
 
 type row struct {
 	id       int
+	platform string
 	username string
 	stored   float64
 	computed float64
@@ -94,7 +128,8 @@ func connStr() string {
 	if user == "" || host == "" || dbName == "" {
 		log.Fatal("DATABASE_USER, DATABASE_HOST, and DATABASE_DB must be set")
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", user, pass, host, dbName)
+	u := url.URL{Scheme: "postgres", User: url.UserPassword(user, pass), Host: host, Path: dbName, RawQuery: "sslmode=disable"}
+	return u.String()
 }
 
 func main() {
@@ -133,7 +168,7 @@ func main() {
 	var results []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.username, &r.stored, &r.computed, &r.delta); err != nil {
+		if err := rows.Scan(&r.id, &r.platform, &r.username, &r.stored, &r.computed, &r.delta); err != nil {
 			log.Fatalf("scan: %v", err)
 		}
 		results = append(results, r)
@@ -144,22 +179,22 @@ func main() {
 
 	if *outputSQL {
 		fmt.Println("-- Generated by cmd/backfill-miles --output-sql")
-		fmt.Println("-- Safe to run against any target DB: matches by username, only raises miles.")
+		fmt.Println("-- Safe to run against any target DB: matches by platform + username, only raises miles.")
 		fmt.Println("-- Bots excluded. Apply with: psql \"$PROD_DSN\" < this-file.sql")
 		fmt.Println()
 		for _, r := range results {
 			if r.computed <= r.stored || r.delta < *minDelta {
 				continue
 			}
-			fmt.Printf(upsertMilesSQLFmt, r.computed, r.username)
+			fmt.Printf(upsertMilesSQLFmt, r.computed, sqlQuote(r.platform), sqlQuote(r.username))
 		}
 		return
 	}
 
 	// human-readable report
-	fmt.Printf("%-30s  %10s  %10s  %10s  %s\n", "username", "stored", "computed", "delta", "action")
-	fmt.Printf("%-30s  %10s  %10s  %10s  %s\n",
-		"------------------------------", "----------", "----------", "----------", "------")
+	fmt.Printf("%-10s  %-30s  %10s  %10s  %10s  %s\n", "platform", "username", "stored", "computed", "delta", "action")
+	fmt.Printf("%-10s  %-30s  %10s  %10s  %10s  %s\n",
+		"----------", "------------------------------", "----------", "----------", "----------", "------")
 
 	var updateCount, skipCount int
 	for _, r := range results {
@@ -173,8 +208,8 @@ func main() {
 			action = "update"
 		}
 
-		fmt.Printf("%-30s  %10.2f  %10.2f  %+10.2f  %s\n",
-			r.username, r.stored, r.computed, r.delta, action)
+		fmt.Printf("%-10s  %-30s  %10.2f  %10.2f  %+10.2f  %s\n",
+			r.platform, r.username, r.stored, r.computed, r.delta, action)
 
 		if *apply && willUpdate {
 			if _, err := db.Exec(updateMilesSQL, r.computed, r.id); err != nil {

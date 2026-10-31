@@ -1,45 +1,28 @@
 package config
 
 import (
-	"log"
-	"log/slog"
-	"os"
+	"fmt"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/contract"
 	"github.com/kelseyhightower/envconfig"
 )
 
-var Conf *OnscreensServerConfig
-
-func LoadOnscreensServerConfig() *OnscreensServerConfig {
-	var cfg OnscreensServerConfig
-	err := envconfig.Process("ONSCREENS_SERVER", &cfg)
-	if err != nil {
-		log.Fatalf("could not load config: %v", err)
-	}
-	return &cfg
-}
-
-func init() {
+// Load reads the onscreens-server config from the environment — loading the
+// env-specific dotenv file first — and returns it. main calls this once and
+// passes the result in; nothing holds a package global. Whether a failure here
+// should end the process is main's call, so it comes back as an error rather
+// than exiting from inside the package.
+func Load() (*OnscreensServerConfig, error) {
 	// set the Environment and load dotenv
 	config.SetEnvironment()
 
-	Conf = LoadOnscreensServerConfig()
-
-	// these dirs will get created on boot if necessary
-	dirsToCreate := []string{
-		Conf.RunDir,
+	var cfg OnscreensServerConfig
+	if err := envconfig.Process("ONSCREENS_SERVER", &cfg); err != nil {
+		return nil, fmt.Errorf("could not load config: %w", err)
 	}
-	for _, d := range dirsToCreate {
-		_, err := os.Stat(d)
-		if err != nil {
-			if os.IsNotExist(err) {
-				slog.Info("creating directory", "dir", d)
-				err = os.MkdirAll(d, 0755)
-				if err != nil {
-					log.Fatalf("Error creating directory %s: %s", d, err)
-				}
-			}
-		}
+	if cfg.OnscreensServerBindAddress == "" {
+		cfg.OnscreensServerBindAddress = fmt.Sprintf(":%d", contract.PortOnscreensHTTP)
 	}
+	return &cfg, nil
 }
