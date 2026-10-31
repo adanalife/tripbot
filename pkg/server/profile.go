@@ -2,16 +2,19 @@ package server
 
 import (
 	"context"
-	"html/template"
+	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/achievements"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 )
 
 // findUser / sessionCount / monthlyMiles are the data seams the profile handler
@@ -19,65 +22,137 @@ import (
 // Each is an operator-triggered read (one click), not a hot path, so the extra
 // monthly-score query is fine.
 var (
-	findUser     = users.Find
-	sessionCount = events.SessionCount
-	monthlyMiles = func(ctx context.Context, u users.User) float32 {
+	findUser      = users.Find
+	findUserByID  = users.FindByPlatformUserID
+	sessionCount  = events.SessionCount
+	earliestEvent = events.EarliestRealEventDate
+	monthlyMiles  = func(ctx context.Context, u users.User) float32 {
 		return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard())
 	}
+	earnedBy = achievements.EarnedBy
 )
 
-// userProfile is the chat-console popover payload — a small at-a-glance view of
-// a chatter, events-derived per the tripbot-events-table-design ADR.
-type userProfile struct {
-	Username     string
-	Found        bool
-	IsBot        bool
-	Miles        float32 // lifetime
-	MonthlyMiles float32 // current month
-	Sessions     int64
-	FirstSeen    time.Time
-	LastSeen     time.Time
-}
-
-// userProfileHandler serves GET /admin/user/{username}: the HTML fragment the
-// live console pops over when an operator clicks a username. Phase 2 will add
-// timeout/ban actions here (needs the broadcaster token's
-// moderator:manage:banned_users scope — see the vault TODO).
-func userProfileHandler(w http.ResponseWriter, r *http.Request) {
-	username := strings.ToLower(strings.TrimSpace(mux.Vars(r)["username"]))
-	prof := userProfile{Username: username}
-	if username != "" {
-		if u := findUser(r.Context(), username); u.ID != 0 {
-			prof.Found = true
-			prof.IsBot = u.IsBot
-			prof.Miles = u.Miles
-			prof.MonthlyMiles = monthlyMiles(r.Context(), u)
-			prof.FirstSeen = u.DateCreated
-			prof.LastSeen = u.LastSeen
-			prof.Sessions = sessionCount(r.Context(), username)
+// bestEffortFirstSeen picks the earliest non-zero timestamp among the user
+// row's own dates and their earliest real event. The users row is authoritative
+// when present (FirstSeen/DateCreated are stamped on insert now), but accounts
+// created during the date_created bug window have zero-value dates there — for
+// those, the earliest non-bug event row is the best surviving evidence of when
+// we first saw them. Returns the zero time only when nothing real is available.
+func bestEffortFirstSeen(times ...time.Time) time.Time {
+	var best time.Time
+	for _, t := range times {
+		if t.IsZero() {
+			continue
+		}
+		if best.IsZero() || t.Before(best) {
+			best = t
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if err := userProfileTmpl.Execute(w, prof); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't render user profile", "err", err)
-	}
+	return best
 }
 
-// userProfileTmpl renders the popover fragment. html/template escapes the
-// username everywhere it appears (incl. the Twitch URL).
-var userProfileTmpl = template.Must(template.New("profile").Parse(`<div class="profile-card">
-  <div class="profile-name">{{.Username}}{{if .IsBot}} <span class="profile-bot">bot</span>{{end}}</div>
-  {{- if .Found}}
-  <dl class="profile-stats">
-    <dt>miles</dt><dd>{{printf "%.1f" .Miles}}</dd>
-    <dt>this month</dt><dd>{{printf "%.1f" .MonthlyMiles}}</dd>
-    <dt>sessions</dt><dd>{{.Sessions}}</dd>
-    <dt>first seen</dt><dd>{{if .FirstSeen.IsZero}}unknown{{else}}{{.FirstSeen.Format "2006-01-02"}}{{end}}</dd>
-    <dt>last seen</dt><dd>{{if .LastSeen.IsZero}}unknown{{else}}{{.LastSeen.Format "2006-01-02 15:04"}}{{end}}</dd>
-  </dl>
-  {{- else}}
-  <p class="profile-empty">no record for this user yet</p>
-  {{- end}}
-  <a class="profile-link" href="https://twitch.tv/{{.Username}}" target="_blank" rel="noopener">view on Twitch ↗</a>
-</div>`))
+// userProfile is the chat-console popover payload — a small at-a-glance view of
+// a chatter, derived from the append-only events table. The JSON
+// tags are the wire format the standalone tripbot-console reads via
+// GET /api/user/{username} (it has no DB access of its own and proxies here).
+type userProfile struct {
+	Username     string    `json:"username"`
+	Found        bool      `json:"found"`
+	IsBot        bool      `json:"is_bot"`
+	Starred      bool      `json:"starred"`
+	Note         string    `json:"note"`
+	Miles        float32   `json:"miles"`         // lifetime
+	MonthlyMiles float32   `json:"monthly_miles"` // current month
+	Sessions     int64     `json:"sessions"`
+	FirstSeen    time.Time `json:"first_seen"`
+	LastSeen     time.Time `json:"last_seen"`
+	// Achievements are collected silently until their viewer-facing design
+	// exists: this profile is how the console's owner sees them meanwhile.
+	Achievements []achievements.Earned `json:"achievements"`
+}
+
+// resolveUser finds the chatter's row, preferring the platform's user id over
+// the display name: the id survives a rename, where the name it was requested
+// under may since have moved to nobody (or to somebody else).
+//
+// The id falls back to the username rather than being authoritative on its own,
+// because a row is only stamped with an id once its owner has spoken since the
+// column shipped — so an id miss is the expected case for a while yet, and it
+// means "not stamped", not "no such user".
+func resolveUser(ctx context.Context, platform, platformUserID, username string) (users.User, error) {
+	if platformUserID != "" {
+		u, err := findUserByID(ctx, platform, platformUserID)
+		if err == nil {
+			return u, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			logQueryFailure(ctx, "error finding user by platform id", err,
+				"platform_user_id", platformUserID)
+		}
+	}
+	if username == "" {
+		return users.User{}, gorm.ErrRecordNotFound
+	}
+	return findUser(ctx, platform, username)
+}
+
+// gatherUserProfile reads a chatter's at-a-glance stats through the DB seams,
+// scoped to this instance's platform. Operator-triggered (one click), not a
+// hot path, so the extra monthly-score query is fine. No matching row — or
+// neither identifier given — returns Found=false.
+//
+// platformUserID may be empty; see resolveUser for how the two identifiers rank.
+func gatherUserProfile(ctx context.Context, platform, platformUserID, username string) userProfile {
+	username = strings.ToLower(strings.TrimSpace(username))
+	platformUserID = strings.TrimSpace(platformUserID)
+	prof := userProfile{Username: username, Achievements: []achievements.Earned{}}
+	if username == "" && platformUserID == "" {
+		return prof
+	}
+	u, err := resolveUser(ctx, platform, platformUserID, username)
+	if err != nil {
+		// not-found renders as Found=false; a real DB error does too, but
+		// gets logged so it's visible as a failure rather than a ghost user.
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			logQueryFailure(ctx, "error finding user", err, "username", username)
+		}
+		return prof
+	}
+	// The stored name wins over the requested one: resolving by id after a
+	// rename is exactly the case where they differ, and the events below are
+	// keyed by the name they were written under.
+	prof.Username = u.Username
+	prof.Found = true
+	prof.IsBot = u.IsBot
+	prof.Starred = u.Starred
+	prof.Note = u.Note
+	prof.Miles = u.Miles
+	prof.MonthlyMiles = monthlyMiles(ctx, u)
+	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, u.Username))
+	prof.LastSeen = u.LastSeen
+	prof.Sessions = sessionCount(ctx, platform, u.Username)
+	if earned, err := earnedBy(ctx, u.Platform, u.Username); err != nil {
+		logQueryFailure(ctx, "error reading achievements", err, "username", u.Username)
+	} else {
+		prof.Achievements = earned
+	}
+	return prof
+}
+
+// userProfileAPIHandler serves GET /api/user/{username}: a chatter's
+// at-a-glance stats as JSON, for the standalone tripbot-console to render its
+// own popover (the console holds no DB access — it proxies here).
+//
+// An optional ?user_id= carries the platform's own user id, which resolves the
+// chatter across a rename. It's a query parameter rather than a second route so
+// a caller can send both and get the id's accuracy with the name's coverage;
+// the response's username field says which row actually answered.
+func (s *Server) userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
+	prof := gatherUserProfile(r.Context(), s.cfg.Platform,
+		r.URL.Query().Get("user_id"), mux.Vars(r)["username"])
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(prof); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't encode user profile", "err", err)
+	}
+}

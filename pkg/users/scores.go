@@ -8,7 +8,7 @@ import (
 )
 
 func (u User) GetScore(ctx context.Context, scoreboardName string) float32 {
-	value, err := scoreboards.GetScoreByName(ctx, u.Username, scoreboardName)
+	value, err := scoreboards.GetScoreByName(ctx, u.Platform, u.Username, scoreboardName)
 	if err != nil {
 		slog.ErrorContext(ctx, "error getting score for user", "err", err)
 		return -1.0
@@ -17,7 +17,7 @@ func (u User) GetScore(ctx context.Context, scoreboardName string) float32 {
 }
 
 func (u User) AddToScore(ctx context.Context, scoreboardName string, valueToAdd float32) {
-	err := scoreboards.AddToScoreByName(ctx, u.Username, scoreboardName, valueToAdd)
+	err := scoreboards.AddToScoreByName(ctx, u.Platform, u.Username, scoreboardName, valueToAdd)
 	if err != nil {
 		slog.ErrorContext(ctx, "error setting score for user", "err", err)
 	}

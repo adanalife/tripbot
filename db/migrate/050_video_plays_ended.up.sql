@@ -1,0 +1,11 @@
+-- video_plays has always recorded when a clip landed on screen (started_at)
+-- and nothing about when it left, so a clip that aired to the end is
+-- indistinguishable from one skipped at 8 seconds — noise any footage-
+-- performance rollup has to exclude.
+--
+-- ended_at is when the clip stopped airing, stamped by the play that
+-- supersedes it: each insert closes the platform's previous still-open row.
+-- NULL means the end was never observed — the process crashed or restarted
+-- while the clip was up, or the row predates this column. Duration is derived
+-- (ended_at - started_at), never stored.
+ALTER TABLE video_plays ADD COLUMN ended_at TIMESTAMPTZ;

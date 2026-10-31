@@ -19,4 +19,18 @@ type Command struct {
 	Handler            HandlerFunc
 	RequiresFollow     bool
 	RequiresSubscriber bool
+	RequiresAdmin      bool
+	// RequiresMod opens the command to the channel's moderators as well as
+	// the broadcaster. Declines silently, like the admin gate.
+	RequiresMod bool
+
+	// Help is the one-line answer to "!help <trigger>": what the command does,
+	// in chat-sized viewer-facing prose. Every command sets it — the registry
+	// test fails on an empty one — so the man page can't lag the surface.
+	Help string
+
+	// AdminDeniedMsg is what chat hears when a non-admin runs this command.
+	// Empty is the default and the common case: an admin command declines in
+	// silence rather than advertising itself.
+	AdminDeniedMsg string
 }

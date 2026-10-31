@@ -1,27 +1,50 @@
-name: Testing
+name: testing
 on:
   pull_request:
+    # Docs/cdk8s/workflow-only PRs don't need the compose test stack. Pushes
+    # to main stay unfiltered as the safety net.
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'db/**'
+      - 'configs/**'
+      - 'assets/**'
+      - 'infra/docker/**'
+      - '.env.testing'
+      - 'Taskfile.yml'
+      - '.github/workflows/testing.yml'
   push:
     branches:
-      - develop
-      - master
-    tags:
-      - v*
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v6
-    - uses: arduino/setup-task@v2
+    - uses: actions/checkout@v7
+    - uses: arduino/setup-task@v3
       with:
-        version: 3.x
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     # `task test:cover` runs the test service from
     # infra/docker/docker-compose.testing.yml — same path used locally,
-    # so CI doesn't need its own Go toolchain or libvlc-dev install.
+    # so CI doesn't need its own Go toolchain.
+    # pipefail, or the pipe hands the step tee's exit status and a failing test
+    # suite reports success. The default shell is `bash -e`, which doesn't set it.
     - name: Run tests with coverage
-      run: task test:cover | tee coverage.txt
+      shell: bash
+      run: |
+        set -o pipefail
+        task test:cover | tee coverage.txt
     - name: Coverage summary
       run: |
         echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
@@ -33,7 +56,7 @@ jobs:
         infile: coverage.out
         outfile: coverage.lcov
     - name: Upload coverage to Coveralls
-      uses: coverallsapp/github-action@v2.3.6
+      uses: coverallsapp/github-action@v2.3.8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         path-to-lcov: coverage.lcov

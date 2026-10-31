@@ -14,62 +14,12 @@ services:
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
-    volumes:
-      #TODO: do we even need this?
-      - ./assets/video:/opt/data/Dashcam/_all:ro
-    restart: unless-stopped
-
-  obs:
-    # privileged: true                       # not needed without GPU passthrough
-    image: adanalife/obs
-    hostname: obs
-    # env_file:                              # entrypoint reads only STREAM_KEY directly
-    #   - infra/docker/env.docker
-    build:
-      context: .
-      dockerfile: infra/docker/obs/Dockerfile
-    depends_on:
-      - vlc                                  # vlc must be up so RTSP source resolves
-    ports:
-      - "5902:5900"
-      - "4455:4455"                          # obs-websocket control plane
-    environment:
-      # DISPLAY: ":0.0"                      # entrypoint sets DISPLAY internally
-      # XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # FONTCONFIG_PATH: "/etc/fonts"
-      STREAM_KEY: "${STREAM_KEY:-}"
-      DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
-      # OBS browser sources fetch onscreen state from onscreens-server's HTTP API.
-      ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://vlc:8081}"
-      OBS_WEBSOCKET_PASSWD: "${OBS_WEBSOCKET_PASSWD:-adanalife}"
-    restart: unless-stopped
-
-  vlc:
-    privileged: true
-    image: adanalife/vlc
-    hostname: vlc
-    env_file:
-      - infra/docker/env.docker
-    build:
-      context: .
-      dockerfile: infra/docker/vlc/Dockerfile
-    ports:
-      # this should match the VLC_SERVER_HOST env var
-      - "8080"
-      # onscreens-server (second binary in the same container)
-      - "8081"
-      - "8554:8554"
-    environment:
-      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # hack to make fontconfig happy
-      FONTCONFIG_PATH: "/etc/fonts"
-    volumes:
-      - .:/go/src/github.com/adanalife/tripbot
-      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 is a drop-in for postgres:16-alpine that adds the
+    # `vector` extension (used by frame_embeddings / dashcam-cv visual search).
+    image: ghcr.io/adanalife/mirror/pgvector:pg16
     restart: always
     ports:
       - "5432"
@@ -77,10 +27,10 @@ services:
       POSTGRES_PASSWORD: "${DATABASE_PASS}"
       POSTGRES_USER: "${DATABASE_USER}"
       POSTGRES_DB: "${DATABASE_DB}"
-    # data persistence is opt-in per environment (see docker-compose.development.yml)
+    # ephemeral — no data volume; test/CI runs start from a fresh migrated db
 
   migrate:
-    image: migrate/migrate
+    image: ghcr.io/adanalife/mirror/migrate:4
     depends_on:
       - db
     volumes:
@@ -90,17 +40,4 @@ services:
       "-database",  "postgres://${DATABASE_USER}:${DATABASE_PASS}@${DATABASE_HOST}:5432/${DATABASE_DB}?sslmode=disable",
       "up"
     ]
-    restart: on-failure
-
-  seed:
-    image: adanalife/tripbot
-    env_file:
-      - infra/docker/env.docker
-    depends_on:
-      - migrate
-    working_dir: /go/src/github.com/adanalife/tripbot
-    entrypoint: bash -c "infra/docker/bin/seed-db.sh"
-    #TODO: this can be removed once the script is baked into the image
-    volumes:
-      - .:/go/src/github.com/adanalife/tripbot
     restart: on-failure
