@@ -114,7 +114,7 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	// still receive unstyled records.
 	var consoleHandler slog.Handler
 	if term.IsTerminal(int(os.Stderr.Fd())) {
-		consoleHandler = tint.NewHandler(os.Stderr, &tint.Options{Level: slog.LevelInfo})
+		consoleHandler = tint.NewTextHandler(os.Stderr, &tint.Options{Level: slog.LevelInfo})
 	} else {
 		consoleHandler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	}
