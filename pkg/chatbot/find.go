@@ -457,7 +457,7 @@ func (a *App) similarCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Reply(ctx, "Sorry, similar isn't available right now")
 		return
 	}
-	if !user.Broadcaster && time.Since(lastTimewarpTime) < 20*time.Second {
+	if !user.Broadcaster && time.Since(lastTimewarpTime()) < 20*time.Second {
 		a.Reply(ctx, "Not yet; enjoy the moment!")
 		return
 	}
