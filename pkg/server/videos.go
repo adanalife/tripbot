@@ -33,6 +33,12 @@ type videoDetail struct {
 	Lng     float64  `json:"lng"`
 	Flagged bool     `json:"flagged"`
 	Corpus  string   `json:"corpus"`
+	// CoordSource is where Lat/Lng came from (`ocr`, `track`, `synthetic`,
+	// `missing`, …); CoordConfidence is the coords stage's belief in the
+	// per-moment track, null until that stage has looked. Together they say
+	// why a clip with a point can have no track.
+	CoordSource     string   `json:"coord_source"`
+	CoordConfidence *float64 `json:"coord_confidence"`
 	// RecordedAt and RecordedAtUTC are when the clip was filmed, RFC 3339; see
 	// filmedTimes.
 	RecordedAt    string `json:"recorded_at"`
@@ -132,6 +138,7 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	d := videoDetail{
 		ID: v.ID, File: v.File(), State: v.State, City: v.City, CityM: v.CityM,
 		Place: v.Place(), Lat: v.Lat, Lng: v.Lng, Flagged: v.Flagged, Corpus: v.Corpus,
+		CoordSource: v.CoordSource, CoordConfidence: v.CoordConfidence,
 		Plays: plays.Plays, Track: trackOf(ctx, v), SourceTrack: sourceTrackOf(ctx, v),
 	}
 	d.RecordedAt, d.RecordedAtUTC = filmedTimes(v)
