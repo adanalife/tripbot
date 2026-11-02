@@ -12,7 +12,7 @@ require (
 	github.com/getsentry/sentry-go v0.50.0
 	github.com/getsentry/sentry-go/negroni v0.50.0
 	github.com/getsentry/sentry-go/otel v0.50.0
-	github.com/go-co-op/gocron/v2 v2.22.0
+	github.com/go-co-op/gocron/v2 v2.23.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
@@ -23,13 +23,13 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/nathan-osman/go-sunrise v1.1.0
 	github.com/nats-io/nats-server/v2 v2.15.1
-	github.com/nats-io/nats.go v1.54.0
+	github.com/nats-io/nats.go v1.55.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/samber/slog-sentry/v2 v2.11.0
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/unrolled/secure v1.17.0
 	github.com/uptrace/opentelemetry-go-extra/otelgorm v0.4.0
-	github.com/urfave/negroni/v3 v3.1.1
+	github.com/urfave/negroni/v3 v3.1.2
 	go.opentelemetry.io/contrib/bridges/otelslog v0.21.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.72.0
