@@ -55,8 +55,8 @@ func TestVideoHandler(t *testing.T) {
 	ctx := context.Background()
 	for _, q := range []string{
 		`INSERT INTO videos (id, slug, state, lat, lng, next_vid) VALUES (6, '2018_0514_224501_012', 'Utah', 38.5, -109.5, 7)`,
-		`INSERT INTO videos (id, slug, state, city, city_m, lat, lng, next_vid, date_filmed)
-		 VALUES (7, '2018_0514_224801_013', 'Utah', 'Moab', 0, 38.57, -109.55, 8, '2018-05-14 22:48:01+00')`,
+		`INSERT INTO videos (id, slug, state, city, city_m, lat, lng, next_vid, date_filmed, coord_source, coord_confidence)
+		 VALUES (7, '2018_0514_224801_013', 'Utah', 'Moab', 0, 38.57, -109.55, 8, '2018-05-14 22:48:01+00', 'track', 0.5)`,
 		`INSERT INTO videos (id, slug, state, lat, lng) VALUES (8, '2018_0514_225101_014', 'Utah', 38.7, -109.7)`,
 		`INSERT INTO video_plays (platform, video_id, started_at) VALUES
 		 ('twitch', 7, '2026-10-01 00:00:00+00'), ('youtube', 7, '2026-10-02 00:00:00+00'), ('twitch', 9, now())`,
@@ -74,10 +74,11 @@ func TestVideoHandler(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	zero, prev, next := 0.0, int64(6), int64(8)
+	zero, half, prev, next := 0.0, 0.5, int64(6), int64(8)
 	want := videoDetail{
 		ID: 7, File: "2018_0514_224801_013.MP4", State: "Utah", City: "Moab", CityM: &zero,
 		Place: "Moab, Utah", Lat: 38.57, Lng: -109.55, Corpus: "s1",
+		CoordSource: "track", CoordConfidence: &half,
 		RecordedAt: "2018-05-14T22:48:01Z", RecordedAtUTC: "2018-05-15T04:48:01Z",
 		PrevID: &prev, NextID: &next,
 		Plays: 2, LastPlayedAt: "2026-10-02T00:00:00Z",
