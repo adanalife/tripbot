@@ -290,7 +290,8 @@ func TestPlaybackDailyHandler_Buckets(t *testing.T) {
 	seedUser(t, db, "daily_alice", false)
 	seedUser(t, db, "daily_bot", true)
 	in := time.Now().Add(-1 * time.Hour)
-	earlier := time.Now().Add(-3 * 24 * time.Hour)
+	// Noon, so the two sessions an hour apart below share a day bucket at any hour.
+	earlier := time.Now().UTC().Truncate(24 * time.Hour).Add(-3*24*time.Hour + 12*time.Hour)
 	out := time.Now().Add(-40 * 24 * time.Hour)
 
 	vid := seedVideo(t, db, "stats_clip_daily", "Utah", "", nil)

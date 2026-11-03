@@ -55,8 +55,8 @@ func TestVideoHandler(t *testing.T) {
 	ctx := context.Background()
 	for _, q := range []string{
 		`INSERT INTO videos (id, slug, state, lat, lng, next_vid) VALUES (6, '2018_0514_224501_012', 'Utah', 38.5, -109.5, 7)`,
-		`INSERT INTO videos (id, slug, state, city, city_m, lat, lng, next_vid, date_filmed)
-		 VALUES (7, '2018_0514_224801_013', 'Utah', 'Moab', 0, 38.57, -109.55, 8, '2018-05-14 22:48:01+00')`,
+		`INSERT INTO videos (id, slug, state, city, city_m, lat, lng, next_vid, date_filmed, coord_source, coord_confidence)
+		 VALUES (7, '2018_0514_224801_013', 'Utah', 'Moab', 0, 38.57, -109.55, 8, '2018-05-14 22:48:01+00', 'track', 0.5)`,
 		`INSERT INTO videos (id, slug, state, lat, lng) VALUES (8, '2018_0514_225101_014', 'Utah', 38.7, -109.7)`,
 		`INSERT INTO video_plays (platform, video_id, started_at) VALUES
 		 ('twitch', 7, '2026-10-01 00:00:00+00'), ('youtube', 7, '2026-10-02 00:00:00+00'), ('twitch', 9, now())`,
@@ -74,10 +74,11 @@ func TestVideoHandler(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	zero, prev, next := 0.0, int64(6), int64(8)
+	zero, half, prev, next := 0.0, 0.5, int64(6), int64(8)
 	want := videoDetail{
 		ID: 7, File: "2018_0514_224801_013.MP4", State: "Utah", City: "Moab", CityM: &zero,
 		Place: "Moab, Utah", Lat: 38.57, Lng: -109.55, Corpus: "s1",
+		CoordSource: "track", CoordConfidence: &half,
 		RecordedAt: "2018-05-14T22:48:01Z", RecordedAtUTC: "2018-05-15T04:48:01Z",
 		PrevID: &prev, NextID: &next,
 		Plays: 2, LastPlayedAt: "2026-10-02T00:00:00Z",
@@ -288,6 +289,7 @@ func footageGET(t *testing.T, path string) *httptest.ResponseRecorder {
 	r.Handle("/api/footage/days", http.HandlerFunc(footageDaysHandler)).Methods("GET")
 	r.Handle("/api/footage/days/{day}", http.HandlerFunc(footageDayHandler)).Methods("GET")
 	r.Handle("/api/footage/dropped", http.HandlerFunc(footageDroppedHandler)).Methods("GET")
+	r.Handle("/api/footage/proposals", http.HandlerFunc(footageProposalsHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
@@ -338,6 +340,38 @@ func TestFootageDays(t *testing.T) {
 
 // A piece is listed when either auto-trim or a reviewer dropped it whole,
 // newest footage first, with the clip it aired as when a reviewer kept it.
+// The review queue is the unruled trims and drops in film order: a keep
+// needs no ruling, and a ruled piece is done whatever the ruling said.
+func TestFootageProposals(t *testing.T) {
+	db := testdb.New(t)
+	if err := db.Exec(`INSERT INTO video_cuts (slug, proposal, ruling) VALUES
+		 ('20260502080000_000124_s0000', '{"verdict":"drop"}', NULL),
+		 ('20260501120000_000123_s0180', '{"verdict":"trim","cuts":[{"start":0,"end":25}]}', NULL),
+		 ('20260501120000_000123_s0000', '{"verdict":"keep"}', NULL),
+		 ('20260501120000_000123_s0360', '{"verdict":"drop"}', '{"verdict":"keep"}')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	rec := footageGET(t, "/api/footage/proposals")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got []proposedCut
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	var slugs []string
+	for _, c := range got {
+		slugs = append(slugs, c.Slug)
+	}
+	want := []string{"20260501120000_000123_s0180", "20260502080000_000124_s0000"}
+	if !reflect.DeepEqual(slugs, want) {
+		t.Fatalf("slugs = %v, want %v", slugs, want)
+	}
+	if !strings.Contains(string(got[0].Proposal), `"cuts"`) {
+		t.Fatalf("proposal passed through = %s", got[0].Proposal)
+	}
+}
+
 func TestFootageDropped(t *testing.T) {
 	db := testdb.New(t)
 	for _, q := range []string{

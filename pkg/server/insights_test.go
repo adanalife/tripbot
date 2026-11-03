@@ -88,9 +88,10 @@ func TestInsightsSince(t *testing.T) {
 	if got := insightsSince(0); !got.Equal(time.Unix(0, 0)) {
 		t.Errorf("all time should start at the epoch, got %v", got)
 	}
+	// A calendar week, not 168h: across a DST change the two differ by an hour.
 	since := insightsSince(7)
-	if d := time.Since(since); d < 7*24*time.Hour-time.Minute || d > 7*24*time.Hour+time.Minute {
-		t.Errorf("a 7-day window should start a week ago, got %v ago", d)
+	if d := since.Sub(time.Now().AddDate(0, 0, -7)); d < -time.Minute || d > time.Minute {
+		t.Errorf("a 7-day window should start a calendar week ago, got %v (off by %v)", since, d)
 	}
 	if !insightsSince(90).After(insightsSince(0)) {
 		t.Error("a bounded window must start after the epoch")
