@@ -33,6 +33,12 @@ type videoDetail struct {
 	Lng     float64  `json:"lng"`
 	Flagged bool     `json:"flagged"`
 	Corpus  string   `json:"corpus"`
+	// CoordSource is where Lat/Lng came from (`ocr`, `track`, `synthetic`,
+	// `missing`, …); CoordConfidence is the coords stage's belief in the
+	// per-moment track, null until that stage has looked. Together they say
+	// why a clip with a point can have no track.
+	CoordSource     string   `json:"coord_source"`
+	CoordConfidence *float64 `json:"coord_confidence"`
 	// RecordedAt and RecordedAtUTC are when the clip was filmed, RFC 3339; see
 	// filmedTimes.
 	RecordedAt    string `json:"recorded_at"`
@@ -132,6 +138,7 @@ func videoByID(ctx context.Context, id int) (videoDetail, error) {
 	d := videoDetail{
 		ID: v.ID, File: v.File(), State: v.State, City: v.City, CityM: v.CityM,
 		Place: v.Place(), Lat: v.Lat, Lng: v.Lng, Flagged: v.Flagged, Corpus: v.Corpus,
+		CoordSource: v.CoordSource, CoordConfidence: v.CoordConfidence,
 		Plays: plays.Plays, Track: trackOf(ctx, v), SourceTrack: sourceTrackOf(ctx, v),
 	}
 	d.RecordedAt, d.RecordedAtUTC = filmedTimes(v)
@@ -380,6 +387,35 @@ func footageDroppedHandler(w http.ResponseWriter, r *http.Request) {
 	if err := database.GormDB().WithContext(r.Context()).Raw(droppedSQL).Scan(&cuts).Error; err != nil {
 		logQueryFailure(r.Context(), "dropped pieces failed", err)
 		http.Error(w, `{"error":"couldn't read dropped pieces"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, cuts)
+}
+
+// proposedCut is one unruled piece auto-trim proposed to trim or drop, as GET
+// /api/footage/proposals lists them for a reviewer to rule on: its cut row,
+// the proposal untouched (video-pipeline's shape).
+type proposedCut struct {
+	Slug     string          `json:"slug"`
+	Proposal json.RawMessage `json:"proposal"`
+}
+
+// proposalsSQL lists the pieces auto-trim would cut that nobody has ruled on
+// yet, in film order (a slug leads with the camera's clock). A `keep`
+// proposal needs no ruling, so it is left out.
+// ponytail: a scan of video_cuts per call, a row per season-2 piece.
+const proposalsSQL = `SELECT c.slug, c.proposal
+FROM video_cuts c
+WHERE c.ruling IS NULL AND c.proposal->>'verdict' IN ('trim', 'drop')
+ORDER BY c.slug`
+
+// footageProposalsHandler serves GET /api/footage/proposals: every unruled
+// trim or drop auto-trim proposed, for the review queue.
+func footageProposalsHandler(w http.ResponseWriter, r *http.Request) {
+	cuts := []proposedCut{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(proposalsSQL).Scan(&cuts).Error; err != nil {
+		logQueryFailure(r.Context(), "proposed cuts failed", err)
+		http.Error(w, `{"error":"couldn't read proposed cuts"}`, http.StatusInternalServerError)
 		return
 	}
 	writeInsights(w, r, cuts)

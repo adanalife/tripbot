@@ -554,7 +554,10 @@ func (s *Store) SetVoicing(ctx context.Context, voicing string) error {
 // what's actually playing and a caller re-reading it sees the switch didn't take.
 func (s *Store) schedule(ctx context.Context, sw Switch) error {
 	if switchDelay <= 0 {
-		return s.applyPending(ctx, sw)
+		s.mu.Lock()
+		gen := s.gen
+		s.mu.Unlock()
+		return s.applyPending(ctx, sw, gen)
 	}
 
 	sw.At = time.Now().Add(switchDelay)
@@ -576,7 +579,7 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 		if stale {
 			return // superseded between the timer firing and this lock
 		}
-		if err := s.applyPending(applyCtx, sw); err != nil {
+		if err := s.applyPending(applyCtx, sw, gen); err != nil {
 			slog.WarnContext(applyCtx, "background audio: scheduled switch failed",
 				"err", err, "bed", sw.Bed, "station", sw.Station)
 		}
@@ -595,7 +598,7 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 // actually audible. setNow takes the lock itself, so the switch can't be made
 // under one; the flag is what covers that gap, and clearing it early would let
 // a caller read the new station off a store still playing the old bed.
-func (s *Store) applyPending(ctx context.Context, sw Switch) error {
+func (s *Store) applyPending(ctx context.Context, sw Switch, gen uint64) error {
 	s.mu.Lock()
 	prevStation, prevVoicing := s.station, s.voicing
 	s.station, s.voicing = sw.Station, sw.Voicing
@@ -604,17 +607,25 @@ func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
 		s.station, s.voicing = prevStation, prevVoicing
-		s.pending = nil
+		s.clearPendingLocked(gen)
 		s.mu.Unlock()
 		return err
 	}
 
 	s.mu.Lock()
-	s.pending = nil
+	s.clearPendingLocked(gen)
 	s.mu.Unlock()
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
 		"station", sw.Station, "voicing", sw.Voicing)
 	return nil
+}
+
+// clearPendingLocked drops the pending marker unless a newer switch was
+// scheduled while this one was reaching OBS; that one is still waiting.
+func (s *Store) clearPendingLocked(gen uint64) {
+	if s.gen == gen {
+		s.pending = nil
+	}
 }
 
 // Pending reports the switch waiting to land, if there is one. false means what
