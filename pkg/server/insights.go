@@ -211,7 +211,10 @@ type stateGuesses struct {
 
 // guessInsightsResponse is the wire shape of GET /api/insights/guesses.
 type guessInsightsResponse struct {
-	Days    int            `json:"days"`
+	Days int `json:"days"`
+	// Month is the calendar month the window covers ("2006-01") when the
+	// caller asked for ?month=current, in which case Days is ignored.
+	Month   string         `json:"month,omitempty"`
 	Total   int64          `json:"total"`
 	Correct int64          `json:"correct"`
 	Players int64          `json:"players"`
@@ -243,7 +246,7 @@ GROUP BY 1
 ORDER BY guesses DESC, state
 LIMIT 15`
 
-func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, error) {
+func gatherGuessInsights(ctx context.Context, days int, since time.Time) (guessInsightsResponse, error) {
 	out := guessInsightsResponse{Days: days, States: []stateGuesses{}}
 	db := database.GormDB().WithContext(ctx)
 	var totals struct {
@@ -251,11 +254,11 @@ func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, 
 		Correct int64
 		Players int64
 	}
-	if err := db.Raw(guessTotalsSQL, sql.Named("since", insightsSince(days))).Scan(&totals).Error; err != nil {
+	if err := db.Raw(guessTotalsSQL, sql.Named("since", since)).Scan(&totals).Error; err != nil {
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
-	if err := db.Raw(guessStatesSQL, sql.Named("since", insightsSince(days))).Scan(&out.States).Error; err != nil {
+	if err := db.Raw(guessStatesSQL, sql.Named("since", since)).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
 	}
 	return out, nil
@@ -484,10 +487,19 @@ func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
 
 // guessInsightsHandler serves GET /api/insights/guesses: !guess volume,
 // accuracy, distinct players, and the per-state breakdown over the ?days
-// window.
+// window, or over the month in progress with ?month=current — the same
+// calendar month, on the same clock, the monthly leaderboards count.
 func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, guessInsightsDefaultDays)
-	payload, err := gatherGuessInsights(r.Context(), days)
+	since := insightsSince(days)
+	month := ""
+	if r.URL.Query().Get("month") == "current" {
+		now := time.Now()
+		since = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		month = now.Format("2006-01")
+	}
+	payload, err := gatherGuessInsights(r.Context(), days, since)
+	payload.Month = month
 	if err != nil {
 		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather guess insights")
