@@ -385,6 +385,35 @@ func footageDroppedHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, cuts)
 }
 
+// proposedCut is one unruled piece auto-trim proposed to trim or drop, as GET
+// /api/footage/proposals lists them for a reviewer to rule on: its cut row,
+// the proposal untouched (video-pipeline's shape).
+type proposedCut struct {
+	Slug     string          `json:"slug"`
+	Proposal json.RawMessage `json:"proposal"`
+}
+
+// proposalsSQL lists the pieces auto-trim would cut that nobody has ruled on
+// yet, in film order (a slug leads with the camera's clock). A `keep`
+// proposal needs no ruling, so it is left out.
+// ponytail: a scan of video_cuts per call, a row per season-2 piece.
+const proposalsSQL = `SELECT c.slug, c.proposal
+FROM video_cuts c
+WHERE c.ruling IS NULL AND c.proposal->>'verdict' IN ('trim', 'drop')
+ORDER BY c.slug`
+
+// footageProposalsHandler serves GET /api/footage/proposals: every unruled
+// trim or drop auto-trim proposed, for the review queue.
+func footageProposalsHandler(w http.ResponseWriter, r *http.Request) {
+	cuts := []proposedCut{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(proposalsSQL).Scan(&cuts).Error; err != nil {
+		logQueryFailure(r.Context(), "proposed cuts failed", err)
+		http.Error(w, `{"error":"couldn't read proposed cuts"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, cuts)
+}
+
 // footageDaysHandler serves GET /api/footage/days: every day with footage,
 // oldest first, for the console's calendar.
 // ponytail: a scan of videos per call, a few thousand rows.

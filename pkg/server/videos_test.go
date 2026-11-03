@@ -288,6 +288,7 @@ func footageGET(t *testing.T, path string) *httptest.ResponseRecorder {
 	r.Handle("/api/footage/days", http.HandlerFunc(footageDaysHandler)).Methods("GET")
 	r.Handle("/api/footage/days/{day}", http.HandlerFunc(footageDayHandler)).Methods("GET")
 	r.Handle("/api/footage/dropped", http.HandlerFunc(footageDroppedHandler)).Methods("GET")
+	r.Handle("/api/footage/proposals", http.HandlerFunc(footageProposalsHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
@@ -338,6 +339,38 @@ func TestFootageDays(t *testing.T) {
 
 // A piece is listed when either auto-trim or a reviewer dropped it whole,
 // newest footage first, with the clip it aired as when a reviewer kept it.
+// The review queue is the unruled trims and drops in film order: a keep
+// needs no ruling, and a ruled piece is done whatever the ruling said.
+func TestFootageProposals(t *testing.T) {
+	db := testdb.New(t)
+	if err := db.Exec(`INSERT INTO video_cuts (slug, proposal, ruling) VALUES
+		 ('20260502080000_000124_s0000', '{"verdict":"drop"}', NULL),
+		 ('20260501120000_000123_s0180', '{"verdict":"trim","cuts":[{"start":0,"end":25}]}', NULL),
+		 ('20260501120000_000123_s0000', '{"verdict":"keep"}', NULL),
+		 ('20260501120000_000123_s0360', '{"verdict":"drop"}', '{"verdict":"keep"}')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	rec := footageGET(t, "/api/footage/proposals")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got []proposedCut
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	var slugs []string
+	for _, c := range got {
+		slugs = append(slugs, c.Slug)
+	}
+	want := []string{"20260501120000_000123_s0180", "20260502080000_000124_s0000"}
+	if !reflect.DeepEqual(slugs, want) {
+		t.Fatalf("slugs = %v, want %v", slugs, want)
+	}
+	if !strings.Contains(string(got[0].Proposal), `"cuts"`) {
+		t.Fatalf("proposal passed through = %s", got[0].Proposal)
+	}
+}
+
 func TestFootageDropped(t *testing.T) {
 	db := testdb.New(t)
 	for _, q := range []string{
