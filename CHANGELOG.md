@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.7.0] — 2026-11-03
+
+### Chatbot
+
+- Clips air by live corpus (`CORPORA`, default `s1`, the same key playout boots from), not by whether someone has reviewed them: !state, !daytime and !find draw from every clip in the live set. ([#1768](https://github.com/adanalife/tripbot/pull/1768))
+
+### Console / API
+
+- `GET /api/insights/guesses?month=current` counts the month in progress, the same calendar month the monthly leaderboards do, and echoes it as `month`. ([#1790](https://github.com/adanalife/tripbot/pull/1790))
+
+### CI / Tooling
+
+- The weekly super-linter sweep passes again: codespell 2.4 reads the hyphenated `re-declare` as a misspelling, so it joins the ignore list. ([#1774](https://github.com/adanalife/tripbot/pull/1774))
+
 ## [v6.6.0] — 2026-11-03
 
 ### Console / API
