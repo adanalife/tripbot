@@ -198,6 +198,12 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 	titlecaseState := helpers.TitlecaseState(state)
+	// a word that names no state or territory gets told so, rather than the
+	// no-footage reply that reads as a state we haven't driven yet
+	if helpers.StateAbbrevToState(state) == "" && helpers.StateToStateAbbrev(state) == "" {
+		a.Reply(ctx, fmt.Sprintf("%s isn't a state! Usage: !jump [state]", titlecaseState))
+		return
+	}
 	randomVid, err := a.Video.FindRandomByState(ctx, state)
 	// check to see if we even have footage for this state
 	if errors.Is(err, terrors.ErrNoFootageForState) {
