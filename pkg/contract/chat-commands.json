@@ -49,6 +49,21 @@
       ]
     },
     {
+      "trigger": "!clip",
+      "aliases": [
+        "!moment",
+        "!timestamp"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!commands",
       "aliases": [
         "!command",
