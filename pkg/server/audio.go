@@ -21,6 +21,7 @@ type BedStore interface {
 	PlayingAlbum() string
 	RadioTrack(ctx context.Context) (artist, title string, err error)
 	Pending() (beds.Switch, bool)
+	ApplyNow(ctx context.Context) error
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
 	SetVoicing(ctx context.Context, voicing string) error
@@ -111,7 +112,8 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 // can't hear isn't a thing anyone means. A name we don't know (or a private
 // station) is a 400; a switch OBS rejects is a 502 — either way the previous
 // bed keeps playing and the re-read reports it, so a failed switch is visible
-// in the UI rather than silently ignored.
+// in the UI rather than silently ignored. {"now": true} lands the switch
+// waiting out its delay straight away, and is a no-op when none is waiting.
 func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	store := s.bedStore()
 	if store == nil {
@@ -122,6 +124,7 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 		Bed     string `json:"bed"`
 		Station string `json:"station"`
 		Voicing string `json:"voicing"`
+		Now     bool   `json:"now"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request body", http.StatusBadRequest)
@@ -130,6 +133,8 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	switch {
+	case body.Now:
+		err = store.ApplyNow(r.Context())
 	case body.Station != "":
 		if !beds.SelectableStation(body.Station) {
 			http.Error(w, "unknown or private radio station", http.StatusBadRequest)
