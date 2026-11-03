@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1052,4 +1053,52 @@ func TestScanTracksExtensions(t *testing.T) {
 	if want := []string{"a.mp3", "b.flac", "c.m4a", "d.ogg", "e.OPUS"}; !slices.Equal(names, want) {
 		t.Fatalf("scanTracks = %v, want %v", names, want)
 	}
+}
+
+// gatedOBS holds its first network call open until released, so a test can
+// act while a switch is still in flight to OBS.
+type gatedOBS struct {
+	fakeOBS
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (g *gatedOBS) SetNetwork(ctx context.Context, input, url string) error {
+	g.once.Do(func() {
+		close(g.entered)
+		<-g.release
+	})
+	return g.fakeOBS.SetNetwork(ctx, input, url)
+}
+
+// A switch picked while the previous one is still reaching OBS keeps its
+// countdown: the first one landing must not report the second as already done,
+// or the console shows no pending switch for a change that is about to happen.
+func TestSchedule_LandingSwitchKeepsTheNextOnePending(t *testing.T) {
+	switchDelay = 20 * time.Millisecond
+	t.Cleanup(func() { switchDelay = 0 })
+
+	o := &gatedOBS{entered: make(chan struct{}), release: make(chan struct{})}
+	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.Set(ctx, Radio); err != nil {
+		t.Fatal(err)
+	}
+	<-o.entered // the radio switch is now inside its OBS call
+	if err := s.Set(ctx, CarHum); err != nil {
+		t.Fatal(err)
+	}
+	close(o.release)
+	waitFor(t, "the radio switch to land", func() bool {
+		bed, _ := s.Current()
+		return bed == Radio
+	})
+	if sw, ok := s.Pending(); !ok || sw.Bed != CarHum {
+		t.Fatalf("pending = %+v, %v after the radio switch landed; want the car hum still pending", sw, ok)
+	}
+	waitFor(t, "the car hum switch to land", func() bool {
+		bed, _ := s.Current()
+		_, pending := s.Pending()
+		return bed == CarHum && !pending
+	})
 }
