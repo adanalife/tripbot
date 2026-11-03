@@ -15,7 +15,7 @@ import (
 // no hits.
 type noopSearch struct{}
 
-func (noopSearch) Find(_ context.Context, _, _ string) ([]SearchHit, error) { return nil, nil }
+func (noopSearch) Find(_ context.Context, _ string) ([]SearchHit, error) { return nil, nil }
 
 // recordingSearch returns canned hits / error and records the queries and
 // corpora it saw, so command tests can assert !find behavior without NATS or
@@ -24,12 +24,10 @@ type recordingSearch struct {
 	Hits    []SearchHit
 	Err     error
 	Queries []string
-	Corpora []string
 }
 
-func (r *recordingSearch) Find(_ context.Context, query, corpus string) ([]SearchHit, error) {
+func (r *recordingSearch) Find(_ context.Context, query string) ([]SearchHit, error) {
 	r.Queries = append(r.Queries, query)
-	r.Corpora = append(r.Corpora, corpus)
 	return r.Hits, r.Err
 }
 
@@ -152,7 +150,7 @@ func TestSearchFrameEmbeddings_ScansRows(t *testing.T) {
 			AddRow("2018_0601_000000_001", 12.0, "Utah", 0.55))
 
 	hits, err := searchFrameEmbeddings(context.Background(), database.GormDB(),
-		[]float32{0.1, 0.2, 0.3}, "model-x", video.CorpusS1, nil, nil, 5)
+		[]float32{0.1, 0.2, 0.3}, "model-x", s1Live, nil, nil, 5)
 	if err != nil {
 		t.Fatalf("searchFrameEmbeddings: %v", err)
 	}
@@ -179,7 +177,7 @@ func TestSearchFrameEmbeddings_WithStateAndMonthFilters(t *testing.T) {
 			AddRow("2018_0514_224801_013", 5.0, "Nevada", 0.3))
 
 	hits, err := searchFrameEmbeddings(context.Background(), database.GormDB(),
-		[]float32{0.1, 0.2}, "model-x", video.CorpusS1, []string{"Nevada"}, []int{5}, 5)
+		[]float32{0.1, 0.2}, "model-x", s1Live, []string{"Nevada"}, []int{5}, 5)
 	if err != nil {
 		t.Fatalf("searchFrameEmbeddings: %v", err)
 	}
@@ -191,14 +189,20 @@ func TestSearchFrameEmbeddings_WithStateAndMonthFilters(t *testing.T) {
 	}
 }
 
-func TestSearchFrameEmbeddings_FiltersToCorpus(t *testing.T) {
+// s1Live is the live set every deployed env airs today: season 1 alone.
+var s1Live = []string{video.CorpusS1}
+
+// The search stays inside the live corpora and nothing else gates a clip:
+// a frame from a reviewed clip in a parked corpus is out, an unreviewed clip's
+// frame in a live one is in.
+func TestSearchFrameEmbeddings_FiltersToLiveCorpora(t *testing.T) {
 	mock := installMockDB(t)
-	mock.ExpectQuery(`AND v\.corpus = \$3\s+AND v\.reviewed_at IS NOT NULL`).
-		WithArgs(sqlmock.AnyArg(), "model-x", video.CorpusS2, sqlmock.AnyArg(), 5).
+	mock.ExpectQuery(`AND v\.corpus IN \(\$3,\$4\)\s+ORDER BY`).
+		WithArgs(sqlmock.AnyArg(), "model-x", video.CorpusS1, video.CorpusS2, sqlmock.AnyArg(), 5).
 		WillReturnRows(mock.NewRows([]string{"slug", "ts_sec", "state", "distance"}))
 
 	if _, err := searchFrameEmbeddings(context.Background(), database.GormDB(),
-		[]float32{0.1}, "model-x", video.CorpusS2, nil, nil, 5); err != nil {
+		[]float32{0.1}, "model-x", []string{video.CorpusS1, video.CorpusS2}, nil, nil, 5); err != nil {
 		t.Fatalf("searchFrameEmbeddings: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -206,26 +210,8 @@ func TestSearchFrameEmbeddings_FiltersToCorpus(t *testing.T) {
 	}
 }
 
-func TestFindCmd_SearchesTheCorpusOnScreen(t *testing.T) {
-	enablePlayback(t)
-	for _, tc := range []struct{ onScreen, want string }{
-		{"", video.CorpusS1},
-		{video.CorpusS2, video.CorpusS2},
-	} {
-		search := &recordingSearch{}
-		app, _, _ := newFindTestApp(t, search)
-		app.Video = &recordingVideo{Vid: video.Video{Corpus: tc.onScreen}}
-		runAsAdmin(t, func() {
-			app.findCmd(context.Background(), newAdminUser(), []string{"a", "bridge"})
-		})
-		if len(search.Corpora) != 1 || search.Corpora[0] != tc.want {
-			t.Errorf("on screen %q: searched %v, want [%s]", tc.onScreen, search.Corpora, tc.want)
-		}
-	}
-}
-
 func TestSearchFrameEmbeddings_EmptyVector(t *testing.T) {
-	if _, err := searchFrameEmbeddings(context.Background(), nil, nil, "model-x", video.CorpusS1, nil, nil, 5); err == nil {
+	if _, err := searchFrameEmbeddings(context.Background(), nil, nil, "model-x", s1Live, nil, nil, 5); err == nil {
 		t.Error("expected an error for an empty query vector")
 	}
 }
