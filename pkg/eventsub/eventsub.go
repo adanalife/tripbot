@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	twitch "github.com/joeyak/go-twitch-eventsub/v3"
@@ -105,7 +106,17 @@ type Config struct {
 	// httptest servers.
 	wsURL        string
 	subscribeURL string
+	// subscribeTimeout bounds one Helix subscribe call; zero means
+	// defaultSubscribeTimeout. Tests shorten it.
+	subscribeTimeout time.Duration
 }
+
+// defaultSubscribeTimeout bounds each subscribe POST. The library sends it on
+// http.DefaultClient, which has no timeout of its own, and Run waits for the
+// subscribe round to finish before it returns, so a POST stuck on a half-open
+// connection would otherwise hold Run past the socket closing and stop the
+// caller from redialing.
+const defaultSubscribeTimeout = 10 * time.Second
 
 // Run dials the EventSub WebSocket, subscribes to the events for which
 // Handlers has non-nil callbacks, and blocks until ctx is canceled or
@@ -324,6 +335,12 @@ func subscribe(ctx context.Context, cfg Config, sessionID string, ev twitch.Even
 		Event:       ev,
 		Condition:   cond,
 	}
+	timeout := cfg.subscribeTimeout
+	if timeout <= 0 {
+		timeout = defaultSubscribeTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	var err error
 	if cfg.subscribeURL != "" {
 		_, err = twitch.SubscribeEventUrlWithContext(ctx, req, cfg.subscribeURL)
