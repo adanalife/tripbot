@@ -325,6 +325,28 @@ func TestGuessInsightsHandler_Aggregates(t *testing.T) {
 	}
 }
 
+// ?month=current counts from midnight on the first, whatever ?days says.
+func TestGuessInsightsHandler_CurrentMonth(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "guess_alice", false)
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"utah","actual":"utah","correct":true}`, start.Add(time.Second))
+	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"ohio","actual":"ohio","correct":true}`, start.Add(-time.Minute))
+
+	rec := insightsGET(t, "/api/insights/guesses?month=current&days=90", guessInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got guessInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if got.Month != now.Format("2006-01") || got.Total != 1 || got.Correct != 1 {
+		t.Errorf("got %+v, want month %s with only the in-month guess", got, now.Format("2006-01"))
+	}
+}
+
 // seedVideo inserts a videos row with place columns and returns its id.
 func seedVideo(t *testing.T, db *gorm.DB, slug, state, city string, cityM *float64) int {
 	t.Helper()
