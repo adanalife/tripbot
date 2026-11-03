@@ -9,6 +9,23 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.6.0] — 2026-11-03
+
+### Console / API
+
+- A clip's record on `GET /api/videos/{id}` carries `coord_source` and `coord_confidence`, so the console can say where its point came from and why it has no track. ([#1778](https://github.com/adanalife/tripbot/pull/1778))
+- `GET /api/footage/proposals`: every unruled piece auto-trim proposed to trim or drop, for the console's review queue ([#1785](https://github.com/adanalife/tripbot/pull/1785))
+
+### Fixes
+
+- A bed or station picked while the previous switch is still reaching OBS keeps its countdown on the console and in !audio, instead of reading as already applied. ([#1780](https://github.com/adanalife/tripbot/pull/1780))
+- EventSub gives up on a Helix subscribe call after 10s, so one stuck on a dead connection can't keep the listener from redialing. ([#1781](https://github.com/adanalife/tripbot/pull/1781))
+
+### CI / Tooling
+
+- Each push to `main` posts the test suite's total coverage as a `coverage` commit status, which the console's main-CI row shows. ([#1775](https://github.com/adanalife/tripbot/pull/1775))
+- Cover the background-audio radio probe: a station that answers with an error, an empty body, or a handshake and no audio reads down, and the probe's User-Agent is sent. ([#1779](https://github.com/adanalife/tripbot/pull/1779))
+
 ## [v6.5.0] — 2026-10-26
 
 ### Console / API
