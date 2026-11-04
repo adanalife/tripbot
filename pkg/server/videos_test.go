@@ -291,6 +291,7 @@ func footageGET(t *testing.T, path string) *httptest.ResponseRecorder {
 	r.Handle("/api/footage/dropped", http.HandlerFunc(footageDroppedHandler)).Methods("GET")
 	r.Handle("/api/footage/proposals", http.HandlerFunc(footageProposalsHandler)).Methods("GET")
 	r.Handle("/api/footage/reports", http.HandlerFunc(footageReportsHandler)).Methods("GET")
+	r.Handle("/api/footage/near", http.HandlerFunc(footageNearHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
@@ -336,6 +337,51 @@ func TestFootageDays(t *testing.T) {
 	}
 	if rec := footageGET(t, "/api/footage/days/march"); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad day: status = %d, want 400", rec.Code)
+	}
+}
+
+// The clips nearest a point come back nearest first, with no fix-less or
+// flagged clip among them; at 45°N a degree of longitude is ~0.7 of a degree
+// of latitude, so the clip 0.13° east beats the one 0.1° north.
+func TestFootageNear(t *testing.T) {
+	db := testdb.New(t)
+	for _, q := range []string{
+		`INSERT INTO videos (id, slug, lat, lng) VALUES (1, '2018_0514_224801_001', 45.1, -100)`,
+		`INSERT INTO videos (id, slug, lat, lng) VALUES (2, '2018_0514_224801_002', 45, -99.87)`,
+		`INSERT INTO videos (id, slug, lat, lng) VALUES (3, '2018_0514_224801_003', 46, -100)`,
+		`INSERT INTO videos (id, slug, lat, lng) VALUES (4, '2018_0514_224801_004', 0, 0)`,
+		`INSERT INTO videos (id, slug, lat, lng, flagged) VALUES (5, '2018_0514_224801_005', 45, -100, true)`,
+	} {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := func(path string) []int {
+		t.Helper()
+		rec := footageGET(t, path)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d: %s", path, rec.Code, rec.Body.String())
+		}
+		var clips []sourceClip
+		if err := json.Unmarshal(rec.Body.Bytes(), &clips); err != nil {
+			t.Fatal(err)
+		}
+		out := []int{}
+		for _, c := range clips {
+			out = append(out, c.ID)
+		}
+		return out
+	}
+	if got, want := ids("/api/footage/near?lat=45&lng=-100"), []int{2, 1, 3}; !reflect.DeepEqual(got, want) {
+		t.Errorf("near = %v, want %v", got, want)
+	}
+	if got, want := ids("/api/footage/near?lat=45&lng=-100&n=1"), []int{2}; !reflect.DeepEqual(got, want) {
+		t.Errorf("n=1 = %v, want %v", got, want)
+	}
+	for _, bad := range []string{"?lat=45", "?lat=91&lng=0", "?lat=45&lng=-100&n=0", "?lat=x&lng=1"} {
+		if rec := footageGET(t, "/api/footage/near"+bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", bad, rec.Code)
+		}
 	}
 }
 
