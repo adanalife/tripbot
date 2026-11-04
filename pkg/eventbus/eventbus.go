@@ -675,7 +675,7 @@ type SubscriberEvent struct {
 	// on events emitted before the tag existed. Only Twitch has an EventSub
 	// source today, but the tag keeps the console's per-platform filter honest.
 	Platform    string `json:"platform,omitempty"`
-	Kind        string `json:"kind"`     // "follow" | "sub" | "gift" | "resub"
+	Kind        string `json:"kind"`     // "follow" | "sub" | "gift" | "resub" | "raid"
 	Username    string `json:"username"` // the actor; "" for an anonymous gifter
 	Tier        string `json:"tier,omitempty"`
 	Months      int    `json:"months,omitempty"`       // cumulative months (resub)

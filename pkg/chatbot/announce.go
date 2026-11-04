@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
@@ -119,14 +120,32 @@ func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
 	}
 }
 
-// RecordRaid thanks the raiding channel in chat and logs a raid event stamped
-// with the airing clip and playhead, so audience rollups can separate a raid's
-// viewer spike from footage that genuinely draws viewers. Wired from
-// pkg/eventsub on channel.raid events.
+// raidFoldWindow is how soon a second raid from the same channel counts as
+// the same raid: a raider whose first raid looked like it failed on their end
+// sends it again within a minute or two, and one thank-you covers both.
+const raidFoldWindow = 5 * time.Minute
+
+// RecordRaid thanks the raiding channel in chat, publishes a raid event to the
+// console (the chat line, the TV banner, the push), and logs a raid event
+// stamped with the airing clip and playhead, so audience rollups can separate
+// a raid's viewer spike from footage that genuinely draws viewers. Wired from
+// pkg/eventsub on channel.raid events. A repeat raid from the same channel
+// inside raidFoldWindow is still logged but neither thanked nor published
+// again.
 func (a *App) RecordRaid(from string, viewers int) {
 	ctx := context.Background()
-	a.Chat.Say(fmt.Sprintf("Thank you for the raid, @%s; welcome to all %d raider(s) bleedPurple", from, viewers))
-	instrumentation.Announcements.Inc(a.Platform, "raid")
+	now := time.Now()
+	repeat := from == a.lastRaidFrom && now.Sub(a.lastRaidAt) < raidFoldWindow
+	a.lastRaidFrom, a.lastRaidAt = from, now
+	if !repeat {
+		a.Chat.Say(fmt.Sprintf("Thank you for the raid, @%s; welcome to all %d raider(s) bleedPurple", from, viewers))
+		instrumentation.Announcements.Inc(a.Platform, "raid")
+		eventbus.EmitSubscriberEvent(ctx, a.Cfg.Environment, eventbus.SubscriberEvent{
+			Platform: a.Platform,
+			Kind:     "raid",
+			Username: from,
+		})
+	}
 	r := events.Raid{From: from, Viewers: viewers}
 	// Current() is the cached notion of what's playing — no I/O, because
 	// recording a raid must not cost a round-trip to playout.
