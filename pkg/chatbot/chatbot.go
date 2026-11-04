@@ -141,6 +141,20 @@ type App struct {
 	// inside reportCooldown can't spam Discord and Sentry.
 	reportedAtMu sync.Mutex
 	reportedAt   map[string]time.Time
+	// lastReveal is the most recent chat command that named the airing
+	// location (!location, !state), so a guess on the same clip is stamped
+	// with who gave the answer away and how long before. Channel-wide, unlike
+	// the per-viewer guess cooldown: the piggyback on someone else's answer
+	// is the thing being measured.
+	lastRevealMu sync.Mutex
+	lastReveal   reveal
+}
+
+// reveal is one answer-naming command: who, which, when, and on which clip.
+type reveal struct {
+	by, command string
+	at          time.Time
+	videoID     int
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
