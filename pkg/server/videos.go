@@ -421,13 +421,16 @@ func footageProposalsHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, cuts)
 }
 
-// trimReport is one viewer's !trim, as GET /api/footage/trims lists them: the
-// clip and the moment in it (Sec, as the clip airs now), the same moment in
-// the uncut recording the clip was rendered from (SourceSec, the clock a
-// season-2 piece's trims are in), and who reported it, when, and why.
-type trimReport struct {
+// report is one person pointing at a moment of a clip, as GET
+// /api/footage/reports lists them: a viewer's !trim, a bad_coord marked on
+// the clip page, or a star. The clip and the moment in it (Sec, as the clip
+// airs now), the same moment in the uncut recording the clip was rendered
+// from (SourceSec, the clock a season-2 piece's trims are in), and who
+// reported it, when, and why.
+type report struct {
 	VideoID   int       `json:"video_id"`
 	Slug      string    `json:"slug"`
+	Kind      string    `json:"kind"`
 	Sec       float64   `json:"sec"`
 	SourceSec float64   `json:"source_sec"`
 	Note      string    `json:"note"`
@@ -436,25 +439,34 @@ type trimReport struct {
 	At        time.Time `json:"at"`
 }
 
-// trimsSQL is the newest trim reports first; each clip's offset is the same
-// one video.ClipOffset reads.
-const trimsSQL = `SELECT m.video_id, v.slug, m.source_ts_sec AS source_sec,
+// reportKinds is what ?kind= may ask for: video_moments' CHECK constraint.
+var reportKinds = map[string]bool{"trim": true, "bad_coord": true, "star": true}
+
+// reportsSQL is the newest reports first, one kind or every kind; each clip's
+// offset is the same one video.ClipOffset reads.
+const reportsSQL = `SELECT m.video_id, v.slug, m.kind, m.source_ts_sec AS source_sec,
   m.source_ts_sec - COALESCE((SELECT c.source_ts_sec - c.ts_sec FROM video_coords c
     WHERE c.video_id = m.video_id AND c.ts_sec IS NOT NULL LIMIT 1), 0) AS sec,
   m.note, m.username AS by, m.platform, m.created_at AS at
 FROM video_moments m JOIN videos v ON v.id = m.video_id
-WHERE m.kind = 'trim' ORDER BY m.created_at DESC LIMIT 200`
+WHERE (? = '' OR m.kind = ?) ORDER BY m.created_at DESC LIMIT 200`
 
-// footageTrimsHandler serves GET /api/footage/trims: the newest 200 trim
-// reports viewers sent from chat, for the console's trim queue.
-func footageTrimsHandler(w http.ResponseWriter, r *http.Request) {
-	trims := []trimReport{}
-	if err := database.GormDB().WithContext(r.Context()).Raw(trimsSQL).Scan(&trims).Error; err != nil {
-		logQueryFailure(r.Context(), "trim reports failed", err)
-		http.Error(w, `{"error":"couldn't read trim reports"}`, http.StatusInternalServerError)
+// footageReportsHandler serves GET /api/footage/reports: the newest 200
+// reports on moments of clips, every kind or the one ?kind= names, for the
+// console's inbox.
+func footageReportsHandler(w http.ResponseWriter, r *http.Request) {
+	kind := r.URL.Query().Get("kind")
+	if kind != "" && !reportKinds[kind] {
+		http.Error(w, `{"error":"kind is trim, bad_coord or star"}`, http.StatusBadRequest)
 		return
 	}
-	writeInsights(w, r, trims)
+	reports := []report{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(reportsSQL, kind, kind).Scan(&reports).Error; err != nil {
+		logQueryFailure(r.Context(), "reports failed", err)
+		http.Error(w, `{"error":"couldn't read reports"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, reports)
 }
 
 // footageDaysHandler serves GET /api/footage/days: every day with footage,

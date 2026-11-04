@@ -175,8 +175,8 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/footage/dropped", httpmw.Tagged("/api/footage/dropped", footageDroppedHandler)).Methods("GET")
 	// every unruled piece auto-trim proposed to trim or drop, for the review queue.
 	r.Handle("/api/footage/proposals", httpmw.Tagged("/api/footage/proposals", footageProposalsHandler)).Methods("GET")
-	// viewers' !trim reports, newest first, for the console's trim queue.
-	r.Handle("/api/footage/trims", httpmw.Tagged("/api/footage/trims", footageTrimsHandler)).Methods("GET")
+	// every report on a moment of a clip (!trim, bad_coord, star), newest first, for the console's inbox.
+	r.Handle("/api/footage/reports", httpmw.Tagged("/api/footage/reports", footageReportsHandler)).Methods("GET")
 	// read-only JSON stats for the console's stats page: lifetime totals over
 	// the whole log, a recent playback window, and community numbers.
 	r.Handle("/api/stats/lifetime", httpmw.Tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
