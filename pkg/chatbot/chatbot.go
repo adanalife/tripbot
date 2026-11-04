@@ -45,6 +45,11 @@ type App struct {
 	// Playout drives playback operations (timewarp, jump, skip, back). Tests
 	// inject a no-op fake; production uses the realPlayout adapter.
 	Playout Playout
+	// lastRaidFrom / lastRaidAt remember the most recent raid so RecordRaid can
+	// fold a quick repeat from the same channel into one thank-you. Only the
+	// EventSub goroutine touches them.
+	lastRaidFrom string
+	lastRaidAt   time.Time
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
 	Video Video

@@ -103,6 +103,7 @@ func TestRecordRaid_RecordsRaidEventWithAiring(t *testing.T) {
 	app.Events = rec
 	chat := &recordingChat{}
 	app.Chat = chat
+	emitted := captureSubscriberEvents(t)
 
 	app.RecordRaid("somechannel", 25)
 
@@ -124,6 +125,36 @@ func TestRecordRaid_RecordsRaidEventWithAiring(t *testing.T) {
 	}
 	if !strings.Contains(chat.Says[0], "@somechannel") || !strings.Contains(chat.Says[0], "25") {
 		t.Errorf("raid shout = %q, want the raider's @name and the viewer count", chat.Says[0])
+	}
+	evs := emitted()
+	if len(evs) != 1 || evs[0].Kind != "raid" || evs[0].Username != "somechannel" || evs[0].Platform != app.Platform {
+		t.Errorf("subscriber events = %+v, want one raid event naming somechannel on %q", evs, app.Platform)
+	}
+}
+
+// A raider who sends the raid twice in quick succession (the first looked like
+// a failure from their side) is thanked and celebrated once; both raids are
+// still logged, since each really did deliver viewers.
+func TestRecordRaid_RepeatWithinWindowIsFoldedIntoOne(t *testing.T) {
+	app := newTestApp(video.Video{ID: 77})
+	rec := &recordingEvents{}
+	app.Events = rec
+	chat := &recordingChat{}
+	app.Chat = chat
+	emitted := captureSubscriberEvents(t)
+
+	app.RecordRaid("somechannel", 9)
+	app.RecordRaid("somechannel", 2)
+	app.RecordRaid("otherchannel", 4)
+
+	if len(rec.Raids) != 3 {
+		t.Fatalf("raids = %d, want all 3 logged", len(rec.Raids))
+	}
+	if len(chat.Says) != 2 {
+		t.Errorf("chat says = %v, want one shout per distinct raider", chat.Says)
+	}
+	if evs := emitted(); len(evs) != 2 {
+		t.Errorf("subscriber events = %+v, want one per distinct raider", evs)
 	}
 }
 
