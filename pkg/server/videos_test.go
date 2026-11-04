@@ -290,6 +290,7 @@ func footageGET(t *testing.T, path string) *httptest.ResponseRecorder {
 	r.Handle("/api/footage/days/{day}", http.HandlerFunc(footageDayHandler)).Methods("GET")
 	r.Handle("/api/footage/dropped", http.HandlerFunc(footageDroppedHandler)).Methods("GET")
 	r.Handle("/api/footage/proposals", http.HandlerFunc(footageProposalsHandler)).Methods("GET")
+	r.Handle("/api/footage/reports", http.HandlerFunc(footageReportsHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
@@ -404,5 +405,50 @@ func TestFootageDropped(t *testing.T) {
 	}
 	if got[0].VideoID != 9 || got[1].VideoID != 0 || !strings.Contains(string(got[1].Ruling), "drop") {
 		t.Errorf("got %+v", got)
+	}
+}
+
+// Every kind is listed, newest report first, each at its moment in the clip
+// as it airs (shifted by a trimmed clip's offset) and in the uncut piece;
+// ?kind= narrows to one kind and refuses one that isn't.
+func TestFootageReports(t *testing.T) {
+	db := testdb.New(t)
+	for _, q := range []string{
+		`INSERT INTO videos (id, slug, corpus) VALUES (5, '20260502080000_000124_s0180', 's2'), (6, '2018_0514_224801_013', 's1')`,
+		`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source) VALUES (5, 0, 12, 40, -110, 'ocr')`,
+		`INSERT INTO video_moments (video_id, kind, source_ts_sec, note, username, platform, created_at) VALUES
+		 (5, 'trim', 42, 'fog', 'ada', 'twitch', '2026-10-30 10:00:00+00'),
+		 (6, 'trim', 7, '', 'bo', 'youtube', '2026-10-31 10:00:00+00'),
+		 (5, 'star', 20, '', 'cy', 'twitch', '2026-10-31 11:00:00+00')`,
+	} {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := footageGET(t, "/api/footage/reports")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got []report
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].Kind != "star" || got[1].VideoID != 6 || got[1].Sec != 7 || got[1].By != "bo" {
+		t.Fatalf("got %+v, want the star first, then the s1 trim at 7s", got)
+	}
+	if r := got[2]; r.Slug != "20260502080000_000124_s0180" || r.Kind != "trim" || r.Sec != 30 || r.SourceSec != 42 ||
+		r.Note != "fog" || r.Platform != "twitch" {
+		t.Errorf("trimmed clip's report = %+v, want sec 30 / source_sec 42", r)
+	}
+	rec = footageGET(t, "/api/footage/reports?kind=trim")
+	got = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Kind != "trim" || got[1].Kind != "trim" {
+		t.Errorf("kind=trim got %+v, want the two trims", got)
+	}
+	if rec := footageGET(t, "/api/footage/reports?kind=boring"); rec.Code != http.StatusBadRequest {
+		t.Errorf("kind=boring status = %d, want 400", rec.Code)
 	}
 }

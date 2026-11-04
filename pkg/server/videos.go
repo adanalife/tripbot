@@ -421,6 +421,54 @@ func footageProposalsHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, cuts)
 }
 
+// report is one person pointing at a moment of a clip, as GET
+// /api/footage/reports lists them: a viewer's !trim, a bad_coord marked on
+// the clip page, or a star. The clip and the moment in it (Sec, as the clip
+// airs now), the same moment in the uncut recording the clip was rendered
+// from (SourceSec, the clock a season-2 piece's trims are in), and who
+// reported it, when, and why.
+type report struct {
+	VideoID   int       `json:"video_id"`
+	Slug      string    `json:"slug"`
+	Kind      string    `json:"kind"`
+	Sec       float64   `json:"sec"`
+	SourceSec float64   `json:"source_sec"`
+	Note      string    `json:"note"`
+	By        string    `json:"by"`
+	Platform  string    `json:"platform"`
+	At        time.Time `json:"at"`
+}
+
+// reportKinds is what ?kind= may ask for: video_moments' CHECK constraint.
+var reportKinds = map[string]bool{"trim": true, "bad_coord": true, "star": true}
+
+// reportsSQL is the newest reports first, one kind or every kind; each clip's
+// offset is the same one video.ClipOffset reads.
+const reportsSQL = `SELECT m.video_id, v.slug, m.kind, m.source_ts_sec AS source_sec,
+  m.source_ts_sec - COALESCE((SELECT c.source_ts_sec - c.ts_sec FROM video_coords c
+    WHERE c.video_id = m.video_id AND c.ts_sec IS NOT NULL LIMIT 1), 0) AS sec,
+  m.note, m.username AS by, m.platform, m.created_at AS at
+FROM video_moments m JOIN videos v ON v.id = m.video_id
+WHERE (? = '' OR m.kind = ?) ORDER BY m.created_at DESC LIMIT 200`
+
+// footageReportsHandler serves GET /api/footage/reports: the newest 200
+// reports on moments of clips, every kind or the one ?kind= names, for the
+// console's inbox.
+func footageReportsHandler(w http.ResponseWriter, r *http.Request) {
+	kind := r.URL.Query().Get("kind")
+	if kind != "" && !reportKinds[kind] {
+		http.Error(w, `{"error":"kind is trim, bad_coord or star"}`, http.StatusBadRequest)
+		return
+	}
+	reports := []report{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(reportsSQL, kind, kind).Scan(&reports).Error; err != nil {
+		logQueryFailure(r.Context(), "reports failed", err)
+		http.Error(w, `{"error":"couldn't read reports"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, reports)
+}
+
 // footageDaysHandler serves GET /api/footage/days: every day with footage,
 // oldest first, for the console's calendar.
 // ponytail: a scan of videos per call, a few thousand rows.
