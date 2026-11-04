@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.9.0] — 2026-11-04
+
+### Chatbot
+
+- A raid now reaches the console, tempomat and the TV banner as a raid event, and a quick re-raid from the same channel is thanked once ([#1792](https://github.com/adanalife/tripbot/pull/1792))
+
+### Console / API
+
+- The console can list every report on a moment of a clip — viewers' `!trim`s, bad-coordinate marks, stars: `GET /api/footage/reports` returns the newest 200 (or one `?kind=`), each with its moment in the clip and in the uncut piece. ([#1776](https://github.com/adanalife/tripbot/pull/1776))
+
 ## [v6.8.0] — 2026-11-04
 
 ### Console / API

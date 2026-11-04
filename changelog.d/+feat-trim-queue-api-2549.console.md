@@ -1,1 +1,0 @@
-The console can list every report on a moment of a clip — viewers' `!trim`s, bad-coordinate marks, stars: `GET /api/footage/reports` returns the newest 200 (or one `?kind=`), each with its moment in the clip and in the uncut piece.
