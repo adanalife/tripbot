@@ -9,6 +9,17 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.8.0] — 2026-11-04
+
+### Console / API
+
+- `POST /api/audio` with `{"now": true}` lands a background-audio switch that is waiting out its correction delay straight away, for the console's "do it now" button. ([#1786](https://github.com/adanalife/tripbot/pull/1786))
+
+### Fixes
+
+- EventSub redials after Twitch closes the socket normally instead of going quiet until the next restart: follows, subs and raids keep arriving. ([#1770](https://github.com/adanalife/tripbot/pull/1770))
+- The radio station list follows its mounted file: a list that lands or becomes valid after the bot starts is picked up on the next lookup, no restart needed. ([#1771](https://github.com/adanalife/tripbot/pull/1771))
+
 ## [v6.7.0] — 2026-11-03
 
 ### Chatbot
