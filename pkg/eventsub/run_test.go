@@ -216,8 +216,10 @@ func TestRun_SubscribesAndDispatches(t *testing.T) {
 		OnRaid: func(from string, viewers int) { record("raid " + from + " " + strconv.Itoa(viewers)) },
 	}
 
-	if err := run(t, cfg, h); err != nil {
-		t.Fatalf("Run after a normal close = %v, want nil", err)
+	// The close ends the session, and a lost session is an error however it
+	// was closed: nil would read as a clean shutdown and stop the redial.
+	if err := run(t, cfg, h); err == nil {
+		t.Fatal("Run after the close returned nil, want an error so the loop redials")
 	}
 
 	want := []string{
@@ -286,8 +288,10 @@ func TestRun_SubscribesOnlyRegisteredHandlers(t *testing.T) {
 	f := &fakeTwitch{respond: accepted, closeCode: websocket.StatusNormalClosure}
 	cfg := f.start(t)
 
-	if err := run(t, cfg, Handlers{OnRaid: func(string, int) {}}); err != nil {
-		t.Fatalf("Run = %v, want nil", err)
+	// A normal close (1000) outside a reconnect is reported too — the library
+	// hands it back as no error, and the session is just as gone.
+	if err := run(t, cfg, Handlers{OnRaid: func(string, int) {}}); err == nil {
+		t.Fatal("Run after a normal close returned nil, want an error so the loop redials")
 	}
 	reqs := f.requests()
 	if len(reqs) != 1 || reqs[0].Type != "channel.raid" {
@@ -417,8 +421,8 @@ func TestRun_ReportsMissingScopes(t *testing.T) {
 				OnRaid:          func(string, int) {},
 				OnMissingScopes: func(s []string) { reports <- slices.Clone(s) },
 			}
-			if err := run(t, cfg, h); err != nil {
-				t.Fatalf("Run = %v, want nil", err)
+			if err := run(t, cfg, h); err == nil {
+				t.Fatal("Run after the close returned nil, want an error so the loop redials")
 			}
 			var got []string
 			select {
