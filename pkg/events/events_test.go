@@ -283,6 +283,30 @@ func TestGuessSubmittedRow(t *testing.T) {
 	}
 }
 
+// A guess that followed a reveal carries it in the meta — who named the
+// answer, with which command, how long before — so a rollup can set
+// piggybacks aside. The key is absent, not null, when nobody had.
+func TestGuessSubmittedRowCarriesReveal(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone", "twitch", "guess_submitted", sqlmock.AnyArg(), sqlmock.AnyArg(), nil, nil, nil,
+			`{"guessed":"Colorado","actual":"Colorado","correct":true,"distance_mi":0,"reveal":{"by":"kate","command":"location","secs_before":42.5}}`,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := GuessSubmitted(context.Background(), &c.TripbotConfig{Platform: "twitch"}, GuessSubmission{
+		Username: "someone", Guessed: "Colorado", Actual: "Colorado", Correct: true,
+		Reveal: &GuessReveal{By: "kate", Command: "location", SecsBefore: 42.5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 // A miss records correct:false explicitly — the key never drops out of the
 // meta, or a rollup computing accuracy would read absence as anything it
 // likes — and carries the miss distance in centroid-to-centroid miles. Zero

@@ -399,7 +399,33 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	// record that they know the location now
 	user.SetLastLocationTime()
+	a.noteReveal(user, "location")
 	a.Reply(ctx, msg)
+}
+
+// noteReveal remembers that user just named the airing clip's location, for
+// recordGuess to stamp onto the guesses that follow on the same clip.
+func (a *App) noteReveal(user *users.User, command string) {
+	var vid int
+	if a.Video != nil {
+		vid = a.Video.Current().ID
+	}
+	a.lastRevealMu.Lock()
+	a.lastReveal = reveal{by: user.Username, command: command, at: time.Now(), videoID: vid}
+	a.lastRevealMu.Unlock()
+}
+
+// revealFor is the reveal that applies to a guess on videoID — the last one,
+// if it named that same clip — or nil. A clip the player hasn't identified
+// (0) never matches: a reveal there names nothing a guess could lean on.
+func (a *App) revealFor(videoID int) *events.GuessReveal {
+	a.lastRevealMu.Lock()
+	r := a.lastReveal
+	a.lastRevealMu.Unlock()
+	if videoID == 0 || r.videoID != videoID {
+		return nil
+	}
+	return &events.GuessReveal{By: r.by, Command: r.command, SecsBefore: time.Since(r.at).Seconds()}
 }
 
 func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -658,6 +684,7 @@ func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
 		secs := a.Video.CurrentProgress().Seconds()
 		g.TsSec = &secs
 	}
+	g.Reveal = a.revealFor(g.VideoID)
 	if err := a.Events.GuessSubmitted(ctx, g); err != nil {
 		slog.ErrorContext(ctx, "error recording guess", "err", err,
 			"username", g.Username)
@@ -768,6 +795,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, params []string) {
 	msg := fmt.Sprintf("We're in %s", state)
 	// record that they know the location now
 	user.SetLastLocationTime()
+	a.noteReveal(user, "state")
 	a.Reply(ctx, msg)
 }
 

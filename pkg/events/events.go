@@ -190,6 +190,18 @@ type guessMeta struct {
 	// guess. Omitted when a centroid doesn't resolve (a territory), since a
 	// missing measurement and a perfect one must not read alike.
 	DistanceMi *float64 `json:"distance_mi,omitempty"`
+	// Reveal is the chat command that named the answer on this same clip
+	// before the guess, when one did — the guesser's own or anyone's.
+	Reveal *GuessReveal `json:"reveal,omitempty"`
+}
+
+// GuessReveal names the command that gave a guess's answer away: who ran
+// !location or !state on the clip being guessed, and how many seconds before
+// the guess. A rollup separates earned guesses from piggybacks with it.
+type GuessReveal struct {
+	By         string  `json:"by"`
+	Command    string  `json:"command"`
+	SecsBefore float64 `json:"secs_before"`
 }
 
 // guessDistanceMi measures a guess's miss distance in centroid-to-centroid
@@ -226,6 +238,9 @@ type GuessSubmission struct {
 	VideoID int
 	// TsSec is seconds into that clip; nil writes NULL.
 	TsSec *float64
+	// Reveal is the answer-naming command that preceded this guess on the
+	// same clip; nil when nobody had named it.
+	Reveal *GuessReveal
 }
 
 // GuessSubmitted records one answerable !guess — right or wrong — pairing what
@@ -240,6 +255,7 @@ func GuessSubmitted(ctx context.Context, cfg *c.TripbotConfig, g GuessSubmission
 		Actual:     g.Actual,
 		Correct:    g.Correct,
 		DistanceMi: guessDistanceMi(g),
+		Reveal:     g.Reveal,
 	})
 	if err != nil {
 		return err
