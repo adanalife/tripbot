@@ -10,6 +10,10 @@ const (
 	SlugRightMessage = "right-message"
 	SlugTimewarp     = "timewarp"
 	SlugGPS          = "gps"
+	// SlugWeather has no *Onscreen behind it: state.json derives it from the
+	// location feed's cached $weather (see weatherView), so it shows and hides
+	// with the same freshness the corner rotators use.
+	SlugWeather = "weather"
 )
 
 // Snapshot returns a fresh map of every registered onscreen keyed by slug.
