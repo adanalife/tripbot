@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/bradfitz/latlong"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // videoDetail is one clip's record for the console's video page: the file,
@@ -483,6 +485,50 @@ WHERE day IS NOT NULL GROUP BY day ORDER BY day`).Scan(&days).Error
 		return
 	}
 	writeInsights(w, r, days)
+}
+
+// nearDefault and nearMax bound GET /api/footage/near's ?n=.
+const (
+	nearDefault = 10
+	nearMax     = 50
+)
+
+// footageNearHandler serves GET /api/footage/near?lat=&lng=&n=: the n clips
+// filmed closest to a point, nearest first, each with its fix and track (the
+// footage day's shape), for the app's map. A clip with no fix is left out.
+// ponytail: a scan of videos per call with a flat-earth distance — a few
+// thousand rows, one long-press. A PostGIS index if it shows.
+func footageNearHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	lat, errLat := strconv.ParseFloat(q.Get("lat"), 64)
+	lng, errLng := strconv.ParseFloat(q.Get("lng"), 64)
+	if errLat != nil || errLng != nil || math.Abs(lat) > 90 || math.Abs(lng) > 180 {
+		http.Error(w, `{"error":"lat and lng are a point"}`, http.StatusBadRequest)
+		return
+	}
+	n := nearDefault
+	if s := q.Get("n"); s != "" {
+		v, err := strconv.Atoi(s)
+		if err != nil || v < 1 {
+			http.Error(w, `{"error":"n is a positive count"}`, http.StatusBadRequest)
+			return
+		}
+		n = min(v, nearMax)
+	}
+	var vids []video.Video
+	err := database.GormDB().WithContext(r.Context()).
+		Where("NOT flagged AND NOT (lat = 0 AND lng = 0)").
+		Order(clause.OrderBy{Expression: clause.Expr{
+			SQL:  "power(lat - ?, 2) + power((lng - ?) * cos(radians(?)), 2)",
+			Vars: []any{lat, lng, lat}, WithoutParentheses: true,
+		}}).
+		Limit(n).Find(&vids).Error
+	if err != nil {
+		logQueryFailure(r.Context(), "footage near failed", err, "lat", lat, "lng", lng)
+		http.Error(w, `{"error":"couldn't read footage near that point"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, withTracks(r.Context(), vids))
 }
 
 // footageDayResponse is the wire shape of GET /api/footage/days/{day}.

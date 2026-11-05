@@ -171,6 +171,8 @@ func (s *Server) Start(ctx context.Context) error {
 	// the footage calendar: every filmed day, and one day's clips.
 	r.Handle("/api/footage/days", httpmw.Tagged("/api/footage/days", footageDaysHandler)).Methods("GET")
 	r.Handle("/api/footage/days/{day}", httpmw.Tagged("/api/footage/days/{day}", footageDayHandler)).Methods("GET")
+	// the clips filmed closest to a point, for the app's map.
+	r.Handle("/api/footage/near", httpmw.Tagged("/api/footage/near", footageNearHandler)).Methods("GET")
 	// every season-2 piece auto-trim or a reviewer dropped whole.
 	r.Handle("/api/footage/dropped", httpmw.Tagged("/api/footage/dropped", footageDroppedHandler)).Methods("GET")
 	// every unruled piece auto-trim proposed to trim or drop, for the review queue.
