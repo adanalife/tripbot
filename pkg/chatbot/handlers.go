@@ -414,8 +414,9 @@ func (a *App) findCommand(message string) (*Command, string, []string) {
 		// spaceless variant: "!gotowyoming" is a registered trigger with its
 		// first param glued on. Runs after the fuzzy pass so a close
 		// misspelling ("!gotoo") stays a typo of !goto rather than becoming
-		// "!goto o".
-		if cmd, rest := a.splitSpaceless(command); cmd != nil {
+		// "!goto o". Only a state name counts as the glued-on param:
+		// "!staterequest" is an unknown command, not "!state request".
+		if cmd, rest := a.splitSpaceless(command); cmd != nil && stateGuessParams("!"+rest, params) != nil {
 			slog.Info("split spaceless command", "text", command, "command", cmd.Trigger)
 			return cmd, command, append([]string{rest}, params...)
 		}
