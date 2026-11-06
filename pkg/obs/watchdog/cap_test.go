@@ -119,9 +119,9 @@ func TestBroadcastCapRestartsOncePerBroadcast(t *testing.T) {
 	})
 }
 
-// A failed restart is reported to OnRestart with its error, and still counts
-// as this broadcast's one restart: the loop does not retry it every tick.
-func TestBroadcastCapReportsAFailedRestartOnce(t *testing.T) {
+// A failed restart is reported to OnRestart with its error and tried again on
+// the next tick, up to capRestartAttempts times for the broadcast, then left.
+func TestBroadcastCapRetriesAFailedRestartAFewTimes(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		restartErr := errors.New("obs: connection refused")
 		f := &capFixture{restartErr: restartErr}
@@ -129,14 +129,38 @@ func TestBroadcastCapReportsAFailedRestartOnce(t *testing.T) {
 		stop := startCap(t, f)
 		defer stop()
 
-		tick(5)
-		if got := f.restartCount(); got != 1 {
-			t.Fatalf("restarts after a failed restart = %d, want 1", got)
+		tick(10)
+		if got := f.restartCount(); got != capRestartAttempts {
+			t.Fatalf("restarts after failed restarts = %d, want %d", got, capRestartAttempts)
 		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		if len(f.outcomes) != 1 || !errors.Is(f.outcomes[0], restartErr) {
-			t.Fatalf("OnRestart calls = %v, want one carrying %v", f.outcomes, restartErr)
+		if len(f.outcomes) != capRestartAttempts {
+			t.Fatalf("OnRestart calls = %v, want %d", f.outcomes, capRestartAttempts)
+		}
+		for _, err := range f.outcomes {
+			if !errors.Is(err, restartErr) {
+				t.Fatalf("OnRestart calls = %v, want each carrying %v", f.outcomes, restartErr)
+			}
+		}
+	})
+}
+
+// A retry that succeeds is the broadcast's restart: the loop stops there.
+func TestBroadcastCapStopsRetryingOnceARestartSucceeds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := &capFixture{restartErr: errors.New("obs: connection refused")}
+		f.set(obs.StreamSteady, time.Now().Add(-capMaxAge-time.Minute))
+		stop := startCap(t, f)
+		defer stop()
+
+		tick(1)
+		f.mu.Lock()
+		f.restartErr = nil
+		f.mu.Unlock()
+		tick(10)
+		if got := f.restartCount(); got != 2 {
+			t.Fatalf("restarts = %d, want 2 (one failure, one success)", got)
 		}
 	})
 }
