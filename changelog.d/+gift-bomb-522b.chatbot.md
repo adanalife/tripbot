@@ -1,0 +1,1 @@
+A gift bomb gets one celebration in chat, scaled to the gift (an emote per sub gifted, up to 25, and one mile per sub for everyone in a single grant), instead of two bot lines and a mile grant per recipient, which a big bomb pushed past Twitch's chat rate limit.
