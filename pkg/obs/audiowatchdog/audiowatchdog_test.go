@@ -158,7 +158,7 @@ var playing = tick{state: obs.MediaStatePlaying, reachable: true, db: -18, fresh
 var ended = tick{state: obs.MediaStateEnded, reachable: false, db: silenceFloorDB, fresh: false}
 
 func cfg(fail, recover int, cooldown time.Duration) Config {
-	return Config{FailThreshold: fail, RecoverThreshold: recover, SilenceDB: -50, Cooldown: cooldown}
+	return Config{FailThreshold: fail, SilenceThreshold: fail, RecoverThreshold: recover, SilenceDB: -50, Cooldown: cooldown}
 }
 
 func TestWatch_FallsBackAfterThresholdDownTicks(t *testing.T) {
@@ -180,6 +180,40 @@ func TestWatch_SilenceWhilePlayingTriggersFallback(t *testing.T) {
 	// "playing but silent" case the audio meter exists to catch.
 	silent := tick{state: obs.MediaStatePlaying, reachable: false, db: -58, fresh: true}
 	deps := run(t, []tick{silent, silent, silent, playing, playing}, cfg(3, 4, time.Minute))
+	if got := deps.toFallback.Load(); got != 1 {
+		t.Fatalf("to_fallback swaps: want 1, got %d", got)
+	}
+}
+
+func TestWatch_QuietPassageShorterThanSilenceThresholdStaysOnRadio(t *testing.T) {
+	// The radio's own quiet passages read at the meter floor while the media
+	// plays on: three silent ticks there are music, not an outage.
+	quiet := tick{state: obs.MediaStatePlaying, reachable: true, db: silenceFloorDB, fresh: true}
+	c := cfg(3, 4, time.Minute)
+	c.SilenceThreshold = 5
+	deps := run(t, []tick{quiet, quiet, quiet, quiet, playing, quiet, quiet, playing}, c)
+	if got := deps.toFallback.Load(); got != 0 {
+		t.Fatalf("to_fallback swaps: want 0, got %d", got)
+	}
+}
+
+func TestWatch_SustainedSilenceFallsBackAtSilenceThreshold(t *testing.T) {
+	quiet := tick{state: obs.MediaStatePlaying, reachable: false, db: silenceFloorDB, fresh: true}
+	c := cfg(3, 4, time.Minute)
+	c.SilenceThreshold = 5
+	deps := run(t, []tick{quiet, quiet, quiet, quiet, quiet, playing}, c)
+	if got := deps.toFallback.Load(); got != 1 {
+		t.Fatalf("to_fallback swaps: want 1, got %d", got)
+	}
+}
+
+func TestWatch_MediaGoingDownMidSilenceUsesFailThreshold(t *testing.T) {
+	// Silence that ends in a wedged source is an outage: once the media reads
+	// down, the shorter threshold applies to the misses already counted.
+	quiet := tick{state: obs.MediaStatePlaying, reachable: false, db: silenceFloorDB, fresh: true}
+	c := cfg(3, 4, time.Minute)
+	c.SilenceThreshold = 9
+	deps := run(t, []tick{quiet, quiet, ended, playing}, c)
 	if got := deps.toFallback.Load(); got != 1 {
 		t.Fatalf("to_fallback swaps: want 1, got %d", got)
 	}
