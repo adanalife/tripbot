@@ -1,0 +1,1 @@
+The schema ships in its own `adanalife/tripbot-migrate` image (migrate CLI + `db/migrate` + seed), tagged with the tripbot release; the migrate initContainer and the seed Job run from it and the bot image no longer bundles them.

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Called by infra/docker/docker-compose.yml (seed service entrypoint) and baked
-# into the tripbot image (infra/docker/tripbot/Dockerfile) as /usr/local/bin/seed
-# for the k8s one-shot DB seed Job. Idempotently loads db/seed/videos.csv.
+# Baked into the migrate image (infra/docker/migrate/Dockerfile) as
+# /usr/local/bin/seed-db for the k8s one-shot DB seed Job, which has psql.
+# Idempotently loads db/seed/videos.csv.
 
 set -ex
-
-apt-get update && apt-get install -y --no-install-recommends postgresql-client
 
 DSN="postgres://$DATABASE_USER:$DATABASE_PASS@$DATABASE_HOST/$DATABASE_DB"
 

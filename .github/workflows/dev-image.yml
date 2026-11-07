@@ -46,7 +46,6 @@ jobs:
             tripbot:
               - 'cmd/tripbot/**'
               - 'pkg/**'
-              - 'db/migrate/**'
               - 'infra/docker/tripbot/**'
               - 'go.mod'
               - 'go.sum'

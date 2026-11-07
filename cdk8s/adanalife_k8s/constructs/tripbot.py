@@ -48,6 +48,11 @@ from adanalife_k8s.naming import app_name, meta_labels, selector
 from adanalife_k8s.network_policy import emit_http_ingress_policy
 
 IMAGE = "adanalife/tripbot"
+# The schema image (migrate CLI + db/migrate + seed), published by the same
+# release run under the same tag, so it rides tripbot's pin and needs none of
+# its own. The image gate probes only IMAGE: this one is a copy of files and
+# publishes first in the run.
+MIGRATE_IMAGE = "adanalife/tripbot-migrate"
 DB_SECRET_NAME = "tripbot-database-creds"  # ESO-materialized DB creds (eso envs)
 LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
 # Identity label for the shared (non-per-platform) Secrets — they belong to the
@@ -229,6 +234,7 @@ class Tripbot(Construct):
         labels = meta_labels(name)
         sel = selector(name)
         image = f"{IMAGE}:{env.tag_for('tripbot')}"
+        migrate_image = f"{MIGRATE_IMAGE}:{env.tag_for('tripbot')}"
         pull = env.pull_policy_for("tripbot")
         cm_name = config_map_name(platform)
         local = env.secret_source == "local"
@@ -327,7 +333,7 @@ class Tripbot(Construct):
         # populates the schema before the main container's LoadFromDB runs.
         migrate = k8s.Container(
             name="migrate",
-            image=image,
+            image=migrate_image,
             image_pull_policy=pull,
             security_context=hardened,
             command=["migrate"],
@@ -674,7 +680,7 @@ def seed(scope: Construct, env: EnvConfig) -> None:
     ns = env.namespace or None
     local = env.secret_source == "local"
     db_secret = LOCAL_DB_SECRET if local else DB_SECRET_NAME
-    image = f"{IMAGE}:{env.tag_for('tripbot')}"
+    image = f"{MIGRATE_IMAGE}:{env.tag_for('tripbot')}"
     pull = env.pull_policy_for("tripbot")
     db_env = [
         k8s.EnvFromSource(
