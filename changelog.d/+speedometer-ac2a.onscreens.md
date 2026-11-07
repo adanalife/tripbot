@@ -1,0 +1,1 @@
+A `speedometer` onscreen shows the van's speed at the playhead on a speed-limit sign, fed every ten seconds over a new `speed.update` subject. It hides on interpolated spans and implausible readings, and when the feed stops.
