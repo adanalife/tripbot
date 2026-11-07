@@ -425,16 +425,17 @@ func footageProposalsHandler(w http.ResponseWriter, r *http.Request) {
 
 // report is one person pointing at a moment of a clip, as GET
 // /api/footage/reports lists them: a viewer's !trim, a bad_coord marked on
-// the clip page, or a star. The clip and the moment in it (Sec, as the clip
-// airs now), the same moment in the uncut recording the clip was rendered
-// from (SourceSec, the clock a season-2 piece's trims are in), and who
+// the clip page, or a star — or at the whole clip, a viewer's !boring. The
+// clip and the moment in it (Sec, as the clip airs now), the same moment in
+// the uncut recording the clip was rendered from (SourceSec, the clock a
+// season-2 piece's trims are in), both nil for a whole-clip report, and who
 // reported it, when, and why.
 type report struct {
 	VideoID   int       `json:"video_id"`
 	Slug      string    `json:"slug"`
 	Kind      string    `json:"kind"`
-	Sec       float64   `json:"sec"`
-	SourceSec float64   `json:"source_sec"`
+	Sec       *float64  `json:"sec"`
+	SourceSec *float64  `json:"source_sec"`
 	Note      string    `json:"note"`
 	By        string    `json:"by"`
 	Platform  string    `json:"platform"`
@@ -442,7 +443,7 @@ type report struct {
 }
 
 // reportKinds is what ?kind= may ask for: video_moments' CHECK constraint.
-var reportKinds = map[string]bool{"trim": true, "bad_coord": true, "star": true}
+var reportKinds = map[string]bool{"trim": true, "bad_coord": true, "star": true, "boring": true}
 
 // reportsSQL is the newest reports first, one kind or every kind; each clip's
 // offset is the same one video.ClipOffset reads.
@@ -459,7 +460,7 @@ WHERE (? = '' OR m.kind = ?) ORDER BY m.created_at DESC LIMIT 200`
 func footageReportsHandler(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	if kind != "" && !reportKinds[kind] {
-		http.Error(w, `{"error":"kind is trim, bad_coord or star"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"kind is trim, bad_coord, star or boring"}`, http.StatusBadRequest)
 		return
 	}
 	reports := []report{}

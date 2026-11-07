@@ -49,6 +49,12 @@
       ]
     },
     {
+      "trigger": "!boring",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
       "trigger": "!commands",
       "aliases": [
         "!command",
