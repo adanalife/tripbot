@@ -47,6 +47,7 @@ var twitchOnlyJobs = []string{
 	"twitch.GetFollowerCount",
 	"twitch.ReloadTokens",
 	"twitch.EmitAuthStatus",
+	"knownbots.Refresh",
 }
 
 // The broadcast-discovery jobs are doubly gated: off Twitch, and only when that
