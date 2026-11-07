@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	le "github.com/adanalife/tripbot/pkg/leaderboard-events"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -477,5 +478,74 @@ func TestShowRotatingLeaderboard_FlagOff_NeverFetches(t *testing.T) {
 		if strings.Contains(call, "Guessr") {
 			t.Errorf("a guessr board reached the overlay with the flag off: %s", call)
 		}
+	}
+}
+
+// Every board in the wire vocabulary has to resolve, or a console button
+// publishes a name tripbot silently drops. The map is the only thing standing
+// between the two, so it is what the test walks.
+func TestShowNamedLeaderboard_EveryWireBoardResolves(t *testing.T) {
+	for _, board := range le.Boards {
+		if _, ok := boardsByName[board]; !ok {
+			t.Errorf("wire board %q has no leaderboardKind", board)
+		}
+	}
+	if len(boardsByName) != len(le.Boards) {
+		t.Errorf("boardsByName has %d entries, the wire vocabulary has %d", len(boardsByName), len(le.Boards))
+	}
+}
+
+func TestShowNamedLeaderboard_ShowsTheBoardAsked(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Scoreboards = &recordingScoreboards{
+		Month:   "July",
+		Miles:   [][]string{{"viewer1", "12.5"}, {"viewer2", "3.2"}},
+		Guesses: [][]string{{"viewer1", "7"}},
+	}
+
+	if !app.ShowNamedLeaderboard(context.Background(), le.BoardGuesses) {
+		t.Fatal("ShowNamedLeaderboard reported nothing shown")
+	}
+
+	want := `ShowLeaderboard("Correct Guesses This Month", 1 rows)`
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+// The rotation falls back to monthly miles on an empty board; a named request
+// must not. An operator asked for one board, and quietly showing another reads
+// as the button being broken.
+func TestShowNamedLeaderboard_EmptyBoardDoesNotFallBack(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Scoreboards = &recordingScoreboards{
+		Month: "July",
+		Miles: [][]string{{"viewer1", "12.5"}},
+		// Guesses stays empty — early in the month, nobody has scored yet.
+	}
+
+	if app.ShowNamedLeaderboard(context.Background(), le.BoardGuesses) {
+		t.Error("an empty board reported itself as shown")
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call, got %v", rec.Calls)
+	}
+}
+
+func TestShowNamedLeaderboard_UnknownBoardShowsNothing(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Scoreboards = &recordingScoreboards{Month: "July", Miles: [][]string{{"viewer1", "12.5"}}}
+
+	if app.ShowNamedLeaderboard(context.Background(), "not-a-board") {
+		t.Error("an unknown board reported itself as shown")
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call, got %v", rec.Calls)
 	}
 }
