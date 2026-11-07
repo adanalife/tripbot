@@ -42,3 +42,27 @@ FROM video_moments WHERE video_id = ? ORDER BY source_ts_sec, kind, platform`, v
 		}
 	}
 }
+
+// The previous play is the platform's second newest, with how long it aired;
+// one still on screen or with an unseen end isn't one.
+func TestPreviousPlay(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	a := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Utah"})
+	b := insertVideo(t, db, Video{Slug: "2018_0514_224901_014", State: "Utah"})
+	if _, _, ok, err := PreviousPlay(ctx, "twitch"); ok || err != nil {
+		t.Fatalf("no plays: ok=%v err=%v", ok, err)
+	}
+	db.Exec(`INSERT INTO video_plays (platform, video_id, started_at, ended_at) VALUES
+('twitch', ?, now() - interval '200 seconds', now() - interval '20 seconds'),
+('twitch', ?, now() - interval '20 seconds', NULL),
+('youtube', ?, now() - interval '50 seconds', NULL),
+('youtube', ?, now() - interval '5 seconds', NULL)`, a.ID, b.ID, a.ID, b.ID)
+	id, aired, ok, err := PreviousPlay(ctx, "twitch")
+	if err != nil || !ok || id != a.ID || aired < 179.9 || aired > 180.1 {
+		t.Errorf("twitch = %d, %.1f, %v, %v; want %d, 180, true", id, aired, ok, err, a.ID)
+	}
+	if _, _, ok, err := PreviousPlay(ctx, "youtube"); ok || err != nil {
+		t.Errorf("unseen end: ok=%v err=%v, want false", ok, err)
+	}
+}
