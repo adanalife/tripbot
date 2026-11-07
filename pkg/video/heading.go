@@ -26,14 +26,26 @@ var compassPoints = [8]string{
 	"south", "southwest", "west", "northwest",
 }
 
+// compassAbbrevs are compassPoints as the one- and two-letter marks a map
+// uses, for a surface too narrow for the word.
+var compassAbbrevs = [8]string{"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
+
 // Compass names the eight-point direction a bearing falls in. Chat gets a word
 // rather than a number of degrees: "heading northwest" is what a viewer can
 // picture, and eight points is already finer than a dashcam track supports.
 func Compass(bearing float64) string {
+	return compassPoints[compassIndex(bearing)]
+}
+
+// CompassAbbrev is Compass as "N", "NE", … "NW".
+func CompassAbbrev(bearing float64) string {
+	return compassAbbrevs[compassIndex(bearing)]
+}
+
+func compassIndex(bearing float64) int {
 	// +22.5 puts the boundary between two points halfway between them rather
 	// than on one of them, so due north stays "north" for 22.5° either side.
-	idx := int(math.Floor(math.Mod(bearing+22.5+360, 360) / 45))
-	return compassPoints[idx%8]
+	return int(math.Floor(math.Mod(bearing+22.5+360, 360)/45)) % 8
 }
 
 // Velocity is how the van was moving at one moment: which way, and how fast.
@@ -88,7 +100,7 @@ func VelocityAt(ctx context.Context, vid Video, at time.Duration) (v Velocity, o
 		return Velocity{}, true
 	}
 	return Velocity{
-		Bearing:  bearingDeg(start, end),
+		Bearing:  Bearing(start, end),
 		SpeedMPS: dist / vid.realElapsed(to-from).Seconds(),
 		Moving:   true,
 	}, true
@@ -98,9 +110,9 @@ func VelocityAt(ctx context.Context, vid Video, at time.Duration) (v Velocity, o
 func (v Velocity) MPH() float64 { return v.SpeedMPS * 2.236936 }
 func (v Velocity) KPH() float64 { return v.SpeedMPS * 3.6 }
 
-// bearingDeg is the initial great-circle bearing from a to b, in degrees
+// Bearing is the initial great-circle bearing from a to b, in degrees
 // clockwise from north.
-func bearingDeg(a, b Moment) float64 {
+func Bearing(a, b Moment) float64 {
 	lat1, lat2 := rad(a.Lat), rad(b.Lat)
 	dLon := rad(b.Lng - a.Lng)
 

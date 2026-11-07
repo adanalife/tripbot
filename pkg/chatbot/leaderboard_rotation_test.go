@@ -443,9 +443,9 @@ func TestGuessrLeaderboardCmd_FlagOff_NeverFetches(t *testing.T) {
 
 func swapGuessrURL(t *testing.T, url string) {
 	t.Helper()
-	original := guessrBoardURL
-	guessrBoardURL = url
-	t.Cleanup(func() { guessrBoardURL = original })
+	original := guessrAPI
+	guessrAPI = url
+	t.Cleanup(func() { guessrAPI = original })
 }
 
 // With the flag off, no roll reaches the game at all. Asserted against a server
