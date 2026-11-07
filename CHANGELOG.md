@@ -9,6 +9,23 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.10.0] — 2026-11-07
+
+### Chatbot
+
+- `!jump` with a word that isn't a state says so, instead of claiming there's no footage for it yet. ([#1789](https://github.com/adanalife/tripbot/pull/1789))
+- Spaceless commands only split when the glued-on word is a state, so `!staterequest` stays an unknown command instead of running `!state request`. ([#1789](https://github.com/adanalife/tripbot/pull/1789))
+- Each guess records who named the clip's location before it (!location / !state) and how long before, so piggybacked guesses can be told apart ([#1794](https://github.com/adanalife/tripbot/pull/1794))
+
+### Console / API
+
+- `GET /api/footage/near?lat=&lng=&n=` lists the clips filmed closest to a point, nearest first, each with its fix and track, for the app's map. ([#1797](https://github.com/adanalife/tripbot/pull/1797))
+
+### Fixes
+
+- The audio watchdog waits about a minute of silence before swapping the radio out for the fallback bed (a wedged source still swaps in ~20s), so the radio's quiet passages no longer pull the stream onto the album. ([#1801](https://github.com/adanalife/tripbot/pull/1801))
+- The broadcast-cap watchdog tries a failed pre-cap restart up to three times instead of giving the broadcast up after the first refusal, so one OBS hiccup at hour 47 no longer lets Twitch's 48-hour cut land. ([#1802](https://github.com/adanalife/tripbot/pull/1802))
+
 ## [v6.9.0] — 2026-11-04
 
 ### Chatbot

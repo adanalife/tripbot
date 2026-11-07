@@ -1,1 +1,0 @@
-The broadcast-cap watchdog tries a failed pre-cap restart up to three times instead of giving the broadcast up after the first refusal, so one OBS hiccup at hour 47 no longer lets Twitch's 48-hour cut land.
