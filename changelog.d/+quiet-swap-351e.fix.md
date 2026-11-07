@@ -1,0 +1,1 @@
+The audio watchdog waits about a minute of silence before swapping the radio out for the fallback bed (a wedged source still swaps in ~20s), so the radio's quiet passages no longer pull the stream onto the album.

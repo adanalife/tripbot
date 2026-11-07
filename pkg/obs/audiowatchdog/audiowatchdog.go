@@ -90,6 +90,7 @@ type Deps struct {
 type Config struct {
 	Interval         time.Duration // how often to evaluate
 	FailThreshold    int           // consecutive down ticks before swapping to fallback
+	SilenceThreshold int           // the same, when the media still reads PLAYING and only the level is quiet
 	RecoverThreshold int           // consecutive reachable ticks before swapping back
 	SilenceDB        float64       // peak level at/below which fresh audio counts as silent
 	Cooldown         time.Duration // minimum time between swaps (anti-flap)
@@ -107,14 +108,20 @@ type Config struct {
 // stranded on the fallback, and stranded means probing forever.
 const maxProbeSkip = 31
 
-// DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down audio
+// DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down media
 // before falling back (3 × 7s ≈ a clear signal, not a momentary reconnect),
 // ~30s of radio-healthy before swapping back, and a 2-minute cooldown so a
 // flapping edge can't whipsaw the bed.
+//
+// Silence alone waits ~1 minute instead: the radio's own quiet passages sit at
+// the meter's -60 floor for 20s and more (a week of prod read 51 runs of three
+// silent ticks against a radio that answered every probe), so a 3-tick
+// silence debounce pulled the stream off healthy music onto the fallback.
 func DefaultConfig() Config {
 	return Config{
 		Interval:         7 * time.Second,
 		FailThreshold:    3,
+		SilenceThreshold: 9,
 		RecoverThreshold: 4,
 		SilenceDB:        -50,
 		Cooldown:         2 * time.Minute,
@@ -320,10 +327,14 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 					continue
 				}
 				failMisses++
+				threshold := cfg.FailThreshold
+				if !obs.MediaStateDown(state) {
+					threshold = cfg.SilenceThreshold
+				}
 				slog.WarnContext(ctx, "audio watchdog: background audio down",
 					"state", state, "level_db", db, "level_fresh", fresh,
-					"misses", failMisses, "threshold", cfg.FailThreshold)
-				if failMisses < cfg.FailThreshold {
+					"misses", failMisses, "threshold", threshold)
+				if failMisses < threshold {
 					continue
 				}
 				if cooling {
