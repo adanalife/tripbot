@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/lmittmann/tint"
 	sentryslog "github.com/samber/slog-sentry/v2"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	otelruntime "go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -34,6 +35,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"golang.org/x/term"
 )
 
 // ShutdownFunc flushes and tears down the providers. Wrap the passed
@@ -106,7 +108,16 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	)
 	otel.SetLoggerProvider(lp)
 
-	consoleHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	// Colored output when stderr is a TTY (local dev), plain key=value
+	// everywhere else (CI runs, container stdout in k8s, piped output).
+	// Only the console leg changes — otelHandler + Sentry handlers below
+	// still receive unstyled records.
+	var consoleHandler slog.Handler
+	if term.IsTerminal(int(os.Stderr.Fd())) {
+		consoleHandler = tint.NewTextHandler(os.Stderr, &tint.Options{Level: slog.LevelInfo})
+	} else {
+		consoleHandler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	}
 	otelHandler := otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))
 	// Sentry handler chain. Error+ becomes a captured event (subject to
 	// the BeforeSend throttle in pkg/errors); Info/Warn becomes a
