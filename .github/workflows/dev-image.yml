@@ -24,14 +24,16 @@ permissions:
 
 jobs:
   # Per-image path filters, so a merge that doesn't touch an image's build
-  # surface doesn't rebuild it. Both images rebuild on any Go change — their
-  # binaries transitively import shared pkg/** packages.
+  # surface doesn't rebuild it. Both Go images rebuild on any Go change — their
+  # binaries transitively import shared pkg/** packages. The migrate image
+  # carries no Go and rebuilds only on the schema, the seed, or its own build.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       tripbot: ${{ steps.filter.outputs.tripbot }}
       onscreens: ${{ steps.filter.outputs.onscreens }}
+      migrate: ${{ steps.filter.outputs.migrate }}
       version: main-${{ steps.sha.outputs.short }}
     steps:
       - uses: actions/checkout@v7
@@ -44,12 +46,6 @@ jobs:
             tripbot:
               - 'cmd/tripbot/**'
               - 'pkg/**'
-              # DB migrations are baked into the tripbot image and run by its
-              # migrate initContainer at pod boot — so a migration-only PR must
-              # rebuild the image, or the new migration never ships and the
-              # initContainer reports "no change" against a stale image. (Bit us
-              # 2026-06-19: #906's seed migration didn't reach the floating tag
-              # because this filter didn't watch db/migrate.)
               - 'db/migrate/**'
               - 'infra/docker/tripbot/**'
               - 'go.mod'
@@ -67,6 +63,18 @@ jobs:
               - 'infra/docker/onscreens-server/**'
               - 'go.mod'
               - 'go.sum'
+              - '.dockerignore'
+              - '.github/workflows/dev-image.yml'
+              - '.github/workflows/build-image.yml'
+            migrate:
+              # The migrate initContainer runs from this image at pod boot, so
+              # a migration-only PR must rebuild it or the new migration never
+              # ships and the initContainer reports "no change" against a
+              # stale image.
+              - 'db/migrate/**'
+              - 'db/seed/**'
+              - 'infra/docker/migrate/**'
+              - 'infra/docker/bin/**'
               - '.dockerignore'
               - '.github/workflows/dev-image.yml'
               - '.github/workflows/build-image.yml'
@@ -92,5 +100,17 @@ jobs:
       image: adanalife/onscreens-server
       dockerfile: infra/docker/onscreens-server/Dockerfile
       cache-scope: onscreens-server
+      version: ${{ needs.changes.outputs.version }}
+      tags: main
+
+  migrate:
+    needs: changes
+    if: needs.changes.outputs.migrate == 'true'
+    uses: ./.github/workflows/build-image.yml
+    secrets: inherit
+    with:
+      image: adanalife/tripbot-migrate
+      dockerfile: infra/docker/migrate/Dockerfile
+      cache-scope: migrate
       version: ${{ needs.changes.outputs.version }}
       tags: main

@@ -1,5 +1,5 @@
-# Versioned multi-arch release build for the two images built from this repo
-# (tripbot, onscreens-server), via the shared build-image.yml reusable
+# Versioned multi-arch release build for the three images built from this repo
+# (tripbot, onscreens-server, tripbot-migrate), via the shared build-image.yml reusable
 # workflow. Publishes `X.Y.Z` / `vX.Y` / `vX` / `latest` manifest lists (plus
 # the per-arch `-amd64`/`-arm64` variants) to Docker Hub.
 #
@@ -59,8 +59,19 @@ jobs:
       version: ${{ needs.version.outputs.version }}
       tags: ${{ needs.version.outputs.tags }}
 
+  migrate:
+    needs: version
+    uses: ./.github/workflows/build-image.yml
+    secrets: inherit
+    with:
+      image: adanalife/tripbot-migrate
+      dockerfile: infra/docker/migrate/Dockerfile
+      cache-scope: migrate
+      version: ${{ needs.version.outputs.version }}
+      tags: ${{ needs.version.outputs.tags }}
+
   notify:
-    needs: [tripbot, onscreens-server]
+    needs: [tripbot, onscreens-server, migrate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,7 +107,7 @@ jobs:
   # Best-effort like the announcement -- a failure to report a failure should
   # not become a second failure.
   alert:
-    needs: [version, tripbot, onscreens-server, notify]
+    needs: [version, tripbot, onscreens-server, migrate, notify]
     if: failure()
     runs-on: ubuntu-latest
     timeout-minutes: 15
