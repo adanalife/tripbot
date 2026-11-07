@@ -47,6 +47,9 @@ type Scoreboards interface {
 	// the guesser has already been told they were right, and failing the
 	// command afterwards would be a worse answer than a missing point.
 	CreditGuess(ctx context.Context, u *users.User)
+	// Wrapped is username's month of the guessing game — the month containing
+	// at — in the numbers a !wrapped line is written from.
+	Wrapped(ctx context.Context, username string, at time.Time) (scoreboards.Wrapped, error)
 }
 
 // realScoreboards is the production Scoreboards adapter. It holds only the
@@ -85,4 +88,8 @@ func (r realScoreboards) LastMonth() time.Time {
 func (r realScoreboards) CreditGuess(ctx context.Context, u *users.User) {
 	u.AddToScore(ctx, guessScoreboardTotal, 1.0)
 	u.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
+}
+
+func (r realScoreboards) Wrapped(ctx context.Context, username string, at time.Time) (scoreboards.Wrapped, error) {
+	return scoreboards.ViewerWrapped(ctx, r.cfg, username, at)
 }
