@@ -125,13 +125,30 @@ func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
 // sends it again within a minute or two, and one thank-you covers both.
 const raidFoldWindow = 5 * time.Minute
 
+// raidWelcome is how long the onscreen welcome stays up: long enough for
+// someone who just landed to read it, gone before the clip changes. It is
+// hidden with the same command !middle hide sends, so a message put up by
+// hand inside that window goes with it — the welcome is the one that should
+// win in that rare overlap.
+const raidWelcome = 20 * time.Second
+
+// welcomeRaid greets the raid's audience on the stream itself, where they are
+// looking, not only in a chat they may not have open yet.
+func (a *App) welcomeRaid(ctx context.Context, from string) {
+	if a.Onscreens == nil {
+		return
+	}
+	a.Onscreens.ShowMiddleText(ctx, fmt.Sprintf("Welcome, raiders from @%s! 🚐", from))
+	time.AfterFunc(raidWelcome, func() { a.Onscreens.HideMiddleText(context.Background()) })
+}
+
 // RecordRaid thanks the raiding channel in chat, publishes a raid event to the
 // console (the chat line, the TV banner, the push), and logs a raid event
 // stamped with the airing clip and playhead, so audience rollups can separate
 // a raid's viewer spike from footage that genuinely draws viewers. Wired from
-// pkg/eventsub on channel.raid events. A repeat raid from the same channel
-// inside raidFoldWindow is still logged but neither thanked nor published
-// again.
+// pkg/eventsub on channel.raid events, and puts a welcome on the overlay. A
+// repeat raid from the same channel inside raidFoldWindow is still logged
+// but neither thanked, published nor welcomed again.
 func (a *App) RecordRaid(from string, viewers int) {
 	ctx := context.Background()
 	now := time.Now()
@@ -145,6 +162,7 @@ func (a *App) RecordRaid(from string, viewers int) {
 			Kind:     "raid",
 			Username: from,
 		})
+		a.welcomeRaid(ctx, from)
 	}
 	r := events.Raid{From: from, Viewers: viewers}
 	// Current() is the cached notion of what's playing — no I/O, because
