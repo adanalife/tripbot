@@ -12,14 +12,15 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
-// guessrGameURL is where a viewer goes to play. Separate from guessrBoardURL
+// guessrGameURL is where a viewer goes to play. Separate from guessrAPI
 // because that one is redirected at an httptest server in tests; this is copy.
 const guessrGameURL = "https://guessr.dana.lol"
 
-// guessrBoardURL is the boards endpoint the guessing game serves at
-// guessr.dana.lol. A var, not a const, so tests can point it at an httptest
+// guessrAPI is the API the guessing game serves at guessr.dana.lol: the boards
+// at /leaderboard and each board row's plays at /guesses. A var, not a const, so tests can point it at an httptest
 // server; nothing outside this package can reach it.
 //
 // The direction is deliberate: the game keeps its scores in the D1 next to its
@@ -30,7 +31,7 @@ const guessrGameURL = "https://guessr.dana.lol"
 // of the same scores either way, and a staging game with nobody playing it
 // renders an empty overlay — which is worse for checking the render than the
 // real thing.
-var guessrBoardURL = "https://guessr.dana.lol/api/leaderboard"
+var guessrAPI = "https://guessr.dana.lol/api"
 
 // guessrTimeout bounds the fetch so a hung Cloudflare response can't stall the
 // rotation tick. The overlay job runs every five minutes; anything slower than
@@ -59,7 +60,7 @@ func guessrBoardFor(ctx context.Context, board, month string) (string, [][]strin
 	if month != "" {
 		q.Set("month", month)
 	}
-	u := guessrBoardURL + "?" + q.Encode()
+	u := guessrAPI + "/leaderboard?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", nil, err
@@ -104,6 +105,96 @@ func guessrBoardFor(ctx context.Context, board, month string) (string, [][]strin
 	return body.Period, rows, nil
 }
 
+// withMisses returns a copy of an overlay board with each player's latest
+// miss after their name — "Patient Delta · 23 km NW", where the pin landed
+// relative to the truth. A row whose plays can't be fetched, don't match it, or
+// have no closed round yet is left exactly as it was: the line is a garnish,
+// and the board without it is the one the overlay showed all along.
+//
+// The board is one player per row but several rounds each, so the line is the
+// most recent closed round's — the one the player is likeliest to remember.
+//
+// ponytail: one request per row, sequential under one shared timeout; a hung
+// game costs the lines, not the board. Concurrent fetches if ten rows ever read
+// slow on stream.
+func withMisses(ctx context.Context, board string, rows [][]string) [][]string {
+	ctx, cancel := context.WithTimeout(ctx, guessrTimeout)
+	defer cancel()
+
+	out := make([][]string, len(rows))
+	for i, row := range rows {
+		out[i] = row
+		miss, err := guessrMiss(ctx, board, i+1, row[0])
+		if err != nil {
+			slog.DebugContext(ctx, "no guessr miss line", "err", err, "board", board, "rank", i+1)
+			continue
+		}
+		if miss != "" {
+			out[i] = append([]string{row[0] + " · " + miss}, row[1:]...)
+		}
+	}
+	return out
+}
+
+// guessrMiss is the miss line for the player at rank on board, or "" when none
+// of their rounds has closed. name is the board row's label, checked against
+// the plays' owner: ranks are re-resolved per request, so a board that moved
+// between the two reads would otherwise caption one player with another's miss.
+func guessrMiss(ctx context.Context, board string, rank int, name string) (string, error) {
+	q := url.Values{"board": {board}, "rank": {fmt.Sprint(rank)}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, guessrAPI+"/guesses?"+q.Encode(), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("guessr %s guesses: status %d", board, resp.StatusCode)
+	}
+
+	// The coordinates are null on a round still open, which the game withholds
+	// because they would be a public copy of today's answers.
+	var body struct {
+		Name string `json:"name"`
+		Rows []struct {
+			Km        float64  `json:"km"`
+			GuessLat  *float64 `json:"guess_lat"`
+			GuessLng  *float64 `json:"guess_lng"`
+			AnswerLat *float64 `json:"answer_lat"`
+			AnswerLng *float64 `json:"answer_lng"`
+		} `json:"rows"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", err
+	}
+	// The board numbers colliding names ("Sam (2)"); the plays carry the raw one.
+	if body.Name == "" || !strings.HasPrefix(name, body.Name) {
+		return "", fmt.Errorf("guessr rank %d is %q, board says %q", rank, body.Name, name)
+	}
+	for i := len(body.Rows) - 1; i >= 0; i-- {
+		r := body.Rows[i]
+		if r.GuessLat == nil || r.GuessLng == nil || r.AnswerLat == nil || r.AnswerLng == nil {
+			continue
+		}
+		return missLine(r.Km,
+			video.Bearing(video.Moment{Lat: *r.AnswerLat, Lng: *r.AnswerLng}, video.Moment{Lat: *r.GuessLat, Lng: *r.GuessLng})), nil
+	}
+	return "", nil
+}
+
+// missLine renders a miss as "23 km NW". The distance is the game's own km, the
+// one it scored, rather than a second haversine that could round differently.
+// Under a kilometre the direction is noise, so it reads as a bullseye.
+func missLine(km, bearing float64) string {
+	if km < 1 {
+		return "bullseye"
+	}
+	return fmt.Sprintf("%.0f km %s", km, video.CompassAbbrev(bearing))
+}
+
 // guessrLeaderboardCmd answers !guessr with the game's board, on screen and in
 // chat. Daily by default — the topical one — with "monthly" for the running
 // total, so both boards the rotation shows are reachable on demand.
@@ -135,7 +226,7 @@ func (a *App) guessrLeaderboardCmd(ctx context.Context, user *users.User, params
 		return
 	}
 
-	a.Onscreens.ShowLeaderboard(ctx, title, overlayRows(rows, size))
+	a.Onscreens.ShowLeaderboard(ctx, title, withMisses(ctx, board, overlayRows(rows, size)))
 
 	a.Reply(ctx, title+": "+rankedList(rows, ""))
 }
