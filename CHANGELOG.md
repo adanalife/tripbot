@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.11.0] — 2026-11-08
+
+### Deploy / Infra
+
+- The schema ships in its own `adanalife/tripbot-migrate` image (migrate CLI + `db/migrate` + seed), tagged with the tripbot release; the migrate initContainer and the seed Job run from it and the bot image no longer bundles them. ([#1804](https://github.com/adanalife/tripbot/pull/1804))
+
 ## [v6.10.0] — 2026-11-07
 
 ### Chatbot
