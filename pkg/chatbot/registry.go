@@ -260,10 +260,10 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:       "!givemiles",
-			Help:          "Grant a viewer miles: !givemiles @user <miles>",
-			Handler:       a.giveMilesCmd,
-			RequiresAdmin: true,
+			Trigger:     "!givemiles",
+			Help:        "Grant a viewer miles: !givemiles @user <miles>",
+			Handler:     a.giveMilesCmd,
+			RequiresMod: true,
 		},
 		{
 			Trigger:        "!km",
