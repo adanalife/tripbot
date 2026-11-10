@@ -207,6 +207,11 @@ type stateGuesses struct {
 	State   string `json:"state"`
 	Guesses int64  `json:"guesses"`
 	Correct int64  `json:"correct"`
+	// PrevRank is the state's place on the same board counted through the end
+	// of yesterday, 0 when it wasn't on it. Set only for ?month=current after
+	// the first of the month, so a caller can tell "nothing to compare" (no
+	// field) from "new today" (0).
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // guessInsightsResponse is the wire shape of GET /api/insights/guesses.
@@ -241,12 +246,22 @@ FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'guess_submitted'
   AND e.date_created >= @since
+  AND e.date_created < @before
   AND u.is_bot = false
 GROUP BY 1
-ORDER BY guesses DESC, state
-LIMIT 15`
+ORDER BY correct DESC, guesses DESC, state
+LIMIT @limit`
 
-func gatherGuessInsights(ctx context.Context, days int, since time.Time) (guessInsightsResponse, error) {
+// guessStatesShown is how many states the board lists; the previous ranking
+// reads further so a state that climbs into the list isn't called new.
+const (
+	guessStatesShown = 15
+	guessStatesPrev  = 60
+)
+
+// gatherGuessInsights counts from since; a prevBefore after since also ranks
+// the states as they stood at prevBefore, for the board's trend chevrons.
+func gatherGuessInsights(ctx context.Context, days int, since, prevBefore time.Time) (guessInsightsResponse, error) {
 	out := guessInsightsResponse{Days: days, States: []stateGuesses{}}
 	db := database.GormDB().WithContext(ctx)
 	var totals struct {
@@ -258,10 +273,33 @@ func gatherGuessInsights(ctx context.Context, days int, since time.Time) (guessI
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
-	if err := db.Raw(guessStatesSQL, sql.Named("since", since)).Scan(&out.States).Error; err != nil {
+	open := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", open),
+		sql.Named("limit", guessStatesShown)).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
 	}
+	if prevBefore.After(since) {
+		var prev []stateGuesses
+		if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", prevBefore),
+			sql.Named("limit", guessStatesPrev)).Scan(&prev).Error; err != nil {
+			return out, fmt.Errorf("guess states before %s: %w", prevBefore.Format(time.DateOnly), err)
+		}
+		withPrevStateRanks(out.States, prev)
+	}
 	return out, nil
+}
+
+// withPrevStateRanks stamps each state with its place in prev (1-based), or 0
+// when prev doesn't list it.
+func withPrevStateRanks(states, prev []stateGuesses) {
+	rank := make(map[string]int, len(prev))
+	for i, p := range prev {
+		rank[p.State] = i + 1
+	}
+	for i := range states {
+		r := rank[states[i].State]
+		states[i].PrevRank = &r
+	}
 }
 
 // clipInsight is one clip's in-window footage performance. AvgChatters /
@@ -493,12 +531,14 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, guessInsightsDefaultDays)
 	since := insightsSince(days)
 	month := ""
+	var prevBefore time.Time
 	if r.URL.Query().Get("month") == "current" {
 		now := time.Now()
 		since = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		month = now.Format("2006-01")
+		prevBefore = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	}
-	payload, err := gatherGuessInsights(r.Context(), days, since)
+	payload, err := gatherGuessInsights(r.Context(), days, since, prevBefore)
 	payload.Month = month
 	if err != nil {
 		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
