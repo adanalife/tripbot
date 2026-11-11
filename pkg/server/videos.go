@@ -218,10 +218,11 @@ type sourceClip struct {
 // withTracks lists clips in the order given, each with its fix and track.
 func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
 	clips := make([]sourceClip, 0, len(vids))
+	track, source := clipTracks(ctx, vids)
 	for _, v := range vids {
 		c := sourceClip{
 			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Place: v.Place(),
-			Track: trackOf(ctx, v), SourceTrack: sourceTrackOf(ctx, v),
+			Track: triples(track[v.ID]), SourceTrack: triples(source[v.ID]),
 		}
 		c.RecordedAt, c.RecordedAtUTC = filmedTimes(v)
 		clips = append(clips, c)
