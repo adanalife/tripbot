@@ -1,10 +1,12 @@
 package video
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
@@ -195,43 +197,63 @@ type TrackPoint struct {
 	Sec, Lat, Lng float64
 }
 
-// The primary key is one row per moment of the source recording, so the aired
+// One row per moment of the source recording (the primary key), so the aired
 // rows are already one per moment of the clip; null ts_sec rows lie outside
 // the trim.
-const trackQuery = `
-SELECT ts_sec AS sec, lat, lng FROM video_coords
-WHERE video_id = @vid AND ts_sec IS NOT NULL
-ORDER BY ts_sec`
+const tracksQuery = `
+SELECT video_id, ts_sec, source_ts_sec, lat, lng FROM video_coords
+WHERE video_id IN @ids
+ORDER BY video_id, source_ts_sec`
 
-// The whole recording the clip was cut from, cut seconds included, on the
-// recording's own clock (a season-2 piece's seconds before any trim).
-const sourceTrackQuery = `
-SELECT source_ts_sec AS sec, lat, lng FROM video_coords
-WHERE video_id = @vid
-ORDER BY source_ts_sec`
-
-// Track returns vid's whole per-moment track in clip order, gated like
-// CoordAt: nil when the clip has no track worth believing, which is the
+// Tracks reads many clips' tracks in one query, keyed by clip ID: track is
+// each clip's aired moments in clip order, source the whole recording it was
+// cut from (cut seconds included) on the recording's own clock. Gated like
+// CoordAt: a clip with no track worth believing has no entry, which is the
 // caller's signal to fall back to the clip-level fix.
+func Tracks(ctx context.Context, vids []Video) (track, source map[int][]TrackPoint) {
+	var ids []int
+	for _, v := range vids {
+		if v.ID != 0 && v.CoordConfidence != nil && *v.CoordConfidence >= MinCoordConfidence {
+			ids = append(ids, v.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		VideoID     int
+		TsSec       sql.NullFloat64
+		SourceTsSec float64
+		Lat, Lng    float64
+	}
+	if err := database.GormDB().WithContext(ctx).Raw(tracksQuery, sql.Named("ids", ids)).Scan(&rows).Error; err != nil {
+		slog.ErrorContext(ctx, "video_coords track lookup failed", "err", err, "clips", len(ids))
+		return nil, nil
+	}
+	track, source = map[int][]TrackPoint{}, map[int][]TrackPoint{}
+	for _, r := range rows {
+		source[r.VideoID] = append(source[r.VideoID], TrackPoint{r.SourceTsSec, r.Lat, r.Lng})
+		if r.TsSec.Valid {
+			track[r.VideoID] = append(track[r.VideoID], TrackPoint{r.TsSec.Float64, r.Lat, r.Lng})
+		}
+	}
+	for _, pts := range track {
+		slices.SortStableFunc(pts, func(a, b TrackPoint) int { return cmp.Compare(a.Sec, b.Sec) })
+	}
+	return track, source
+}
+
+// Track returns vid's whole per-moment track in clip order, nil when the clip
+// has no track worth believing.
 func Track(ctx context.Context, vid Video) []TrackPoint {
-	return trackBy(ctx, vid, trackQuery)
+	track, _ := Tracks(ctx, []Video{vid})
+	return track[vid.ID]
 }
 
 // SourceTrack is Track over the recording the clip was cut from, Sec on the
 // recording's clock: the same points for an untrimmed clip, the cut stretches
 // too for a trimmed one.
 func SourceTrack(ctx context.Context, vid Video) []TrackPoint {
-	return trackBy(ctx, vid, sourceTrackQuery)
-}
-
-func trackBy(ctx context.Context, vid Video, query string) []TrackPoint {
-	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < MinCoordConfidence {
-		return nil
-	}
-	var pts []TrackPoint
-	if err := database.GormDB().WithContext(ctx).Raw(query, sql.Named("vid", vid.ID)).Scan(&pts).Error; err != nil {
-		slog.ErrorContext(ctx, "video_coords track lookup failed", "err", err, "slug", vid.Slug)
-		return nil
-	}
-	return pts
+	_, source := Tracks(ctx, []Video{vid})
+	return source[vid.ID]
 }
