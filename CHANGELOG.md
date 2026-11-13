@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.11.1] — 2026-11-13
+
+### Fixes
+
+- Build with Go 1.26.11, which fixes a net/http vulnerability (GO-2026-6859) in the standard library. ([#1807](https://github.com/adanalife/tripbot/pull/1807))
+
 ## [v6.11.0] — 2026-11-08
 
 ### Deploy / Infra
