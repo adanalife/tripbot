@@ -213,18 +213,21 @@ func TestAnnounceSubscriber_ThanksLogsAndReachesConsole(t *testing.T) {
 	}
 }
 
-// A gift recipient's channel.subscribe still shouts and still opens their
-// subscribed interval, but publishes nothing to the console — the gifter's own
-// gift event is what the console celebrates, so a mass-gift shows one banner
-// rather than one per recipient.
-func TestAnnounceSubscriber_GiftRecipientSkipsConsoleEvent(t *testing.T) {
+// A gift recipient's channel.subscribe opens their subscribed interval and
+// nothing else: no chat lines, no mile grant, no console event. The gifter's
+// own gift event celebrates the batch once, so a 50-gift bomb is one moment in
+// chat rather than 100 bot lines.
+func TestAnnounceSubscriber_GiftRecipientIsRecordedQuietly(t *testing.T) {
 	app, chat, rec := subAnnounceApp(t)
 	events := captureSubscriberEvents(t)
 
 	app.AnnounceSubscriber("viewer1", true, "1000")
 
-	if len(chat.Says) != 2 {
-		t.Errorf("says = %d, want 2 — a gifted sub is still shouted: %v", len(chat.Says), chat.Says)
+	if len(chat.Says) != 0 {
+		t.Errorf("says = %v, want none for a gift recipient", chat.Says)
+	}
+	if gifts := app.Sessions.(*recordingSessions).Gifts; len(gifts) != 0 {
+		t.Errorf("mile grants = %v, want none for a gift recipient", gifts)
 	}
 	if len(rec.Subs) != 1 {
 		t.Errorf("subscribe events = %v, want the interval opened for a gift recipient too", rec.Subs)
@@ -248,21 +251,29 @@ func TestAnnounceSubscriber_BonusLineReportsLiveViewerCount(t *testing.T) {
 
 // --- AnnounceGiftSub ---
 
-// A named gifter is thanked by name and reaches the console with the number of
-// subs gifted, so the panel can size the celebration.
+// A named gifter is thanked by name with an emote per sub gifted, everyone
+// logged in gets one mile per sub in a single grant, and the console gets the
+// number of subs gifted so the panel can size the celebration.
 func TestAnnounceGiftSub_NamesGifterAndCount(t *testing.T) {
-	app := newTestApp(video.Video{})
-	chat := &recordingChat{}
-	app.Chat = chat
+	app, chat, _ := subAnnounceApp(t)
 	events := captureSubscriberEvents(t)
 
 	app.AnnounceGiftSub("generousviewer", 5, "1000", false)
 
-	if len(chat.Says) != 1 {
-		t.Fatalf("says = %d, want 1: %v", len(chat.Says), chat.Says)
+	if len(chat.Says) != 2 {
+		t.Fatalf("says = %d, want 2 (thank-you + bonus-mile line): %v", len(chat.Says), chat.Says)
 	}
-	if !strings.Contains(chat.Says[0], "@generousviewer") || !strings.Contains(chat.Says[0], "5") {
+	if !strings.Contains(chat.Says[0], "@generousviewer") || !strings.Contains(chat.Says[0], "5 subs") {
 		t.Errorf("thank-you = %q, want the gifter and the count", chat.Says[0])
+	}
+	if n := strings.Count(chat.Says[0], "HolidayPresent"); n != 5 {
+		t.Errorf("thank-you = %q, want an emote wall of 5, got %d", chat.Says[0], n)
+	}
+	if gifts := app.Sessions.(*recordingSessions).Gifts; len(gifts) != 1 || gifts[0] != 5 {
+		t.Errorf("mile grants = %v, want one grant of 5", gifts)
+	}
+	if !strings.Contains(chat.Says[1], "5 bonus miles") {
+		t.Errorf("bonus line = %q, want 5 bonus miles", chat.Says[1])
 	}
 	got := events()
 	if len(got) != 1 {
@@ -273,19 +284,38 @@ func TestAnnounceGiftSub_NamesGifterAndCount(t *testing.T) {
 	}
 }
 
+// A big bomb's emote wall stops at giftWallMax, so the line stays a chat line.
+func TestAnnounceGiftSub_EmoteWallIsCapped(t *testing.T) {
+	app, chat, _ := subAnnounceApp(t)
+	captureSubscriberEvents(t)
+
+	app.AnnounceGiftSub("whale", 100, "1000", false)
+
+	if n := strings.Count(chat.Says[0], "HolidayPresent"); n != giftWallMax {
+		t.Errorf("emote wall = %d, want capped at %d", n, giftWallMax)
+	}
+	if len(chat.Says[0]) > 500 {
+		t.Errorf("thank-you is %d chars, past Twitch's 500 limit", len(chat.Says[0]))
+	}
+	if gifts := app.Sessions.(*recordingSessions).Gifts; len(gifts) != 1 || gifts[0] != 100 {
+		t.Errorf("mile grants = %v, want one grant of 100", gifts)
+	}
+}
+
 // An anonymous gift must not leak an empty @ into chat — the thank-you says
 // "an anonymous gifter" instead, and the console event carries the flag so the
 // panel can render it the same way.
 func TestAnnounceGiftSub_AnonymousGifterHasNoHandle(t *testing.T) {
-	app := newTestApp(video.Video{})
-	chat := &recordingChat{}
-	app.Chat = chat
+	app, chat, _ := subAnnounceApp(t)
 	events := captureSubscriberEvents(t)
 
 	app.AnnounceGiftSub("", 1, "1000", true)
 
-	if len(chat.Says) != 1 {
-		t.Fatalf("says = %d, want 1: %v", len(chat.Says), chat.Says)
+	if len(chat.Says) != 2 {
+		t.Fatalf("says = %d, want 2: %v", len(chat.Says), chat.Says)
+	}
+	if !strings.Contains(chat.Says[0], "a sub!") || !strings.Contains(chat.Says[1], "a bonus mile") {
+		t.Errorf("lines = %v, want singular sub and mile", chat.Says)
 	}
 	if strings.Contains(chat.Says[0], "@") {
 		t.Errorf("thank-you = %q, want no @handle for an anonymous gifter", chat.Says[0])
