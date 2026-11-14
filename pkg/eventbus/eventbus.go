@@ -391,9 +391,11 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 // empty when Reachable is false — the instance has no live connection to OBS
 // and therefore no state to report, which is not the same as a stopped stream.
 //
-// Published on change rather than on every read: it is a last-value cache
+// Published on every read (each poll tick), not only on change, so EmittedAt is
+// the freshness of the answer: a subscriber tells a steady stream from a
+// snapshot left behind by an instance that died. It is a last-value cache
 // (TRIPBOT_OBS, MaxMsgsPerSubject=1), so a fresh subscriber replays the current
-// state and then sees only transitions.
+// state and then sees every read, most of them repeating it.
 type OBSStream struct {
 	Platform  string `json:"platform"`
 	State     string `json:"state,omitempty"`
