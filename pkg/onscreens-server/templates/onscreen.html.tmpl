@@ -42,8 +42,19 @@
   #warp .tw-credit:empty { display: none; }
   /* .nobg (from the no_background flag in state.json) drops the opaque cover,
      leaving the wordmark and speed-lines over the live video. The cover element
-     stays so the streaks keep fading in and out with it — only its fill goes. */
+     stays so the streaks keep fading in and out with it — only its fill goes.
+     The footage is then the backdrop, and a white sky or a snowfield swallows
+     pale text, so the wordmark gets the dark outline the cover's fill used to
+     supply (layered shadows rather than text-stroke, which thins the glyphs)
+     and the streaks a dark edge. */
   #warp.nobg .cover { background: none; }
+  #warp.nobg .tw {
+    text-shadow:
+      0 0 22px rgba(180, 200, 230, 0.55), 0 4px 14px rgba(0, 0, 0, 0.85),
+      0.03em 0 1px #000, -0.03em 0 1px #000, 0 0.03em 1px #000, 0 -0.03em 1px #000,
+      0.02em 0.02em 1px #000, -0.02em 0.02em 1px #000, 0.02em -0.02em 1px #000, -0.02em -0.02em 1px #000;
+  }
+  #warp.nobg .streaks { filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8)); }
   /* the .play class (added on the showing rising-edge) drives all the timing */
   #warp.play .cover     { animation: tw-cover 4.0s ease-in-out forwards; }
   #warp.play .streaks i { animation: tw-streak 1s linear infinite; }
