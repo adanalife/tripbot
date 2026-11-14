@@ -199,13 +199,10 @@ func sourceGET(t *testing.T, stem string) *httptest.ResponseRecorder {
 // place and filming times, where a clip with no fix has no real-UTC time.
 func TestSourceHandler(t *testing.T) {
 	db := testdb.New(t)
-	orig := clipTrack
-	t.Cleanup(func() { clipTrack = orig })
-	clipTrack = func(_ context.Context, v video.Video) []video.TrackPoint {
-		if v.ID == 3 {
-			return []video.TrackPoint{{Sec: 0, Lat: 35.1, Lng: -106.6}, {Sec: 20, Lat: 35.2, Lng: -106.7}}
-		}
-		return nil
+	orig := clipTracks
+	t.Cleanup(func() { clipTracks = orig })
+	clipTracks = func(context.Context, []video.Video) (track, source map[int][]video.TrackPoint) {
+		return map[int][]video.TrackPoint{3: {{Sec: 0, Lat: 35.1, Lng: -106.6}, {Sec: 20, Lat: 35.2, Lng: -106.7}}}, nil
 	}
 	for _, q := range []string{
 		`INSERT INTO videos (id, slug, corpus, lat, lng, state, city, city_m, date_filmed)
