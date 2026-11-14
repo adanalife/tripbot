@@ -10,15 +10,17 @@ import (
 
 // A Mark is one mark on a moment of a clip: an operator's star or bad_coord
 // from the console, or a viewer's star or trim from chat. Sec is seconds into
-// the clip as it airs now; By and Platform name who set it from chat and are
-// empty for the console's marks.
+// the clip as it airs now, unless ClipLevel says the mark is on the whole
+// clip (a viewer's boring report) and Sec means nothing; By and Platform name
+// who set it from chat and are empty for the console's marks.
 type Mark struct {
-	VideoID  int
-	Kind     string
-	Sec      float64
-	Note     string
-	By       string
-	Platform string
+	VideoID   int
+	Kind      string
+	Sec       float64
+	ClipLevel bool
+	Note      string
+	By        string
+	Platform  string
 }
 
 // A clip's offset into its original recording, read off its own track: the
@@ -40,7 +42,8 @@ func ClipOffset(db *gorm.DB, id int) (float64, error) {
 }
 
 // SetMark writes m, keyed to the original recording so a re-trim moves no
-// mark. Marking a moment its setter already marked replaces the note. A
+// mark; a clip-level mark is stored with no second. Marking a moment its
+// setter already marked replaces the note. A
 // mark set from chat first clears that viewer's earlier mark of the same kind
 // on the clip, so one viewer holds at most one star and one trim per clip and
 // a repeated command moves the mark rather than piling more up.
@@ -51,7 +54,7 @@ func SetMark(ctx context.Context, m Mark) error {
 			return err
 		}
 		args := []any{sql.Named("id", m.VideoID), sql.Named("kind", m.Kind),
-			sql.Named("src", m.Sec+off), sql.Named("note", m.Note),
+			sql.Named("src", sql.NullFloat64{Float64: m.Sec + off, Valid: !m.ClipLevel}), sql.Named("note", m.Note),
 			sql.Named("by", m.By), sql.Named("platform", m.Platform)}
 		if m.By != "" {
 			if err := tx.Exec(`DELETE FROM video_moments
@@ -61,7 +64,7 @@ WHERE video_id = @id AND kind = @kind AND username = @by AND platform = @platfor
 		}
 		return tx.Exec(`INSERT INTO video_moments (video_id, kind, source_ts_sec, note, username, platform)
 VALUES (@id, @kind, @src, @note, @by, @platform)
-ON CONFLICT (video_id, kind, source_ts_sec, username, platform)
+ON CONFLICT (video_id, kind, COALESCE(source_ts_sec, -1), username, platform)
 DO UPDATE SET note = EXCLUDED.note`, args...).Error
 	})
 }

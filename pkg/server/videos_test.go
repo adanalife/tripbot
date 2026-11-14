@@ -150,8 +150,8 @@ func TestVideoMomentsHandler(t *testing.T) {
 		t.Errorf("stored source_ts_sec = %v, want 45", src)
 	}
 	got := moments()
-	if len(got) != 2 || got[0].Kind != "bad_coord" || math.Abs(got[0].Sec-10.1) > 0.01 ||
-		got[1] != (moment{Kind: "star", Sec: 30, Note: "the canyon opens up"}) {
+	if len(got) != 2 || got[0].Kind != "bad_coord" || math.Abs(*got[0].Sec-10.1) > 0.01 ||
+		got[1].Kind != "star" || *got[1].Sec != 30 || got[1].Note != "the canyon opens up" {
 		t.Errorf("got %+v", got)
 	}
 
@@ -159,7 +159,7 @@ func TestVideoMomentsHandler(t *testing.T) {
 	// removes its mark.
 	for _, body := range []string{
 		`{"kind":"star","sec":30,"remove":true}`,
-		fmt.Sprintf(`{"kind":"bad_coord","sec":%v,"remove":true}`, got[0].Sec),
+		fmt.Sprintf(`{"kind":"bad_coord","sec":%v,"remove":true}`, *got[0].Sec),
 	} {
 		if rec := momentPOST(t, "7", body); rec.Code != http.StatusOK {
 			t.Fatalf("%s: status = %d", body, rec.Code)
@@ -455,8 +455,9 @@ func TestFootageDropped(t *testing.T) {
 }
 
 // Every kind is listed, newest report first, each at its moment in the clip
-// as it airs (shifted by a trimmed clip's offset) and in the uncut piece;
-// ?kind= narrows to one kind and refuses one that isn't.
+// as it airs (shifted by a trimmed clip's offset) and in the uncut piece, or
+// with no moment at all for a report on the whole clip; ?kind= narrows to one
+// kind and refuses one that isn't.
 func TestFootageReports(t *testing.T) {
 	db := testdb.New(t)
 	for _, q := range []string{
@@ -465,7 +466,8 @@ func TestFootageReports(t *testing.T) {
 		`INSERT INTO video_moments (video_id, kind, source_ts_sec, note, username, platform, created_at) VALUES
 		 (5, 'trim', 42, 'fog', 'ada', 'twitch', '2026-10-30 10:00:00+00'),
 		 (6, 'trim', 7, '', 'bo', 'youtube', '2026-10-31 10:00:00+00'),
-		 (5, 'star', 20, '', 'cy', 'twitch', '2026-10-31 11:00:00+00')`,
+		 (5, 'star', 20, '', 'cy', 'twitch', '2026-10-31 11:00:00+00'),
+		 (6, 'boring', NULL, 'nothing happens', 'di', 'twitch', '2026-10-31 12:00:00+00')`,
 	} {
 		if err := db.Exec(q).Error; err != nil {
 			t.Fatal(err)
@@ -479,10 +481,14 @@ func TestFootageReports(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 || got[0].Kind != "star" || got[1].VideoID != 6 || got[1].Sec != 7 || got[1].By != "bo" {
-		t.Fatalf("got %+v, want the star first, then the s1 trim at 7s", got)
+	if len(got) != 4 || got[0].Kind != "boring" || got[0].Sec != nil || got[0].SourceSec != nil || got[0].By != "di" ||
+		got[1].Kind != "star" || got[2].VideoID != 6 || *got[2].Sec != 7 || got[2].By != "bo" {
+		t.Fatalf("got %+v, want the boring clip first with no second, then the star, then the s1 trim at 7s", got)
 	}
-	if r := got[2]; r.Slug != "20260502080000_000124_s0180" || r.Kind != "trim" || r.Sec != 30 || r.SourceSec != 42 ||
+	if !strings.Contains(rec.Body.String(), `"sec":null,"source_sec":null`) {
+		t.Errorf("whole-clip report body = %s, want null seconds", rec.Body.String())
+	}
+	if r := got[3]; r.Slug != "20260502080000_000124_s0180" || r.Kind != "trim" || *r.Sec != 30 || *r.SourceSec != 42 ||
 		r.Note != "fog" || r.Platform != "twitch" {
 		t.Errorf("trimmed clip's report = %+v, want sec 30 / source_sec 42", r)
 	}
@@ -494,7 +500,7 @@ func TestFootageReports(t *testing.T) {
 	if len(got) != 2 || got[0].Kind != "trim" || got[1].Kind != "trim" {
 		t.Errorf("kind=trim got %+v, want the two trims", got)
 	}
-	if rec := footageGET(t, "/api/footage/reports?kind=boring"); rec.Code != http.StatusBadRequest {
-		t.Errorf("kind=boring status = %d, want 400", rec.Code)
+	if rec := footageGET(t, "/api/footage/reports?kind=dull"); rec.Code != http.StatusBadRequest {
+		t.Errorf("kind=dull status = %d, want 400", rec.Code)
 	}
 }
