@@ -9,6 +9,17 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.12.0] — 2026-11-15
+
+### Console / API
+
+- `GET /api/insights/guesses` ranks states by correct guesses, and with `?month=current` gives each a `prev_rank`: its place through the end of yesterday, for the console's trend chevrons. ([#1806](https://github.com/adanalife/tripbot/pull/1806))
+- Footage day, source and nearby-footage reads fetch every clip's track in one query instead of two per clip (386 round trips for the busiest day). ([#1808](https://github.com/adanalife/tripbot/pull/1808))
+
+### Fixes
+
+- Build with Go 1.26.11, which fixes a net/http vulnerability (GO-2026-6859) in the standard library. ([#1807](https://github.com/adanalife/tripbot/pull/1807))
+
 ## [v6.11.0] — 2026-11-08
 
 ### Deploy / Infra
