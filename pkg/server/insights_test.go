@@ -347,6 +347,65 @@ func TestGuessInsightsHandler_CurrentMonth(t *testing.T) {
 	}
 }
 
+// ?month=current ranks states by correct guesses and stamps each with its
+// place through the end of yesterday: utah led yesterday and is overtaken
+// today, ohio held second-by-correct, and idaho first appears today.
+func TestGuessInsightsHandler_CurrentMonthPrevRank(t *testing.T) {
+	now := time.Now()
+	if now.Day() == 1 {
+		t.Skip("the first of the month has no earlier day to rank against")
+	}
+	db := testdb.New(t)
+	seedUser(t, db, "guess_alice", false)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	earlier := time.Date(now.Year(), now.Month(), 1, 0, 0, 1, 0, now.Location())
+	right := func(state string, at time.Time) {
+		seedEvent(t, db, "guess_alice", "guess_submitted",
+			`{"guessed":"`+state+`","actual":"`+state+`","correct":true}`, at)
+	}
+	right("utah", earlier)
+	right("utah", earlier.Add(time.Second))
+	right("ohio", earlier)
+	for i := range 3 {
+		right("florida", today.Add(time.Duration(i)*time.Second))
+	}
+	right("idaho", today)
+
+	rec := insightsGET(t, "/api/insights/guesses?month=current", guessInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got guessInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	want := []struct {
+		state string
+		prev  int
+	}{{"florida", 0}, {"utah", 1}, {"idaho", 0}, {"ohio", 2}}
+	if len(got.States) != len(want) {
+		t.Fatalf("states = %+v, want %d rows", got.States, len(want))
+	}
+	for i, w := range want {
+		g := got.States[i]
+		if g.State != w.state || g.PrevRank == nil || *g.PrevRank != w.prev {
+			t.Errorf("states[%d] = %s prev %v, want %s prev %d", i, g.State, g.PrevRank, w.state, w.prev)
+		}
+	}
+}
+
+// A rolling ?days window has no "yesterday's board", so no state carries a
+// prev_rank and the caller draws no chevrons.
+func TestGuessInsightsHandler_DaysWindowHasNoPrevRank(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "guess_alice", false)
+	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"utah","actual":"utah","correct":true}`, time.Now().Add(-48*time.Hour))
+	rec := insightsGET(t, "/api/insights/guesses", guessInsightsHandler)
+	if strings.Contains(rec.Body.String(), "prev_rank") {
+		t.Errorf("days window carried prev_rank: %s", rec.Body.String())
+	}
+}
+
 // seedVideo inserts a videos row with place columns and returns its id.
 func seedVideo(t *testing.T, db *gorm.DB, slug, state, city string, cityM *float64) int {
 	t.Helper()
