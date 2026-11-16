@@ -29,8 +29,8 @@ github.com/getsentry/sentry-go/negroni v0.50.0 h1:5ryILJOPe8qdLtsL8yUEvkTSr72Oub
 github.com/getsentry/sentry-go/negroni v0.50.0/go.mod h1:YVtpF5gnPKyEa5vl3AfvsfBcZmlggwjAsI0tBS3h6gU=
 github.com/getsentry/sentry-go/otel v0.50.0 h1:MlUtdu7dN4POvAde4qlrzC0h3DPniZA3IFdjCuZwAKA=
 github.com/getsentry/sentry-go/otel v0.50.0/go.mod h1:OfwS7wmoL6iHwUJsvmUV7FsKMdLs/wZTIi7t75sPMHg=
-github.com/go-co-op/gocron/v2 v2.23.0 h1:Qkhe0ZlUf3sRMCEuoXRi5VU/t8fi5lyD97eO+PsGJ4g=
-github.com/go-co-op/gocron/v2 v2.23.0/go.mod h1:QwAfxPmGC9tPDL5R9R3inaJYPDvYEXs/zkYrXD3L9jk=
+github.com/go-co-op/gocron/v2 v2.23.1 h1:DAM4k6jfBHaaaLS0yCps8Jdq3smQZRoEg+/hwR5bLlk=
+github.com/go-co-op/gocron/v2 v2.23.1/go.mod h1:QwAfxPmGC9tPDL5R9R3inaJYPDvYEXs/zkYrXD3L9jk=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
 github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
