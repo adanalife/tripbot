@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.13.0] — 2026-11-16
+
+### Chatbot
+
+- A gift bomb gets one celebration in chat, scaled to the gift (an emote per sub gifted, up to 25, and one mile per sub for everyone in a single grant), instead of two bot lines and a mile grant per recipient, which a big bomb pushed past Twitch's chat rate limit. ([#1803](https://github.com/adanalife/tripbot/pull/1803))
+
 ## [v6.12.0] — 2026-11-15
 
 ### Console / API
