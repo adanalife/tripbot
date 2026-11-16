@@ -12,7 +12,7 @@ require (
 	github.com/getsentry/sentry-go v0.50.0
 	github.com/getsentry/sentry-go/negroni v0.50.0
 	github.com/getsentry/sentry-go/otel v0.50.0
-	github.com/go-co-op/gocron/v2 v2.23.0
+	github.com/go-co-op/gocron/v2 v2.23.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
