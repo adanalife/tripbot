@@ -85,6 +85,30 @@ func TestRestoreMiddleText(t *testing.T) {
 	}
 }
 
+// TestRepersistMiddleText proves Server.RepersistMiddleText writes the
+// in-memory overlay state into an empty (freshly declared) stream, as after a
+// NATS restart that wiped storage.
+func TestRepersistMiddleText(t *testing.T) {
+	nc := connectEmbeddedJetStream(t)
+	natsclient.SetConn(nc)
+	t.Cleanup(func() { natsclient.SetConn(nil) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.SetState("kept text", false)
+	if err := s.EnsureStreams(ctx); err != nil {
+		t.Fatalf("ensure streams: %v", err)
+	}
+
+	s.RepersistMiddleText(ctx)
+	if err := nc.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	waitMiddleState(t, ctx, natsclient.JetStream(), testConf.Environment, testConf.Platform, "kept text", false)
+}
+
 // TestMiddleStateNilJetStream proves the paths degrade to "nothing to
 // restore" when NATS is unconfigured.
 func TestMiddleStateNilJetStream(t *testing.T) {
