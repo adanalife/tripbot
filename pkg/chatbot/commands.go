@@ -410,6 +410,12 @@ func (a *App) noteReveal(user *users.User, command string) {
 	if a.Video != nil {
 		vid = a.Video.Current().ID
 	}
+	a.noteRevealOn(user, command, vid)
+}
+
+// noteRevealOn is noteReveal for a clip the caller names: a jump reveals the
+// state of the clip it lands on, before the player reports that clip airing.
+func (a *App) noteRevealOn(user *users.User, command string, vid int) {
 	a.lastRevealMu.Lock()
 	a.lastReveal = reveal{by: user.Username, command: command, at: time.Now(), videoID: vid}
 	a.lastRevealMu.Unlock()
