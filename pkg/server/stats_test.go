@@ -411,6 +411,45 @@ func TestCommunityStatsHandler_TopMilesPrevRank(t *testing.T) {
 	}
 }
 
+// ?top_miles_days picks the window the previous place is measured over: a
+// correction three days ago moves nobody against yesterday's board but
+// climbs a place over the week, and a window outside the offered set falls
+// back to a day.
+func TestCommunityStatsHandler_TopMilesWindow(t *testing.T) {
+	db := testdb.New(t)
+	seedMilesUser(t, db, "win_leader", 110, false, false)
+	seedMilesUser(t, db, "win_climber", 115, false, false) // passed win_leader three days ago
+	err := db.Exec(`INSERT INTO events (platform, username, event, date_created, extra_miles_earned)
+	                VALUES ('twitch', 'win_climber', 'correction', ?, 10)`, time.Now().Add(-72*time.Hour)).Error
+	if err != nil {
+		t.Fatalf("insert correction: %v", err)
+	}
+	for _, c := range []struct {
+		query    string
+		days     int
+		climbers int
+	}{
+		{"", 1, 1},
+		{"?top_miles_days=7", 7, 2},
+		{"?top_miles_days=30", 30, 2},
+		{"?top_miles_days=3", 1, 1},
+		{"?top_miles_days=abc", 1, 1},
+	} {
+		rec := insightsGET(t, "/api/stats/community"+c.query, communityServer.communityStatsHandler)
+		var got communityStatsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("%q: decode: %v\n%s", c.query, err, rec.Body.String())
+		}
+		if got.TopMilesDays != c.days {
+			t.Errorf("%q: top_miles_days = %d, want %d", c.query, got.TopMilesDays, c.days)
+		}
+		if len(got.TopMiles) != 2 || got.TopMiles[0].Username != "win_climber" ||
+			got.TopMiles[0].PrevRank == nil || *got.TopMiles[0].PrevRank != c.climbers {
+			t.Errorf("%q: top_miles = %+v, want win_climber first with prev_rank %d", c.query, got.TopMiles, c.climbers)
+		}
+	}
+}
+
 func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	db := testdb.New(t)
 	seedMilesUser(t, db, "comm_alice", 500.5, false, false)
