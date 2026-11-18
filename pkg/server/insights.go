@@ -289,11 +289,16 @@ type guessInsightsResponse struct {
 	Days int `json:"days"`
 	// Month is the calendar month the window covers ("2006-01") when the
 	// caller asked for ?month=current, in which case Days is ignored.
-	Month   string         `json:"month,omitempty"`
-	Total   int64          `json:"total"`
-	Correct int64          `json:"correct"`
-	Players int64          `json:"players"`
-	States  []stateGuesses `json:"states"`
+	Month   string `json:"month,omitempty"`
+	Total   int64  `json:"total"`
+	Correct int64  `json:"correct"`
+	// Revealed counts the correct guesses made after a chat command named the
+	// answer on the same clip; Piggybacked is the share of those where someone
+	// other than the guesser ran it.
+	Revealed    int64          `json:"revealed"`
+	Piggybacked int64          `json:"piggybacked"`
+	Players     int64          `json:"players"`
+	States      []stateGuesses `json:"states"`
 }
 
 // meta->>'correct' reads 'true' whether the writer stored a JSON boolean or
@@ -301,6 +306,10 @@ type guessInsightsResponse struct {
 const guessTotalsSQL = `
 SELECT COUNT(*) AS total,
        COUNT(*) FILTER (WHERE e.meta->>'correct' = 'true') AS correct,
+       COUNT(*) FILTER (WHERE e.meta->>'correct' = 'true'
+                          AND e.meta->'reveal' IS NOT NULL) AS revealed,
+       COUNT(*) FILTER (WHERE e.meta->>'correct' = 'true'
+                          AND lower(e.meta->'reveal'->>'by') <> lower(e.username)) AS piggybacked,
        COUNT(DISTINCT e.username) AS players
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
@@ -336,14 +345,17 @@ func gatherGuessInsights(ctx context.Context, days int, since, prevSince, prevBe
 	out := guessInsightsResponse{Days: days, States: []stateGuesses{}}
 	db := database.GormDB().WithContext(ctx)
 	var totals struct {
-		Total   int64
-		Correct int64
-		Players int64
+		Total       int64
+		Correct     int64
+		Revealed    int64
+		Piggybacked int64
+		Players     int64
 	}
 	if err := db.Raw(guessTotalsSQL, sql.Named("since", since)).Scan(&totals).Error; err != nil {
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
+	out.Revealed, out.Piggybacked = totals.Revealed, totals.Piggybacked
 	if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", openBefore),
 		sql.Named("limit", guessStatesShown)).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
