@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -371,6 +373,44 @@ func seedSnapshotOn(t *testing.T, db *gorm.DB, platform, board string, rank int,
 	}
 }
 
+// TestCommunityStatsHandler_TopMilesPrevRank reconstructs each row's place 24
+// hours ago: a viewer who climbed shows where they started, including from just
+// off the displayed board, and a viewer who earned nothing keeps their rank.
+func TestCommunityStatsHandler_TopMilesPrevRank(t *testing.T) {
+	db := testdb.New(t)
+	for i := 1; i <= 9; i++ {
+		seedMilesUser(t, db, fmt.Sprintf("prev_u%02d", i), float64(1000-i), false, false)
+	}
+	seedMilesUser(t, db, "prev_climber", 105, false, false) // 10th now, 11th before its correction
+	seedMilesUser(t, db, "prev_passed", 100, false, false)  // 11th now: off the board
+	err := db.Exec(`INSERT INTO events (platform, username, event, date_created, extra_miles_earned)
+	                VALUES ('twitch', 'prev_climber', 'correction', ?, 10)`, time.Now().Add(-time.Hour)).Error
+	if err != nil {
+		t.Fatalf("insert correction: %v", err)
+	}
+
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
+	var got communityStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if len(got.TopMiles) != topMilesSize {
+		t.Fatalf("top_miles has %d rows, want %d", len(got.TopMiles), topMilesSize)
+	}
+	if got.TopMiles[9].Username != "prev_climber" {
+		t.Fatalf("top_miles[9] = %+v, want prev_climber", got.TopMiles[9])
+	}
+	for i, row := range got.TopMiles {
+		want := i + 1
+		if i == 9 {
+			want = 11
+		}
+		if row.PrevRank == nil || *row.PrevRank != want {
+			t.Errorf("%s (rank %d) prev_rank = %v, want %d", row.Username, i+1, row.PrevRank, want)
+		}
+	}
+}
+
 func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	db := testdb.New(t)
 	seedMilesUser(t, db, "comm_alice", 500.5, false, false)
@@ -420,7 +460,9 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("top_miles = %+v, want %+v (bots and opted-out excluded)", got.TopMiles, wantTop)
 	}
 	for i := range wantTop {
-		if got.TopMiles[i] != wantTop[i] {
+		// Nobody earned miles in the window, so each row held its place.
+		wantTop[i].PrevRank = &[]int{i + 1}[0]
+		if !reflect.DeepEqual(got.TopMiles[i], wantTop[i]) {
 			t.Errorf("top_miles[%d] = %+v, want %+v", i, got.TopMiles[i], wantTop[i])
 		}
 	}
