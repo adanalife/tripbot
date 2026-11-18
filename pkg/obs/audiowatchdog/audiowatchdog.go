@@ -231,9 +231,11 @@ func defaultRadioReachable(ctx context.Context, url string) bool {
 // audible music on the stream: it swaps to the local bed after cfg.FailThreshold
 // consecutive down ticks and swaps back after cfg.RecoverThreshold consecutive
 // ticks of the radio being reachable, with cfg.Cooldown between any two swaps.
-// Records the playing / level / on-fallback gauges every tick; radio_reachable
-// only on the ticks that probe — which back off as an outage wears on, so it
-// reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is canceled.
+// Records the playing / level-fresh / on-fallback / radio-probing gauges every
+// tick; the level only while it is fresh, and radio_reachable only on the ticks
+// that probe. The SDK re-exports a gauge's last value, so those two hold their
+// last reading between records and the matching freshness gauge says whether to
+// trust it. Runs until ctx is canceled.
 func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
@@ -260,12 +262,12 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			return
 		case <-ticker.C:
 			db, fresh := deps.Level()
+			instrumentation.OBSBackgroundAudio.SetLevelFresh(platform, fresh)
 			if fresh {
 				// Only record a level we actually trust. A stale meter (the
-				// OBS WebSocket subscription dropped) would otherwise sit at
-				// the -60 floor and read as false silence; recording nothing
-				// instead lets the series go stale → NoData rather than
-				// fake-silent, so dashboards show a gap and alerts don't fire.
+				// OBS WebSocket subscription dropped) sits at the -60 floor
+				// and would read as false silence; the level series instead
+				// holds its last trusted value and level_fresh reads 0.
 				instrumentation.OBSBackgroundAudio.SetLevelDB(platform, db)
 			}
 
@@ -275,6 +277,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				// gauge / OBS-streaming alert carry it; don't advance counters
 				// on a blind tick.
 				slog.WarnContext(ctx, "audio watchdog: obs media state unavailable", "err", err)
+				instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, false)
 				synced = false
 				continue
 			}
@@ -293,6 +296,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			// would stomp the operator's choice.
 			if deps.ActiveBed() != beds.Radio {
 				failMisses, recoverHits = 0, 0
+				instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, false)
 				// "On fallback" is a statement about the radio bed: a local bed
 				// the operator chose is not a fallback, however local it is.
 				instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
@@ -309,9 +313,12 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			onFallback, err := deps.SourceIsLocal(ctx)
 			if err != nil {
 				slog.WarnContext(ctx, "audio watchdog: obs source settings unavailable", "err", err)
+				instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, false)
 				continue
 			}
 			instrumentation.OBSBackgroundAudio.SetOnFallback(platform, onFallback)
+			// The fallback branch below is the only one that probes.
+			instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, onFallback)
 
 			cooling := time.Since(lastSwap) < cfg.Cooldown
 
