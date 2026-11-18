@@ -1,1 +1,0 @@
-The guessed-states board in `/api/insights/guesses` carries `prev_rank` on a `?days` window and on all time too, ranked over the same-length window ending a day earlier; `?month=current` keeps comparing against the month through yesterday.
