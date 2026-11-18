@@ -41,6 +41,7 @@ const (
 	BandTrusted   = "trusted"   // the clip's own OCR track, believed
 	BandSynthetic = "synthetic" // interpolated across the clip from trusted neighbors
 	BandUntrusted = "untrusted" // no track worth drawing; one point for the whole clip
+	BandTrimmed   = "trimmed"   // footage a trim left off the air, kept out of the default route
 )
 
 // minRouteConfidence is how believable a track has to be to be drawn per-moment
