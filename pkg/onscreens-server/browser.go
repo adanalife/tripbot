@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"time"
 
 	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/gorilla/mux"
@@ -97,6 +98,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugWeather: {
+		// Server emits the icon and the temperature as HTML (see weatherView).
+		Name: SlugWeather, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, ColorCSS: "#ffffff", DropShadow: true,
+		RenderAsHTML: true,
+	},
 }
 
 // rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
@@ -148,6 +154,7 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		out[slug] = view
 	}
+	out[SlugWeather] = weatherView(liveLocation.snapshot(time.Now()))
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		slog.ErrorContext(r.Context(), "encoding onscreens state", "err", err)
 	}
