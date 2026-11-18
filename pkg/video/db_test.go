@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -401,6 +402,61 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	}
 	if i := indexOf(route, [2]float64{0, 0}); i >= 0 {
 		t.Errorf("CorpusRoute() included a 0/0 clip at %d", i)
+	}
+}
+
+// The seconds a trim left out ride along as BandTrimmed, in the place along
+// the clip they were driven, and so does the track of a piece auto-trim dropped
+// whole — placed by the start its slug names, on its own clock. A piece that
+// later aired is drawn from its clip, not twice.
+func TestCorpusRoute_MarksTrimmedFootageInFilmOrder(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	conf := 1.0
+
+	clip := insertVideo(t, db, Video{Slug: "20990605144519_000001_s0180", Corpus: CorpusS2, CoordConfidence: &conf})
+	if err := db.Exec(`UPDATE videos SET date_filmed = '2099-06-05T14:48:19Z' WHERE id = ?`, clip.ID).Error; err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	for _, r := range []struct {
+		ts     *float64
+		source float64
+		lat    float64
+	}{{nil, 200, 45.04}, {ptr(10), 190, 45.03}, {nil, 170, 45.01}, {ptr(0), 180, 45.02}} {
+		if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+			VALUES (?, ?, ?, ?, -75.5, 'ocr')`, clip.ID, r.ts, r.source, r.lat).Error; err != nil {
+			t.Fatalf("insert coord: %v", err)
+		}
+	}
+	// Dropped three minutes later; its points arrive out of order on purpose.
+	// The second piece has a clip of its own, so its piece track is skipped.
+	insertVideo(t, db, Video{Slug: "20990605144519_000001_s0540", Corpus: CorpusS2})
+	if err := db.Exec(`INSERT INTO piece_tracks (slug, confidence, points) VALUES
+		('20990605144519_000001_s0360', 0.9, '[[10, 45.06, -75.5], [0, 45.05, -75.5]]'),
+		('20990605144519_000001_s0540', 0.9, '[[0, 45.09, -75.5]]'),
+		('20990605144519_000001_s0720', 0.1, '[[0, 45.08, -75.5]]')`).Error; err != nil {
+		t.Fatalf("insert piece tracks: %v", err)
+	}
+
+	var got []RoutePoint
+	for _, p := range CorpusRoute(ctx) {
+		if p.Lng == -75.5 {
+			got = append(got, p)
+		}
+	}
+	trim := func(lat float64) RoutePoint {
+		return RoutePoint{Lat: lat, Lng: -75.5, Band: BandTrimmed, Season: CorpusS2}
+	}
+	want := []RoutePoint{
+		trim(45.01),
+		{Lat: 45.02, Lng: -75.5, Band: BandTrusted, Season: CorpusS2},
+		{Lat: 45.03, Lng: -75.5, Band: BandTrusted, Season: CorpusS2},
+		trim(45.04),
+		trim(45.05),
+		trim(45.06),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("CorpusRoute() = %v\nwant %v", got, want)
 	}
 }
 
