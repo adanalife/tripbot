@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.15.0] — 2026-11-18
+
+### Console / API
+
+- The guessed-states board in `/api/insights/guesses` carries `prev_rank` on a `?days` window and on all time too, ranked over the same-length window ending a day earlier; `?month=current` keeps comparing against the month through yesterday. ([#1821](https://github.com/adanalife/tripbot/pull/1821))
+
 ## [v6.14.0] — 2026-11-18
 
 ### Console / API
