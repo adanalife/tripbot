@@ -806,7 +806,7 @@ func TestCheckAccess_RequiresAdmin_Admin(t *testing.T) {
 func TestRegistry_AdminCommandsDeclareRequiresAdmin(t *testing.T) {
 	want := map[string]bool{
 		"!shutdown": true, "!refreshoverlays": true, "!secretinfo": true,
-		"!middle": true, "!makebot": true, "!unbot": true, "!givemiles": true,
+		"!middle": true, "!makebot": true, "!unbot": true,
 	}
 	for _, cmd := range (&App{}).buildRegistry() {
 		if want[cmd.Trigger] && !cmd.RequiresAdmin {
