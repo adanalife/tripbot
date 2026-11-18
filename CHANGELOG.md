@@ -9,6 +9,14 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.14.0] — 2026-11-18
+
+### Console / API
+
+- The lifetime miles leaderboard in /api/stats/community carries each row's prev_rank: its place 24 hours ago, reconstructed from the miles earned since. ([#1817](https://github.com/adanalife/tripbot/pull/1817))
+- The command, unknown-command, footage, region and `!song` rankings carry each row's `prev_rank` — its place on the same board a day earlier — so the console can draw trend chevrons on them. ([#1818](https://github.com/adanalife/tripbot/pull/1818))
+- `/api/stats/community` takes `?top_miles_days=1|7|30` to pick the window each top-miles row's `prev_rank` is measured over, and echoes it as `top_miles_days`. ([#1820](https://github.com/adanalife/tripbot/pull/1820))
+
 ## [v6.13.0] — 2026-11-16
 
 ### Chatbot
