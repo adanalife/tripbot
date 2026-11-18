@@ -257,6 +257,8 @@ func (s *Sessions) login(ctx context.Context, username string) User {
 // after it find no entry, and of two logouts racing for one session (Shutdown
 // against a reconcile tick) only the first closes it.
 func (s *Sessions) logout(ctx context.Context, username string) {
+	// a session that crossed the cap between checkpoints still reports it
+	s.reportOverCap(ctx, username)
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
 	var u User
@@ -320,6 +322,9 @@ func (s *Sessions) CheckpointMiles(ctx context.Context) {
 	// already skips.
 	for _, user := range s.sessionSnapshot() {
 		username := user.Username
+		// Ahead of the miles check: a capped session accrues nothing more, so
+		// it would skip the rest of this loop.
+		s.reportOverCap(ctx, username)
 		miles := s.sessionMiles(ctx, user)
 		if miles <= 0 {
 			continue
@@ -342,6 +347,28 @@ func (s *Sessions) CheckpointMiles(ctx context.Context) {
 		}
 		updated.save(ctx)
 		updated.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), miles)
+	}
+}
+
+// reportOverCap writes the session_over_24h event the first time username's
+// session runs past maxSessionDuration. Known bots are skipped: they sit in
+// chat around the clock by design, and the event exists to surface the
+// accounts nobody has flagged yet.
+func (s *Sessions) reportOverCap(ctx context.Context, username string) {
+	s.mu.Lock()
+	live, ok := s.loggedIn[username]
+	due := ok && !live.IsBot && !live.overCapReported && time.Since(live.LoggedIn) >= maxSessionDuration
+	var sessionID uuid.UUID
+	if due {
+		live.overCapReported = true
+		sessionID = live.sessionID
+	}
+	s.mu.Unlock()
+	if !due {
+		return
+	}
+	if err := events.SessionOver24h(ctx, s.cfg, username, sessionID); err != nil {
+		slog.ErrorContext(ctx, "error creating session_over_24h event", "err", err, "username", username)
 	}
 }
 

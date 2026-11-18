@@ -99,6 +99,14 @@ func Logout(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uu
 	return record(ctx, cfg, e)
 }
 
+// SessionOver24h records that a viewer's session passed the 24h miles cap.
+// Written once per session, paired to it by sessionID: a continuous day in
+// chat is the signature of an idle farming account, so this is the row an
+// admin review of the leaderboard starts from.
+func SessionOver24h(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID) error {
+	return record(ctx, cfg, Event{Username: user, Event: "session_over_24h", SessionID: sessionID})
+}
+
 // Subscribe records that a viewer's subscription began (Twitch
 // channel.subscribe — initial subs and gift-sub recipients). Paired with
 // Unsubscribe it bounds a viewer's subscribed interval, which is what the 5%
