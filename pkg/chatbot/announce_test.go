@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -103,9 +104,15 @@ func TestRecordRaid_RecordsRaidEventWithAiring(t *testing.T) {
 	app.Events = rec
 	chat := &recordingChat{}
 	app.Chat = chat
+	overlay := &recordingOnscreens{}
+	app.Onscreens = overlay
 	emitted := captureSubscriberEvents(t)
 
 	app.RecordRaid("somechannel", 25)
+
+	if want := []string{`ShowMiddleText("Welcome, raiders from @somechannel! 🚐")`}; !reflect.DeepEqual(overlay.Calls, want) {
+		t.Errorf("overlay calls = %q, want %q", overlay.Calls, want)
+	}
 
 	if len(rec.Raids) != 1 {
 		t.Fatalf("raids = %d, want 1", len(rec.Raids))
@@ -141,11 +148,17 @@ func TestRecordRaid_RepeatWithinWindowIsFoldedIntoOne(t *testing.T) {
 	app.Events = rec
 	chat := &recordingChat{}
 	app.Chat = chat
+	overlay := &recordingOnscreens{}
+	app.Onscreens = overlay
 	emitted := captureSubscriberEvents(t)
 
 	app.RecordRaid("somechannel", 9)
 	app.RecordRaid("somechannel", 2)
 	app.RecordRaid("otherchannel", 4)
+
+	if len(overlay.Calls) != 2 {
+		t.Errorf("overlay calls = %q, want one welcome per distinct raider", overlay.Calls)
+	}
 
 	if len(rec.Raids) != 3 {
 		t.Fatalf("raids = %d, want all 3 logged", len(rec.Raids))
