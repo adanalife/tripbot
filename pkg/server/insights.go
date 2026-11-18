@@ -60,14 +60,45 @@ func insightsWindowDays(r *http.Request, def int) int {
 	return queryInt(r, "days", def, insightsAllTime, insightsMaxDays)
 }
 
-// insightsSince is the window's lower bound as a timestamp: `days` ago, or the
-// epoch for all time. A timestamp rather than an interval in the SQL keeps the
-// predicate a plain range the date indexes scan, whichever the window is.
-func insightsSince(days int) time.Time {
+// insightsSince is the window's lower bound as a timestamp: `days` before now,
+// or the epoch for all time. A timestamp rather than an interval in the SQL
+// keeps the predicate a plain range the date indexes scan, whichever the
+// window is.
+func insightsSince(now time.Time, days int) time.Time {
 	if days <= insightsAllTime {
 		return time.Unix(0, 0).UTC()
 	}
-	return time.Now().AddDate(0, 0, -days)
+	return now.AddDate(0, 0, -days)
+}
+
+// openBefore is the upper bound of a window that runs to the present.
+var openBefore = time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// prevBoardShift is how far back a ranked list's previous board ends: each
+// row's trend chevron compares its place with its place a day earlier.
+const prevBoardShift = 24 * time.Hour
+
+// prevWindow is the window [since, now) shifted back prevBoardShift: the same
+// length ending a day earlier, or everything up to a day ago for all time.
+func prevWindow(since, now time.Time) (time.Time, time.Time) {
+	if since.Equal(time.Unix(0, 0)) {
+		return since, now.Add(-prevBoardShift)
+	}
+	return since.Add(-prevBoardShift), now.Add(-prevBoardShift)
+}
+
+// stampPrevRanks stamps each row with its 1-based place in prev, or 0 when prev
+// doesn't list it; a caller with no previous board skips it, so the field is
+// absent and the console draws no chevrons rather than all "new".
+func stampPrevRanks[T any, K comparable](rows, prev []T, key func(T) K, set func(*T, *int)) {
+	rank := make(map[K]int, len(prev))
+	for i, p := range prev {
+		rank[key(p)] = i + 1
+	}
+	for i := range rows {
+		r := rank[key(rows[i])]
+		set(&rows[i], &r)
+	}
 }
 
 // queryInt parses the named integer query parameter, falling back to def when
@@ -93,6 +124,10 @@ type commandUsage struct {
 	Runs     int64  `json:"runs"`
 	Users    int64  `json:"users"`
 	Refusals int64  `json:"refusals"`
+	// PrevRank is the command's place on the same board over the window
+	// ending a day earlier, 0 when it wasn't on it; absent when that board
+	// couldn't be read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // refusalReason is one command_refused reason's in-window count.
@@ -106,6 +141,8 @@ type refusalReason struct {
 type unknownCommand struct {
 	Typed string `json:"typed"`
 	Count int64  `json:"count"`
+	// PrevRank is as commandUsage's.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // commandInsightsResponse is the wire shape of GET /api/insights/commands.
@@ -130,6 +167,7 @@ WITH runs AS (
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_run'
       AND e.date_created >= @since
+      AND e.date_created < @before
       AND u.is_bot = false
     GROUP BY 1
 ),
@@ -140,6 +178,7 @@ refused AS (
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_refused'
       AND e.date_created >= @since
+      AND e.date_created < @before
       AND u.is_bot = false
     GROUP BY 1
 )
@@ -150,7 +189,7 @@ SELECT COALESCE(r.command, f.command) AS command,
 FROM runs r
 FULL OUTER JOIN refused f ON f.command = r.command
 ORDER BY runs DESC, refusals DESC, command
-LIMIT 20`
+LIMIT @limit`
 
 const refusalReasonsSQL = `
 SELECT COALESCE(e.meta->>'reason', '') AS reason,
@@ -176,12 +215,22 @@ JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_refused'
   AND e.meta->>'reason' = 'unknown'
   AND e.date_created >= @since
+  AND e.date_created < @before
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY count DESC, typed
-LIMIT 10`
+LIMIT @limit`
 
-func gatherCommandInsights(ctx context.Context, days int) (commandInsightsResponse, error) {
+// How many rows each command list shows, and how deep its previous board
+// reads so a row that climbs into the list isn't called new.
+const (
+	commandUsageShown    = 20
+	commandUsagePrev     = 80
+	unknownCommandsShown = 10
+	unknownCommandsPrev  = 40
+)
+
+func gatherCommandInsights(ctx context.Context, days int, now time.Time) (commandInsightsResponse, error) {
 	out := commandInsightsResponse{
 		Days:            days,
 		Commands:        []commandUsage{},
@@ -189,14 +238,34 @@ func gatherCommandInsights(ctx context.Context, days int) (commandInsightsRespon
 		UnknownCommands: []unknownCommand{},
 	}
 	db := database.GormDB().WithContext(ctx)
-	if err := db.Raw(commandUsageSQL, sql.Named("since", insightsSince(days))).Scan(&out.Commands).Error; err != nil {
+	since := insightsSince(now, days)
+	prevSince, prevBefore := prevWindow(since, now)
+	if err := db.Raw(commandUsageSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", commandUsageShown)).Scan(&out.Commands).Error; err != nil {
 		return out, fmt.Errorf("command usage: %w", err)
 	}
-	if err := db.Raw(refusalReasonsSQL, sql.Named("since", insightsSince(days))).Scan(&out.RefusalReasons).Error; err != nil {
+	var prevCommands []commandUsage
+	if err := db.Raw(commandUsageSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("limit", commandUsagePrev)).Scan(&prevCommands).Error; err != nil {
+		logQueryFailure(ctx, "previous command usage query failed", err, "days", days)
+	} else {
+		stampPrevRanks(out.Commands, prevCommands, func(c commandUsage) string { return c.Command },
+			func(c *commandUsage, r *int) { c.PrevRank = r })
+	}
+	if err := db.Raw(refusalReasonsSQL, sql.Named("since", since)).Scan(&out.RefusalReasons).Error; err != nil {
 		return out, fmt.Errorf("refusal reasons: %w", err)
 	}
-	if err := db.Raw(unknownCommandsSQL, sql.Named("since", insightsSince(days))).Scan(&out.UnknownCommands).Error; err != nil {
+	if err := db.Raw(unknownCommandsSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", unknownCommandsShown)).Scan(&out.UnknownCommands).Error; err != nil {
 		return out, fmt.Errorf("unknown commands: %w", err)
+	}
+	var prevUnknown []unknownCommand
+	if err := db.Raw(unknownCommandsSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("limit", unknownCommandsPrev)).Scan(&prevUnknown).Error; err != nil {
+		logQueryFailure(ctx, "previous unknown commands query failed", err, "days", days)
+	} else {
+		stampPrevRanks(out.UnknownCommands, prevUnknown, func(c unknownCommand) string { return c.Typed },
+			func(c *unknownCommand, r *int) { c.PrevRank = r })
 	}
 	return out, nil
 }
@@ -273,8 +342,7 @@ func gatherGuessInsights(ctx context.Context, days int, since, prevBefore time.T
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
-	open := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
-	if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", open),
+	if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", openBefore),
 		sql.Named("limit", guessStatesShown)).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
 	}
@@ -284,22 +352,10 @@ func gatherGuessInsights(ctx context.Context, days int, since, prevBefore time.T
 			sql.Named("limit", guessStatesPrev)).Scan(&prev).Error; err != nil {
 			return out, fmt.Errorf("guess states before %s: %w", prevBefore.Format(time.DateOnly), err)
 		}
-		withPrevStateRanks(out.States, prev)
+		stampPrevRanks(out.States, prev, func(s stateGuesses) string { return s.State },
+			func(s *stateGuesses, r *int) { s.PrevRank = r })
 	}
 	return out, nil
-}
-
-// withPrevStateRanks stamps each state with its place in prev (1-based), or 0
-// when prev doesn't list it.
-func withPrevStateRanks(states, prev []stateGuesses) {
-	rank := make(map[string]int, len(prev))
-	for i, p := range prev {
-		rank[p.State] = i + 1
-	}
-	for i := range states {
-		r := rank[states[i].State]
-		states[i].PrevRank = &r
-	}
 }
 
 // clipInsight is one clip's in-window footage performance. AvgChatters /
@@ -330,6 +386,10 @@ type clipInsight struct {
 	// it stays out of the mean rather than reading as infinitely long.
 	ClosedPlays      int64    `json:"closed_plays"`
 	AvgPlayedSeconds *float64 `json:"avg_played_seconds"`
+	// PrevRank is the clip's place on the same board over the window ending a
+	// day earlier, 0 when it wasn't on it; absent when that board couldn't be
+	// read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // footageInsightsResponse is the wire shape of GET /api/insights/footage.
@@ -369,6 +429,7 @@ WITH samples AS (
     FROM viewer_samples
     WHERE video_id IS NOT NULL
       AND sampled_at >= @since
+      AND sampled_at < @before
     GROUP BY video_id
     HAVING COUNT(*) >= @min_samples
 ),
@@ -380,6 +441,7 @@ plays AS (
     FROM video_plays
     WHERE video_id IS NOT NULL
       AND started_at >= @since
+      AND started_at < @before
     GROUP BY video_id
 )
 SELECT s.video_id,
@@ -399,7 +461,14 @@ FROM samples s
 LEFT JOIN plays p ON p.video_id = s.video_id
 LEFT JOIN videos v ON v.id = s.video_id
 ORDER BY s.avg_chatters DESC, s.video_id
-LIMIT 15`
+LIMIT @limit`
+
+// footageShown is how many clips the board lists; the previous board reads
+// further so a clip that climbs into the list isn't called new.
+const (
+	footageShown = 15
+	footagePrev  = 60
+)
 
 // footagePlatformsSQL names the platforms that contributed samples to the
 // window. Deliberately not filtered by min_samples or joined to the clip list:
@@ -432,9 +501,9 @@ func clipLabel(state, city string, cityM *float64) string {
 	return state
 }
 
-func gatherFootageInsights(ctx context.Context, days int) (footageInsightsResponse, error) {
+func gatherFootageInsights(ctx context.Context, days int, now time.Time) (footageInsightsResponse, error) {
 	out := footageInsightsResponse{Days: days, Clips: []clipInsight{}, Platforms: []string{}}
-	var rows []struct {
+	type footageRow struct {
 		VideoID          int
 		Plays            int64
 		ClosedPlays      int64
@@ -449,9 +518,16 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 		City             string
 		CityM            *float64
 	}
-	err := database.GormDB().WithContext(ctx).
-		Raw(footageSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", footageMinSamples)).
-		Scan(&rows).Error
+	board := func(since, before time.Time, limit int) ([]footageRow, error) {
+		var rows []footageRow
+		err := database.GormDB().WithContext(ctx).
+			Raw(footageSQL, sql.Named("since", since), sql.Named("before", before),
+				sql.Named("min_samples", footageMinSamples), sql.Named("limit", limit)).
+			Scan(&rows).Error
+		return rows, err
+	}
+	since := insightsSince(now, days)
+	rows, err := board(since, openBefore, footageShown)
 	if err != nil {
 		return out, fmt.Errorf("footage: %w", err)
 	}
@@ -470,8 +546,19 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 			AvgPlayedSeconds: r.AvgPlayedSeconds,
 		})
 	}
+	prevSince, prevBefore := prevWindow(since, now)
+	if prev, err := board(prevSince, prevBefore, footagePrev); err != nil {
+		logQueryFailure(ctx, "previous footage query failed", err, "days", days)
+	} else {
+		prevClips := make([]clipInsight, len(prev))
+		for i, p := range prev {
+			prevClips[i].VideoID = p.VideoID
+		}
+		stampPrevRanks(out.Clips, prevClips, func(c clipInsight) int { return c.VideoID },
+			func(c *clipInsight, r *int) { c.PrevRank = r })
+	}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(footagePlatformsSQL, sql.Named("since", insightsSince(days))).
+		Raw(footagePlatformsSQL, sql.Named("since", since)).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("footage platforms: %w", err)
 	}
@@ -514,7 +601,7 @@ func insightsError(w http.ResponseWriter, msg string) {
 // over the ?days window.
 func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, commandInsightsDefaultDays)
-	payload, err := gatherCommandInsights(r.Context(), days)
+	payload, err := gatherCommandInsights(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "command insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather command insights")
@@ -529,11 +616,11 @@ func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
 // calendar month, on the same clock, the monthly leaderboards count.
 func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, guessInsightsDefaultDays)
-	since := insightsSince(days)
+	now := time.Now()
+	since := insightsSince(now, days)
 	month := ""
 	var prevBefore time.Time
 	if r.URL.Query().Get("month") == "current" {
-		now := time.Now()
 		since = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		month = now.Format("2006-01")
 		prevBefore = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -553,7 +640,7 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 // window.
 func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, footageInsightsDefaultDays)
-	payload, err := gatherFootageInsights(r.Context(), days)
+	payload, err := gatherFootageInsights(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "footage insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather footage insights")
@@ -613,6 +700,10 @@ type regionInsight struct {
 	// times longer collects more joins without performing any better. Null
 	// when no play in the window closed, leaving no airtime to divide by.
 	NetPerHour *float64 `json:"net_per_hour"`
+	// PrevRank is the state's place on the same board over the window ending
+	// a day earlier, 0 when it wasn't on it; absent when that board couldn't
+	// be read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // regionInsightsResponse is the wire shape of GET /api/insights/regions.
@@ -654,6 +745,7 @@ WITH samples AS (
     WHERE s.video_id IS NOT NULL
       AND v.state <> ''
       AND s.sampled_at >= @since
+      AND s.sampled_at < @before
     GROUP BY v.state
     HAVING COUNT(*) >= @min_samples
 ),
@@ -667,6 +759,7 @@ airtime AS (
     WHERE p.video_id IS NOT NULL
       AND v.state <> ''
       AND p.started_at >= @since
+      AND p.started_at < @before
     GROUP BY v.state
 ),
 churn AS (
@@ -681,6 +774,7 @@ churn AS (
       AND v.state <> ''
       AND u.is_bot = false
       AND e.date_created >= @since
+      AND e.date_created < @before
     GROUP BY v.state
 )
 SELECT s.state,
@@ -701,7 +795,14 @@ FROM samples s
 LEFT JOIN airtime a ON a.state = s.state
 LEFT JOIN churn   c ON c.state = s.state
 ORDER BY net_per_hour DESC NULLS LAST, avg_viewers DESC NULLS LAST, s.state
-LIMIT 20`
+LIMIT @limit`
+
+// regionsShown is how many states the board lists; the previous board reads
+// further so a state that climbs into the list isn't called new.
+const (
+	regionsShown = 20
+	regionsPrev  = 60
+)
 
 // regionPlatformsSQL names the platforms that contributed samples to the
 // window. Unfiltered by min_samples for the same reason as the per-clip
@@ -715,16 +816,27 @@ WHERE s.video_id IS NOT NULL
   AND s.sampled_at >= @since
 ORDER BY s.platform`
 
-func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse, error) {
+func gatherRegionInsights(ctx context.Context, days int, now time.Time) (regionInsightsResponse, error) {
 	out := regionInsightsResponse{Days: days, Regions: []regionInsight{}, Platforms: []string{}}
-	err := database.GormDB().WithContext(ctx).
-		Raw(regionsSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", regionMinSamples)).
-		Scan(&out.Regions).Error
-	if err != nil {
+	db := database.GormDB().WithContext(ctx)
+	since := insightsSince(now, days)
+	if err := db.Raw(regionsSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("min_samples", regionMinSamples), sql.Named("limit", regionsShown)).
+		Scan(&out.Regions).Error; err != nil {
 		return out, fmt.Errorf("regions: %w", err)
 	}
-	if err := database.GormDB().WithContext(ctx).
-		Raw(regionPlatformsSQL, sql.Named("since", insightsSince(days))).
+	prevSince, prevBefore := prevWindow(since, now)
+	var prev []regionInsight
+	if err := db.Raw(regionsSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("min_samples", regionMinSamples), sql.Named("limit", regionsPrev)).
+		Scan(&prev).Error; err != nil {
+		logQueryFailure(ctx, "previous region query failed", err, "days", days)
+	} else {
+		stampPrevRanks(out.Regions, prev, func(r regionInsight) string { return r.State },
+			func(r *regionInsight, p *int) { r.PrevRank = p })
+	}
+	if err := db.
+		Raw(regionPlatformsSQL, sql.Named("since", since)).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("region platforms: %w", err)
 	}
@@ -735,7 +847,7 @@ func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse
 // audience and join/leave churn over the ?days window.
 func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, regionInsightsDefaultDays)
-	payload, err := gatherRegionInsights(r.Context(), days)
+	payload, err := gatherRegionInsights(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "region insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather region insights")
@@ -916,7 +1028,7 @@ ORDER BY platform`
 func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsResponse, error) {
 	out := sessionInsightsResponse{Days: days, Platforms: []sessionStats{}}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(sessionsSQL, sql.Named("since", insightsSince(days))).
+		Raw(sessionsSQL, sql.Named("since", insightsSince(time.Now(), days))).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("sessions: %w", err)
 	}

@@ -488,6 +488,39 @@ func seedSongRun(t *testing.T, db *gorm.DB, username, title, artist string, at t
 	}
 }
 
+// The song board ranks a day earlier over the same 90-day window: Colorado
+// Sunrise overtakes Big Wow today and Lost Highway is new today.
+func TestGatherSongStats_PrevRank(t *testing.T) {
+	db := testdb.New(t)
+	seedMilesUser(t, db, "song_alice", 0, false, false)
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	yesterday, today := now.Add(-48*time.Hour), now.Add(-time.Hour)
+	ask := func(title string, n int, at time.Time) {
+		for i := range n {
+			seedSongRun(t, db, "song_alice", title, "Fifty Horizons", at.Add(time.Duration(i)*time.Second))
+		}
+	}
+	ask("Big Wow", 2, yesterday)
+	ask("Colorado Sunrise", 1, yesterday)
+	ask("Colorado Sunrise", 3, today)
+	ask("Lost Highway", 1, today)
+
+	got, err := gatherSongStats(context.Background(), 90, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, s := range got.Songs {
+		titles = append(titles, s.Title)
+	}
+	if !slices.Equal(titles, []string{"Colorado Sunrise", "Big Wow", "Lost Highway"}) {
+		t.Fatalf("songs = %v", titles)
+	}
+	if ranks := prevRanks(got.Songs, func(s songCount) *int { return s.PrevRank }); !slices.Equal(ranks, []int{2, 1, 0}) {
+		t.Errorf("songs prev_rank = %v, want [2 1 0]", ranks)
+	}
+}
+
 func TestSongStatsHandler_RanksTheNamedTracks(t *testing.T) {
 	db := testdb.New(t)
 	seedMilesUser(t, db, "song_alice", 0, false, false)
