@@ -53,22 +53,39 @@ func TestPlayRandom_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
 	c := New(commandHost, rec, "stage", "twitch")
 
-	if err := c.PlayRandom(context.Background()); err != nil {
+	if err := c.PlayRandom(context.Background(), ""); err != nil {
 		t.Fatalf("PlayRandom: %v", err)
 	}
+	if err := c.PlayRandom(context.Background(), "s2"); err != nil {
+		t.Fatalf("PlayRandom(s2): %v", err)
+	}
 
-	if len(rec.Publishes) != 1 {
-		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	if len(rec.Publishes) != 2 {
+		t.Fatalf("expected 2 publishes, got %d", len(rec.Publishes))
 	}
-	if rec.Publishes[0].Subject != "tripbot.stage.playout.play.random.twitch" {
-		t.Errorf("subject = %q, want tripbot.stage.playout.play.random.twitch", rec.Publishes[0].Subject)
+	for _, p := range rec.Publishes {
+		if p.Subject != "tripbot.stage.playout.play.random.twitch" {
+			t.Errorf("subject = %q, want tripbot.stage.playout.play.random.twitch", p.Subject)
+		}
 	}
-	var ev ve.Command
-	if err := json.Unmarshal(rec.Publishes[0].Payload, &ev); err != nil {
+	// The rotation pick is the bare envelope, as before corpora existed — no
+	// corpus key at all, so playout reads it as "from the mode".
+	var bare map[string]any
+	if err := json.Unmarshal(rec.Publishes[0].Payload, &bare); err != nil {
 		t.Fatalf("payload not valid JSON: %v", err)
 	}
-	if ev.EmittedAt == "" {
+	if bare["emitted_at"] == "" || bare["emitted_at"] == nil {
 		t.Error("emitted_at empty")
+	}
+	if _, ok := bare["corpus"]; ok {
+		t.Errorf("rotation pick carries a corpus key: %s", rec.Publishes[0].Payload)
+	}
+	var named ve.PlayRandom
+	if err := json.Unmarshal(rec.Publishes[1].Payload, &named); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if named.Corpus != "s2" {
+		t.Errorf("corpus = %q, want s2", named.Corpus)
 	}
 }
 
