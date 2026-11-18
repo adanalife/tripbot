@@ -80,3 +80,28 @@ func RemoveMark(ctx context.Context, id int, kind string, sec float64) error {
 WHERE video_id = @id AND kind = @kind AND username = '' AND abs(source_ts_sec - @src) < 0.01`,
 		sql.Named("id", id), sql.Named("kind", kind), sql.Named("src", sec+off)).Error
 }
+
+// The play before the platform's newest one, and how long it aired. ended_at
+// is stamped by the play that superseded it, so it is NULL only when the bot
+// never saw the clip leave.
+const previousPlaySQL = `
+SELECT video_id, EXTRACT(EPOCH FROM ended_at - started_at) AS aired
+FROM video_plays
+WHERE platform = @platform
+ORDER BY started_at DESC
+OFFSET 1 LIMIT 1`
+
+// PreviousPlay returns the clip that aired on platform before the one on
+// screen and how many seconds of it aired. ok is false when there is no such
+// play, or its clip or end went unrecorded.
+func PreviousPlay(ctx context.Context, platform string) (id int, aired float64, ok bool, err error) {
+	var row struct {
+		VideoID *int
+		Aired   *float64
+	}
+	err = database.GormDB().WithContext(ctx).Raw(previousPlaySQL, sql.Named("platform", platform)).Scan(&row).Error
+	if err != nil || row.VideoID == nil || row.Aired == nil {
+		return 0, 0, false, err
+	}
+	return *row.VideoID, *row.Aired, true, nil
+}
