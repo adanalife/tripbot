@@ -18,15 +18,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// moment is one mark on a clip, at Sec seconds into the clip as it airs now.
-// By and Platform name the viewer who set it from chat, empty for the
-// operator's own marks.
+// moment is one mark on a clip, at Sec seconds into the clip as it airs now,
+// or nil for a mark on the whole clip (a viewer's boring report). By and
+// Platform name the viewer who set it from chat, empty for the operator's own
+// marks.
 type moment struct {
-	Kind     string  `json:"kind"`
-	Sec      float64 `json:"sec"`
-	Note     string  `json:"note"`
-	By       string  `json:"by"`
-	Platform string  `json:"platform"`
+	Kind     string   `json:"kind"`
+	Sec      *float64 `json:"sec"`
+	Note     string   `json:"note"`
+	By       string   `json:"by"`
+	Platform string   `json:"platform"`
 }
 
 // momentKinds are the kinds the console may set; a trim only comes from chat.

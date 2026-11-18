@@ -8,7 +8,8 @@ import (
 )
 
 // A viewer holds one mark of a kind per clip: marking again moves it, while
-// another viewer's mark and the console's stay put.
+// another viewer's mark and the console's stay put. A clip-level mark has no
+// second, and marking the clip again replaces its note.
 func TestSetMarkMovesAViewersOwnMark(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
@@ -21,17 +22,19 @@ func TestSetMarkMovesAViewersOwnMark(t *testing.T) {
 		{VideoID: vid.ID, Kind: "trim", Sec: 30, By: "bo", Platform: "twitch", Note: "fog"},
 		{VideoID: vid.ID, Kind: "star", Sec: 40},
 		{VideoID: vid.ID, Kind: "star", Sec: 41},
+		{VideoID: vid.ID, Kind: "boring", ClipLevel: true, By: "ada", Platform: "twitch", Note: "dull"},
+		{VideoID: vid.ID, Kind: "boring", ClipLevel: true, By: "ada", Platform: "twitch", Note: "still dull"},
 	} {
 		if err := SetMark(ctx, m); err != nil {
 			t.Fatalf("SetMark(%+v): %v", m, err)
 		}
 	}
 	var got []string
-	db.Raw(`SELECT kind || ' ' || source_ts_sec::int || ' ' || username || ' ' || platform || ' ' || note
+	db.Raw(`SELECT kind || ' ' || COALESCE(source_ts_sec::int::text, '-') || ' ' || username || ' ' || platform || ' ' || note
 FROM video_moments WHERE video_id = ? ORDER BY source_ts_sec, kind, platform`, vid.ID).Scan(&got)
 	want := []string{
 		"star 20 ada twitch ", "trim 20 ada twitch ", "trim 20 ada youtube ",
-		"trim 30 bo twitch fog", "star 40   ", "star 41   ",
+		"trim 30 bo twitch fog", "star 40   ", "star 41   ", "boring - ada twitch still dull",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %q, want %q", got, want)

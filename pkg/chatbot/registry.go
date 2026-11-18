@@ -354,6 +354,11 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.trimCmd,
 		},
 		{
+			Trigger: "!boring",
+			Help:    "Report that this whole clip is dull, with an optional note: !boring <why>",
+			Handler: a.boringCmd,
+		},
+		{
 			Trigger:        "!report",
 			Help:           "Report a stream problem, like no audio or a frozen picture",
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},

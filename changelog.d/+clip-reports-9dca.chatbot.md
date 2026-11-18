@@ -1,0 +1,1 @@
+`!boring` reports the whole clip on screen as dull, the first report with no second: `video_moments.source_ts_sec` is nullable and the footage reports and clip moments endpoints send `sec`/`source_sec` as `null` for it.
