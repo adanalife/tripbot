@@ -115,6 +115,105 @@ func queryInt(r *http.Request, key string, def, lo, hi int) int {
 	return min(max(n, lo), hi)
 }
 
+// insightsBucket parses ?bucket for the reads that can add a trend: "" (no
+// series), "day" or "week". ok is false for any other value.
+func insightsBucket(r *http.Request) (bucket string, ok bool) {
+	switch b := r.URL.Query().Get("bucket"); b {
+	case "", "day", "week":
+		return b, true
+	}
+	return "", false
+}
+
+// badBucket answers an unknown ?bucket.
+func badBucket(w http.ResponseWriter) {
+	http.Error(w, `bucket must be "day" or "week"`, http.StatusBadRequest)
+}
+
+// bucketCount is one bucket of a read's ?bucket series. Day is the bucket's
+// first day (a week starts on Monday) on the database session's calendar (UTC
+// on the cluster), as in playbackDay.
+type bucketCount struct {
+	Day   string `json:"day"`
+	Count int64  `json:"count"`
+}
+
+// guessBucket is a guesses series bucket: Count guesses, Correct of them right.
+type guessBucket struct {
+	Day     string `json:"day"`
+	Count   int64  `json:"count"`
+	Correct int64  `json:"correct"`
+}
+
+// bucketSeriesSQL counts the rows of a `hits (at, correct)` CTE per @bucket and
+// joins the counts onto a generated calendar, as playbackDailySQL does, so
+// every bucket from the window's first through the current one is a row,
+// oldest first. All time has no start to fill from, so its calendar begins at
+// the first bucket holding a row, or the current one when none does.
+func bucketSeriesSQL(hits string) string {
+	return `
+WITH ` + hits + `,
+counts AS (
+    SELECT date_trunc(CAST(@bucket AS text), at)::date AS bucket,
+           COUNT(*)                        AS n,
+           COUNT(*) FILTER (WHERE correct) AS correct
+    FROM hits
+    GROUP BY 1
+),
+calendar AS (
+    SELECT generate_series(
+               CASE WHEN CAST(@all_time AS boolean)
+                    THEN COALESCE((SELECT MIN(bucket) FROM counts), date_trunc(CAST(@bucket AS text), now())::date)
+                    ELSE date_trunc(CAST(@bucket AS text), CAST(@since AS timestamptz))::date
+               END,
+               date_trunc(CAST(@bucket AS text), now())::date,
+               CAST('1 ' || CAST(@bucket AS text) AS interval))::date AS bucket
+)
+SELECT to_char(c.bucket, 'YYYY-MM-DD') AS day,
+       COALESCE(n.n, 0)       AS count,
+       COALESCE(n.correct, 0) AS correct
+FROM calendar c
+LEFT JOIN counts n ON n.bucket = c.bucket
+ORDER BY c.bucket`
+}
+
+// gatherBucketSeries runs bucketSeriesSQL over hits from since.
+func gatherBucketSeries[T any](ctx context.Context, hits, bucket string, since time.Time) ([]T, error) {
+	out := []T{}
+	err := database.GormDB().WithContext(ctx).
+		Raw(bucketSeriesSQL(hits), sql.Named("bucket", bucket), sql.Named("since", since),
+			sql.Named("all_time", since.Equal(time.Unix(0, 0)))).
+		Scan(&out).Error
+	return out, err
+}
+
+// The rows each read's series counts, under the same window and bot filter as
+// that read's totals: commands bucket command runs, guesses bucket guesses
+// (and the correct ones), sessions bucket closed visits by login day.
+const (
+	commandRunHits = `hits AS (
+    SELECT e.date_created AS at, false AS correct
+    FROM events e
+    JOIN users u ON u.platform = e.platform AND u.username = e.username
+    WHERE e.event = 'command_run'
+      AND e.date_created >= @since
+      AND u.is_bot = false
+)`
+	guessHits = `hits AS (
+    SELECT e.date_created AS at, COALESCE(e.meta->>'correct' = 'true', false) AS correct
+    FROM events e
+    JOIN users u ON u.platform = e.platform AND u.username = e.username
+    WHERE e.event = 'guess_submitted'
+      AND e.date_created >= @since
+      AND u.is_bot = false
+)`
+	visitHits = visitsCTE + `,
+hits AS (
+    SELECT day::timestamp AS at, false AS correct
+    FROM visits
+)`
+)
+
 // commandUsage is one command's in-window activity: how often it ran, how many
 // distinct non-bot chatters ran it, and how often it was refused (gates,
 // cooldowns, typos that resolved to it). Command strings pass through verbatim
@@ -613,23 +712,48 @@ func insightsError(w http.ResponseWriter, msg string) {
 
 // commandInsightsHandler serves GET /api/insights/commands: per-command run /
 // distinct-user / refusal counts, refusal reasons, and the top unknown tokens
-// over the ?days window.
+// over the ?days window. ?bucket=day|week adds a series of command runs.
 func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	bucket, ok := insightsBucket(r)
+	if !ok {
+		badBucket(w)
+		return
+	}
 	days := insightsWindowDays(r, commandInsightsDefaultDays)
-	payload, err := gatherCommandInsights(r.Context(), days, time.Now())
+	now := time.Now()
+	payload, err := gatherCommandInsights(r.Context(), days, now)
 	if err != nil {
 		logQueryFailure(r.Context(), "command insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather command insights")
 		return
 	}
-	writeInsights(w, r, payload)
+	if bucket == "" {
+		writeInsights(w, r, payload)
+		return
+	}
+	series, err := gatherBucketSeries[bucketCount](r.Context(), commandRunHits, bucket, insightsSince(now, days))
+	if err != nil {
+		logQueryFailure(r.Context(), "command series query failed", err, "days", days, "bucket", bucket)
+		insightsError(w, "couldn't gather command insights")
+		return
+	}
+	writeInsights(w, r, struct {
+		commandInsightsResponse
+		Series []bucketCount `json:"series"`
+	}{payload, series})
 }
 
 // guessInsightsHandler serves GET /api/insights/guesses: !guess volume,
 // accuracy, distinct players, and the per-state breakdown over the ?days
 // window, or over the month in progress with ?month=current — the same
 // calendar month, on the same clock, the monthly leaderboards count.
+// ?bucket=day|week adds a series of guesses and correct guesses.
 func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	bucket, ok := insightsBucket(r)
+	if !ok {
+		badBucket(w)
+		return
+	}
 	days := insightsWindowDays(r, guessInsightsDefaultDays)
 	now := time.Now()
 	since := insightsSince(now, days)
@@ -649,7 +773,20 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 		insightsError(w, "couldn't gather guess insights")
 		return
 	}
-	writeInsights(w, r, payload)
+	if bucket == "" {
+		writeInsights(w, r, payload)
+		return
+	}
+	series, err := gatherBucketSeries[guessBucket](r.Context(), guessHits, bucket, since)
+	if err != nil {
+		logQueryFailure(r.Context(), "guess series query failed", err, "days", days, "bucket", bucket)
+		insightsError(w, "couldn't gather guess insights")
+		return
+	}
+	writeInsights(w, r, struct {
+		guessInsightsResponse
+		Series []guessBucket `json:"series"`
+	}{payload, series})
 }
 
 // footageInsightsHandler serves GET /api/insights/footage: per-clip play
@@ -1042,10 +1179,10 @@ FROM visits
 GROUP BY platform
 ORDER BY platform`
 
-func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsResponse, error) {
+func gatherSessionInsights(ctx context.Context, days int, since time.Time) (sessionInsightsResponse, error) {
 	out := sessionInsightsResponse{Days: days, Platforms: []sessionStats{}}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(sessionsSQL, sql.Named("since", insightsSince(time.Now(), days))).
+		Raw(sessionsSQL, sql.Named("since", since)).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("sessions: %w", err)
 	}
@@ -1053,14 +1190,34 @@ func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsRespon
 }
 
 // sessionInsightsHandler serves GET /api/insights/sessions: per-platform
-// human session length over the ?days window.
+// human session length over the ?days window. ?bucket=day|week adds a series
+// of closed visits, all platforms together, by login day.
 func sessionInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	bucket, ok := insightsBucket(r)
+	if !ok {
+		badBucket(w)
+		return
+	}
 	days := insightsWindowDays(r, sessionInsightsDefaultDays)
-	payload, err := gatherSessionInsights(r.Context(), days)
+	since := insightsSince(time.Now(), days)
+	payload, err := gatherSessionInsights(r.Context(), days, since)
 	if err != nil {
 		logQueryFailure(r.Context(), "session insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather session insights")
 		return
 	}
-	writeInsights(w, r, payload)
+	if bucket == "" {
+		writeInsights(w, r, payload)
+		return
+	}
+	series, err := gatherBucketSeries[bucketCount](r.Context(), visitHits, bucket, since)
+	if err != nil {
+		logQueryFailure(r.Context(), "session series query failed", err, "days", days, "bucket", bucket)
+		insightsError(w, "couldn't gather session insights")
+		return
+	}
+	writeInsights(w, r, struct {
+		sessionInsightsResponse
+		Series []bucketCount `json:"series"`
+	}{payload, series})
 }

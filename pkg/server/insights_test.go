@@ -1295,3 +1295,155 @@ func TestSessionInsightsHandler_Aggregates(t *testing.T) {
 		t.Errorf("14-day twitch sessions = %d, want 6", got.Platforms[0].Sessions)
 	}
 }
+
+// bucketSeries GETs path and decodes its series, which every ?bucket read
+// shapes the same way (guesses add correct).
+func bucketSeries(t *testing.T, path string, handler http.HandlerFunc) []guessBucket {
+	t.Helper()
+	rec := insightsGET(t, path, handler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s: status = %d: %s", path, rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Series []guessBucket `json:"series"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	for i := 1; i < len(got.Series); i++ {
+		if got.Series[i].Day <= got.Series[i-1].Day {
+			t.Errorf("%s: series out of order at %d: %v", path, i, got.Series)
+		}
+	}
+	return got.Series
+}
+
+// seriesDays is three noon timestamps a day apart, oldest first, ending
+// yesterday: the busy days are the first and last, the middle one a gap.
+func seriesDays() [3]time.Time {
+	first := time.Now().UTC().Truncate(24 * time.Hour).Add(-3*24*time.Hour + 12*time.Hour)
+	return [3]time.Time{first, first.Add(24 * time.Hour), first.Add(48 * time.Hour)}
+}
+
+// checkDaySeries asserts a 7-day window's day series: a row per calendar day
+// from the window's first through today, with want's counts on the seeded days
+// and zero everywhere else.
+func checkDaySeries(t *testing.T, series []guessBucket, want map[string]guessBucket) {
+	t.Helper()
+	if len(series) != 8 {
+		t.Fatalf("7-day window has %d day buckets, want 8: %v", len(series), series)
+	}
+	if today := time.Now().UTC().Format("2006-01-02"); series[7].Day != today {
+		t.Errorf("last bucket = %s, want today %s", series[7].Day, today)
+	}
+	for _, b := range series {
+		w := want[b.Day]
+		if b.Count != w.Count || b.Correct != w.Correct {
+			t.Errorf("%s = %d/%d, want %d/%d", b.Day, b.Count, b.Correct, w.Count, w.Correct)
+		}
+	}
+}
+
+func dayKey(at time.Time) string { return at.Format("2006-01-02") }
+
+func TestCommandInsightsHandler_DaySeries(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "cs_alice", false)
+	seedUser(t, db, "cs_bot", true)
+	d := seriesDays()
+	seedEvent(t, db, "cs_alice", "command_run", `{"command":"!miles"}`, d[0])
+	seedEvent(t, db, "cs_alice", "command_run", `{"command":"!guess"}`, d[0].Add(time.Minute))
+	seedEvent(t, db, "cs_alice", "command_refused", `{"command":"!guess","reason":"cooldown"}`, d[0])
+	seedEvent(t, db, "cs_bot", "command_run", `{"command":"!miles"}`, d[0])
+	seedEvent(t, db, "cs_alice", "command_run", `{"command":"!miles"}`, d[2])
+	seedEvent(t, db, "cs_alice", "command_run", `{"command":"!miles"}`, time.Now().Add(-20*24*time.Hour))
+
+	series := bucketSeries(t, "/api/insights/commands?bucket=day", commandInsightsHandler)
+	checkDaySeries(t, series, map[string]guessBucket{
+		dayKey(d[0]): {Count: 2},
+		dayKey(d[2]): {Count: 1},
+	})
+
+	// All time starts the calendar at the first bucket holding a row.
+	series = bucketSeries(t, "/api/insights/commands?days=0&bucket=day", commandInsightsHandler)
+	if want := dayKey(time.Now().Add(-20 * 24 * time.Hour).UTC()); len(series) == 0 || series[0].Day != want {
+		t.Errorf("all-time series starts %v, want %s", series, want)
+	}
+}
+
+func TestGuessInsightsHandler_DaySeries(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "gs_alice", false)
+	seedUser(t, db, "gs_bot", true)
+	d := seriesDays()
+	seedEvent(t, db, "gs_alice", "guess_submitted", `{"actual":"utah","correct":true}`, d[0])
+	seedEvent(t, db, "gs_alice", "guess_submitted", `{"actual":"utah","correct":false}`, d[0].Add(time.Minute))
+	seedEvent(t, db, "gs_bot", "guess_submitted", `{"actual":"utah","correct":true}`, d[0])
+	seedEvent(t, db, "gs_alice", "guess_submitted", `{"actual":"ohio","correct":"true"}`, d[2])
+
+	series := bucketSeries(t, "/api/insights/guesses?days=7&bucket=day", guessInsightsHandler)
+	checkDaySeries(t, series, map[string]guessBucket{
+		dayKey(d[0]): {Count: 2, Correct: 1},
+		dayKey(d[2]): {Count: 1, Correct: 1},
+	})
+
+	// Weeks start on Monday, run back to the window's first week, and add up
+	// to the window's totals.
+	series = bucketSeries(t, "/api/insights/guesses?days=30&bucket=week", guessInsightsHandler)
+	if len(series) < 5 || len(series) > 6 {
+		t.Errorf("30-day window has %d week buckets, want 5 or 6: %v", len(series), series)
+	}
+	var count, correct int64
+	for i, b := range series {
+		start, err := time.Parse("2006-01-02", b.Day)
+		if err != nil || start.Weekday() != time.Monday {
+			t.Errorf("week bucket %q doesn't start on a Monday", b.Day)
+		}
+		if i > 0 {
+			prev, _ := time.Parse("2006-01-02", series[i-1].Day)
+			if start.Sub(prev) != 7*24*time.Hour {
+				t.Errorf("week buckets %s and %s aren't a week apart", series[i-1].Day, b.Day)
+			}
+		}
+		count += b.Count
+		correct += b.Correct
+	}
+	if count != 3 || correct != 2 {
+		t.Errorf("week series sums to %d/%d, want 3/2", count, correct)
+	}
+}
+
+func TestSessionInsightsHandler_DaySeries(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "ss_alice", false)
+	seedUser(t, db, "ss_bot", true)
+	d := seriesDays()
+	seedSession(t, db, "twitch", "ss_alice", d[0], 10)
+	seedSession(t, db, "twitch", "ss_alice", d[0].Add(time.Hour), 20)
+	seedSession(t, db, "twitch", "ss_bot", d[0], 30)
+	seedSession(t, db, "twitch", "ss_alice", d[2], -1)
+	seedSession(t, db, "twitch", "ss_alice", d[2], 15)
+
+	series := bucketSeries(t, "/api/insights/sessions?bucket=day", sessionInsightsHandler)
+	checkDaySeries(t, series, map[string]guessBucket{
+		dayKey(d[0]): {Count: 2},
+		dayKey(d[2]): {Count: 1},
+	})
+}
+
+// An unknown bucket is refused; without one the reads carry no series.
+func TestInsightsHandlers_Bucket(t *testing.T) {
+	testdb.New(t)
+	for path, handler := range map[string]http.HandlerFunc{
+		"/api/insights/commands": commandInsightsHandler,
+		"/api/insights/guesses":  guessInsightsHandler,
+		"/api/insights/sessions": sessionInsightsHandler,
+	} {
+		if rec := insightsGET(t, path+"?bucket=month", handler); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s?bucket=month: status = %d, want 400", path, rec.Code)
+		}
+		if rec := insightsGET(t, path, handler); strings.Contains(rec.Body.String(), `"series"`) {
+			t.Errorf("%s without bucket carries a series: %s", path, rec.Body.String())
+		}
+	}
+}
