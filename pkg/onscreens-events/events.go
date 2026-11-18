@@ -92,6 +92,16 @@ type LocationData struct {
 	Sunset   string `json:"sunset"`
 }
 
+// SpeedUpdate is the payload for the speed.update subject: the van's ground
+// speed at the playhead, for the speedometer overlay. MPH is absent when there
+// is no reading worth showing — no track, or an interpolated span — and the
+// overlay hides. Like LocationData it is a periodic feed; the overlay hides on
+// its own when updates stop.
+type SpeedUpdate struct {
+	Envelope
+	MPH *float64 `json:"mph,omitempty"`
+}
+
 // RotatorConfig is the payload for the rotator.config subject: the full
 // corner-rotator copy for one platform, as edited in the admin console and
 // stored in Postgres. It replaces the receiving server's pools wholesale rather

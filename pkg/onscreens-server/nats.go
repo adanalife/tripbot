@@ -46,6 +46,7 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.GPSShowSubject(env, platform), s.handleGPSShow},
 		{oe.GPSHideSubject(env, platform), s.handleGPSHide},
 		{oe.LocationUpdateSubject(env, platform), s.handleLocationUpdate},
+		{oe.SpeedUpdateSubject(env, platform), s.handleSpeedUpdate},
 		{oe.RotatorConfigSubject(env, platform), s.handleRotatorConfig},
 	}
 	for _, sb := range subs {

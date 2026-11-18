@@ -94,6 +94,13 @@ func (c *Client) UpdateLocation(ctx context.Context, data oe.LocationData) error
 	return nil
 }
 
+// UpdateSpeed publishes the van's speed for the speedometer overlay; nil hides
+// it. Fire-and-forget; tripbot republishes on a timer.
+func (c *Client) UpdateSpeed(ctx context.Context, mph *float64) error {
+	c.publish(ctx, oe.SpeedUpdateSubject(c.env, c.platform), oe.SpeedUpdate{Envelope: oe.NewEnvelope(), MPH: mph})
+	return nil
+}
+
 // PublishRotatorConfig pushes edited corner-rotator copy to a platform's
 // onscreens-server, which swaps it into its live pools.
 //

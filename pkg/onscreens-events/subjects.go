@@ -82,3 +82,10 @@ func GPSHideSubject(env, platform string) string { return subject(env, platform,
 func LocationUpdateSubject(env, platform string) string {
 	return subject(env, platform, "location", "update")
 }
+
+// SpeedUpdateSubject carries the van's speed at the playhead from tripbot to
+// onscreens-server's speedometer overlay. A periodic feed, like the location
+// update.
+func SpeedUpdateSubject(env, platform string) string {
+	return subject(env, platform, "speed", "update")
+}
