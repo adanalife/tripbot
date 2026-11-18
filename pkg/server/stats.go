@@ -594,6 +594,10 @@ type songCount struct {
 	Count     int64     `json:"count"`
 	Askers    int64     `json:"askers"`
 	LastAsked time.Time `json:"last_asked"`
+	// PrevRank is the track's place on the same board over the window ending
+	// a day earlier, 0 when it wasn't on it; absent when that board couldn't
+	// be read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // songStatsResponse is the wire shape of GET /api/stats/songs.
@@ -616,20 +620,42 @@ JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_run'
   AND e.meta->>'command' = '!song'
   AND e.meta->'detail'->>'title' IS NOT NULL
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
+  AND e.date_created < @before
   AND u.is_bot = false
 GROUP BY 1, 2
 ORDER BY count DESC, last_asked DESC
 LIMIT @limit`
 
+// songStatsPrev is how deep the previous board reads, so a track that climbs
+// into the list isn't called new.
+const songStatsPrev = 80
+
+func gatherSongStats(ctx context.Context, days int, now time.Time) (songStatsResponse, error) {
+	out := songStatsResponse{Days: days, Songs: []songCount{}}
+	db := database.GormDB().WithContext(ctx)
+	since := insightsSince(now, days)
+	if err := db.Raw(songStatsSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", songStatsLimit)).Scan(&out.Songs).Error; err != nil {
+		return out, err
+	}
+	prevSince, prevBefore := prevWindow(since, now)
+	var prev []songCount
+	if err := db.Raw(songStatsSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("limit", songStatsPrev)).Scan(&prev).Error; err != nil {
+		logQueryFailure(ctx, "previous song stats query failed", err, "days", days)
+		return out, nil
+	}
+	stampPrevRanks(out.Songs, prev, func(s songCount) [2]string { return [2]string{s.Title, s.Artist} },
+		func(s *songCount, r *int) { s.PrevRank = r })
+	return out, nil
+}
+
 // songStatsHandler serves GET /api/stats/songs: the tracks chat asked about
 // most with !song over the ?days window.
 func songStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, songStatsDefaultDays)
-	out := songStatsResponse{Days: days, Songs: []songCount{}}
-	err := database.GormDB().WithContext(r.Context()).
-		Raw(songStatsSQL, sql.Named("days", days), sql.Named("limit", songStatsLimit)).
-		Scan(&out.Songs).Error
+	out, err := gatherSongStats(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "song stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather song stats")

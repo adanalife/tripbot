@@ -85,17 +85,47 @@ func TestInsightsWindowDays_ZeroIsAllTime(t *testing.T) {
 }
 
 func TestInsightsSince(t *testing.T) {
-	if got := insightsSince(0); !got.Equal(time.Unix(0, 0)) {
+	now := time.Now()
+	if got := insightsSince(now, 0); !got.Equal(time.Unix(0, 0)) {
 		t.Errorf("all time should start at the epoch, got %v", got)
 	}
 	// A calendar week, not 168h: across a DST change the two differ by an hour.
-	since := insightsSince(7)
-	if d := since.Sub(time.Now().AddDate(0, 0, -7)); d < -time.Minute || d > time.Minute {
+	since := insightsSince(now, 7)
+	if d := since.Sub(now.AddDate(0, 0, -7)); d != 0 {
 		t.Errorf("a 7-day window should start a calendar week ago, got %v (off by %v)", since, d)
 	}
-	if !insightsSince(90).After(insightsSince(0)) {
+	if !insightsSince(now, 90).After(insightsSince(now, 0)) {
 		t.Error("a bounded window must start after the epoch")
 	}
+}
+
+// The previous board is the same window a day earlier; all time keeps the
+// epoch and stops a day short.
+func TestPrevWindow(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	since, before := prevWindow(insightsSince(now, 7), now)
+	if want := time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC); !since.Equal(want) {
+		t.Errorf("7d since = %v, want %v", since, want)
+	}
+	if want := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC); !before.Equal(want) {
+		t.Errorf("7d before = %v, want %v", before, want)
+	}
+	since, before = prevWindow(insightsSince(now, insightsAllTime), now)
+	if !since.Equal(time.Unix(0, 0)) || !before.Equal(now.Add(-24*time.Hour)) {
+		t.Errorf("all time = [%v, %v), want [epoch, a day ago)", since, before)
+	}
+}
+
+// prevRanks reads each row's prev_rank, -1 for an absent one.
+func prevRanks[T any](rows []T, prev func(T) *int) []int {
+	out := make([]int, len(rows))
+	for i, r := range rows {
+		out[i] = -1
+		if p := prev(r); p != nil {
+			out[i] = *p
+		}
+	}
+	return out
 }
 
 func TestClipLabel(t *testing.T) {
@@ -249,7 +279,12 @@ func TestCommandInsightsHandler_Aggregates(t *testing.T) {
 	if len(got.Commands) != len(wantCommands) {
 		t.Fatalf("commands = %+v, want %+v", got.Commands, wantCommands)
 	}
+	// Nothing predates the window, so every command is new on the board.
+	if ranks := prevRanks(got.Commands, func(c commandUsage) *int { return c.PrevRank }); !slices.Equal(ranks, []int{0, 0, 0, 0}) {
+		t.Errorf("commands prev_rank = %v, want all 0 (new)", ranks)
+	}
 	for i := range wantCommands {
+		got.Commands[i].PrevRank = nil
 		if got.Commands[i] != wantCommands[i] {
 			t.Errorf("commands[%d] = %+v, want %+v", i, got.Commands[i], wantCommands[i])
 		}
@@ -277,9 +312,55 @@ func TestCommandInsightsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("unknown_commands = %+v, want %+v", got.UnknownCommands, wantUnknown)
 	}
 	for i := range wantUnknown {
+		got.UnknownCommands[i].PrevRank = nil
 		if got.UnknownCommands[i] != wantUnknown[i] {
 			t.Errorf("unknown_commands[%d] = %+v, want %+v", i, got.UnknownCommands[i], wantUnknown[i])
 		}
+	}
+}
+
+// Each command list ranks a day earlier over the same-length window: !b
+// overtakes !a today, !c first appears today, and the unknown !x held first.
+func TestGatherCommandInsights_PrevRank(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "cmd_alice", false)
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	yesterday, today := now.Add(-48*time.Hour), now.Add(-time.Hour)
+	run := func(cmd string, n int, at time.Time) {
+		for i := range n {
+			seedEvent(t, db, "cmd_alice", "command_run", `{"command":"`+cmd+`"}`, at.Add(time.Duration(i)*time.Second))
+		}
+	}
+	run("!a", 3, yesterday)
+	run("!b", 1, yesterday)
+	run("!b", 5, today)
+	run("!c", 1, today)
+	// Outside the earlier 7-day window as well as the current one.
+	run("!c", 9, now.Add(-9*24*time.Hour))
+	unknown := func(tok string, at time.Time) {
+		seedEvent(t, db, "cmd_alice", "command_refused", `{"command":"`+tok+`","reason":"unknown"}`, at)
+	}
+	unknown("!x", yesterday)
+	unknown("!x", yesterday.Add(time.Second))
+	unknown("!y", today)
+
+	got, err := gatherCommandInsights(context.Background(), 7, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cmds []string
+	for _, c := range got.Commands {
+		cmds = append(cmds, c.Command)
+	}
+	// The unknown refusals rank on the command board too, under every run.
+	if !slices.Equal(cmds, []string{"!b", "!a", "!c", "!x", "!y"}) {
+		t.Fatalf("commands = %v, want !b !a !c !x !y", cmds)
+	}
+	if ranks := prevRanks(got.Commands, func(c commandUsage) *int { return c.PrevRank }); !slices.Equal(ranks, []int{2, 1, 0, 3, 0}) {
+		t.Errorf("commands prev_rank = %v, want [2 1 0 3 0]", ranks)
+	}
+	if ranks := prevRanks(got.UnknownCommands, func(c unknownCommand) *int { return c.PrevRank }); !slices.Equal(ranks, []int{1, 0}) {
+		t.Errorf("unknown prev_rank = %v, want [1 0] for %+v", ranks, got.UnknownCommands)
 	}
 }
 
@@ -484,9 +565,11 @@ func TestFootageInsightsHandler_Aggregates(t *testing.T) {
 	if got.Days != 7 {
 		t.Errorf("days = %d, want 7", got.Days)
 	}
+	// Neither clip cleared the sample bar a day earlier, so both are new.
+	zero := 0
 	want := []clipInsight{
-		{VideoID: nevada, Label: "Nevada", Plays: 0, AvgChatters: 7.0, MaxChatters: 10, Samples: 4},
-		{VideoID: moab, Label: "Moab, Utah", Plays: 2, AvgChatters: 1.7, MaxChatters: 2, Samples: 3},
+		{VideoID: nevada, Label: "Nevada", Plays: 0, AvgChatters: 7.0, MaxChatters: 10, Samples: 4, PrevRank: &zero},
+		{VideoID: moab, Label: "Moab, Utah", Plays: 2, AvgChatters: 1.7, MaxChatters: 2, Samples: 3, PrevRank: &zero},
 	}
 	if len(got.Clips) != len(want) {
 		t.Fatalf("clips = %+v, want %+v", got.Clips, want)
@@ -533,6 +616,40 @@ func TestFootageInsightsHandler_AllTime(t *testing.T) {
 	}
 	if len(all.Clips) != 1 || all.Clips[0].VideoID != clip || all.Clips[0].Plays != 1 {
 		t.Errorf("all time: clips = %s, want the 200-day-old clip with its one play", clipJSON(t, all.Clips[0]))
+	}
+}
+
+// An all-time board's previous ranking is everything up to a day ago: the
+// Nevada clip led then and is overtaken by Utah's busy hour today, and the
+// Idaho clip first clears the sample bar today.
+func TestGatherFootageInsights_AllTimePrevRank(t *testing.T) {
+	db := testdb.New(t)
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	old, today := now.Add(-100*24*time.Hour), now.Add(-time.Hour)
+	nevada := seedVideo(t, db, "insights_prev_nv", "Nevada", "", nil)
+	utah := seedVideo(t, db, "insights_prev_ut", "Utah", "", nil)
+	idaho := seedVideo(t, db, "insights_prev_id", "Idaho", "", nil)
+	for i := range 3 {
+		at := time.Duration(i) * time.Minute
+		seedSample(t, db, nevada, 5, old.Add(at))
+		seedSample(t, db, utah, 2, old.Add(at))
+		seedSample(t, db, utah, 20, today.Add(at))
+		seedSample(t, db, idaho, 1, today.Add(at))
+	}
+
+	got, err := gatherFootageInsights(context.Background(), insightsAllTime, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int
+	for _, c := range got.Clips {
+		ids = append(ids, c.VideoID)
+	}
+	if !slices.Equal(ids, []int{utah, nevada, idaho}) {
+		t.Fatalf("clips = %v, want utah %d, nevada %d, idaho %d", ids, utah, nevada, idaho)
+	}
+	if ranks := prevRanks(got.Clips, func(c clipInsight) *int { return c.PrevRank }); !slices.Equal(ranks, []int{2, 1, 0}) {
+		t.Errorf("clips prev_rank = %v, want [2 1 0]", ranks)
 	}
 }
 
@@ -825,6 +942,42 @@ func TestRegionInsightsHandler_Aggregates(t *testing.T) {
 	}
 	if !slices.Equal(got.Platforms, []string{"twitch"}) {
 		t.Errorf("platforms = %v, want [twitch]", got.Platforms)
+	}
+}
+
+// The regions board ranks a day earlier over the same 30-day window. With no
+// closed airtime every net_per_hour is null, so the order falls to viewers:
+// Nevada's busy hour today lifts it past Utah, and Oregon is new today.
+func TestGatherRegionInsights_PrevRank(t *testing.T) {
+	db := testdb.New(t)
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	yesterday, today := now.Add(-48*time.Hour), now.Add(-time.Hour)
+	utah := seedVideo(t, db, "insights_prev_region_ut", "Utah", "", nil)
+	nevada := seedVideo(t, db, "insights_prev_region_nv", "Nevada", "", nil)
+	oregon := seedVideo(t, db, "insights_prev_region_or", "Oregon", "", nil)
+	live := true
+	five, ten, twenty, fifty := 5, 10, 20, 50
+	for i := range regionMinSamples {
+		at := time.Duration(i) * time.Minute
+		seedSampleFull(t, db, utah, 1, &twenty, &live, yesterday.Add(at))
+		seedSampleFull(t, db, nevada, 1, &ten, &live, yesterday.Add(at))
+		seedSampleFull(t, db, nevada, 1, &fifty, &live, today.Add(at))
+		seedSampleFull(t, db, oregon, 1, &five, &live, today.Add(at))
+	}
+
+	got, err := gatherRegionInsights(context.Background(), 30, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var states []string
+	for _, r := range got.Regions {
+		states = append(states, r.State)
+	}
+	if !slices.Equal(states, []string{"Nevada", "Utah", "Oregon"}) {
+		t.Fatalf("regions = %v, want Nevada Utah Oregon", states)
+	}
+	if ranks := prevRanks(got.Regions, func(r regionInsight) *int { return r.PrevRank }); !slices.Equal(ranks, []int{2, 1, 0}) {
+		t.Errorf("regions prev_rank = %v, want [2 1 0]", ranks)
 	}
 }
 
