@@ -25,13 +25,17 @@ import (
 // collecting and nothing firing.
 var (
 	obsBackgroundAudioLevelDB = mustFloat64Gauge("obs_background_audio_level_db",
-		"Peak output level (dBFS, floored at -60) of the platform's background-audio source. Silence (≈ -60) for a sustained window is the 'no audio on stream' alert signal.")
+		"Peak output level (dBFS, floored at -60) of the platform's background-audio source. Silence (≈ -60) for a sustained window is the 'no audio on stream' signal. Recorded only while the meter is fresh and re-exported unchanged otherwise, so read it only where obs_background_audio_level_fresh is 1.")
+	obsBackgroundAudioLevelFresh = mustGauge("obs_background_audio_level_fresh",
+		"1 when the platform's background-audio meter delivered a level recently enough to trust, 0 when it went stale (the OBS WebSocket subscription dropped). Recorded every watchdog tick; obs_background_audio_level_db holds its last value while this reads 0.")
 	obsBackgroundAudioPlaying = mustGauge("obs_background_audio_playing",
 		"1 when the platform's background-audio source's OBS media state is PLAYING, 0 when it is ended/stopped/errored/none.")
 	obsBackgroundAudioOnFallback = mustGauge("obs_background_audio_on_fallback",
 		"1 when the audio-fallback watchdog has swapped the platform's background bed to the local Car Hum file because the radio was unreachable, 0 when on the normal radio source.")
 	radioReachable = mustGauge("radio_reachable",
-		"1 when the radio stream served stream bytes on the watchdog's last probe, 0 when it timed out or returned no data. Gates the swap back from the local fallback, and reported only while a bot is waiting on that gate: absent in steady state, so read a gap as 'nothing needed the edge', not as 'the edge is down'.")
+		"1 when the radio stream served stream bytes on the watchdog's last probe, 0 when it timed out or returned no data. Gates the swap back from the local fallback, so it is probed only while the radio bed is stranded on the fallback; outside that it holds its last probe result. Read it only where radio_reachable_fresh is 1.")
+	radioReachableFresh = mustGauge("radio_reachable_fresh",
+		"1 while the audio watchdog is on the radio's fallback and probing the radio (with backoff), so radio_reachable is current; 0 when nothing probes and radio_reachable is a leftover from the last outage. Recorded every watchdog tick OBS answers, and 0 on the ticks it does not.")
 	obsBackgroundAudioSwaps = mustCounter("obs_background_audio_swaps_total",
 		"Total background-audio source swaps performed by the audio-fallback watchdog, labeled by direction (to_fallback|to_radio). Any to_fallback increment means the radio dropped in prod.")
 	backgroundAudioBed = mustGauge("tripbot_background_audio_bed",
@@ -50,9 +54,11 @@ var (
 // or is re-read off OBS.
 var OBSBackgroundAudio = obsBackgroundAudioMetrics{
 	levelDB:     obsBackgroundAudioLevelDB,
+	levelFresh:  obsBackgroundAudioLevelFresh,
 	playing:     obsBackgroundAudioPlaying,
 	onFallback:  obsBackgroundAudioOnFallback,
 	reachable:   radioReachable,
+	probing:     radioReachableFresh,
 	swaps:       obsBackgroundAudioSwaps,
 	bed:         backgroundAudioBed,
 	albumTracks: backgroundAudioAlbumTracks,
@@ -61,9 +67,11 @@ var OBSBackgroundAudio = obsBackgroundAudioMetrics{
 
 type obsBackgroundAudioMetrics struct {
 	levelDB     metric.Float64Gauge
+	levelFresh  metric.Int64Gauge
 	playing     metric.Int64Gauge
 	onFallback  metric.Int64Gauge
 	reachable   metric.Int64Gauge
+	probing     metric.Int64Gauge
 	swaps       metric.Int64Counter
 	bed         metric.Int64Gauge
 	albumTracks metric.Int64Gauge
@@ -73,6 +81,11 @@ type obsBackgroundAudioMetrics struct {
 // SetLevelDB records the latest peak output level (already floored at -60).
 func (o obsBackgroundAudioMetrics) SetLevelDB(platform string, db float64) {
 	o.levelDB.Record(context.Background(), db, platformAttr(platform))
+}
+
+// SetLevelFresh records whether the meter's level is fresh enough to trust.
+func (o obsBackgroundAudioMetrics) SetLevelFresh(platform string, fresh bool) {
+	o.levelFresh.Record(context.Background(), b2i(fresh), platformAttr(platform))
 }
 
 // SetPlaying records whether OBS reports the source's media state as PLAYING.
@@ -88,6 +101,12 @@ func (o obsBackgroundAudioMetrics) SetOnFallback(platform string, on bool) {
 // SetRadioReachable records the last radio stream probe result.
 func (o obsBackgroundAudioMetrics) SetRadioReachable(platform string, reachable bool) {
 	o.reachable.Record(context.Background(), b2i(reachable), platformAttr(platform))
+}
+
+// SetRadioProbing records whether the watchdog is probing the radio, i.e.
+// whether the radio_reachable value is current.
+func (o obsBackgroundAudioMetrics) SetRadioProbing(platform string, probing bool) {
+	o.probing.Record(context.Background(), b2i(probing), platformAttr(platform))
 }
 
 // SetBed records whether a bed is the one on air for a platform. The caller
