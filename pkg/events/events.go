@@ -196,8 +196,8 @@ type guessMeta struct {
 }
 
 // GuessReveal names the command that gave a guess's answer away: who ran
-// !location or !state on the clip being guessed, and how many seconds before
-// the guess. A rollup separates earned guesses from piggybacks with it.
+// !location or !state on the clip being guessed, or jumped to it by naming
+// its state, and how many seconds before the guess. A rollup separates earned guesses from piggybacks with it.
 type GuessReveal struct {
 	By         string  `json:"by"`
 	Command    string  `json:"command"`

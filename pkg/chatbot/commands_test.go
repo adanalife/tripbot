@@ -984,6 +984,32 @@ func TestGuessCmd_StampsWhoRevealedTheAnswer(t *testing.T) {
 	}
 }
 
+// "!state California" then "!guess ca": a jump to a named state gives the
+// answer away for the clip it lands on, to the jumper and to everyone in chat.
+func TestGuessCmd_StampsAJumpToANamedState(t *testing.T) {
+	enablePlayback(t)
+	landed := newTestVideo("California", 36.7, -119.4, time.Now())
+	landed.ID = 91
+	landed.Slug = "2019_0615_183000_001"
+	app := newTestApp(video.Video{})
+	app.Playout = &recordingPlayout{}
+	app.Video = &recordingVideo{RandomVid: landed, RefreshedVid: &landed}
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	runAsAdmin(t, func() {
+		app.stateCmd(context.Background(), newAdminUser(), []string{"california"})
+	})
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"CA"})
+
+	if len(rec.Guesses) != 1 {
+		t.Fatalf("guesses = %d, want 1", len(rec.Guesses))
+	}
+	if r := rec.Guesses[0].Reveal; r == nil || r.Command != "jump" || r.By == "bob" {
+		t.Errorf("reveal = %+v, want the admin's jump", r)
+	}
+}
+
 // A correct guess records both events: the guess itself, stamped with the
 // clip it was about, and the timewarp it triggers, from that clip onto
 // wherever the warp lands.
