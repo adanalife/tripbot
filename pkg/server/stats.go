@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -253,7 +254,7 @@ type topMilesEntry struct {
 	Username string  `json:"username"`
 	Platform string  `json:"platform"`
 	Miles    float64 `json:"miles"`
-	// PrevRank is the row's place topMilesWindow ago, reconstructed by taking
+	// PrevRank is the row's place top_miles_days ago, reconstructed by taking
 	// the miles earned over that window off each total. nil when that read
 	// failed.
 	PrevRank *int `json:"prev_rank,omitempty"`
@@ -262,12 +263,18 @@ type topMilesEntry struct {
 // topMilesSize is how many rows the board shows; topMilesDepth is how many
 // are ranked to find each row's previous place, so a viewer who passed
 // someone in the window ranks against the one now just off the board; and
-// topMilesWindow is how far back that previous place is measured.
+// topMilesDefaultDays is how far back that previous place is measured unless
+// the caller picks one of topMilesWindowDays.
 const (
-	topMilesSize   = 10
-	topMilesDepth  = 50
-	topMilesWindow = 24 * time.Hour
+	topMilesSize        = 10
+	topMilesDepth       = 50
+	topMilesDefaultDays = 1
 )
+
+// topMilesWindowDays are the comparison windows ?top_miles_days accepts. Each
+// is one events.MilesGained read for the board's users, which the
+// events_username_event_date index bounds per user however long it is.
+var topMilesWindowDays = []int{1, 7, 30}
 
 // boardRow is one frozen scoreboard_snapshots placement.
 type boardRow struct {
@@ -290,6 +297,9 @@ type communityStatsResponse struct {
 	Unsubscribes int64           `json:"unsubscribes"`
 	Corrections  int64           `json:"corrections"`
 	TopMiles     []topMilesEntry `json:"top_miles"`
+	// TopMilesDays is the window, in days, each top-miles row's PrevRank is
+	// measured over.
+	TopMilesDays int             `json:"top_miles_days"`
 	Boards       []boardSnapshot `json:"boards"`
 }
 
@@ -341,11 +351,12 @@ WHERE substring(s.scoreboard_name FROM '[0-9]{4}_[0-9]{2}$') = latest.month
   AND s.rank <= 5
 ORDER BY s.scoreboard_name, s.rank`
 
-func gatherCommunityStats(ctx context.Context, days int, platform string, now time.Time) (communityStatsResponse, error) {
+func gatherCommunityStats(ctx context.Context, days int, platform string, now time.Time, topMilesDays int) (communityStatsResponse, error) {
 	out := communityStatsResponse{
-		Days:     days,
-		TopMiles: []topMilesEntry{},
-		Boards:   []boardSnapshot{},
+		Days:         days,
+		TopMiles:     []topMilesEntry{},
+		TopMilesDays: topMilesDays,
+		Boards:       []boardSnapshot{},
 	}
 	db := database.GormDB().WithContext(ctx)
 
@@ -377,7 +388,7 @@ func gatherCommunityStats(ctx context.Context, days int, platform string, now ti
 	var err error
 	for p, usernames := range byPlatform {
 		var gained map[string]float64
-		if gained, err = events.MilesGained(ctx, p, usernames, now.Add(-topMilesWindow), now); err != nil {
+		if gained, err = events.MilesGained(ctx, p, usernames, now.AddDate(0, 0, -topMilesDays), now); err != nil {
 			logQueryFailure(ctx, "top miles prev rank query failed", err)
 			break
 		}
@@ -578,7 +589,11 @@ func playbackDailyHandler(w http.ResponseWriter, r *http.Request) {
 // each row's place 24 hours ago, and the latest month's frozen scoreboards for this instance's platform.
 func (s *Server) communityStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, communityStatsDefaultDays)
-	payload, err := gatherCommunityStats(r.Context(), days, s.cfg.Platform, time.Now())
+	topMilesDays := queryInt(r, "top_miles_days", topMilesDefaultDays, 1, 30)
+	if !slices.Contains(topMilesWindowDays, topMilesDays) {
+		topMilesDays = topMilesDefaultDays
+	}
+	payload, err := gatherCommunityStats(r.Context(), days, s.cfg.Platform, time.Now(), topMilesDays)
 	if err != nil {
 		logQueryFailure(r.Context(), "community stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather community stats")
