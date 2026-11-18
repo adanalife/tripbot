@@ -190,7 +190,7 @@ func TestGuessInsightsHandler_EmptyDataShape(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`"days":30`, `"total":0`, `"correct":0`, `"players":0`, `"states":[]`} {
+	for _, want := range []string{`"days":30`, `"total":0`, `"correct":0`, `"revealed":0`, `"piggybacked":0`, `"players":0`, `"states":[]`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %s: %s", want, body)
 		}
@@ -374,9 +374,12 @@ func TestGuessInsightsHandler_Aggregates(t *testing.T) {
 	out := time.Now().Add(-40 * 24 * time.Hour)
 
 	// correct is a JSON boolean, the way the writer stores it.
-	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"florida","actual":"florida","correct":true}`, in)
-	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"georgia","actual":"florida","correct":false}`, in.Add(time.Minute))
-	seedEvent(t, db, "guess_bob", "guess_submitted", `{"guessed":"utah","actual":"utah","correct":true}`, in)
+	// alice was right after her own !location; bob after alice's !state. A
+	// miss after a reveal spoiled nothing.
+	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"florida","actual":"florida","correct":true,"reveal":{"by":"guess_alice","command":"location","secs_before":200}}`, in)
+	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"georgia","actual":"florida","correct":false,"reveal":{"by":"guess_bob","command":"state","secs_before":5}}`, in.Add(time.Minute))
+	seedEvent(t, db, "guess_bob", "guess_submitted", `{"guessed":"utah","actual":"utah","correct":true,"reveal":{"by":"Guess_Alice","command":"state","secs_before":9}}`, in)
+	seedEvent(t, db, "guess_bob", "guess_submitted", `{"guessed":"ohio","actual":"ohio","correct":true}`, in.Add(time.Minute))
 	// A bot's guess and a stale guess must not count anywhere.
 	seedEvent(t, db, "guess_bot", "guess_submitted", `{"guessed":"utah","actual":"utah","correct":true}`, in)
 	seedEvent(t, db, "guess_bob", "guess_submitted", `{"guessed":"idaho","actual":"idaho","correct":true}`, out)
@@ -390,11 +393,15 @@ func TestGuessInsightsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
 	}
 
-	if got.Days != 30 || got.Total != 3 || got.Correct != 2 || got.Players != 2 {
-		t.Errorf("totals = %+v, want days 30, total 3, correct 2, players 2", got)
+	if got.Days != 30 || got.Total != 4 || got.Correct != 3 || got.Players != 2 {
+		t.Errorf("totals = %+v, want days 30, total 4, correct 3, players 2", got)
+	}
+	if got.Revealed != 2 || got.Piggybacked != 1 {
+		t.Errorf("revealed = %d, piggybacked = %d, want 2 and 1", got.Revealed, got.Piggybacked)
 	}
 	wantStates := []stateGuesses{
 		{State: "florida", Guesses: 2, Correct: 1},
+		{State: "ohio", Guesses: 1, Correct: 1},
 		{State: "utah", Guesses: 1, Correct: 1},
 	}
 	if len(got.States) != len(wantStates) {
