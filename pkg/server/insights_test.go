@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -400,6 +401,7 @@ func TestGuessInsightsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("states = %+v, want %+v", got.States, wantStates)
 	}
 	for i := range wantStates {
+		got.States[i].PrevRank = nil
 		if got.States[i] != wantStates[i] {
 			t.Errorf("states[%d] = %+v, want %+v", i, got.States[i], wantStates[i])
 		}
@@ -475,15 +477,74 @@ func TestGuessInsightsHandler_CurrentMonthPrevRank(t *testing.T) {
 	}
 }
 
-// A rolling ?days window has no "yesterday's board", so no state carries a
-// prev_rank and the caller draws no chevrons.
-func TestGuessInsightsHandler_DaysWindowHasNoPrevRank(t *testing.T) {
+// guessStatePrevRanks reads the guesses board at path as "state:prev_rank"
+// pairs, prev_rank -1 when absent.
+func guessStatePrevRanks(t *testing.T, path string) []string {
+	t.Helper()
+	rec := insightsGET(t, path, guessInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got guessInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	var out []string
+	for _, s := range got.States {
+		prev := -1
+		if s.PrevRank != nil {
+			prev = *s.PrevRank
+		}
+		out = append(out, fmt.Sprintf("%s:%d", s.State, prev))
+	}
+	return out
+}
+
+// A ?days window ranks the states a day earlier over the same-length window:
+// utah led then and is overtaken today, ohio held second, florida and idaho
+// are new today, and a guess older than either window counts toward nothing.
+func TestGuessInsightsHandler_DaysWindowPrevRank(t *testing.T) {
 	db := testdb.New(t)
 	seedUser(t, db, "guess_alice", false)
-	seedEvent(t, db, "guess_alice", "guess_submitted", `{"guessed":"utah","actual":"utah","correct":true}`, time.Now().Add(-48*time.Hour))
-	rec := insightsGET(t, "/api/insights/guesses", guessInsightsHandler)
-	if strings.Contains(rec.Body.String(), "prev_rank") {
-		t.Errorf("days window carried prev_rank: %s", rec.Body.String())
+	now := time.Now()
+	right := func(state string, n int, at time.Time) {
+		for i := range n {
+			seedEvent(t, db, "guess_alice", "guess_submitted",
+				`{"guessed":"`+state+`","actual":"`+state+`","correct":true}`, at.Add(time.Duration(i)*time.Second))
+		}
+	}
+	right("utah", 2, now.Add(-48*time.Hour))
+	right("ohio", 1, now.Add(-48*time.Hour))
+	right("florida", 3, now.Add(-time.Hour))
+	right("idaho", 1, now.Add(-time.Hour))
+	right("nevada", 5, now.Add(-9*24*time.Hour))
+
+	got := guessStatePrevRanks(t, "/api/insights/guesses?days=7")
+	want := []string{"florida:0", "utah:1", "idaho:0", "ohio:2"}
+	if !slices.Equal(got, want) {
+		t.Errorf("states = %v, want %v", got, want)
+	}
+}
+
+// All time ranks against everything up to a day ago.
+func TestGuessInsightsHandler_AllTimePrevRank(t *testing.T) {
+	db := testdb.New(t)
+	seedUser(t, db, "guess_alice", false)
+	now := time.Now()
+	right := func(state string, n int, at time.Time) {
+		for i := range n {
+			seedEvent(t, db, "guess_alice", "guess_submitted",
+				`{"guessed":"`+state+`","actual":"`+state+`","correct":true}`, at.Add(time.Duration(i)*time.Second))
+		}
+	}
+	right("utah", 2, now.Add(-200*24*time.Hour))
+	right("ohio", 1, now.Add(-200*24*time.Hour))
+	right("florida", 3, now.Add(-time.Hour))
+
+	got := guessStatePrevRanks(t, "/api/insights/guesses?days=0")
+	want := []string{"florida:0", "utah:1", "ohio:2"}
+	if !slices.Equal(got, want) {
+		t.Errorf("states = %v, want %v", got, want)
 	}
 }
 

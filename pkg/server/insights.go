@@ -276,10 +276,11 @@ type stateGuesses struct {
 	State   string `json:"state"`
 	Guesses int64  `json:"guesses"`
 	Correct int64  `json:"correct"`
-	// PrevRank is the state's place on the same board counted through the end
-	// of yesterday, 0 when it wasn't on it. Set only for ?month=current after
-	// the first of the month, so a caller can tell "nothing to compare" (no
-	// field) from "new today" (0).
+	// PrevRank is the state's place on the same board earlier, 0 when it
+	// wasn't on it: for ?month=current the month counted through the end of
+	// yesterday, otherwise the same-length window ending a day earlier. Absent
+	// when there is nothing to compare (the first of the month) or that board
+	// couldn't be read, so a caller can tell "nothing to compare" from "new" (0).
 	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
@@ -328,9 +329,10 @@ const (
 	guessStatesPrev  = 60
 )
 
-// gatherGuessInsights counts from since; a prevBefore after since also ranks
-// the states as they stood at prevBefore, for the board's trend chevrons.
-func gatherGuessInsights(ctx context.Context, days int, since, prevBefore time.Time) (guessInsightsResponse, error) {
+// gatherGuessInsights counts from since; a prevBefore after prevSince also
+// ranks the states over [prevSince, prevBefore), for the board's trend
+// chevrons.
+func gatherGuessInsights(ctx context.Context, days int, since, prevSince, prevBefore time.Time) (guessInsightsResponse, error) {
 	out := guessInsightsResponse{Days: days, States: []stateGuesses{}}
 	db := database.GormDB().WithContext(ctx)
 	var totals struct {
@@ -346,14 +348,15 @@ func gatherGuessInsights(ctx context.Context, days int, since, prevBefore time.T
 		sql.Named("limit", guessStatesShown)).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
 	}
-	if prevBefore.After(since) {
+	if prevBefore.After(prevSince) {
 		var prev []stateGuesses
-		if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", prevBefore),
+		if err := db.Raw(guessStatesSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
 			sql.Named("limit", guessStatesPrev)).Scan(&prev).Error; err != nil {
-			return out, fmt.Errorf("guess states before %s: %w", prevBefore.Format(time.DateOnly), err)
+			logQueryFailure(ctx, "previous guess states query failed", err, "days", days)
+		} else {
+			stampPrevRanks(out.States, prev, func(s stateGuesses) string { return s.State },
+				func(s *stateGuesses, r *int) { s.PrevRank = r })
 		}
-		stampPrevRanks(out.States, prev, func(s stateGuesses) string { return s.State },
-			func(s *stateGuesses, r *int) { s.PrevRank = r })
 	}
 	return out, nil
 }
@@ -619,13 +622,15 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	since := insightsSince(now, days)
 	month := ""
-	var prevBefore time.Time
+	prevSince, prevBefore := prevWindow(since, now)
 	if r.URL.Query().Get("month") == "current" {
+		// The month so far against the month through the end of yesterday.
 		since = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		month = now.Format("2006-01")
+		prevSince = since
 		prevBefore = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	}
-	payload, err := gatherGuessInsights(r.Context(), days, since, prevBefore)
+	payload, err := gatherGuessInsights(r.Context(), days, since, prevSince, prevBefore)
 	payload.Month = month
 	if err != nil {
 		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
