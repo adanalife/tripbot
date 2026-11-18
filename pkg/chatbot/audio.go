@@ -40,6 +40,11 @@ type Beds interface {
 	Pending() (beds.Switch, bool)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
+	// Tracks lists the files the tuned station can be asked for, and Push
+	// queues one to play next. Both answer beds.ErrNoRequests on a station
+	// that isn't ours.
+	Tracks(ctx context.Context) ([]string, error)
+	Push(ctx context.Context, file string) error
 }
 
 // bedDescs is the audience-facing name of each local bed — chat asks "what am I
