@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.17.0] — 2026-11-19
+
+### Misc
+
+- `backfill-miles-driven` measures a clip along its own GPS track when the track is trustworthy, stepping over misread fixes, and falls back to the clip-to-clip chord otherwise; `videos.miles_driven_source` records which. ([#1840](https://github.com/adanalife/tripbot/pull/1840))
+
 ## [v6.16.0] — 2026-11-19
 
 ### Chatbot
