@@ -34,6 +34,16 @@ func installMockDB(t *testing.T) sqlmock.Sqlmock {
 	return mock
 }
 
+// expectCounterPass expects every counter tier's award query, unlocking nothing.
+func expectCounterPass(mock sqlmock.Sqlmock) {
+	for _, ctr := range counters {
+		for range ctr.Tiers {
+			mock.ExpectQuery(`INSERT INTO achievements`).
+				WillReturnRows(sqlmock.NewRows([]string{"username"}))
+		}
+	}
+}
+
 var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
 
 func TestHandleVideoChange_ZeroIDIsANoOp(t *testing.T) {
@@ -76,6 +86,7 @@ func TestHandleVideoChange_AwardsStateVisit(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO achievements`).
 		WithArgs("state-california-100", "100th visit to California", "twitch", "California", 100).
 		WillReturnRows(sqlmock.NewRows([]string{"username"}))
+	expectCounterPass(mock)
 	mock.ExpectCommit()
 
 	msgs := HandleVideoChange(context.Background(), testConf, v, []string{"alice", "bob"})
@@ -98,6 +109,7 @@ func TestHandleVideoChange_AwardsLandmark(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO achievements`).
 		WithArgs("twitch", "alice", "landmark-golden-gate-bridge", "Saw the Golden Gate Bridge").
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectCounterPass(mock)
 	mock.ExpectCommit()
 
 	msgs := HandleVideoChange(context.Background(), testConf, v, []string{"alice"})

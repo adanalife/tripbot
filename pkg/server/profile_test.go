@@ -22,13 +22,19 @@ func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float3
 	t.Helper()
 	savedFind, savedCount, savedMonthly, savedEarliest := findUser, sessionCount, monthlyMiles, earliestEvent
 	savedFindByID, savedEarned := findUserByID, earnedBy
+	savedDays, savedAired := stateDays, statesAired
 	t.Cleanup(func() {
 		findUser, sessionCount, monthlyMiles, earliestEvent = savedFind, savedCount, savedMonthly, savedEarliest
 		findUserByID, earnedBy = savedFindByID, savedEarned
+		stateDays, statesAired = savedDays, savedAired
 	})
 	earnedBy = func(context.Context, string, string) ([]achievements.Earned, error) {
 		return []achievements.Earned{}, nil
 	}
+	stateDays = func(context.Context, string, string) ([]achievements.StateDays, error) {
+		return []achievements.StateDays{}, nil
+	}
+	statesAired = func(context.Context, string) (int, error) { return 0, nil }
 	findUser = func(context.Context, string, string) (users.User, error) {
 		// mirror pkg/users.Find's contract: a staged zero-ID user means "no row"
 		if u.ID == 0 {
@@ -274,5 +280,26 @@ func TestUserProfileAPIHandler_Achievements(t *testing.T) {
 	got = gatherUserProfile(context.Background(), "twitch", "", "danalol")
 	if !got.Found || got.Achievements == nil || len(got.Achievements) != 0 {
 		t.Errorf("failed read: found=%v achievements=%#v", got.Found, got.Achievements)
+	}
+}
+
+// The passport's numbers ride the profile too: per-state day counts and the
+// platform's aired-state total, each surviving the other's failed read.
+func TestUserProfileAPIHandler_StateDays(t *testing.T) {
+	withProfileSeams(t, users.User{ID: 42, Username: "danalol", Platform: "twitch"}, 0, 0)
+	stateDays = func(context.Context, string, string) ([]achievements.StateDays, error) {
+		return []achievements.StateDays{{State: "Utah", Days: 7}}, nil
+	}
+	statesAired = func(context.Context, string) (int, error) { return 48, nil }
+	got := gatherUserProfile(context.Background(), "twitch", "", "danalol")
+	if len(got.StateDays) != 1 || got.StateDays[0].Days != 7 || got.StatesAired != 48 {
+		t.Errorf("got %+v of %d", got.StateDays, got.StatesAired)
+	}
+	stateDays = func(context.Context, string, string) ([]achievements.StateDays, error) {
+		return nil, gorm.ErrInvalidDB
+	}
+	got = gatherUserProfile(context.Background(), "twitch", "", "danalol")
+	if got.StateDays == nil || len(got.StateDays) != 0 || got.StatesAired != 48 {
+		t.Errorf("failed read: %#v of %d", got.StateDays, got.StatesAired)
 	}
 }
