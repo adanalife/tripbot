@@ -347,3 +347,14 @@ func MilesOnScreenSince(ctx context.Context, platform string, since time.Time) (
 			platform, since).Scan(&miles).Error
 	return miles, err
 }
+
+// PlayMilesSQL is the road distance one play credits: the clip's miles_driven
+// scaled by how much of the clip aired, so a clip skipped at ten seconds is
+// worth ten seconds of road. It reads video_plays as p and videos as v. A
+// play with no ended_at is measured to now, which is right for the clip still
+// on air and caps at the whole clip for one whose end was never observed. The
+// clip's length is its track's last aired fix, or three minutes without one.
+const PlayMilesSQL = `v.miles_driven * LEAST(1.0,
+    EXTRACT(EPOCH FROM (COALESCE(p.ended_at, now()) - p.started_at)) /
+    COALESCE((SELECT NULLIF(MAX(c.ts_sec), 0) FROM video_coords c
+              WHERE c.video_id = v.id AND c.ts_sec IS NOT NULL), 180))`
