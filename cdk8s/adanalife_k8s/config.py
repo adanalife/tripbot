@@ -101,6 +101,11 @@ class EnvConfig:
     # /k8s/tripbot/google-maps-api-key seeded — an unseeded parameter still
     # holds terraform's placeholder, which ESO cannot unmarshal.
     maps: bool = False
+    # Emit the output-denylist ExternalSecret + envFrom it: the terms tripbot
+    # masks in chat and on the overlays. Off by default, and optional to the
+    # binary (no list, nothing masked). Same seeding rule as the Maps key: turn
+    # it on only once the env's /k8s/tripbot/output-denylist holds real JSON.
+    denylist: bool = False
     postgres_size: str = "5Gi"
     postgres_storage_class: str = ""  # "" = cluster default; local-path-retain on prod
     postgres_backup: bool = False
