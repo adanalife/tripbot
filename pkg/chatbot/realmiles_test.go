@@ -53,6 +53,36 @@ func TestRealMilesCmd_SumsRollupAndLiveSession(t *testing.T) {
 	}
 }
 
+// The clip on air counts only as far as it has run: a third of a 3-mile clip
+// one minute into its three.
+func TestRealMilesCmd_CountsTheClipOnAirSoFar(t *testing.T) {
+	db := testdb.New(t)
+	seedRealMiles(t, db, "midclip", 10.5)
+	if err := db.Exec(`UPDATE video_plays SET ended_at = started_at + interval '3 minutes'`).Error; err != nil {
+		t.Fatalf("close the seeded play: %v", err)
+	}
+	var vidID int64
+	if err := db.Raw(`INSERT INTO videos (slug, lat, lng, date_filmed, miles_driven)
+	                  VALUES ('realmiles_on_air', 40.0, -111.0, now(), 3.0) RETURNING id`).Scan(&vidID).Error; err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO video_plays (platform, video_id, started_at)
+	                   VALUES ('twitch', ?, now() - interval '1 minute')`, vidID).Error; err != nil {
+		t.Fatalf("insert play: %v", err)
+	}
+
+	app := newTestApp(video.Video{})
+	say, _ := captureSay(t, app)
+	user := &users.User{Username: "midclip", LoggedIn: time.Now().Add(-10 * time.Minute)}
+
+	app.realMilesCmd(context.Background(), user, nil)
+
+	// 10.5 rolled + 1.5 (the finished clip) + 1.0 (a third of the one on air)
+	if got := say(); !strings.Contains(got, "13.0") {
+		t.Errorf("expected 13.0 in output, got %q", got)
+	}
+}
+
 func TestRealMilesCmd_ExcludesPlaysBeforeLogin(t *testing.T) {
 	db := testdb.New(t)
 	seedRealMiles(t, db, "latecomer", 10.5)
