@@ -97,6 +97,12 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugReply: {
+		// Server emits the card's HTML (see renderReply). Sized to read over
+		// video rather than inside the bottom strip the other text sits in.
+		Name: SlugReply, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 26, ColorCSS: "#ffffff",
+		RenderAsHTML: true,
+	},
 }
 
 // rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can

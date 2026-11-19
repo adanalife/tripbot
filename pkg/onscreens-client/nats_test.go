@@ -127,6 +127,7 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 	}{
 		{"middle.hide", func(c *Client) error { return c.HideMiddleText(context.Background()) }, "tripbot.stage.onscreens.middle.hide.twitch"},
 		{"timewarp.show", func(c *Client) error { return c.ShowTimewarp(context.Background(), "viewer1", false) }, "tripbot.stage.onscreens.timewarp.show.twitch"},
+		{"reply.show", func(c *Client) error { return c.ShowReply(context.Background(), "viewer1", "72°F") }, "tripbot.stage.onscreens.reply.show.twitch"},
 		{"gps.show", func(c *Client) error { return c.ShowGPSImage(context.Background(), 60) }, "tripbot.stage.onscreens.gps.show.twitch"},
 		{"gps.hide", func(c *Client) error { return c.HideGPSImage(context.Background()) }, "tripbot.stage.onscreens.gps.hide.twitch"},
 	}

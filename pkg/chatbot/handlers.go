@@ -203,11 +203,26 @@ func withReplyParent(ctx context.Context, messageID string) context.Context {
 	return context.WithValue(ctx, replyParentKey{}, messageID)
 }
 
+// askerKey carries the display name of the chatter a dispatch is answering, so
+// App.Reply can credit them on the reply overlay.
+type askerKey struct{}
+
+func withAsker(ctx context.Context, username string) context.Context {
+	return context.WithValue(ctx, askerKey{}, username)
+}
+
 // Reply posts msg as a reply to the message ctx is answering — the inbound
 // line HandleMessage stashed — or as a plain Say when ctx carries none: a timed
 // job, a test, or a platform whose inbound has no message ids. Handlers reach
 // chat through this so a viewer can tell which answer is theirs.
+//
+// Where the platform has no chat to post to, an answer to a chatter also goes
+// to the reply overlay. Chat still gets it: the send drops, but the console
+// mirror in front of it is how the answer reaches the admin console.
 func (a *App) Reply(ctx context.Context, msg string) {
+	if asker, ok := ctx.Value(askerKey{}).(string); ok && a.repliesOnScreen {
+		a.Onscreens.ShowReply(ctx, asker, strings.TrimPrefix(msg, "/me "))
+	}
 	if parent, ok := ctx.Value(replyParentKey{}).(string); ok {
 		a.Chat.Reply(parent, msg)
 		return
@@ -680,7 +695,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	user := a.chatUser(ctx, msg.User, msg.UserID)
 	user.Moderator = msg.Moderator
 	user.Broadcaster = msg.Broadcaster
-	a.runCommand(withReplyParent(ctx, msg.MessageID), user, msg.Text)
+	a.runCommand(withAsker(withReplyParent(ctx, msg.MessageID), msg.User), user, msg.Text)
 }
 
 // chatUser resolves a sender to the user the command path runs as.
