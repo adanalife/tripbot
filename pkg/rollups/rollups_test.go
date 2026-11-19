@@ -629,3 +629,34 @@ func TestMilesGainedMatchesReconcile(t *testing.T) {
 	closeTo(t, "MilesGained vs events_miles + extra_miles", got["drift"], r.EventsMiles+r.ExtraMiles)
 	closeTo(t, "fixture total", got["drift"], 1.5+2.0+1.5-0.5)
 }
+
+// A play cut short credits only the share of the clip that aired: measured
+// against the clip's track length when it has one, three minutes otherwise.
+func TestReconcile_RealMilesProrateSkippedPlays(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+
+	tracked := addVideo(t, db, "rm_tracked", 4.0)
+	if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+	                   VALUES (?, 0, 0, 40, -111, 'ocr'), (?, 200, 200, 40.05, -111, 'ocr')`,
+		tracked, tracked).Error; err != nil {
+		t.Fatalf("insert track: %v", err)
+	}
+	trackless := addVideo(t, db, "rm_trackless", 1.8)
+	endPlay := func(videoID int64, at time.Time, aired time.Duration) {
+		t.Helper()
+		if err := db.Exec(`INSERT INTO video_plays (platform, video_id, started_at, ended_at)
+		                   VALUES ('twitch', ?, ?, ?)`, videoID, at, at.Add(aired)).Error; err != nil {
+			t.Fatalf("insert play: %v", err)
+		}
+	}
+
+	addSession(t, db, "skipper", 0, 60*time.Minute)
+	endPlay(tracked, base.Add(5*time.Minute), 50*time.Second)    // 50s of 200s: 1.0
+	endPlay(trackless, base.Add(10*time.Minute), 90*time.Second) // 90s of 180s: 0.9
+	endPlay(tracked, base.Add(20*time.Minute), 10*time.Minute)   // overran: the whole 4.0
+
+	Reconcile(context.Background(), testConf)
+
+	closeTo(t, "real_miles", getRollup(t, db, "twitch", "skipper").RealMiles, 5.9)
+}

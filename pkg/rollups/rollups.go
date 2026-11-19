@@ -11,9 +11,10 @@
 // SUM(events.extra_miles_earned) over logout + correction events: the sub-grant,
 // 5%-bonus, and manual-correction portion the pairing can't see, so reconstructed
 // display miles ≈ events_miles + extra_miles.
-// user_rollups.real_miles is the real-odometer number: SUM(videos.miles_driven)
-// over the video_plays that fell inside the user's sessions — the actual road
-// miles the van drove while they watched. Coverage starts at the video_plays
+// user_rollups.real_miles is the real-odometer number: videos.miles_driven
+// summed over the video_plays that fell inside the user's sessions, each
+// scaled by how much of the clip aired — the actual road miles the van drove
+// while they watched. Coverage starts at the video_plays
 // epoch (migration 033).
 // users.miles remains the authoritative display number; these columns are for
 // audit, reconciliation, and cross-platform aggregation.
@@ -27,6 +28,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"gorm.io/gorm"
 )
 
@@ -99,9 +101,10 @@ miles AS (
 ),
 real_miles AS (
     /* A play counts when it started inside the session window — no proration
-       at the edges (clips are ~3 minutes, so the boundary error is at most one
-       clip). Plays of clips with unknown distance contribute nothing. */
-    SELECT s.platform, s.username, SUM(v.miles_driven)::real AS real_miles
+       at the session's edges (clips are ~3 minutes, so the boundary error is
+       at most one clip) — and credits the share of the clip that aired. Plays
+       of clips with unknown distance contribute nothing. */
+    SELECT s.platform, s.username, SUM(` + viewstats.PlayMilesSQL + `)::real AS real_miles
     FROM sessions s
     JOIN video_plays p ON p.platform = s.platform
        AND p.started_at >= s.login_time AND p.started_at < s.logout_time
