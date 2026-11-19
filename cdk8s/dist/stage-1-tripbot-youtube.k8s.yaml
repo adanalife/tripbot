@@ -62,6 +62,8 @@ spec:
   selector:
     matchLabels:
       app: tripbot-youtube
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:

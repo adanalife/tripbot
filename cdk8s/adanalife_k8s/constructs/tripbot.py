@@ -442,6 +442,10 @@ class Tripbot(Construct):
                 # Argo ignores .spec.replicas so the scale sticks (infra argocd
                 # ignore_replicas). Replica count is runtime-owned, not git-owned.
                 replicas=0,
+                # Never two pods at once: lifetime miles are saved as an
+                # absolute value from each pod's in-memory copy, so the last
+                # writer of an overlapping pair erases the other's accrual.
+                strategy=k8s.DeploymentStrategy(type="Recreate"),
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(

@@ -38,6 +38,8 @@ spec:
   selector:
     matchLabels:
       app: tripbot-twitch
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
