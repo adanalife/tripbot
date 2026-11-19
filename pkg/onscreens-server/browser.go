@@ -98,8 +98,9 @@ var onscreenRegistry = map[string]onscreenStyle{
 		Name: SlugGPS, IsImage: true,
 	},
 	SlugReply: {
-		// Server emits the card's HTML (see renderReply).
-		Name: SlugReply, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 20, ColorCSS: "#ffffff",
+		// Server emits the card's HTML (see renderReply). Sized to read over
+		// video rather than inside the bottom strip the other text sits in.
+		Name: SlugReply, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 26, ColorCSS: "#ffffff",
 		RenderAsHTML: true,
 	},
 }
