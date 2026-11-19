@@ -1860,6 +1860,31 @@ func TestLastMonthCmd_NoSnapshotYet(t *testing.T) {
 	}
 }
 
+// The unprompted month-end post says what !lastmonth answers and puts the
+// final miles board on the overlay; with nothing frozen it stays silent.
+func TestAnnounceLastMonth(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{}
+	app.Scoreboards = &recordingScoreboards{}
+	out, says := captureSay(t, app)
+
+	app.AnnounceLastMonth(context.Background())
+	if says() != 0 || len(rec.Calls) != 0 {
+		t.Fatalf("announced with no frozen boards: %q, overlay %v", out(), rec.Calls)
+	}
+
+	app.Scoreboards = &recordingScoreboards{LastMiles: [][]string{{"a", "12.0"}, {"b", "11.0"}}}
+	app.AnnounceLastMonth(context.Background())
+	if want := "🏆 August final boards — Miles: 1. a (12.0mi), 2. b (11.0mi)"; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
+	}
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August Miles (final)", 2 rows)`) {
+		t.Errorf("expected one final-miles overlay call, got %v", rec.Calls)
+	}
+}
+
 // With the guessr flag off the game is never asked and the line carries only
 // tripbot's own boards.
 func TestLastMonthCmd_FlagOff_SkipsGuessr(t *testing.T) {
