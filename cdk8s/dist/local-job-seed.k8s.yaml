@@ -15,7 +15,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-secret
-          image: adanalife/tripbot:latest
+          image: adanalife/tripbot-migrate:latest
           imagePullPolicy: Always
           name: seed
           resources:
@@ -50,7 +50,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-secret
-          image: adanalife/tripbot:latest
+          image: adanalife/tripbot-migrate:latest
           imagePullPolicy: Always
           name: migrate
           resources:

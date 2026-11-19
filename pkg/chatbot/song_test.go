@@ -64,29 +64,40 @@ func TestSongCmd_OffRadio_ReportsTheLiveBedNotTheFeed(t *testing.T) {
 	}
 }
 
-// On the radio bed the feed is the only thing that knows the track, and the
-// channel it came from is half the answer to "what is this".
-func TestSongCmd_OnRadio_NamesTheTunedChannel(t *testing.T) {
-	app := newTestApp(video.Video{})
-	app.Beds = &fakeBeds{
-		bed:     beds.Radio,
-		station: "lofi",
-		artist:  "Steve Cobby",
-		title:   "Big Wow",
-	}
-	out, says := captureSay(t, app)
+// On the radio bed the reply names the track and never the station, so a channel
+// change goes unannounced; the album bed still names its album.
+func TestSongCmd_Reply(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fake *fakeBeds
+		want string
+	}{
+		{"radio with track", &fakeBeds{bed: beds.Radio, station: "lofi", artist: "Steve Cobby", title: "Big Wow"},
+			"♪ Now playing: Big Wow — Steve Cobby"},
+		{"radio title only", &fakeBeds{bed: beds.Radio, station: "lofi", title: "Big Wow"},
+			"♪ Now playing: Big Wow"},
+		{"radio without track", &fakeBeds{bed: beds.Radio, station: "lofi"},
+			"♪ Now playing: the radio"},
+		{"album unchanged", &fakeBeds{bed: beds.Album, track: testTrack},
+			`♪ Now playing: "Colorado Sunrise" — Fifty Horizons, by wooderCZ`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			app.Beds = tc.fake
+			out, says := captureSay(t, app)
 
-	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
+			app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 
-	got := out()
-	if !strings.Contains(got, "Big Wow") {
-		t.Errorf("expected the radio track, got %q", got)
-	}
-	if !strings.Contains(got, "Example Lo-Fi") {
-		t.Errorf("expected the channel named in the report, got %q", got)
-	}
-	if says() != 1 {
-		t.Errorf("expected exactly one Say() call, got %d", says())
+			if got := out(); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+			if strings.Contains(out(), "Example Lo-Fi") {
+				t.Errorf("named the station: %q", out())
+			}
+			if says() != 1 {
+				t.Errorf("expected exactly one Say() call, got %d", says())
+			}
+		})
 	}
 }
 

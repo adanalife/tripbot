@@ -45,6 +45,11 @@ type App struct {
 	// Playout drives playback operations (timewarp, jump, skip, back). Tests
 	// inject a no-op fake; production uses the realPlayout adapter.
 	Playout Playout
+	// lastRaidFrom / lastRaidAt remember the most recent raid so RecordRaid can
+	// fold a quick repeat from the same channel into one thank-you. Only the
+	// EventSub goroutine touches them.
+	lastRaidFrom string
+	lastRaidAt   time.Time
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
 	Video Video
@@ -136,6 +141,20 @@ type App struct {
 	// inside reportCooldown can't spam Discord and Sentry.
 	reportedAtMu sync.Mutex
 	reportedAt   map[string]time.Time
+	// lastReveal is the most recent chat command that named the airing
+	// location (!location, !state), so a guess on the same clip is stamped
+	// with who gave the answer away and how long before. Channel-wide, unlike
+	// the per-viewer guess cooldown: the piggyback on someone else's answer
+	// is the thing being measured.
+	lastRevealMu sync.Mutex
+	lastReveal   reveal
+}
+
+// reveal is one answer-naming command: who, which, when, and on which clip.
+type reveal struct {
+	by, command string
+	at          time.Time
+	videoID     int
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
@@ -151,7 +170,7 @@ func New(version string, cfg *c.TripbotConfig) *App {
 		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Playout:     realPlayout{c: playoutClient.New(cfg.PlayoutHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform), platform: cfg.Platform},
-		Video:       realVideo{},
+		Video:       realVideo{corpora: cfg.Corpora},
 		Chat:        disconnectedChat{},
 		Sessions:    realSessions{},
 		Flags:       feature.NewInMemoryClient(nil),
@@ -159,7 +178,7 @@ func New(version string, cfg *c.TripbotConfig) *App {
 		Geocoder:    realGeocoder{},
 		Weather:     realWeather,
 		OBS:         realOBS{},
-		Search:      realSearch{env: cfg.Environment},
+		Search:      realSearch{env: cfg.Environment, corpora: cfg.Corpora},
 		Scoreboards: realScoreboards{cfg: cfg},
 		Events:      realEvents{cfg: cfg},
 	}

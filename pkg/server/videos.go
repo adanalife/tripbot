@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/bradfitz/latlong"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // videoDetail is one clip's record for the console's video page: the file,
@@ -216,10 +218,11 @@ type sourceClip struct {
 // withTracks lists clips in the order given, each with its fix and track.
 func withTracks(ctx context.Context, vids []video.Video) []sourceClip {
 	clips := make([]sourceClip, 0, len(vids))
+	track, source := clipTracks(ctx, vids)
 	for _, v := range vids {
 		c := sourceClip{
 			ID: v.ID, Slug: v.Slug, Lat: v.Lat, Lng: v.Lng, Place: v.Place(),
-			Track: trackOf(ctx, v), SourceTrack: sourceTrackOf(ctx, v),
+			Track: triples(track[v.ID]), SourceTrack: triples(source[v.ID]),
 		}
 		c.RecordedAt, c.RecordedAtUTC = filmedTimes(v)
 		clips = append(clips, c)
@@ -421,6 +424,54 @@ func footageProposalsHandler(w http.ResponseWriter, r *http.Request) {
 	writeInsights(w, r, cuts)
 }
 
+// report is one person pointing at a moment of a clip, as GET
+// /api/footage/reports lists them: a viewer's !trim, a bad_coord marked on
+// the clip page, or a star. The clip and the moment in it (Sec, as the clip
+// airs now), the same moment in the uncut recording the clip was rendered
+// from (SourceSec, the clock a season-2 piece's trims are in), and who
+// reported it, when, and why.
+type report struct {
+	VideoID   int       `json:"video_id"`
+	Slug      string    `json:"slug"`
+	Kind      string    `json:"kind"`
+	Sec       float64   `json:"sec"`
+	SourceSec float64   `json:"source_sec"`
+	Note      string    `json:"note"`
+	By        string    `json:"by"`
+	Platform  string    `json:"platform"`
+	At        time.Time `json:"at"`
+}
+
+// reportKinds is what ?kind= may ask for: video_moments' CHECK constraint.
+var reportKinds = map[string]bool{"trim": true, "bad_coord": true, "star": true}
+
+// reportsSQL is the newest reports first, one kind or every kind; each clip's
+// offset is the same one video.ClipOffset reads.
+const reportsSQL = `SELECT m.video_id, v.slug, m.kind, m.source_ts_sec AS source_sec,
+  m.source_ts_sec - COALESCE((SELECT c.source_ts_sec - c.ts_sec FROM video_coords c
+    WHERE c.video_id = m.video_id AND c.ts_sec IS NOT NULL LIMIT 1), 0) AS sec,
+  m.note, m.username AS by, m.platform, m.created_at AS at
+FROM video_moments m JOIN videos v ON v.id = m.video_id
+WHERE (? = '' OR m.kind = ?) ORDER BY m.created_at DESC LIMIT 200`
+
+// footageReportsHandler serves GET /api/footage/reports: the newest 200
+// reports on moments of clips, every kind or the one ?kind= names, for the
+// console's inbox.
+func footageReportsHandler(w http.ResponseWriter, r *http.Request) {
+	kind := r.URL.Query().Get("kind")
+	if kind != "" && !reportKinds[kind] {
+		http.Error(w, `{"error":"kind is trim, bad_coord or star"}`, http.StatusBadRequest)
+		return
+	}
+	reports := []report{}
+	if err := database.GormDB().WithContext(r.Context()).Raw(reportsSQL, kind, kind).Scan(&reports).Error; err != nil {
+		logQueryFailure(r.Context(), "reports failed", err)
+		http.Error(w, `{"error":"couldn't read reports"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, reports)
+}
+
 // footageDaysHandler serves GET /api/footage/days: every day with footage,
 // oldest first, for the console's calendar.
 // ponytail: a scan of videos per call, a few thousand rows.
@@ -435,6 +486,50 @@ WHERE day IS NOT NULL GROUP BY day ORDER BY day`).Scan(&days).Error
 		return
 	}
 	writeInsights(w, r, days)
+}
+
+// nearDefault and nearMax bound GET /api/footage/near's ?n=.
+const (
+	nearDefault = 10
+	nearMax     = 50
+)
+
+// footageNearHandler serves GET /api/footage/near?lat=&lng=&n=: the n clips
+// filmed closest to a point, nearest first, each with its fix and track (the
+// footage day's shape), for the app's map. A clip with no fix is left out.
+// ponytail: a scan of videos per call with a flat-earth distance — a few
+// thousand rows, one long-press. A PostGIS index if it shows.
+func footageNearHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	lat, errLat := strconv.ParseFloat(q.Get("lat"), 64)
+	lng, errLng := strconv.ParseFloat(q.Get("lng"), 64)
+	if errLat != nil || errLng != nil || math.Abs(lat) > 90 || math.Abs(lng) > 180 {
+		http.Error(w, `{"error":"lat and lng are a point"}`, http.StatusBadRequest)
+		return
+	}
+	n := nearDefault
+	if s := q.Get("n"); s != "" {
+		v, err := strconv.Atoi(s)
+		if err != nil || v < 1 {
+			http.Error(w, `{"error":"n is a positive count"}`, http.StatusBadRequest)
+			return
+		}
+		n = min(v, nearMax)
+	}
+	var vids []video.Video
+	err := database.GormDB().WithContext(r.Context()).
+		Where("NOT flagged AND NOT (lat = 0 AND lng = 0)").
+		Order(clause.OrderBy{Expression: clause.Expr{
+			SQL:  "power(lat - ?, 2) + power((lng - ?) * cos(radians(?)), 2)",
+			Vars: []any{lat, lng, lat}, WithoutParentheses: true,
+		}}).
+		Limit(n).Find(&vids).Error
+	if err != nil {
+		logQueryFailure(r.Context(), "footage near failed", err, "lat", lat, "lng", lng)
+		http.Error(w, `{"error":"couldn't read footage near that point"}`, http.StatusInternalServerError)
+		return
+	}
+	writeInsights(w, r, withTracks(r.Context(), vids))
 }
 
 // footageDayResponse is the wire shape of GET /api/footage/days/{day}.

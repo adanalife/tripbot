@@ -12,8 +12,9 @@ func TestFindCommand_SpacelessSplitsAtTrigger(t *testing.T) {
 		{"!GotoWyoming", "!find", []string{"wyoming"}},
 		{"!gotowyoming now", "!find", []string{"wyoming", "now"}},
 		{"!guessflorida", "!guess", []string{"florida"}},
-		// longest trigger wins: !timewarp + "back", not !time + "warpback"
-		{"!timewarpback", "!timewarp", []string{"back"}},
+		{"!stateoregon", "!state", []string{"oregon"}},
+		// a multi-word state continues into the params
+		{"!gotonew york", "!find", []string{"new", "york"}},
 	}
 	for _, c := range cases {
 		cmd, _, params := builtTestApp.findCommand(c.input)
@@ -38,8 +39,9 @@ func TestFindCommand_SpacelessSplitsAtTrigger(t *testing.T) {
 }
 
 func TestFindCommand_SpacelessLeavesUnknownAlone(t *testing.T) {
-	// no registered trigger prefixes these — they must stay "not found"
-	for _, in := range []string{"!xyzzyfoo", "!g", "hellothere"} {
+	// no registered trigger prefixes these, or the glued-on remainder names
+	// no state — they must stay "not found"
+	for _, in := range []string{"!xyzzyfoo", "!g", "hellothere", "!staterequest", "!jumpbeach", "!timewarpback"} {
 		if cmd, _, _ := builtTestApp.findCommand(in); cmd != nil {
 			t.Errorf("findCommand(%q) = %s, want nil", in, cmd.Trigger)
 		}

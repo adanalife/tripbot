@@ -15,7 +15,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/adanalife/tripbot/pkg/video"
 	"gorm.io/gorm"
 )
 
@@ -106,10 +105,10 @@ type SearchHit struct {
 // video-pipeline responder over NATS and runs the pgvector cosine search.
 type Search interface {
 	// Find returns the closest frames to query (nearest first) among the
-	// clips in corpus, or an empty slice when nothing matches / the corpus
-	// isn't embedded. A non-nil error means the search itself couldn't run
-	// (responder down, NATS off, DB error).
-	Find(ctx context.Context, query, corpus string) ([]SearchHit, error)
+	// clips in the live corpora, or an empty slice when nothing matches / the
+	// corpora aren't embedded. A non-nil error means the search itself
+	// couldn't run (responder down, NATS off, DB error).
+	Find(ctx context.Context, query string) ([]SearchHit, error)
 }
 
 // errSearchUnavailable is returned when NATS isn't connected, so the embed
@@ -118,19 +117,20 @@ type Search interface {
 var errSearchUnavailable = errors.New("search unavailable: NATS not connected")
 
 // realSearch is the production Search adapter. Beyond the env its NATS
-// subjects are namespaced by, it holds no state: the embed request goes
-// through the pkg/natsclient singleton and the pgvector
-// query through the process-wide DB (like realSessions).
+// subjects are namespaced by and the live corpora it searches, it holds no
+// state: the embed request goes through the pkg/natsclient singleton and the
+// pgvector query through the process-wide DB (like realSessions).
 type realSearch struct {
-	env string
+	env     string
+	corpora []string
 }
 
-func (s realSearch) Find(ctx context.Context, query, corpus string) ([]SearchHit, error) {
+func (s realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
 	resp, err := requestEmbedding(ctx, s.env, query)
 	if err != nil {
 		return nil, err
 	}
-	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, corpus, resp.States, resp.Months, findCandidatePool)
+	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, s.corpora, resp.States, resp.Months, findCandidatePool)
 }
 
 // requestEmbedding asks the video-pipeline responder to embed query, returning
@@ -163,11 +163,11 @@ func requestEmbedding(_ context.Context, env, query string) (findEmbedResponse, 
 }
 
 // searchFrameEmbeddings runs the pgvector cosine search: the nearest frames to
-// vec, filtered to the responder's model, the corpus's reviewed clips, and any parsed
-// state/month facets.
+// vec, filtered to the responder's model, the live corpora's clips, and any
+// parsed state/month facets.
 // Ports video-pipeline's search.py SQL to Go (tripbot owns the DB). Exported-ish
 // as a standalone func so it's sqlmock-testable without NATS or a real model.
-func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, model, corpus string, states []string, months []int, limit int) ([]SearchHit, error) {
+func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, model string, corpora []string, states []string, months []int, limit int) ([]SearchHit, error) {
 	if len(vec) == 0 {
 		return nil, errors.New("empty query vector")
 	}
@@ -181,9 +181,8 @@ func searchFrameEmbeddings(ctx context.Context, db *gorm.DB, vec []float32, mode
 FROM frame_embeddings fe
 JOIN videos v ON v.id = fe.video_id
 WHERE fe.model = ?
-  AND v.corpus = ?
-  AND v.reviewed_at IS NOT NULL`
-	args := []any{lit, model, corpus}
+  AND v.corpus IN ?`
+	args := []any{lit, model, corpora}
 
 	if len(states) > 0 {
 		lower := make([]string, len(states))
@@ -321,9 +320,9 @@ var errFindMiss = errors.New("no close enough match")
 // errFindMiss when the search ran and nothing cleared findMaxDistance; any
 // other error means the search itself couldn't run.
 func (a *App) findHit(ctx context.Context, query string) (SearchHit, error) {
-	// Stay in the corpus on screen, as !jump does: a parked clip's frames are
+	// The search stays in the live corpora: a parked clip's frames are
 	// embedded too, and playout refuses a jump into one.
-	hits, err := a.Search.Find(ctx, query, video.AiringCorpus(a.Video.Current()))
+	hits, err := a.Search.Find(ctx, query)
 	if err != nil {
 		slog.ErrorContext(ctx, "find search failed", "err", err, "query", query)
 		return SearchHit{}, err

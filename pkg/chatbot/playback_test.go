@@ -505,32 +505,42 @@ func TestJumpCmd_StateNameParsing(t *testing.T) {
 	}
 }
 
-// An unrecognized multi-word name still reaches the friendly no-footage reply
-// rather than erroring out.
-func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
-	enablePlayback(t)
-	app := newTestApp(video.Video{})
-	recPlayout := &recordingPlayout{}
-	recVideo := &recordingVideo{
-		RandomErr: terrors.ErrNoFootageForState,
+// A word that names no state or territory is told so without a footage
+// lookup, rather than getting the no-footage reply meant for a real state.
+func TestJumpCmd_NonStateSaysNotAState(t *testing.T) {
+	cases := []struct {
+		params  []string
+		wantSay string
+	}{
+		{[]string{"request"}, "Request isn't a state!"},
+		{[]string{"beach"}, "Beach isn't a state!"},
+		{[]string{"north", "atlantis"}, "North Atlantis isn't a state!"},
 	}
-	recIRC := &recordingChat{}
-	app.Playout = recPlayout
-	app.Video = recVideo
-	app.Chat = recIRC
+	for _, c := range cases {
+		t.Run(strings.Join(c.params, " "), func(t *testing.T) {
+			enablePlayback(t)
+			app := newTestApp(video.Video{})
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.Playout = recPlayout
+			app.Video = recVideo
+			app.Chat = recIRC
 
-	runAsAdmin(t, func() {
-		app.jumpCmd(context.Background(), newAdminUser(), []string{"north", "atlantis"})
-	})
+			runAsAdmin(t, func() {
+				app.jumpCmd(context.Background(), newAdminUser(), c.params)
+			})
 
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != `FindRandomByState("north atlantis")` {
-		t.Errorf("expected single FindRandomByState(\"north atlantis\"), got %v", recVideo.Calls)
-	}
-	if len(recPlayout.Calls) != 0 {
-		t.Errorf("expected no Playout calls on no-footage path, got %v", recPlayout.Calls)
-	}
-	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for North Atlantis") {
-		t.Errorf("expected single 'No footage for North Atlantis' message, got %v", recIRC.Says)
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no video lookup for a non-state, got %v", recVideo.Calls)
+			}
+			if len(recPlayout.Calls) != 0 {
+				t.Errorf("expected no Playout calls for a non-state, got %v", recPlayout.Calls)
+			}
+			if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], c.wantSay) {
+				t.Errorf("expected a %q message, got %v", c.wantSay, recIRC.Says)
+			}
+		})
 	}
 }
 

@@ -122,14 +122,6 @@ func (s *Server) Start(ctx context.Context) error {
 	osc.Handle("/render/{name}", httpmw.Tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
 	osc.Handle("/asset/{name}", httpmw.Tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
 
-	// admin actions — no app-layer auth gate. onscreens-server publishes no
-	// Ingress, so this is reachable only in-cluster (Service DNS) or through a
-	// port-forward. /admin/shutdown is the admin panel's "restart
-	// onscreens-server" surface; the shared handler SIGTERMs the process and
-	// k8s restartPolicy: Always brings the pod back.
-	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
-	admin.Handle("/shutdown", httpmw.Tagged("/admin/shutdown", httpmw.ShutdownHandler()))
-
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(httpmw.Tagged("/metrics", promhttp.Handler().ServeHTTP))
 

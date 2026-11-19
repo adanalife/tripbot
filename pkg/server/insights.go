@@ -60,14 +60,45 @@ func insightsWindowDays(r *http.Request, def int) int {
 	return queryInt(r, "days", def, insightsAllTime, insightsMaxDays)
 }
 
-// insightsSince is the window's lower bound as a timestamp: `days` ago, or the
-// epoch for all time. A timestamp rather than an interval in the SQL keeps the
-// predicate a plain range the date indexes scan, whichever the window is.
-func insightsSince(days int) time.Time {
+// insightsSince is the window's lower bound as a timestamp: `days` before now,
+// or the epoch for all time. A timestamp rather than an interval in the SQL
+// keeps the predicate a plain range the date indexes scan, whichever the
+// window is.
+func insightsSince(now time.Time, days int) time.Time {
 	if days <= insightsAllTime {
 		return time.Unix(0, 0).UTC()
 	}
-	return time.Now().AddDate(0, 0, -days)
+	return now.AddDate(0, 0, -days)
+}
+
+// openBefore is the upper bound of a window that runs to the present.
+var openBefore = time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// prevBoardShift is how far back a ranked list's previous board ends: each
+// row's trend chevron compares its place with its place a day earlier.
+const prevBoardShift = 24 * time.Hour
+
+// prevWindow is the window [since, now) shifted back prevBoardShift: the same
+// length ending a day earlier, or everything up to a day ago for all time.
+func prevWindow(since, now time.Time) (time.Time, time.Time) {
+	if since.Equal(time.Unix(0, 0)) {
+		return since, now.Add(-prevBoardShift)
+	}
+	return since.Add(-prevBoardShift), now.Add(-prevBoardShift)
+}
+
+// stampPrevRanks stamps each row with its 1-based place in prev, or 0 when prev
+// doesn't list it; a caller with no previous board skips it, so the field is
+// absent and the console draws no chevrons rather than all "new".
+func stampPrevRanks[T any, K comparable](rows, prev []T, key func(T) K, set func(*T, *int)) {
+	rank := make(map[K]int, len(prev))
+	for i, p := range prev {
+		rank[key(p)] = i + 1
+	}
+	for i := range rows {
+		r := rank[key(rows[i])]
+		set(&rows[i], &r)
+	}
 }
 
 // queryInt parses the named integer query parameter, falling back to def when
@@ -84,6 +115,105 @@ func queryInt(r *http.Request, key string, def, lo, hi int) int {
 	return min(max(n, lo), hi)
 }
 
+// insightsBucket parses ?bucket for the reads that can add a trend: "" (no
+// series), "day" or "week". ok is false for any other value.
+func insightsBucket(r *http.Request) (bucket string, ok bool) {
+	switch b := r.URL.Query().Get("bucket"); b {
+	case "", "day", "week":
+		return b, true
+	}
+	return "", false
+}
+
+// badBucket answers an unknown ?bucket.
+func badBucket(w http.ResponseWriter) {
+	http.Error(w, `bucket must be "day" or "week"`, http.StatusBadRequest)
+}
+
+// bucketCount is one bucket of a read's ?bucket series. Day is the bucket's
+// first day (a week starts on Monday) on the database session's calendar (UTC
+// on the cluster), as in playbackDay.
+type bucketCount struct {
+	Day   string `json:"day"`
+	Count int64  `json:"count"`
+}
+
+// guessBucket is a guesses series bucket: Count guesses, Correct of them right.
+type guessBucket struct {
+	Day     string `json:"day"`
+	Count   int64  `json:"count"`
+	Correct int64  `json:"correct"`
+}
+
+// bucketSeriesSQL counts the rows of a `hits (at, correct)` CTE per @bucket and
+// joins the counts onto a generated calendar, as playbackDailySQL does, so
+// every bucket from the window's first through the current one is a row,
+// oldest first. All time has no start to fill from, so its calendar begins at
+// the first bucket holding a row, or the current one when none does.
+func bucketSeriesSQL(hits string) string {
+	return `
+WITH ` + hits + `,
+counts AS (
+    SELECT date_trunc(CAST(@bucket AS text), at)::date AS bucket,
+           COUNT(*)                        AS n,
+           COUNT(*) FILTER (WHERE correct) AS correct
+    FROM hits
+    GROUP BY 1
+),
+calendar AS (
+    SELECT generate_series(
+               CASE WHEN CAST(@all_time AS boolean)
+                    THEN COALESCE((SELECT MIN(bucket) FROM counts), date_trunc(CAST(@bucket AS text), now())::date)
+                    ELSE date_trunc(CAST(@bucket AS text), CAST(@since AS timestamptz))::date
+               END,
+               date_trunc(CAST(@bucket AS text), now())::date,
+               CAST('1 ' || CAST(@bucket AS text) AS interval))::date AS bucket
+)
+SELECT to_char(c.bucket, 'YYYY-MM-DD') AS day,
+       COALESCE(n.n, 0)       AS count,
+       COALESCE(n.correct, 0) AS correct
+FROM calendar c
+LEFT JOIN counts n ON n.bucket = c.bucket
+ORDER BY c.bucket`
+}
+
+// gatherBucketSeries runs bucketSeriesSQL over hits from since.
+func gatherBucketSeries[T any](ctx context.Context, hits, bucket string, since time.Time) ([]T, error) {
+	out := []T{}
+	err := database.GormDB().WithContext(ctx).
+		Raw(bucketSeriesSQL(hits), sql.Named("bucket", bucket), sql.Named("since", since),
+			sql.Named("all_time", since.Equal(time.Unix(0, 0)))).
+		Scan(&out).Error
+	return out, err
+}
+
+// The rows each read's series counts, under the same window and bot filter as
+// that read's totals: commands bucket command runs, guesses bucket guesses
+// (and the correct ones), sessions bucket closed visits by login day.
+const (
+	commandRunHits = `hits AS (
+    SELECT e.date_created AS at, false AS correct
+    FROM events e
+    JOIN users u ON u.platform = e.platform AND u.username = e.username
+    WHERE e.event = 'command_run'
+      AND e.date_created >= @since
+      AND u.is_bot = false
+)`
+	guessHits = `hits AS (
+    SELECT e.date_created AS at, COALESCE(e.meta->>'correct' = 'true', false) AS correct
+    FROM events e
+    JOIN users u ON u.platform = e.platform AND u.username = e.username
+    WHERE e.event = 'guess_submitted'
+      AND e.date_created >= @since
+      AND u.is_bot = false
+)`
+	visitHits = visitsCTE + `,
+hits AS (
+    SELECT day::timestamp AS at, false AS correct
+    FROM visits
+)`
+)
+
 // commandUsage is one command's in-window activity: how often it ran, how many
 // distinct non-bot chatters ran it, and how often it was refused (gates,
 // cooldowns, typos that resolved to it). Command strings pass through verbatim
@@ -93,6 +223,10 @@ type commandUsage struct {
 	Runs     int64  `json:"runs"`
 	Users    int64  `json:"users"`
 	Refusals int64  `json:"refusals"`
+	// PrevRank is the command's place on the same board over the window
+	// ending a day earlier, 0 when it wasn't on it; absent when that board
+	// couldn't be read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // refusalReason is one command_refused reason's in-window count.
@@ -106,6 +240,8 @@ type refusalReason struct {
 type unknownCommand struct {
 	Typed string `json:"typed"`
 	Count int64  `json:"count"`
+	// PrevRank is as commandUsage's.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // commandInsightsResponse is the wire shape of GET /api/insights/commands.
@@ -130,6 +266,7 @@ WITH runs AS (
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_run'
       AND e.date_created >= @since
+      AND e.date_created < @before
       AND u.is_bot = false
     GROUP BY 1
 ),
@@ -140,6 +277,7 @@ refused AS (
     JOIN users u ON u.platform = e.platform AND u.username = e.username
     WHERE e.event = 'command_refused'
       AND e.date_created >= @since
+      AND e.date_created < @before
       AND u.is_bot = false
     GROUP BY 1
 )
@@ -150,7 +288,7 @@ SELECT COALESCE(r.command, f.command) AS command,
 FROM runs r
 FULL OUTER JOIN refused f ON f.command = r.command
 ORDER BY runs DESC, refusals DESC, command
-LIMIT 20`
+LIMIT @limit`
 
 const refusalReasonsSQL = `
 SELECT COALESCE(e.meta->>'reason', '') AS reason,
@@ -176,12 +314,22 @@ JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_refused'
   AND e.meta->>'reason' = 'unknown'
   AND e.date_created >= @since
+  AND e.date_created < @before
   AND u.is_bot = false
 GROUP BY 1
 ORDER BY count DESC, typed
-LIMIT 10`
+LIMIT @limit`
 
-func gatherCommandInsights(ctx context.Context, days int) (commandInsightsResponse, error) {
+// How many rows each command list shows, and how deep its previous board
+// reads so a row that climbs into the list isn't called new.
+const (
+	commandUsageShown    = 20
+	commandUsagePrev     = 80
+	unknownCommandsShown = 10
+	unknownCommandsPrev  = 40
+)
+
+func gatherCommandInsights(ctx context.Context, days int, now time.Time) (commandInsightsResponse, error) {
 	out := commandInsightsResponse{
 		Days:            days,
 		Commands:        []commandUsage{},
@@ -189,14 +337,34 @@ func gatherCommandInsights(ctx context.Context, days int) (commandInsightsRespon
 		UnknownCommands: []unknownCommand{},
 	}
 	db := database.GormDB().WithContext(ctx)
-	if err := db.Raw(commandUsageSQL, sql.Named("since", insightsSince(days))).Scan(&out.Commands).Error; err != nil {
+	since := insightsSince(now, days)
+	prevSince, prevBefore := prevWindow(since, now)
+	if err := db.Raw(commandUsageSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", commandUsageShown)).Scan(&out.Commands).Error; err != nil {
 		return out, fmt.Errorf("command usage: %w", err)
 	}
-	if err := db.Raw(refusalReasonsSQL, sql.Named("since", insightsSince(days))).Scan(&out.RefusalReasons).Error; err != nil {
+	var prevCommands []commandUsage
+	if err := db.Raw(commandUsageSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("limit", commandUsagePrev)).Scan(&prevCommands).Error; err != nil {
+		logQueryFailure(ctx, "previous command usage query failed", err, "days", days)
+	} else {
+		stampPrevRanks(out.Commands, prevCommands, func(c commandUsage) string { return c.Command },
+			func(c *commandUsage, r *int) { c.PrevRank = r })
+	}
+	if err := db.Raw(refusalReasonsSQL, sql.Named("since", since)).Scan(&out.RefusalReasons).Error; err != nil {
 		return out, fmt.Errorf("refusal reasons: %w", err)
 	}
-	if err := db.Raw(unknownCommandsSQL, sql.Named("since", insightsSince(days))).Scan(&out.UnknownCommands).Error; err != nil {
+	if err := db.Raw(unknownCommandsSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", unknownCommandsShown)).Scan(&out.UnknownCommands).Error; err != nil {
 		return out, fmt.Errorf("unknown commands: %w", err)
+	}
+	var prevUnknown []unknownCommand
+	if err := db.Raw(unknownCommandsSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("limit", unknownCommandsPrev)).Scan(&prevUnknown).Error; err != nil {
+		logQueryFailure(ctx, "previous unknown commands query failed", err, "days", days)
+	} else {
+		stampPrevRanks(out.UnknownCommands, prevUnknown, func(c unknownCommand) string { return c.Typed },
+			func(c *unknownCommand, r *int) { c.PrevRank = r })
 	}
 	return out, nil
 }
@@ -207,15 +375,29 @@ type stateGuesses struct {
 	State   string `json:"state"`
 	Guesses int64  `json:"guesses"`
 	Correct int64  `json:"correct"`
+	// PrevRank is the state's place on the same board earlier, 0 when it
+	// wasn't on it: for ?month=current the month counted through the end of
+	// yesterday, otherwise the same-length window ending a day earlier. Absent
+	// when there is nothing to compare (the first of the month) or that board
+	// couldn't be read, so a caller can tell "nothing to compare" from "new" (0).
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // guessInsightsResponse is the wire shape of GET /api/insights/guesses.
 type guessInsightsResponse struct {
-	Days    int            `json:"days"`
-	Total   int64          `json:"total"`
-	Correct int64          `json:"correct"`
-	Players int64          `json:"players"`
-	States  []stateGuesses `json:"states"`
+	Days int `json:"days"`
+	// Month is the calendar month the window covers ("2006-01") when the
+	// caller asked for ?month=current, in which case Days is ignored.
+	Month   string `json:"month,omitempty"`
+	Total   int64  `json:"total"`
+	Correct int64  `json:"correct"`
+	// Revealed counts the correct guesses made after a chat command named the
+	// answer on the same clip; Piggybacked is the share of those where someone
+	// other than the guesser ran it.
+	Revealed    int64          `json:"revealed"`
+	Piggybacked int64          `json:"piggybacked"`
+	Players     int64          `json:"players"`
+	States      []stateGuesses `json:"states"`
 }
 
 // meta->>'correct' reads 'true' whether the writer stored a JSON boolean or
@@ -223,6 +405,10 @@ type guessInsightsResponse struct {
 const guessTotalsSQL = `
 SELECT COUNT(*) AS total,
        COUNT(*) FILTER (WHERE e.meta->>'correct' = 'true') AS correct,
+       COUNT(*) FILTER (WHERE e.meta->>'correct' = 'true'
+                          AND e.meta->'reveal' IS NOT NULL) AS revealed,
+       COUNT(*) FILTER (WHERE e.meta->>'correct' = 'true'
+                          AND lower(e.meta->'reveal'->>'by') <> lower(e.username)) AS piggybacked,
        COUNT(DISTINCT e.username) AS players
 FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
@@ -238,25 +424,50 @@ FROM events e
 JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'guess_submitted'
   AND e.date_created >= @since
+  AND e.date_created < @before
   AND u.is_bot = false
 GROUP BY 1
-ORDER BY guesses DESC, state
-LIMIT 15`
+ORDER BY correct DESC, guesses DESC, state
+LIMIT @limit`
 
-func gatherGuessInsights(ctx context.Context, days int) (guessInsightsResponse, error) {
+// guessStatesShown is how many states the board lists; the previous ranking
+// reads further so a state that climbs into the list isn't called new.
+const (
+	guessStatesShown = 15
+	guessStatesPrev  = 60
+)
+
+// gatherGuessInsights counts from since; a prevBefore after prevSince also
+// ranks the states over [prevSince, prevBefore), for the board's trend
+// chevrons.
+func gatherGuessInsights(ctx context.Context, days int, since, prevSince, prevBefore time.Time) (guessInsightsResponse, error) {
 	out := guessInsightsResponse{Days: days, States: []stateGuesses{}}
 	db := database.GormDB().WithContext(ctx)
 	var totals struct {
-		Total   int64
-		Correct int64
-		Players int64
+		Total       int64
+		Correct     int64
+		Revealed    int64
+		Piggybacked int64
+		Players     int64
 	}
-	if err := db.Raw(guessTotalsSQL, sql.Named("since", insightsSince(days))).Scan(&totals).Error; err != nil {
+	if err := db.Raw(guessTotalsSQL, sql.Named("since", since)).Scan(&totals).Error; err != nil {
 		return out, fmt.Errorf("guess totals: %w", err)
 	}
 	out.Total, out.Correct, out.Players = totals.Total, totals.Correct, totals.Players
-	if err := db.Raw(guessStatesSQL, sql.Named("since", insightsSince(days))).Scan(&out.States).Error; err != nil {
+	out.Revealed, out.Piggybacked = totals.Revealed, totals.Piggybacked
+	if err := db.Raw(guessStatesSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", guessStatesShown)).Scan(&out.States).Error; err != nil {
 		return out, fmt.Errorf("guess states: %w", err)
+	}
+	if prevBefore.After(prevSince) {
+		var prev []stateGuesses
+		if err := db.Raw(guessStatesSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+			sql.Named("limit", guessStatesPrev)).Scan(&prev).Error; err != nil {
+			logQueryFailure(ctx, "previous guess states query failed", err, "days", days)
+		} else {
+			stampPrevRanks(out.States, prev, func(s stateGuesses) string { return s.State },
+				func(s *stateGuesses, r *int) { s.PrevRank = r })
+		}
 	}
 	return out, nil
 }
@@ -289,6 +500,10 @@ type clipInsight struct {
 	// it stays out of the mean rather than reading as infinitely long.
 	ClosedPlays      int64    `json:"closed_plays"`
 	AvgPlayedSeconds *float64 `json:"avg_played_seconds"`
+	// PrevRank is the clip's place on the same board over the window ending a
+	// day earlier, 0 when it wasn't on it; absent when that board couldn't be
+	// read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // footageInsightsResponse is the wire shape of GET /api/insights/footage.
@@ -328,6 +543,7 @@ WITH samples AS (
     FROM viewer_samples
     WHERE video_id IS NOT NULL
       AND sampled_at >= @since
+      AND sampled_at < @before
     GROUP BY video_id
     HAVING COUNT(*) >= @min_samples
 ),
@@ -339,6 +555,7 @@ plays AS (
     FROM video_plays
     WHERE video_id IS NOT NULL
       AND started_at >= @since
+      AND started_at < @before
     GROUP BY video_id
 )
 SELECT s.video_id,
@@ -358,7 +575,14 @@ FROM samples s
 LEFT JOIN plays p ON p.video_id = s.video_id
 LEFT JOIN videos v ON v.id = s.video_id
 ORDER BY s.avg_chatters DESC, s.video_id
-LIMIT 15`
+LIMIT @limit`
+
+// footageShown is how many clips the board lists; the previous board reads
+// further so a clip that climbs into the list isn't called new.
+const (
+	footageShown = 15
+	footagePrev  = 60
+)
 
 // footagePlatformsSQL names the platforms that contributed samples to the
 // window. Deliberately not filtered by min_samples or joined to the clip list:
@@ -391,9 +615,9 @@ func clipLabel(state, city string, cityM *float64) string {
 	return state
 }
 
-func gatherFootageInsights(ctx context.Context, days int) (footageInsightsResponse, error) {
+func gatherFootageInsights(ctx context.Context, days int, now time.Time) (footageInsightsResponse, error) {
 	out := footageInsightsResponse{Days: days, Clips: []clipInsight{}, Platforms: []string{}}
-	var rows []struct {
+	type footageRow struct {
 		VideoID          int
 		Plays            int64
 		ClosedPlays      int64
@@ -408,9 +632,16 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 		City             string
 		CityM            *float64
 	}
-	err := database.GormDB().WithContext(ctx).
-		Raw(footageSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", footageMinSamples)).
-		Scan(&rows).Error
+	board := func(since, before time.Time, limit int) ([]footageRow, error) {
+		var rows []footageRow
+		err := database.GormDB().WithContext(ctx).
+			Raw(footageSQL, sql.Named("since", since), sql.Named("before", before),
+				sql.Named("min_samples", footageMinSamples), sql.Named("limit", limit)).
+			Scan(&rows).Error
+		return rows, err
+	}
+	since := insightsSince(now, days)
+	rows, err := board(since, openBefore, footageShown)
 	if err != nil {
 		return out, fmt.Errorf("footage: %w", err)
 	}
@@ -429,8 +660,19 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 			AvgPlayedSeconds: r.AvgPlayedSeconds,
 		})
 	}
+	prevSince, prevBefore := prevWindow(since, now)
+	if prev, err := board(prevSince, prevBefore, footagePrev); err != nil {
+		logQueryFailure(ctx, "previous footage query failed", err, "days", days)
+	} else {
+		prevClips := make([]clipInsight, len(prev))
+		for i, p := range prev {
+			prevClips[i].VideoID = p.VideoID
+		}
+		stampPrevRanks(out.Clips, prevClips, func(c clipInsight) int { return c.VideoID },
+			func(c *clipInsight, r *int) { c.PrevRank = r })
+	}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(footagePlatformsSQL, sql.Named("since", insightsSince(days))).
+		Raw(footagePlatformsSQL, sql.Named("since", since)).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("footage platforms: %w", err)
 	}
@@ -470,30 +712,81 @@ func insightsError(w http.ResponseWriter, msg string) {
 
 // commandInsightsHandler serves GET /api/insights/commands: per-command run /
 // distinct-user / refusal counts, refusal reasons, and the top unknown tokens
-// over the ?days window.
+// over the ?days window. ?bucket=day|week adds a series of command runs.
 func commandInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	bucket, ok := insightsBucket(r)
+	if !ok {
+		badBucket(w)
+		return
+	}
 	days := insightsWindowDays(r, commandInsightsDefaultDays)
-	payload, err := gatherCommandInsights(r.Context(), days)
+	now := time.Now()
+	payload, err := gatherCommandInsights(r.Context(), days, now)
 	if err != nil {
 		logQueryFailure(r.Context(), "command insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather command insights")
 		return
 	}
-	writeInsights(w, r, payload)
+	if bucket == "" {
+		writeInsights(w, r, payload)
+		return
+	}
+	series, err := gatherBucketSeries[bucketCount](r.Context(), commandRunHits, bucket, insightsSince(now, days))
+	if err != nil {
+		logQueryFailure(r.Context(), "command series query failed", err, "days", days, "bucket", bucket)
+		insightsError(w, "couldn't gather command insights")
+		return
+	}
+	writeInsights(w, r, struct {
+		commandInsightsResponse
+		Series []bucketCount `json:"series"`
+	}{payload, series})
 }
 
 // guessInsightsHandler serves GET /api/insights/guesses: !guess volume,
 // accuracy, distinct players, and the per-state breakdown over the ?days
-// window.
+// window, or over the month in progress with ?month=current — the same
+// calendar month, on the same clock, the monthly leaderboards count.
+// ?bucket=day|week adds a series of guesses and correct guesses.
 func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	bucket, ok := insightsBucket(r)
+	if !ok {
+		badBucket(w)
+		return
+	}
 	days := insightsWindowDays(r, guessInsightsDefaultDays)
-	payload, err := gatherGuessInsights(r.Context(), days)
+	now := time.Now()
+	since := insightsSince(now, days)
+	month := ""
+	prevSince, prevBefore := prevWindow(since, now)
+	if r.URL.Query().Get("month") == "current" {
+		// The month so far against the month through the end of yesterday.
+		since = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		month = now.Format("2006-01")
+		prevSince = since
+		prevBefore = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	}
+	payload, err := gatherGuessInsights(r.Context(), days, since, prevSince, prevBefore)
+	payload.Month = month
 	if err != nil {
 		logQueryFailure(r.Context(), "guess insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather guess insights")
 		return
 	}
-	writeInsights(w, r, payload)
+	if bucket == "" {
+		writeInsights(w, r, payload)
+		return
+	}
+	series, err := gatherBucketSeries[guessBucket](r.Context(), guessHits, bucket, since)
+	if err != nil {
+		logQueryFailure(r.Context(), "guess series query failed", err, "days", days, "bucket", bucket)
+		insightsError(w, "couldn't gather guess insights")
+		return
+	}
+	writeInsights(w, r, struct {
+		guessInsightsResponse
+		Series []guessBucket `json:"series"`
+	}{payload, series})
 }
 
 // footageInsightsHandler serves GET /api/insights/footage: per-clip play
@@ -501,7 +794,7 @@ func guessInsightsHandler(w http.ResponseWriter, r *http.Request) {
 // window.
 func footageInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, footageInsightsDefaultDays)
-	payload, err := gatherFootageInsights(r.Context(), days)
+	payload, err := gatherFootageInsights(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "footage insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather footage insights")
@@ -561,6 +854,10 @@ type regionInsight struct {
 	// times longer collects more joins without performing any better. Null
 	// when no play in the window closed, leaving no airtime to divide by.
 	NetPerHour *float64 `json:"net_per_hour"`
+	// PrevRank is the state's place on the same board over the window ending
+	// a day earlier, 0 when it wasn't on it; absent when that board couldn't
+	// be read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // regionInsightsResponse is the wire shape of GET /api/insights/regions.
@@ -602,6 +899,7 @@ WITH samples AS (
     WHERE s.video_id IS NOT NULL
       AND v.state <> ''
       AND s.sampled_at >= @since
+      AND s.sampled_at < @before
     GROUP BY v.state
     HAVING COUNT(*) >= @min_samples
 ),
@@ -615,6 +913,7 @@ airtime AS (
     WHERE p.video_id IS NOT NULL
       AND v.state <> ''
       AND p.started_at >= @since
+      AND p.started_at < @before
     GROUP BY v.state
 ),
 churn AS (
@@ -629,6 +928,7 @@ churn AS (
       AND v.state <> ''
       AND u.is_bot = false
       AND e.date_created >= @since
+      AND e.date_created < @before
     GROUP BY v.state
 )
 SELECT s.state,
@@ -649,7 +949,14 @@ FROM samples s
 LEFT JOIN airtime a ON a.state = s.state
 LEFT JOIN churn   c ON c.state = s.state
 ORDER BY net_per_hour DESC NULLS LAST, avg_viewers DESC NULLS LAST, s.state
-LIMIT 20`
+LIMIT @limit`
+
+// regionsShown is how many states the board lists; the previous board reads
+// further so a state that climbs into the list isn't called new.
+const (
+	regionsShown = 20
+	regionsPrev  = 60
+)
 
 // regionPlatformsSQL names the platforms that contributed samples to the
 // window. Unfiltered by min_samples for the same reason as the per-clip
@@ -663,16 +970,27 @@ WHERE s.video_id IS NOT NULL
   AND s.sampled_at >= @since
 ORDER BY s.platform`
 
-func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse, error) {
+func gatherRegionInsights(ctx context.Context, days int, now time.Time) (regionInsightsResponse, error) {
 	out := regionInsightsResponse{Days: days, Regions: []regionInsight{}, Platforms: []string{}}
-	err := database.GormDB().WithContext(ctx).
-		Raw(regionsSQL, sql.Named("since", insightsSince(days)), sql.Named("min_samples", regionMinSamples)).
-		Scan(&out.Regions).Error
-	if err != nil {
+	db := database.GormDB().WithContext(ctx)
+	since := insightsSince(now, days)
+	if err := db.Raw(regionsSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("min_samples", regionMinSamples), sql.Named("limit", regionsShown)).
+		Scan(&out.Regions).Error; err != nil {
 		return out, fmt.Errorf("regions: %w", err)
 	}
-	if err := database.GormDB().WithContext(ctx).
-		Raw(regionPlatformsSQL, sql.Named("since", insightsSince(days))).
+	prevSince, prevBefore := prevWindow(since, now)
+	var prev []regionInsight
+	if err := db.Raw(regionsSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("min_samples", regionMinSamples), sql.Named("limit", regionsPrev)).
+		Scan(&prev).Error; err != nil {
+		logQueryFailure(ctx, "previous region query failed", err, "days", days)
+	} else {
+		stampPrevRanks(out.Regions, prev, func(r regionInsight) string { return r.State },
+			func(r *regionInsight, p *int) { r.PrevRank = p })
+	}
+	if err := db.
+		Raw(regionPlatformsSQL, sql.Named("since", since)).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("region platforms: %w", err)
 	}
@@ -683,7 +1001,7 @@ func gatherRegionInsights(ctx context.Context, days int) (regionInsightsResponse
 // audience and join/leave churn over the ?days window.
 func regionInsightsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsWindowDays(r, regionInsightsDefaultDays)
-	payload, err := gatherRegionInsights(r.Context(), days)
+	payload, err := gatherRegionInsights(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "region insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather region insights")
@@ -861,10 +1179,10 @@ FROM visits
 GROUP BY platform
 ORDER BY platform`
 
-func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsResponse, error) {
+func gatherSessionInsights(ctx context.Context, days int, since time.Time) (sessionInsightsResponse, error) {
 	out := sessionInsightsResponse{Days: days, Platforms: []sessionStats{}}
 	if err := database.GormDB().WithContext(ctx).
-		Raw(sessionsSQL, sql.Named("since", insightsSince(days))).
+		Raw(sessionsSQL, sql.Named("since", since)).
 		Scan(&out.Platforms).Error; err != nil {
 		return out, fmt.Errorf("sessions: %w", err)
 	}
@@ -872,14 +1190,34 @@ func gatherSessionInsights(ctx context.Context, days int) (sessionInsightsRespon
 }
 
 // sessionInsightsHandler serves GET /api/insights/sessions: per-platform
-// human session length over the ?days window.
+// human session length over the ?days window. ?bucket=day|week adds a series
+// of closed visits, all platforms together, by login day.
 func sessionInsightsHandler(w http.ResponseWriter, r *http.Request) {
+	bucket, ok := insightsBucket(r)
+	if !ok {
+		badBucket(w)
+		return
+	}
 	days := insightsWindowDays(r, sessionInsightsDefaultDays)
-	payload, err := gatherSessionInsights(r.Context(), days)
+	since := insightsSince(time.Now(), days)
+	payload, err := gatherSessionInsights(r.Context(), days, since)
 	if err != nil {
 		logQueryFailure(r.Context(), "session insights query failed", err, "days", days)
 		insightsError(w, "couldn't gather session insights")
 		return
 	}
-	writeInsights(w, r, payload)
+	if bucket == "" {
+		writeInsights(w, r, payload)
+		return
+	}
+	series, err := gatherBucketSeries[bucketCount](r.Context(), visitHits, bucket, since)
+	if err != nil {
+		logQueryFailure(r.Context(), "session series query failed", err, "days", days, "bucket", bucket)
+		insightsError(w, "couldn't gather session insights")
+		return
+	}
+	writeInsights(w, r, struct {
+		sessionInsightsResponse
+		Series []bucketCount `json:"series"`
+	}{payload, series})
 }

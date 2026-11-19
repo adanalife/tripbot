@@ -21,6 +21,9 @@ type Playhead interface {
 var clipTrack = video.Track
 var clipSourceTrack = video.SourceTrack
 
+// clipTracks is the same seam for a list of clips, read in one query.
+var clipTracks = video.Tracks
+
 // SetPlayhead injects the player behind GET /api/map/playhead. Called from
 // cmd/tripbot before Start runs the HTTP server (so there's no race on the
 // field). Left nil, the endpoint answers 503.

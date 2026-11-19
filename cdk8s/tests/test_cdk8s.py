@@ -122,6 +122,15 @@ def test_prod_pinned_others_float(env, platform):
     else:
         assert tag == ENVS[env].image_tag
         assert container["imagePullPolicy"] == "Always"
+        # The schema image rides tripbot's tag: same release, no pin of its
+        # own. Floating envs only — prod's dist is frozen at its pin, so a
+        # construct change reaches it at the next bump.
+        migrate = next(
+            c
+            for c in dep["spec"]["template"]["spec"]["initContainers"]
+            if c["name"] == "migrate"
+        )
+        assert migrate["image"] == f"adanalife/tripbot-migrate:{tag}"
 
 
 @pytest.mark.parametrize("env", list(ENV_PLATFORMS))
