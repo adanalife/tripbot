@@ -1,1 +1,0 @@
-`/api/insights/commands`, `/guesses` and `/sessions` take `?bucket=day|week` and add a zero-filled `series` of per-bucket counts (command runs, guesses with `correct`, closed visits) for a trend chart.
