@@ -287,6 +287,13 @@ class Tripbot(Construct):
                 )
             )
 
+        if env.denylist:
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-output-denylist")
+                )
+            )
+
         env_from += [
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(
@@ -534,7 +541,7 @@ def emit_identity_secrets(scope: Construct, env: EnvConfig) -> None:
         )
     else:
         _emit_db_external_secret(scope, ns, labels)
-    _emit_app_external_secrets(scope, ns, labels, maps=env.maps)
+    _emit_app_external_secrets(scope, ns, labels, maps=env.maps, denylist=env.denylist)
 
 
 def _emit_db_external_secret(scope, ns, labels):
@@ -602,8 +609,9 @@ def _emit_db_external_secret(scope, ns, labels):
     )
 
 
-def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
-    # twitch + google-maps: extract every top-level key of the parameter's JSON.
+def _emit_app_external_secrets(scope, ns, labels, *, maps: bool, denylist: bool):
+    # twitch, google-maps and the output denylist: extract every top-level key
+    # of the parameter's JSON.
     extracts = [
         (
             "twitch-external-secret",
@@ -617,6 +625,14 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
                 "google-maps-external-secret",
                 "tripbot-google-maps-api-key",
                 "/k8s/tripbot/google-maps-api-key",
+            )
+        )
+    if denylist:
+        extracts.append(
+            (
+                "output-denylist-external-secret",
+                "tripbot-output-denylist",
+                "/k8s/tripbot/output-denylist",
             )
         )
     for id_, name, sm in extracts:

@@ -3,9 +3,11 @@ package onscreensClient
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/adanalife/tripbot/pkg/denylist"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 )
 
@@ -160,5 +162,32 @@ func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
 	c := New(nil, "test", "twitch")
 	if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
 		t.Fatalf("ShowMiddleText: %v", err)
+	}
+}
+
+// Every text an overlay command draws passes the output denylist before it is
+// published, whichever command carries it.
+func TestOverlayTextPassesTheDenylist(t *testing.T) {
+	denylist.SetDefault(denylist.New([]string{"smithson"}))
+	t.Cleanup(func() { denylist.SetDefault(nil) })
+
+	rec := &recordingPublisher{}
+	c := New(rec, "stage", "twitch")
+	ctx := context.Background()
+	_ = c.ShowMiddleText(ctx, "hi Smithson")
+	_ = c.ShowLeaderboard(ctx, "smithson's board", [][]string{{"xsmithsonx", "12"}})
+	_ = c.ShowTimewarp(ctx, "smithson", false)
+	_ = c.UpdateLocation(ctx, oe.LocationData{Location: "Smithson Rd, Ohio", State: "Ohio"})
+
+	if len(rec.Publishes) != 4 {
+		t.Fatalf("expected 4 publishes, got %d", len(rec.Publishes))
+	}
+	for _, pub := range rec.Publishes {
+		if strings.Contains(strings.ToLower(string(pub.Payload)), "smithson") {
+			t.Errorf("%s published the listed term: %s", pub.Subject, pub.Payload)
+		}
+		if !strings.Contains(string(pub.Payload), denylist.Mask) {
+			t.Errorf("%s carries no mask: %s", pub.Subject, pub.Payload)
+		}
 	}
 }

@@ -3,6 +3,8 @@ package discord
 import (
 	"strings"
 	"testing"
+
+	"github.com/adanalife/tripbot/pkg/denylist"
 )
 
 func TestLeaderboardEmbed(t *testing.T) {
@@ -80,5 +82,15 @@ func TestLeaderboardEmbed(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLeaderboardEmbedMasksDenylistedNames(t *testing.T) {
+	denylist.SetDefault(denylist.New([]string{"smithson"}))
+	t.Cleanup(func() { denylist.SetDefault(nil) })
+
+	got := leaderboardEmbed("Miles", [][]string{{"xX_Smithson_Xx", "12"}, {"viewer", "3"}})
+	if want := "**1.** xX_***_Xx — 12\n**2.** viewer — 3\n"; got.Description != want {
+		t.Errorf("Description = %q, want %q", got.Description, want)
 	}
 }
