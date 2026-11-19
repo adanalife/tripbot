@@ -44,7 +44,6 @@ var twitchOnlyJobs = []string{
 	"chatbot.ShowRotatingLeaderboard",
 	"users.PrintCurrentSession",
 	"twitch.GetSubscribers",
-	"twitch.GetFollowerCount",
 	"twitch.ReloadTokens",
 	"twitch.EmitAuthStatus",
 }

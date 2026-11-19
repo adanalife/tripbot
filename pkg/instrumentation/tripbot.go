@@ -29,7 +29,6 @@ var (
 	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (radio|carhum) and platform — answers what the stream has been playing and how often it changes")
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
-	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
 	twitchConnected           = mustGauge("tripbot_twitch_connected", "1 when the bot is receiving Twitch chat, 0 otherwise")
 	twitchTokenExpiry         = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
 	orphanedSessions          = mustGauge("tripbot_orphaned_sessions", "Sessions the previous process left open by exiting without writing their logouts — login rows with no logout sharing their session_id — counted once shortly after startup and labeled by service_platform. Non-zero means the last exit was ungraceful and names how many viewers had in-flight miles discarded; a graceful shutdown pairs every login and reads 0.")
@@ -90,8 +89,8 @@ var ScoreboardWrites = scoreboardWritesCounter{counter: scoreboardWrites}
 // console or !audio — asked for it.
 var BackgroundAudioSelections = backgroundAudioSelectionsCounter{counter: backgroundAudioSelections}
 
-// TwitchAudience exposes subscriber and follower gauge recording.
-var TwitchAudience = twitchAudienceGauges{subscribers: twitchSubscribers, followers: twitchFollowers}
+// TwitchAudience exposes subscriber gauge recording.
+var TwitchAudience = twitchAudienceGauges{subscribers: twitchSubscribers}
 
 // TwitchConnection exposes the chat-connection gauge — whether the bot can
 // reach Twitch chat, written by the gateway inbound poll (the gateway holds the
@@ -245,15 +244,10 @@ func (c backgroundAudioSelectionsCounter) Inc(platform, bed string) {
 
 type twitchAudienceGauges struct {
 	subscribers metric.Int64Gauge
-	followers   metric.Int64Gauge
 }
 
 func (a twitchAudienceGauges) SetSubscribers(n int64) {
 	a.subscribers.Record(context.Background(), n)
-}
-
-func (a twitchAudienceGauges) SetFollowers(n int64) {
-	a.followers.Record(context.Background(), n)
 }
 
 type twitchConnectionGauge struct{ gauge metric.Int64Gauge }
