@@ -21,9 +21,10 @@ import (
 //     live video), so tripbot holds no platform token and binds no chat ID.
 //   - tiktok, instagram — the platform has no way to post. TikTok's webcast
 //     protocol is observe-only, and Instagram's Graph API can read live
-//     comments but not create them. Say drops the message; viewers still see
-//     command effects through playout/onscreens, and consoleMirror keeps the
-//     would-be reply visible in the admin console.
+//     comments but not create them. Say drops the message; viewers see
+//     command effects through playout/onscreens and command answers on the
+//     reply overlay, and consoleMirror keeps every send visible in the admin
+//     console.
 //
 // Inbound is uniform across all of them — NewGatewayChatPoller against the same
 // gateway — so it lives in gateway_chat.go rather than here.
@@ -72,7 +73,8 @@ func (g gatewayChat) send(msg, parentID string) {
 }
 
 // noOutboundChat is the ChatClient for a platform tripbot can read but not
-// write. Say drops with a debug line.
+// write. Say drops with a debug line; App.Reply puts command answers on the
+// reply overlay instead (repliesOnScreen).
 type noOutboundChat struct {
 	platform string
 }
@@ -141,11 +143,13 @@ func (a *App) ConnectFacebookViaGateway() {
 // ConnectTikTokViaGateway wires a tiktok instance (TIKTOK_API_URL set).
 // Inbound only — TikTok has no chat-post API.
 func (a *App) ConnectTikTokViaGateway() {
+	a.repliesOnScreen = true
 	a.connectViaGateway(noOutboundChat{platform: platformTikTok})
 }
 
 // ConnectInstagramViaGateway wires an instagram instance (INSTAGRAM_API_URL
 // set). Inbound only — the Graph API cannot create live comments.
 func (a *App) ConnectInstagramViaGateway() {
+	a.repliesOnScreen = true
 	a.connectViaGateway(noOutboundChat{platform: platformInstagram})
 }

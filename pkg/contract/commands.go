@@ -53,6 +53,11 @@ var (
 		{"title", strType(), true},
 		{"rows", arrayType(arrayType(strType())), true},
 	}
+	replyShowFields = []field{
+		{"emitted_at", dateType(), true},
+		{"username", strType(), true},
+		{"msg", strType(), true},
+	}
 	locationUpdateFields = []field{
 		{"emitted_at", dateType(), true},
 		{"location", strType(), true},
@@ -94,6 +99,7 @@ var commandEnvelopeFields = map[string][]field{
 	"MiddleShow":      middleShowFields,
 	"TimewarpShow":    timewarpShowFields,
 	"LeaderboardShow": leaderboardShowFields,
+	"ReplyShow":       replyShowFields,
 	"LocationData":    locationUpdateFields,
 	"RotatorConfig":   rotatorConfigFields,
 	"Command":         commandFields,
@@ -111,7 +117,7 @@ func commandSubject(overlay, verb, schemaTitle string, fields []field) orderedOb
 }
 
 // commandsContract builds the full onscreens command registry in stable on-disk
-// order, grouped by overlay (show before hide), then the passive location feed.
+// order, grouped by overlay (show before hide), then the reply overlay and the feeds.
 func commandsContract() orderedObject {
 	return orderedObject{
 		{"_comment", commandsComment},
@@ -125,6 +131,7 @@ func commandsContract() orderedObject {
 			{"timewarp_hide", commandSubject("timewarp", "hide", "Command", commandFields)},
 			{"gps_show", commandSubject("gps", "show", "Command", commandFields)},
 			{"gps_hide", commandSubject("gps", "hide", "Command", commandFields)},
+			{"reply_show", commandSubject("reply", "show", "ReplyShow", replyShowFields)},
 			{"location_update", commandSubject("location", "update", "LocationData", locationUpdateFields)},
 			{"rotator_config", commandSubject("rotator", "config", "RotatorConfig", rotatorConfigFields)},
 		}},

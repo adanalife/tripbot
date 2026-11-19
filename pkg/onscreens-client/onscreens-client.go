@@ -84,6 +84,16 @@ func (c *Client) ShowTimewarp(ctx context.Context, username string, noBackground
 	return nil
 }
 
+// ShowReply puts a command's answer to username on the reply overlay.
+func (c *Client) ShowReply(ctx context.Context, username, msg string) error {
+	c.publish(ctx, oe.ReplyShowSubject(c.env, c.platform), oe.ReplyShow{
+		Envelope: oe.NewEnvelope(),
+		Username: username,
+		Msg:      msg,
+	})
+	return nil
+}
+
 // UpdateLocation publishes what's known about the currently-playing clip —
 // location, state, date, conditions, sunset — for the rotators to resolve their
 // $variables from (see oe.LocationData). The envelope is stamped here so callers

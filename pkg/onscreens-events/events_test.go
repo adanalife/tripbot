@@ -19,6 +19,7 @@ func TestSubjects(t *testing.T) {
 		{"leaderboard.hide", LeaderboardHideSubject("prod", "twitch"), "tripbot.prod.onscreens.leaderboard.hide.twitch"},
 		{"timewarp.show", TimewarpShowSubject("development", "twitch"), "tripbot.development.onscreens.timewarp.show.twitch"},
 		{"timewarp.hide", TimewarpHideSubject("development", "twitch"), "tripbot.development.onscreens.timewarp.hide.twitch"},
+		{"reply.show", ReplyShowSubject("development", "tiktok"), "tripbot.development.onscreens.reply.show.tiktok"},
 		{"gps.show", GPSShowSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.show.twitch"},
 		{"gps.hide", GPSHideSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.hide.twitch"},
 		{"location.update", LocationUpdateSubject("prod", "youtube"), "tripbot.prod.onscreens.location.update.youtube"},

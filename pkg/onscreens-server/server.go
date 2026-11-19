@@ -38,6 +38,7 @@ type Server struct {
 	Leaderboard  *Onscreen
 	LeftRotator  *Onscreen
 	MiddleText   *Onscreen
+	Reply        *Onscreen
 	RightRotator *Onscreen
 	Timewarp     *Onscreen
 
@@ -46,6 +47,10 @@ type Server struct {
 	// live pools.
 	left  *rotator
 	right *rotator
+
+	// replies paces the Reply overlay: command answers queue here and show one
+	// at a time.
+	replies *replyQueue
 
 	// timewarpNoBackground is the last warp's "strip the opaque cover" choice,
 	// carried on timewarp.show and served in state.json for the browser source
@@ -62,8 +67,8 @@ type Server struct {
 	http *http.Server
 }
 
-// New constructs a *Server with all six onscreens initialized and
-// their background loops (rotators, expiry sweepers) running. It does
+// New constructs a *Server with every onscreen initialized and their
+// background loops (rotators, expiry sweepers, the reply queue) running. It does
 // not bind any sockets — Start does that.
 func New(cfg Config) *Server {
 	version := cfg.Version
@@ -71,7 +76,12 @@ func New(cfg Config) *Server {
 		version = "dev"
 	}
 	left, right := startRotators(cfg.Conf)
+	reply := newOnscreen(defaultSleepInterval)
+	replies := newReplyQueue()
+	go replies.run(reply, reply.done)
 	return &Server{
+		Reply:        reply,
+		replies:      replies,
 		Version:      version,
 		cfg:          cfg.Conf,
 		GPS:          newGPSOnscreen(),
