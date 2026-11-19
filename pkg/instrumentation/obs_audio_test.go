@@ -37,11 +37,21 @@ func testAudioMetrics(t *testing.T) (obsBackgroundAudioMetrics, *metricsdk.Manua
 	if err != nil {
 		t.Fatalf("swaps counter: %v", err)
 	}
+	levelFresh, err := meter.Int64Gauge("obs_background_audio_level_fresh")
+	if err != nil {
+		t.Fatalf("level fresh gauge: %v", err)
+	}
+	probing, err := meter.Int64Gauge("radio_reachable_fresh")
+	if err != nil {
+		t.Fatalf("reachable fresh gauge: %v", err)
+	}
 	return obsBackgroundAudioMetrics{
 		levelDB:    levelDB,
+		levelFresh: levelFresh,
 		playing:    playing,
 		onFallback: onFallback,
 		reachable:  reachable,
+		probing:    probing,
 		swaps:      swaps,
 	}, reader
 }
@@ -75,6 +85,10 @@ func TestBackgroundAudioGauges_StampPlatform(t *testing.T) {
 	audio.SetPlaying("tiktok", false)
 	audio.SetOnFallback("twitch", true)
 	audio.SetRadioReachable("twitch", false)
+	audio.SetLevelFresh("youtube", true)
+	audio.SetLevelFresh("tiktok", false)
+	audio.SetRadioProbing("twitch", true)
+	audio.SetRadioProbing("youtube", false)
 
 	got := map[string]int64{}
 	for _, m := range collectAudio(t, reader) {
@@ -93,10 +107,14 @@ func TestBackgroundAudioGauges_StampPlatform(t *testing.T) {
 	}
 
 	want := map[string]int64{
-		"obs_background_audio_playing/youtube":    1,
-		"obs_background_audio_playing/tiktok":     0,
-		"obs_background_audio_on_fallback/twitch": 1,
-		"radio_reachable/twitch":                  0,
+		"obs_background_audio_playing/youtube":     1,
+		"obs_background_audio_playing/tiktok":      0,
+		"obs_background_audio_on_fallback/twitch":  1,
+		"radio_reachable/twitch":                   0,
+		"obs_background_audio_level_fresh/youtube": 1,
+		"obs_background_audio_level_fresh/tiktok":  0,
+		"radio_reachable_fresh/twitch":             1,
+		"radio_reachable_fresh/youtube":            0,
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("gauge datapoints = %v, want %v", got, want)

@@ -949,6 +949,67 @@ func TestGuessCmd_MissRecordsGuessSubmitted(t *testing.T) {
 	}
 }
 
+// A guess made after someone named the location of the same clip carries who
+// gave it away and which command did — the guesser's own !location or
+// another viewer's !state alike. Once the clip changes, the old reveal names
+// nothing and the next guess carries none.
+func TestGuessCmd_StampsWhoRevealedTheAnswer(t *testing.T) {
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
+	vid.ID = 77
+	app := newTestApp(vid)
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.stateCmd(context.Background(), newTestUser("kate"), nil)
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
+	app.locationCmd(context.Background(), newTestUser("bob"), nil)
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"UT"})
+
+	if len(rec.Guesses) != 2 {
+		t.Fatalf("guesses = %d, want 2", len(rec.Guesses))
+	}
+	if r := rec.Guesses[0].Reveal; r == nil || r.By != "kate" || r.Command != "state" || r.SecsBefore < 0 {
+		t.Errorf("reveal = %+v, want kate's !state", r)
+	}
+	if r := rec.Guesses[1].Reveal; r == nil || r.By != "bob" || r.Command != "location" {
+		t.Errorf("reveal = %+v, want bob's own !location", r)
+	}
+
+	next := newTestVideo("Utah", 39.3, -111.1, time.Now())
+	next.ID = 78
+	app.Video = &recordingVideo{Vid: next}
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
+	if r := rec.Guesses[2].Reveal; r != nil {
+		t.Errorf("reveal = %+v, want none once the clip changed", r)
+	}
+}
+
+// "!state California" then "!guess ca": a jump to a named state gives the
+// answer away for the clip it lands on, to the jumper and to everyone in chat.
+func TestGuessCmd_StampsAJumpToANamedState(t *testing.T) {
+	enablePlayback(t)
+	landed := newTestVideo("California", 36.7, -119.4, time.Now())
+	landed.ID = 91
+	landed.Slug = "2019_0615_183000_001"
+	app := newTestApp(video.Video{})
+	app.Playout = &recordingPlayout{}
+	app.Video = &recordingVideo{RandomVid: landed, RefreshedVid: &landed}
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	runAsAdmin(t, func() {
+		app.stateCmd(context.Background(), newAdminUser(), []string{"california"})
+	})
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"CA"})
+
+	if len(rec.Guesses) != 1 {
+		t.Fatalf("guesses = %d, want 1", len(rec.Guesses))
+	}
+	if r := rec.Guesses[0].Reveal; r == nil || r.Command != "jump" || r.By == "bob" {
+		t.Errorf("reveal = %+v, want the admin's jump", r)
+	}
+}
+
 // A correct guess records both events: the guess itself, stamped with the
 // clip it was about, and the timewarp it triggers, from that clip onto
 // wherever the warp lands.

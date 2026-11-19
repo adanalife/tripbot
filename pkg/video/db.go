@@ -152,26 +152,14 @@ func validate(slug string) error {
 // share one statement, so no clip can be added or removed between them.
 const randomByStateQuery = `
 	SELECT * FROM videos
-	WHERE state = @state AND corpus = @corpus AND reviewed_at IS NOT NULL
-	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = @state AND corpus = @corpus AND reviewed_at IS NOT NULL))
+	WHERE state = ? AND corpus IN ?
+	OFFSET floor(random() * (SELECT count(*) FROM videos WHERE state = ? AND corpus IN ?))
 	LIMIT 1`
 
-// AiringCorpus is the corpus a pick stays inside: the one on screen. A clip is
-// on playout's playlist exactly when its corpus is live, so staying in the
-// current clip's corpus is what keeps a pick off a parked clip that playout
-// would refuse. Nothing on screen yet reads as the ambient corpus.
-// ponytail: a set of live corpora would let a pick cross from s2 back to s1;
-// playout owns that set, and tripbot doesn't read it yet.
-func AiringCorpus(current Video) string {
-	if current.Corpus == "" {
-		return CorpusS1
-	}
-	return current.Corpus
-}
-
-// FindRandomByState returns a random reviewed clip filmed in `state`, from the
-// corpus `current` is in.
-func FindRandomByState(ctx context.Context, state string, current Video) (Video, error) {
+// FindRandomByState returns a random clip filmed in `state` from the live
+// corpora — the set playout airs, so the pick is never a clip playout would
+// refuse. A clip airs whether or not anyone has reviewed it.
+func FindRandomByState(ctx context.Context, state string, live []string) (Video, error) {
 	var vid Video
 
 	// convert to long form
@@ -185,7 +173,7 @@ func FindRandomByState(ctx context.Context, state string, current Video) (Video,
 	state = helpers.TitlecaseState(state)
 
 	result := database.GormDB().WithContext(ctx).
-		Raw(randomByStateQuery, sql.Named("state", state), sql.Named("corpus", AiringCorpus(current))).
+		Raw(randomByStateQuery, state, live, state, live).
 		Scan(&vid)
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
@@ -208,10 +196,10 @@ const nextDaytimeScanLimit = 5000
 // !daytime. The dashcam corpus is daytime driving footage, so from a dusk or
 // night clip the next daylight is the following day's first daylight clip; this
 // walks clips in film order and returns it. Clips without a GPS fix are skipped
-// (daytime needs coords to resolve sunrise/sunset), and so are unreviewed clips
-// and clips from any corpus but `after`'s. Returns a terrors.ErrNoDaytimeFound when no later
-// daytime clip exists in the scanned window.
-func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
+// (daytime needs coords to resolve sunrise/sunset), and so are clips outside
+// the live corpora. Returns a terrors.ErrNoDaytimeFound when no later daytime
+// clip exists in the scanned window.
+func FindNextDaytime(ctx context.Context, after Video, live []string) (Video, error) {
 	// Baseline calendar day: the current clip's local day when it has a fix,
 	// else its raw filmed day (a flagged clip has no coords to localize).
 	afterDay := time.Date(after.DateFilmed.Year(), after.DateFilmed.Month(), after.DateFilmed.Day(), 0, 0, 0, 0, time.UTC)
@@ -221,7 +209,7 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 
 	var clips []Video
 	err := database.GormDB().WithContext(ctx).
-		Where("corpus = ? AND reviewed_at IS NOT NULL AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", AiringCorpus(after), after.DateFilmed).
+		Where("corpus IN ? AND date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", live, after.DateFilmed).
 		Order("date_filmed").
 		Limit(nextDaytimeScanLimit).
 		Find(&clips).Error
@@ -249,17 +237,34 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 // The confidence rides along so the map can band the line by where each stretch
 // came from. It is the clip's, repeated on every one of that clip's points,
 // which is what makes a band a contiguous run rather than a per-point property.
+//
+// Trimmed footage rides along, marked: a clip's track covers the whole piece it
+// was cut from, and a row with no ts_sec is a second the trim left out. Ordering
+// by source_ts_sec puts a trimmed head or tail exactly where it was driven. The
+// third branch is a season-2 piece auto-trim dropped whole — it has no clip, so
+// its track lives in piece_tracks, placed in film order by the start its slug
+// names (stem clock plus the piece's offset, the same sum date_filmed holds).
+// A piece that later aired has its track on its clip, so it is skipped here.
 const corpusRouteQuery = `
-SELECT lat, lng, coord_confidence, corpus FROM (
-    SELECT c.lat, c.lng, v.coord_confidence, v.corpus, v.date_filmed, c.ts_sec
+SELECT lat, lng, coord_confidence, corpus, trimmed FROM (
+    SELECT c.lat, c.lng, v.coord_confidence, v.corpus, v.date_filmed, c.source_ts_sec AS sec,
+           c.ts_sec IS NULL AS trimmed
     FROM video_coords c JOIN videos v ON v.id = c.video_id
-    WHERE NOT v.flagged AND v.coord_confidence >= @minConfidence AND c.ts_sec IS NOT NULL
+    WHERE NOT v.flagged AND v.coord_confidence >= @minConfidence
   UNION ALL
-    SELECT v.lat, v.lng, v.coord_confidence, v.corpus, v.date_filmed, 0
+    SELECT v.lat, v.lng, v.coord_confidence, v.corpus, v.date_filmed, 0, false
     FROM videos v
     WHERE NOT v.flagged AND (v.lat != 0 OR v.lng != 0)
       AND (v.coord_confidence IS NULL OR v.coord_confidence < @minConfidence)
-) t ORDER BY date_filmed, ts_sec`
+  UNION ALL
+    SELECT (p->>1)::float8, (p->>2)::float8, t.confidence, 's2',
+           to_timestamp(left(t.slug, 14), 'YYYYMMDDHH24MISS')::timestamp AT TIME ZONE 'UTC'
+             + substring(t.slug from '_s([0-9]+)$')::int * interval '1 second',
+           (p->>0)::float8, true
+    FROM piece_tracks t CROSS JOIN jsonb_array_elements(t.points) p
+    WHERE t.confidence >= @minConfidence
+      AND NOT EXISTS (SELECT 1 FROM videos v WHERE v.slug = t.slug)
+) t ORDER BY date_filmed, sec`
 
 // CorpusRoute returns the GPS coordinates of the whole route the van drove,
 // ordered along it — the admin map's background-route overlay.
@@ -274,6 +279,8 @@ SELECT lat, lng, coord_confidence, corpus FROM (
 // caller can draw each trip on its own. A synthetic track is drawn
 // because the map wants the road's shape, which it has; it is still far too
 // coarse to answer a question with, which is why CoordAt keeps the higher bar.
+// Footage the trims left out is BandTrimmed whatever its confidence, since
+// what it says is "not on air", not how well it was read.
 //
 // The result is large — a few hundred thousand points — and callers are
 // expected to simplify before serving it. See pkg/server's map handler.
@@ -283,6 +290,7 @@ func CorpusRoute(ctx context.Context) []RoutePoint {
 		Lng             float64
 		CoordConfidence *float64
 		Corpus          string
+		Trimmed         bool
 	}
 	var rows []coord
 	err := database.GormDB().WithContext(ctx).
@@ -294,7 +302,11 @@ func CorpusRoute(ctx context.Context) []RoutePoint {
 	}
 	out := make([]RoutePoint, len(rows))
 	for i, r := range rows {
-		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: RouteBand(r.CoordConfidence), Season: Season(r.Corpus)}
+		band := RouteBand(r.CoordConfidence)
+		if r.Trimmed {
+			band = BandTrimmed
+		}
+		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: band, Season: Season(r.Corpus)}
 	}
 	return out
 }

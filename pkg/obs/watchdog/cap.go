@@ -40,10 +40,18 @@ type BroadcastCapDeps struct {
 // reporting the same start time, the platform resumed the old broadcast rather
 // than opening a new one, and restarting again would only add gaps before the
 // same cut. The loop logs that once and waits for the next broadcast.
+//
+// A restart that fails is tried again on the next steady tick, up to
+// capRestartAttempts per broadcast: the usual failure is OBS refusing the
+// connection, which changes nothing on air, and the hour of headroom before
+// the cap is wasted if one refusal ends the loop's interest in the broadcast.
 func WatchBroadcastCap(ctx context.Context, deps BroadcastCapDeps, interval, maxAge time.Duration) {
-	// restartedFor is the start time of the broadcast this loop last restarted,
-	// and warnedFor the one it last logged as kept.
+	// restartedFor is the start time of the broadcast this loop last tried to
+	// restart, attempts how many times it tried and restarted whether one of
+	// them succeeded; warnedFor is the broadcast it last logged as left alone.
 	var restartedFor, warnedFor time.Time
+	var attempts int
+	var restarted bool
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -73,25 +81,35 @@ func WatchBroadcastCap(ctx context.Context, deps BroadcastCapDeps, interval, max
 		if age < maxAge {
 			continue
 		}
-		if started.Equal(restartedFor) {
+		if !started.Equal(restartedFor) {
+			restartedFor, attempts, restarted = started, 0, false
+		}
+		if restarted || attempts >= capRestartAttempts {
 			if !started.Equal(warnedFor) {
 				warnedFor = started
-				slog.WarnContext(ctx, "broadcast-cap watchdog: restart kept the same broadcast, leaving it",
-					"platform", deps.Platform, "started_at", started, "age", age)
+				msg := "broadcast-cap watchdog: restart kept the same broadcast, leaving it"
+				if !restarted {
+					msg = "broadcast-cap watchdog: every restart failed, leaving the broadcast to the cap"
+				}
+				slog.WarnContext(ctx, msg, "platform", deps.Platform, "started_at", started,
+					"age", age, "attempts", attempts)
 			}
 			continue
 		}
-		restartedFor = started
+		attempts++
 		slog.InfoContext(ctx, "broadcast-cap watchdog: restarting before the platform's cap",
-			"platform", deps.Platform, "started_at", started, "age", age, "max_age", maxAge)
+			"platform", deps.Platform, "started_at", started, "age", age, "max_age", maxAge,
+			"attempt", attempts)
 		restartErr := deps.Restart(ctx)
 		if deps.OnRestart != nil {
 			deps.OnRestart(ctx, restartErr)
 		}
 		if restartErr != nil {
 			slog.ErrorContext(ctx, "broadcast-cap watchdog: restart failed",
-				"platform", deps.Platform, "err", restartErr)
+				"platform", deps.Platform, "attempt", attempts, "err", restartErr)
+			continue
 		}
+		restarted = true
 	}
 }
 
@@ -103,6 +121,10 @@ func WatchBroadcastCap(ctx context.Context, deps BroadcastCapDeps, interval, max
 // "not broadcasting for 10m" alert, and a platform that still reports live
 // after it gets the output back anyway: a gap with no fresh broadcast is
 // worse than no gap.
+// capRestartAttempts bounds the broadcast-cap loop's tries per broadcast, so a
+// restart that keeps failing doesn't cut the stream every tick until the cap.
+const capRestartAttempts = 3
+
 const (
 	offlineTimeout = 5 * time.Minute
 	offlinePoll    = 15 * time.Second

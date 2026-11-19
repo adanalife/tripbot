@@ -628,6 +628,26 @@ func (s *Store) clearPendingLocked(gen uint64) {
 	}
 }
 
+// ApplyNow lands the switch waiting out switchDelay without waiting for the
+// rest of it — the operator who sees the countdown and is sure. Synchronous, so
+// OBS's answer is the caller's, as with a zero delay. Nothing pending is a
+// no-op. Bumping gen first makes the timer, if it already fired and is waiting
+// on the lock, read itself as superseded rather than land the switch twice.
+func (s *Store) ApplyNow(ctx context.Context) error {
+	s.mu.Lock()
+	if s.pending == nil {
+		s.mu.Unlock()
+		return nil
+	}
+	if s.timer != nil {
+		s.timer.Stop()
+	}
+	s.gen++
+	gen, sw := s.gen, *s.pending
+	s.mu.Unlock()
+	return s.applyPending(ctx, sw, gen)
+}
+
 // Pending reports the switch waiting to land, if there is one. false means what
 // the store reports is what OBS is playing.
 func (s *Store) Pending() (Switch, bool) {

@@ -1102,3 +1102,29 @@ func TestSchedule_LandingSwitchKeepsTheNextOnePending(t *testing.T) {
 		return bed == CarHum && !pending
 	})
 }
+
+// The countdown's "do it now": the waiting switch lands before the call
+// returns, once — the timer it cancels must not land it again.
+func TestApplyNow_LandsTheWaitingSwitchOnce(t *testing.T) {
+	switchDelay = time.Hour
+	t.Cleanup(func() { switchDelay = 0 })
+
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.ApplyNow(ctx); err != nil {
+		t.Fatalf("nothing pending: %v", err)
+	}
+	if err := s.SetStation(ctx, "lofi"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if bed, _ := s.Current(); bed != Radio || s.Station() != "lofi" {
+		t.Errorf("bed=%q station=%q, want the radio on lofi", bed, s.Station())
+	}
+	if _, pending := s.Pending(); pending {
+		t.Error("the switch still reads as pending after landing")
+	}
+}

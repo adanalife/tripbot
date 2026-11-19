@@ -44,6 +44,7 @@ var HelpMessages = []string{
 	"!commands: List more commands you can use",
 	"!daytime: Skip a night stretch ahead to the next morning",
 	"!guess: Guess which state we are in",
+	"!help timewarp: Learn what any command does",
 	"!leaderboard: See who has the most miles",
 	"!location: Get the current location",
 	"!miles: See your current miles",

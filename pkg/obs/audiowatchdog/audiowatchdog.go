@@ -90,6 +90,7 @@ type Deps struct {
 type Config struct {
 	Interval         time.Duration // how often to evaluate
 	FailThreshold    int           // consecutive down ticks before swapping to fallback
+	SilenceThreshold int           // the same, when the media still reads PLAYING and only the level is quiet
 	RecoverThreshold int           // consecutive reachable ticks before swapping back
 	SilenceDB        float64       // peak level at/below which fresh audio counts as silent
 	Cooldown         time.Duration // minimum time between swaps (anti-flap)
@@ -107,14 +108,20 @@ type Config struct {
 // stranded on the fallback, and stranded means probing forever.
 const maxProbeSkip = 31
 
-// DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down audio
+// DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down media
 // before falling back (3 × 7s ≈ a clear signal, not a momentary reconnect),
 // ~30s of radio-healthy before swapping back, and a 2-minute cooldown so a
 // flapping edge can't whipsaw the bed.
+//
+// Silence alone waits ~1 minute instead: the radio's own quiet passages sit at
+// the meter's -60 floor for 20s and more (a week of prod read 51 runs of three
+// silent ticks against a radio that answered every probe), so a 3-tick
+// silence debounce pulled the stream off healthy music onto the fallback.
 func DefaultConfig() Config {
 	return Config{
 		Interval:         7 * time.Second,
 		FailThreshold:    3,
+		SilenceThreshold: 9,
 		RecoverThreshold: 4,
 		SilenceDB:        -50,
 		Cooldown:         2 * time.Minute,
@@ -224,9 +231,11 @@ func defaultRadioReachable(ctx context.Context, url string) bool {
 // audible music on the stream: it swaps to the local bed after cfg.FailThreshold
 // consecutive down ticks and swaps back after cfg.RecoverThreshold consecutive
 // ticks of the radio being reachable, with cfg.Cooldown between any two swaps.
-// Records the playing / level / on-fallback gauges every tick; radio_reachable
-// only on the ticks that probe — which back off as an outage wears on, so it
-// reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is canceled.
+// Records the playing / level-fresh / on-fallback / radio-probing gauges every
+// tick; the level only while it is fresh, and radio_reachable only on the ticks
+// that probe. The SDK re-exports a gauge's last value, so those two hold their
+// last reading between records and the matching freshness gauge says whether to
+// trust it. Runs until ctx is canceled.
 func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
@@ -253,12 +262,12 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			return
 		case <-ticker.C:
 			db, fresh := deps.Level()
+			instrumentation.OBSBackgroundAudio.SetLevelFresh(platform, fresh)
 			if fresh {
 				// Only record a level we actually trust. A stale meter (the
-				// OBS WebSocket subscription dropped) would otherwise sit at
-				// the -60 floor and read as false silence; recording nothing
-				// instead lets the series go stale → NoData rather than
-				// fake-silent, so dashboards show a gap and alerts don't fire.
+				// OBS WebSocket subscription dropped) sits at the -60 floor
+				// and would read as false silence; the level series instead
+				// holds its last trusted value and level_fresh reads 0.
 				instrumentation.OBSBackgroundAudio.SetLevelDB(platform, db)
 			}
 
@@ -268,6 +277,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 				// gauge / OBS-streaming alert carry it; don't advance counters
 				// on a blind tick.
 				slog.WarnContext(ctx, "audio watchdog: obs media state unavailable", "err", err)
+				instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, false)
 				synced = false
 				continue
 			}
@@ -286,6 +296,7 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			// would stomp the operator's choice.
 			if deps.ActiveBed() != beds.Radio {
 				failMisses, recoverHits = 0, 0
+				instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, false)
 				// "On fallback" is a statement about the radio bed: a local bed
 				// the operator chose is not a fallback, however local it is.
 				instrumentation.OBSBackgroundAudio.SetOnFallback(platform, false)
@@ -302,9 +313,12 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 			onFallback, err := deps.SourceIsLocal(ctx)
 			if err != nil {
 				slog.WarnContext(ctx, "audio watchdog: obs source settings unavailable", "err", err)
+				instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, false)
 				continue
 			}
 			instrumentation.OBSBackgroundAudio.SetOnFallback(platform, onFallback)
+			// The fallback branch below is the only one that probes.
+			instrumentation.OBSBackgroundAudio.SetRadioProbing(platform, onFallback)
 
 			cooling := time.Since(lastSwap) < cfg.Cooldown
 
@@ -320,10 +334,14 @@ func Watch(ctx context.Context, platform string, deps Deps, cfg Config) {
 					continue
 				}
 				failMisses++
+				threshold := cfg.FailThreshold
+				if !obs.MediaStateDown(state) {
+					threshold = cfg.SilenceThreshold
+				}
 				slog.WarnContext(ctx, "audio watchdog: background audio down",
 					"state", state, "level_db", db, "level_fresh", fresh,
-					"misses", failMisses, "threshold", cfg.FailThreshold)
-				if failMisses < cfg.FailThreshold {
+					"misses", failMisses, "threshold", threshold)
+				if failMisses < threshold {
 					continue
 				}
 				if cooling {

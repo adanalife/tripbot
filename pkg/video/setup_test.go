@@ -13,8 +13,8 @@ import (
 )
 
 // insertVideo writes a reviewed videos row and returns it with the
-// SERIAL-assigned ID populated, so callers can link chains by real ID. The
-// pickers skip unreviewed clips; unreview clears the mark for a test about that.
+// SERIAL-assigned ID populated, so callers can link chains by real ID.
+// unreview clears the mark for a test about a clip nobody has ruled on.
 func insertVideo(t *testing.T, db *gorm.DB, vid Video) Video {
 	t.Helper()
 	if err := db.Create(&vid).Error; err != nil {

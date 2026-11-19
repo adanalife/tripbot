@@ -72,6 +72,18 @@ func publishMiddleState(ctx context.Context, env, platform, msg string, showing 
 	}
 }
 
+// RepersistMiddleText publishes the overlay's in-memory content + visibility to
+// the last-value cache. Run it after a NATS reconnect has re-declared the
+// streams: a restart that wiped storage leaves the cache empty until the next
+// show/hide, and the in-memory state is the newest there is. Holds
+// middleExpiryMu like show/hide do, so it can't publish over a newer state.
+func (s *Server) RepersistMiddleText(ctx context.Context) {
+	s.middleExpiryMu.Lock()
+	defer s.middleExpiryMu.Unlock()
+	v := s.MiddleText.view()
+	publishMiddleState(ctx, s.cfg.Environment, s.cfg.Platform, v.Content, v.IsShowing)
+}
+
 // readMiddleState reads the last-value cache back: the content + visibility
 // onscreens-server most recently published, or ok=false when there's nothing
 // to restore (empty stream, NATS off, or any read error — restore is

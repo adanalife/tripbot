@@ -76,13 +76,19 @@ func main() {
 	// there (with a bounded retry while JetStream recovers) so a NATS restart
 	// that wiped storage gets its streams back; the restore runs only once,
 	// because after a reconnect the in-memory state is newer than anything a
-	// persist dropped during the outage left in the stream.
+	// persist dropped during the outage left in the stream. A reconnect
+	// republishes the in-memory middle text instead, so a wiped stream holds
+	// it again before the next show/hide.
 	var restored sync.Once
 	natsclient.Connect(conf.NatsURL, "onscreens-server", func(*nats.Conn) {
 		if err := natsclient.RetryDeclare(ctx, srv.EnsureStreams); err != nil {
 			slog.WarnContext(ctx, "onscreens jetstream stream setup failed; overlay state won't survive a restart", "err", err)
 		}
-		restored.Do(func() { srv.RestoreFromJetStream(ctx) })
+		first := false
+		restored.Do(func() { first = true; srv.RestoreFromJetStream(ctx) })
+		if !first {
+			srv.RepersistMiddleText(ctx)
+		}
 	})
 
 	// start the webserver — blocks until ListenAndServe fails or the

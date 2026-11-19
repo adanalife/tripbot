@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"slices"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 )
 
 // The stats endpoints serve the console's broad stats page: lifetime totals
@@ -251,7 +254,27 @@ type topMilesEntry struct {
 	Username string  `json:"username"`
 	Platform string  `json:"platform"`
 	Miles    float64 `json:"miles"`
+	// PrevRank is the row's place top_miles_days ago, reconstructed by taking
+	// the miles earned over that window off each total. nil when that read
+	// failed.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
+
+// topMilesSize is how many rows the board shows; topMilesDepth is how many
+// are ranked to find each row's previous place, so a viewer who passed
+// someone in the window ranks against the one now just off the board; and
+// topMilesDefaultDays is how far back that previous place is measured unless
+// the caller picks one of topMilesWindowDays.
+const (
+	topMilesSize        = 10
+	topMilesDepth       = 50
+	topMilesDefaultDays = 1
+)
+
+// topMilesWindowDays are the comparison windows ?top_miles_days accepts. Each
+// is one events.MilesGained read for the board's users, which the
+// events_username_event_date index bounds per user however long it is.
+var topMilesWindowDays = []int{1, 7, 30}
 
 // boardRow is one frozen scoreboard_snapshots placement.
 type boardRow struct {
@@ -274,6 +297,9 @@ type communityStatsResponse struct {
 	Unsubscribes int64           `json:"unsubscribes"`
 	Corrections  int64           `json:"corrections"`
 	TopMiles     []topMilesEntry `json:"top_miles"`
+	// TopMilesDays is the window, in days, each top-miles row's PrevRank is
+	// measured over.
+	TopMilesDays int             `json:"top_miles_days"`
 	Boards       []boardSnapshot `json:"boards"`
 }
 
@@ -289,13 +315,15 @@ WHERE e.event IN ('subscribe', 'unsubscribe', 'correction')
   AND u.is_bot = false`
 
 // topMilesSQL mirrors the leaderboard-eligibility filter pkg/rollups'
-// snapshot write applies: no bots, no opted-out accounts.
+// snapshot write applies: no bots, no opted-out accounts. raw_miles is the
+// unrounded total the previous ranks are computed from, so two rows that
+// only tie after rounding keep their order.
 const topMilesSQL = `
-SELECT username, platform, ROUND(miles::numeric, 1)::float8 AS miles
+SELECT username, platform, ROUND(miles::numeric, 1)::float8 AS miles, miles::float8 AS raw_miles
 FROM users
 WHERE is_bot = false AND exclude_from_leaderboard = false
 ORDER BY miles DESC, username
-LIMIT 10`
+LIMIT @limit`
 
 // latestBoardsSQL reads one platform's most recent snapshotted month's
 // boards, top 5 placements each. Snapshots rank each platform separately
@@ -323,11 +351,12 @@ WHERE substring(s.scoreboard_name FROM '[0-9]{4}_[0-9]{2}$') = latest.month
   AND s.rank <= 5
 ORDER BY s.scoreboard_name, s.rank`
 
-func gatherCommunityStats(ctx context.Context, days int, platform string) (communityStatsResponse, error) {
+func gatherCommunityStats(ctx context.Context, days int, platform string, now time.Time, topMilesDays int) (communityStatsResponse, error) {
 	out := communityStatsResponse{
-		Days:     days,
-		TopMiles: []topMilesEntry{},
-		Boards:   []boardSnapshot{},
+		Days:         days,
+		TopMiles:     []topMilesEntry{},
+		TopMilesDays: topMilesDays,
+		Boards:       []boardSnapshot{},
 	}
 	db := database.GormDB().WithContext(ctx)
 
@@ -342,8 +371,50 @@ func gatherCommunityStats(ctx context.Context, days int, platform string) (commu
 	out.Subscribes, out.Unsubscribes, out.Corrections =
 		counts.Subscribes, counts.Unsubscribes, counts.Corrections
 
-	if err := db.Raw(topMilesSQL).Scan(&out.TopMiles).Error; err != nil {
+	var top []struct {
+		Username, Platform string
+		Miles, RawMiles    float64
+	}
+	if err := db.Raw(topMilesSQL, sql.Named("limit", topMilesDepth)).Scan(&top).Error; err != nil {
 		return out, fmt.Errorf("top miles: %w", err)
+	}
+	// The board spans platforms and miles are per platform, so the window is
+	// read once per platform on it.
+	byPlatform := map[string][]string{}
+	for _, t := range top {
+		byPlatform[t.Platform] = append(byPlatform[t.Platform], t.Username)
+	}
+	earned := map[[2]string]float64{}
+	var err error
+	for p, usernames := range byPlatform {
+		var gained map[string]float64
+		if gained, err = events.MilesGained(ctx, p, usernames, now.AddDate(0, 0, -topMilesDays), now); err != nil {
+			logQueryFailure(ctx, "top miles prev rank query failed", err)
+			break
+		}
+		for u, miles := range gained {
+			earned[[2]string{p, u}] = miles
+		}
+	}
+	// Rank by the miles held at the window's start; the stable sort breaks
+	// ties in the current order, so a board where nobody earned anything in
+	// the window reads unchanged.
+	prev := make([]int, len(top))
+	for i := range prev {
+		prev[i] = i
+	}
+	before := func(i int) float64 { return top[i].RawMiles - earned[[2]string{top[i].Platform, top[i].Username}] }
+	sort.SliceStable(prev, func(a, b int) bool { return before(prev[a]) > before(prev[b]) })
+	prevRank := make([]int, len(top))
+	for place, i := range prev {
+		prevRank[i] = place + 1
+	}
+	for i, t := range top[:min(len(top), topMilesSize)] {
+		row := topMilesEntry{Username: t.Username, Platform: t.Platform, Miles: t.Miles}
+		if err == nil {
+			row.PrevRank = &prevRank[i]
+		}
+		out.TopMiles = append(out.TopMiles, row)
 	}
 
 	var rows []struct {
@@ -514,11 +585,15 @@ func playbackDailyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // communityStatsHandler serves GET /api/stats/community: subscription and
-// correction counts over the ?days window, the lifetime miles top 10, and
-// the latest month's frozen scoreboards for this instance's platform.
+// correction counts over the ?days window, the lifetime miles top 10 with
+// each row's place 24 hours ago, and the latest month's frozen scoreboards for this instance's platform.
 func (s *Server) communityStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, communityStatsDefaultDays)
-	payload, err := gatherCommunityStats(r.Context(), days, s.cfg.Platform)
+	topMilesDays := queryInt(r, "top_miles_days", topMilesDefaultDays, 1, 30)
+	if !slices.Contains(topMilesWindowDays, topMilesDays) {
+		topMilesDays = topMilesDefaultDays
+	}
+	payload, err := gatherCommunityStats(r.Context(), days, s.cfg.Platform, time.Now(), topMilesDays)
 	if err != nil {
 		logQueryFailure(r.Context(), "community stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather community stats")
@@ -534,6 +609,10 @@ type songCount struct {
 	Count     int64     `json:"count"`
 	Askers    int64     `json:"askers"`
 	LastAsked time.Time `json:"last_asked"`
+	// PrevRank is the track's place on the same board over the window ending
+	// a day earlier, 0 when it wasn't on it; absent when that board couldn't
+	// be read.
+	PrevRank *int `json:"prev_rank,omitempty"`
 }
 
 // songStatsResponse is the wire shape of GET /api/stats/songs.
@@ -556,20 +635,42 @@ JOIN users u ON u.platform = e.platform AND u.username = e.username
 WHERE e.event = 'command_run'
   AND e.meta->>'command' = '!song'
   AND e.meta->'detail'->>'title' IS NOT NULL
-  AND e.date_created >= now() - make_interval(days => @days)
+  AND e.date_created >= @since
+  AND e.date_created < @before
   AND u.is_bot = false
 GROUP BY 1, 2
 ORDER BY count DESC, last_asked DESC
 LIMIT @limit`
 
+// songStatsPrev is how deep the previous board reads, so a track that climbs
+// into the list isn't called new.
+const songStatsPrev = 80
+
+func gatherSongStats(ctx context.Context, days int, now time.Time) (songStatsResponse, error) {
+	out := songStatsResponse{Days: days, Songs: []songCount{}}
+	db := database.GormDB().WithContext(ctx)
+	since := insightsSince(now, days)
+	if err := db.Raw(songStatsSQL, sql.Named("since", since), sql.Named("before", openBefore),
+		sql.Named("limit", songStatsLimit)).Scan(&out.Songs).Error; err != nil {
+		return out, err
+	}
+	prevSince, prevBefore := prevWindow(since, now)
+	var prev []songCount
+	if err := db.Raw(songStatsSQL, sql.Named("since", prevSince), sql.Named("before", prevBefore),
+		sql.Named("limit", songStatsPrev)).Scan(&prev).Error; err != nil {
+		logQueryFailure(ctx, "previous song stats query failed", err, "days", days)
+		return out, nil
+	}
+	stampPrevRanks(out.Songs, prev, func(s songCount) [2]string { return [2]string{s.Title, s.Artist} },
+		func(s *songCount, r *int) { s.PrevRank = r })
+	return out, nil
+}
+
 // songStatsHandler serves GET /api/stats/songs: the tracks chat asked about
 // most with !song over the ?days window.
 func songStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, songStatsDefaultDays)
-	out := songStatsResponse{Days: days, Songs: []songCount{}}
-	err := database.GormDB().WithContext(r.Context()).
-		Raw(songStatsSQL, sql.Named("days", days), sql.Named("limit", songStatsLimit)).
-		Scan(&out.Songs).Error
+	out, err := gatherSongStats(r.Context(), days, time.Now())
 	if err != nil {
 		logQueryFailure(r.Context(), "song stats query failed", err, "days", days)
 		insightsError(w, "couldn't gather song stats")

@@ -45,8 +45,14 @@ func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	setRunDetail(ctx, map[string]string{
 		"bed": string(beds.Radio), "station": a.Beds.Station(), "artist": artist, "title": title,
 	})
-	// Naming the channel matters once there are 40-odd of them: "Drone Zone" is
-	// half the answer to "what is this".
-	a.Reply(ctx, fmt.Sprintf("♪ Now playing on %s: %s — %s",
-		beds.StationName(a.Beds.Station()), title, artist))
+	// The station stays out of the reply so a channel change goes by quietly; the
+	// track is the answer to "what is this".
+	switch {
+	case title == "":
+		a.Reply(ctx, "♪ Now playing: the radio")
+	case artist == "":
+		a.Reply(ctx, "♪ Now playing: "+title)
+	default:
+		a.Reply(ctx, fmt.Sprintf("♪ Now playing: %s — %s", title, artist))
+	}
 }

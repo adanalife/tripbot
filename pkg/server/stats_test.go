@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -371,6 +373,83 @@ func seedSnapshotOn(t *testing.T, db *gorm.DB, platform, board string, rank int,
 	}
 }
 
+// TestCommunityStatsHandler_TopMilesPrevRank reconstructs each row's place 24
+// hours ago: a viewer who climbed shows where they started, including from just
+// off the displayed board, and a viewer who earned nothing keeps their rank.
+func TestCommunityStatsHandler_TopMilesPrevRank(t *testing.T) {
+	db := testdb.New(t)
+	for i := 1; i <= 9; i++ {
+		seedMilesUser(t, db, fmt.Sprintf("prev_u%02d", i), float64(1000-i), false, false)
+	}
+	seedMilesUser(t, db, "prev_climber", 105, false, false) // 10th now, 11th before its correction
+	seedMilesUser(t, db, "prev_passed", 100, false, false)  // 11th now: off the board
+	err := db.Exec(`INSERT INTO events (platform, username, event, date_created, extra_miles_earned)
+	                VALUES ('twitch', 'prev_climber', 'correction', ?, 10)`, time.Now().Add(-time.Hour)).Error
+	if err != nil {
+		t.Fatalf("insert correction: %v", err)
+	}
+
+	rec := insightsGET(t, "/api/stats/community", communityServer.communityStatsHandler)
+	var got communityStatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	if len(got.TopMiles) != topMilesSize {
+		t.Fatalf("top_miles has %d rows, want %d", len(got.TopMiles), topMilesSize)
+	}
+	if got.TopMiles[9].Username != "prev_climber" {
+		t.Fatalf("top_miles[9] = %+v, want prev_climber", got.TopMiles[9])
+	}
+	for i, row := range got.TopMiles {
+		want := i + 1
+		if i == 9 {
+			want = 11
+		}
+		if row.PrevRank == nil || *row.PrevRank != want {
+			t.Errorf("%s (rank %d) prev_rank = %v, want %d", row.Username, i+1, row.PrevRank, want)
+		}
+	}
+}
+
+// ?top_miles_days picks the window the previous place is measured over: a
+// correction three days ago moves nobody against yesterday's board but
+// climbs a place over the week, and a window outside the offered set falls
+// back to a day.
+func TestCommunityStatsHandler_TopMilesWindow(t *testing.T) {
+	db := testdb.New(t)
+	seedMilesUser(t, db, "win_leader", 110, false, false)
+	seedMilesUser(t, db, "win_climber", 115, false, false) // passed win_leader three days ago
+	err := db.Exec(`INSERT INTO events (platform, username, event, date_created, extra_miles_earned)
+	                VALUES ('twitch', 'win_climber', 'correction', ?, 10)`, time.Now().Add(-72*time.Hour)).Error
+	if err != nil {
+		t.Fatalf("insert correction: %v", err)
+	}
+	for _, c := range []struct {
+		query    string
+		days     int
+		climbers int
+	}{
+		{"", 1, 1},
+		{"?top_miles_days=7", 7, 2},
+		{"?top_miles_days=30", 30, 2},
+		{"?top_miles_days=3", 1, 1},
+		{"?top_miles_days=abc", 1, 1},
+	} {
+		rec := insightsGET(t, "/api/stats/community"+c.query, communityServer.communityStatsHandler)
+		var got communityStatsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("%q: decode: %v\n%s", c.query, err, rec.Body.String())
+		}
+		if got.TopMilesDays != c.days {
+			t.Errorf("%q: top_miles_days = %d, want %d", c.query, got.TopMilesDays, c.days)
+		}
+		if len(got.TopMiles) != 2 || got.TopMiles[0].Username != "win_climber" ||
+			got.TopMiles[0].PrevRank == nil || *got.TopMiles[0].PrevRank != c.climbers {
+			t.Errorf("%q: top_miles = %+v, want win_climber first with prev_rank %d", c.query, got.TopMiles, c.climbers)
+		}
+	}
+}
+
 func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 	db := testdb.New(t)
 	seedMilesUser(t, db, "comm_alice", 500.5, false, false)
@@ -420,7 +499,9 @@ func TestCommunityStatsHandler_Aggregates(t *testing.T) {
 		t.Fatalf("top_miles = %+v, want %+v (bots and opted-out excluded)", got.TopMiles, wantTop)
 	}
 	for i := range wantTop {
-		if got.TopMiles[i] != wantTop[i] {
+		// Nobody earned miles in the window, so each row held its place.
+		wantTop[i].PrevRank = &[]int{i + 1}[0]
+		if !reflect.DeepEqual(got.TopMiles[i], wantTop[i]) {
 			t.Errorf("top_miles[%d] = %+v, want %+v", i, got.TopMiles[i], wantTop[i])
 		}
 	}
@@ -485,6 +566,39 @@ func seedSongRun(t *testing.T, db *gorm.DB, username, title, artist string, at t
 	                VALUES ('twitch', ?, 'command_run', ?::jsonb, ?)`, username, meta, at).Error
 	if err != nil {
 		t.Fatalf("insert !song run for %s: %v", username, err)
+	}
+}
+
+// The song board ranks a day earlier over the same 90-day window: Colorado
+// Sunrise overtakes Big Wow today and Lost Highway is new today.
+func TestGatherSongStats_PrevRank(t *testing.T) {
+	db := testdb.New(t)
+	seedMilesUser(t, db, "song_alice", 0, false, false)
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	yesterday, today := now.Add(-48*time.Hour), now.Add(-time.Hour)
+	ask := func(title string, n int, at time.Time) {
+		for i := range n {
+			seedSongRun(t, db, "song_alice", title, "Fifty Horizons", at.Add(time.Duration(i)*time.Second))
+		}
+	}
+	ask("Big Wow", 2, yesterday)
+	ask("Colorado Sunrise", 1, yesterday)
+	ask("Colorado Sunrise", 3, today)
+	ask("Lost Highway", 1, today)
+
+	got, err := gatherSongStats(context.Background(), 90, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, s := range got.Songs {
+		titles = append(titles, s.Title)
+	}
+	if !slices.Equal(titles, []string{"Colorado Sunrise", "Big Wow", "Lost Highway"}) {
+		t.Fatalf("songs = %v", titles)
+	}
+	if ranks := prevRanks(got.Songs, func(s songCount) *int { return s.PrevRank }); !slices.Equal(ranks, []int{2, 1, 0}) {
+		t.Errorf("songs prev_rank = %v, want [2 1 0]", ranks)
 	}
 }
 

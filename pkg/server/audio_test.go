@@ -87,6 +87,13 @@ func (f *fakeBeds) SetVoicing(_ context.Context, voicing string) error {
 	return nil
 }
 
+func (f *fakeBeds) ApplyNow(context.Context) error {
+	if f.pending != nil {
+		f.bed, f.pending = f.pending.Bed, nil
+	}
+	return nil
+}
+
 func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
 	f.sets = append(f.sets, bed)
 	if f.setErr != nil {
@@ -444,5 +451,19 @@ func TestAudioSetHandler_AlbumIsNotABed(t *testing.T) {
 	}
 	if len(f.sets) != 0 {
 		t.Fatalf("the album reached the store: %v", f.sets)
+	}
+}
+
+func TestAudioSetHandler_NowLandsThePendingSwitch(t *testing.T) {
+	f := &fakeBeds{bed: beds.Radio, pending: &beds.Switch{Bed: beds.CarHum}}
+	s := &Server{beds: f}
+	if w := postAudio(t, s, `{"now": true}`); w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	if f.bed != beds.CarHum || f.pending != nil {
+		t.Errorf("bed=%q pending=%v, want the car hum landed", f.bed, f.pending)
+	}
+	if len(f.sets) != 0 {
+		t.Errorf("now scheduled a new switch: %v", f.sets)
 	}
 }
