@@ -15,6 +15,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/denylist"
 	"github.com/adanalife/tripbot/pkg/discord"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/eventbus"
@@ -211,6 +212,7 @@ func newGatewayClient(cfg *c.TripbotConfig) *gateway.Client {
 // that need I/O or ordering (the scheduler, Discord session,
 // Postgres-backed flag client) are filled in by the boot-sequence methods.
 func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
+	denylist.SetDefault(denylist.New(cfg.OutputDenylist))
 	t := &Tripbot{
 		version: version,
 		cfg:     cfg,

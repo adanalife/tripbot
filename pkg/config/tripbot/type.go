@@ -20,6 +20,13 @@ type TripbotConfig struct {
 	// subscriber-only commands without an actual sub (comped friends/VIPs).
 	// Comma-separated, case-insensitive. Empty by default.
 	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
+	// OutputDenylist are terms the bot never puts in front of viewers: each
+	// is masked wherever it would appear in a chat line or on an overlay,
+	// whatever supplied it — a username, echoed command text, a geocoded
+	// address. Comma-separated; matching rules in pkg/denylist. Empty by
+	// default. The terms are private: they are delivered as a secret and
+	// never logged.
+	OutputDenylist []string `envconfig:"OUTPUT_DENYLIST"`
 	// Corpora is the set of corpora this instance airs, the same CORPORA key
 	// and default playout boots from. A clip is on playout's playlist exactly
 	// when its corpus is live, so the pickers draw only from this set and never

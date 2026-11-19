@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/denylist"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	rot "github.com/adanalife/tripbot/pkg/rotator"
@@ -19,6 +20,9 @@ import (
 // subjects and drives the overlays. The HTTP command path (the mirror that
 // preceded the peel) is gone. nats may still be nil in tests that don't
 // exercise pubsub — publishes no-op then.
+//
+// Every piece of text a command draws on the stream passes the output denylist
+// first.
 //
 // platform is the streaming platform this tripbot instance serves ("twitch" /
 // "youtube"); it's the trailing leaf on every subject so only the matching
@@ -59,7 +63,7 @@ func (c *Client) HideMiddleText(ctx context.Context) error {
 func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
 	c.publish(ctx, oe.MiddleShowSubject(c.env, c.platform), oe.MiddleShow{
 		Envelope: oe.NewEnvelope(),
-		Msg:      msg,
+		Msg:      denylist.Redact(msg),
 	})
 	return nil
 }
@@ -67,10 +71,17 @@ func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
 func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
 	// onscreens-server renders the HTML from the structured {title, rows}
 	// payload it receives on this subject.
+	rows := make([][]string, len(leaderboard))
+	for i, row := range leaderboard {
+		rows[i] = make([]string, len(row))
+		for j, cell := range row {
+			rows[i][j] = denylist.Redact(cell)
+		}
+	}
 	c.publish(ctx, oe.LeaderboardShowSubject(c.env, c.platform), oe.LeaderboardShow{
 		Envelope: oe.NewEnvelope(),
-		Title:    title,
-		Rows:     leaderboard,
+		Title:    denylist.Redact(title),
+		Rows:     rows,
 	})
 	return nil
 }
@@ -78,7 +89,7 @@ func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard 
 func (c *Client) ShowTimewarp(ctx context.Context, username string, noBackground bool) error {
 	c.publish(ctx, oe.TimewarpShowSubject(c.env, c.platform), oe.TimewarpShow{
 		Envelope:     oe.NewEnvelope(),
-		Username:     username,
+		Username:     denylist.Redact(username),
 		NoBackground: noBackground,
 	})
 	return nil
@@ -90,6 +101,7 @@ func (c *Client) ShowTimewarp(ctx context.Context, username string, noBackground
 // only supply the data. Fire-and-forget; tripbot republishes on a timer.
 func (c *Client) UpdateLocation(ctx context.Context, data oe.LocationData) error {
 	data.Envelope = oe.NewEnvelope()
+	data.Location = denylist.Redact(data.Location)
 	c.publish(ctx, oe.LocationUpdateSubject(c.env, c.platform), data)
 	return nil
 }

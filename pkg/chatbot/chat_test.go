@@ -2,9 +2,11 @@ package chatbot
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/adanalife/tripbot/pkg/denylist"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 )
 
@@ -89,5 +91,38 @@ func TestConsoleMirror_PublishesBotOutputToEventbus(t *testing.T) {
 	}
 	if ev.Reply == nil || ev.Reply.ParentMessageID != "m1" || ev.Reply.ParentText != "" {
 		t.Errorf("reply = %+v, want parent m1 and nothing else", ev.Reply)
+	}
+}
+
+// A listed term is masked before the line reaches the platform or the console
+// mirror, on a Say and on a Reply.
+func TestConsoleMirror_MasksDenylistedOutput(t *testing.T) {
+	rec := &recordingNATS{}
+	saved := eventbus.Default
+	eventbus.SetPublisher(rec)
+	t.Cleanup(func() { eventbus.Default = saved })
+	denylist.SetDefault(denylist.New([]string{"smithson"}))
+	t.Cleanup(func() { denylist.SetDefault(nil) })
+
+	inner := &recordingChat{}
+	cm := consoleMirror{inner: inner, env: testConf.Environment, botUsername: testConf.BotUsername}
+	cm.Say("thanks for the follow, xX_Smithson_Xx!")
+	cm.Reply("parent-1", "you are at 4 Smithson Rd")
+
+	want := []string{"thanks for the follow, xX_***_Xx!", "you are at 4 *** Rd"}
+	if !slices.Equal(inner.Says, want) {
+		t.Errorf("platform got %q, want %q", inner.Says, want)
+	}
+	if len(rec.Publishes) != 2 {
+		t.Fatalf("expected 2 mirrored lines, got %d", len(rec.Publishes))
+	}
+	for i, p := range rec.Publishes {
+		var ev eventbus.ChatMessage
+		if err := json.Unmarshal(p.Payload, &ev); err != nil {
+			t.Fatalf("bad payload: %v", err)
+		}
+		if ev.Text != want[i] {
+			t.Errorf("mirror %d = %q, want %q", i, ev.Text, want[i])
+		}
 	}
 }
