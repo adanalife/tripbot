@@ -1,7 +1,9 @@
 // Package achievements awards viewer achievements from what's on screen.
 // The Twitch instance's video-change hook calls HandleVideoChange with the
 // new clip and the viewers currently in chat; it upserts each viewer's
-// (state, day) visit row and inserts any newly-crossed achievements. (The
+// (state, day) visit row and inserts any newly-crossed achievements: state
+// visits, landmark sightings, and the counter milestones (miles, days watched,
+// correct guesses). (The
 // append-only "what was on screen when" record is pkg/viewstats's
 // video_plays log, written on the same hook.) Awarding is INSERT ... ON
 // CONFLICT DO NOTHING against the achievements table's unique key, so every
@@ -48,6 +50,41 @@ var landmarks = []struct {
 	{"devils-tower", "Saw Devils Tower", 44.5902, -104.7146, 10},
 	{"niagara-falls", "Saw Niagara Falls", 43.0896, -79.0849, 3},
 }
+
+// counters are the viewer totals that unlock an achievement at each tier. SQL
+// yields (username, n) for the viewers in chat, given (platform, usernames):
+// only someone present can have moved a total since the last clip.
+var counters = []struct {
+	Key   string
+	SQL   string
+	Tiers []counterTier
+}{
+	{"miles", `SELECT username, miles AS n FROM users WHERE platform = ? AND username IN ?`,
+		[]counterTier{{10, "10 miles traveled"}, {100, "100 miles traveled"}, {1000, "1,000 miles traveled"}, {10000, "10,000 miles traveled"}}},
+	// A day counts when the viewer caught footage carrying a state, the same
+	// substrate as the state visits.
+	{"days", `SELECT username, COUNT(DISTINCT day) AS n FROM user_state_days
+		WHERE platform = ? AND username IN ? GROUP BY username`,
+		[]counterTier{{7, "7 days on the road"}, {30, "30 days on the road"}, {100, "100 days on the road"}, {365, "365 days on the road"}}},
+	{"guesses", `SELECT username, COUNT(*) AS n FROM events
+		WHERE platform = ? AND username IN ? AND event = 'guess_submitted' AND meta->>'correct' = 'true'
+		GROUP BY username`,
+		[]counterTier{{1, "First correct guess"}, {10, "10 correct guesses"}, {50, "50 correct guesses"}, {100, "100 correct guesses"}}},
+}
+
+type counterTier struct {
+	N     int
+	Title string
+}
+
+// counterSQL awards one tier of one counter (its SQL goes in the %s) to every
+// viewer in chat whose total has reached it.
+const counterSQL = `
+INSERT INTO achievements (platform, username, name, title)
+SELECT ?, c.username, ?, ? FROM (%s) c WHERE c.n >= ?
+ON CONFLICT DO NOTHING
+RETURNING username
+`
 
 // award inserts one achievement row, idempotently. Returns true when the row
 // is new (i.e. this is the moment to announce it).
@@ -125,6 +162,22 @@ func HandleVideoChange(ctx context.Context, cfg *c.TripbotConfig, v video.Video,
 				}
 			}
 		}
+		if len(viewers) == 0 {
+			return nil
+		}
+		for _, ctr := range counters {
+			for _, tier := range ctr.Tiers {
+				var rows []struct{ Username string }
+				if err := tx.Raw(fmt.Sprintf(counterSQL, ctr.SQL), cfg.Platform,
+					fmt.Sprintf("%s-%d", ctr.Key, tier.N), tier.Title,
+					cfg.Platform, viewers, tier.N).Scan(&rows).Error; err != nil {
+					return err
+				}
+				for _, r := range rows {
+					unlocked[tier.Title] = append(unlocked[tier.Title], r.Username)
+				}
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -158,8 +211,10 @@ func distanceKm(lat1, lng1, lat2, lng2 float64) float64 {
 	return 2 * earthRadiusKm * math.Asin(math.Sqrt(a))
 }
 
-// Earned is one achievement a viewer holds.
+// Earned is one achievement a viewer holds. Name is the stable key
+// ("state-utah-10", "miles-100") a client groups on; Title is the display string.
 type Earned struct {
+	Name     string    `json:"name"`
 	Title    string    `json:"title"`
 	EarnedAt time.Time `json:"earned_at"`
 }
@@ -168,7 +223,34 @@ type Earned struct {
 func EarnedBy(ctx context.Context, platform, username string) ([]Earned, error) {
 	out := []Earned{}
 	err := database.GormDB().WithContext(ctx).
-		Raw(`SELECT title, earned_at FROM achievements WHERE platform = ? AND username = ? ORDER BY earned_at DESC`,
+		Raw(`SELECT name, title, earned_at FROM achievements WHERE platform = ? AND username = ? ORDER BY earned_at DESC`,
 			platform, username).Scan(&out).Error
 	return out, err
+}
+
+// StateDays is how many distinct days a viewer caught footage from one state:
+// the progress behind the state-visit tiers.
+type StateDays struct {
+	State string `json:"state"`
+	Days  int    `json:"days"`
+}
+
+// StateDaysFor is username's day count per state on platform, most-visited
+// first, never nil.
+func StateDaysFor(ctx context.Context, platform, username string) ([]StateDays, error) {
+	out := []StateDays{}
+	err := database.GormDB().WithContext(ctx).
+		Raw(`SELECT state, COUNT(*) AS days FROM user_state_days WHERE platform = ? AND username = ?
+			GROUP BY state ORDER BY days DESC, state`, platform, username).Scan(&out).Error
+	return out, err
+}
+
+// StatesAired is how many distinct states platform's stream has shown: the
+// most a viewer there could have collected.
+func StatesAired(ctx context.Context, platform string) (int, error) {
+	var n int
+	err := database.GormDB().WithContext(ctx).
+		Raw(`SELECT COUNT(DISTINCT state) FROM video_plays WHERE platform = ? AND state <> ''`, platform).
+		Scan(&n).Error
+	return n, err
 }

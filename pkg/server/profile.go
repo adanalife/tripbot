@@ -29,7 +29,9 @@ var (
 	monthlyMiles  = func(ctx context.Context, u users.User) float32 {
 		return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard())
 	}
-	earnedBy = achievements.EarnedBy
+	earnedBy    = achievements.EarnedBy
+	stateDays   = achievements.StateDaysFor
+	statesAired = achievements.StatesAired
 )
 
 // bestEffortFirstSeen picks the earliest non-zero timestamp among the user
@@ -69,6 +71,10 @@ type userProfile struct {
 	// Achievements are collected silently until their viewer-facing design
 	// exists: this profile is how the console's owner sees them meanwhile.
 	Achievements []achievements.Earned `json:"achievements"`
+	// StateDays is the progress behind the state-visit achievements, and
+	// StatesAired the most states anyone on the platform could hold.
+	StateDays   []achievements.StateDays `json:"state_days"`
+	StatesAired int                      `json:"states_aired"`
 }
 
 // resolveUser finds the chatter's row, preferring the platform's user id over
@@ -105,7 +111,7 @@ func resolveUser(ctx context.Context, platform, platformUserID, username string)
 func gatherUserProfile(ctx context.Context, platform, platformUserID, username string) userProfile {
 	username = strings.ToLower(strings.TrimSpace(username))
 	platformUserID = strings.TrimSpace(platformUserID)
-	prof := userProfile{Username: username, Achievements: []achievements.Earned{}}
+	prof := userProfile{Username: username, Achievements: []achievements.Earned{}, StateDays: []achievements.StateDays{}}
 	if username == "" && platformUserID == "" {
 		return prof
 	}
@@ -135,6 +141,16 @@ func gatherUserProfile(ctx context.Context, platform, platformUserID, username s
 		logQueryFailure(ctx, "error reading achievements", err, "username", u.Username)
 	} else {
 		prof.Achievements = earned
+	}
+	if days, err := stateDays(ctx, u.Platform, u.Username); err != nil {
+		logQueryFailure(ctx, "error reading state days", err, "username", u.Username)
+	} else {
+		prof.StateDays = days
+	}
+	if n, err := statesAired(ctx, u.Platform); err != nil {
+		logQueryFailure(ctx, "error counting states aired", err, "platform", u.Platform)
+	} else {
+		prof.StatesAired = n
 	}
 	return prof
 }
