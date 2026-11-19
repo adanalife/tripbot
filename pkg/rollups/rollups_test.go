@@ -376,7 +376,9 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	addScore(t, db, boardID, "tripbot4000", true, 999)
 	addOptedOutScore(t, db, boardID, "adanalife_", 998)
 
-	Reconcile(context.Background(), testConf)
+	if !Reconcile(context.Background(), testConf) {
+		t.Error("the tick that froze the month did not report it")
+	}
 
 	type snapshotRow struct {
 		Rank     int
@@ -407,7 +409,9 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	// The NOT EXISTS guard makes the freeze once-only: a later tick must not
 	// re-snapshot, even after the board gains a score.
 	addScore(t, db, boardID, "latecomer", false, 100)
-	Reconcile(context.Background(), testConf)
+	if Reconcile(context.Background(), testConf) {
+		t.Error("a later tick reported a freeze again")
+	}
 
 	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_snapshots WHERE scoreboard_name = ?`, board); n != 2 {
 		t.Errorf("snapshot re-ran: got %d rows, want 2", n)

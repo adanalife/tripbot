@@ -1369,8 +1369,12 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// Derived-state reconciler over the events table (all platforms' events,
 	// but only one instance should run it — the twitch gate above covers that).
 	// Singleton mode + the reconciler's own row lock make overlap harmless.
-	t.addJob(5*time.Minute, "rollups.Reconcile", func(ctx context.Context) { rollups.Reconcile(ctx, t.cfg) },
-		gocron.WithSingletonMode(gocron.LimitModeReschedule))
+	// The tick that freezes a finished month announces its final boards.
+	t.addJob(5*time.Minute, "rollups.Reconcile", func(ctx context.Context) {
+		if rollups.Reconcile(ctx, t.cfg) {
+			t.app.AnnounceLastMonth(ctx)
+		}
+	}, gocron.WithSingletonMode(gocron.LimitModeReschedule))
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)

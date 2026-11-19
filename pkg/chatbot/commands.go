@@ -503,13 +503,34 @@ const podiumRows = 3
 func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !lastmonth", "username", user.Username)
 
+	line, ok := a.lastMonthBoards(ctx, user.Username)
+	if !ok {
+		a.Reply(ctx, "No final boards for "+a.Scoreboards.LastMonth().Format("January")+" yet — they're frozen shortly after the month ends.")
+		return
+	}
+	a.Reply(ctx, line)
+}
+
+// AnnounceLastMonth posts last month's final boards to chat unprompted, with
+// the miles board on the overlay — what !lastmonth answers, said once when the
+// rollup tick freezes the month.
+func (a *App) AnnounceLastMonth(ctx context.Context) {
+	if line, ok := a.lastMonthBoards(ctx, a.Cfg.ChannelName); ok {
+		a.Chat.Say("🏆 " + line)
+	}
+}
+
+// lastMonthBoards puts last month's final miles board on the overlay and
+// returns the one-line podium of all three boards. ok is false while nothing
+// is frozen for the month. username is who the guessr-board flag is evaluated
+// for.
+func (a *App) lastMonthBoards(ctx context.Context, username string) (line string, ok bool) {
 	month := a.Scoreboards.LastMonth()
 	name := month.Format("January")
 	miles := a.Scoreboards.LastMonthMiles(ctx, leaderboardSize)
 	guesses := a.Scoreboards.LastMonthGuesses(ctx, leaderboardSize)
 	if len(miles) == 0 && len(guesses) == 0 {
-		a.Reply(ctx, "No final boards for "+name+" yet — they're frozen shortly after the month ends.")
-		return
+		return "", false
 	}
 
 	var parts []string
@@ -523,7 +544,7 @@ func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 	// The same flag !guessr and the rotation read: off means the game's board
 	// stays off every surface, this one included.
 	if a.Flags.Bool(ctx, guessrBoardFlagKey, feature.EvalContext{
-		Username: user.Username,
+		Username: username,
 		Channel:  a.Cfg.ChannelName,
 		Env:      a.Cfg.Environment,
 	}) {
@@ -534,7 +555,7 @@ func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 			parts = append(parts, "Guessr: "+rankedList(overlayRows(rows, podiumRows), ""))
 		}
 	}
-	a.Reply(ctx, name+" final boards — "+strings.Join(parts, "; "))
+	return name + " final boards — " + strings.Join(parts, "; "), true
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {

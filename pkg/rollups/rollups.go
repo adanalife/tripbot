@@ -174,11 +174,15 @@ const dailySnapshotRetention = 40 * 24 * time.Hour
 // then recompute aggregates for users with events past the watermark
 // and advance it. The watermark keys on events.id — never date_created, which
 // is zero-valued on historical rows.
-func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
+//
+// It reports whether this tick froze a finished month's boards, which happens
+// once per month: the caller's cue that last month's final standings exist.
+func Reconcile(ctx context.Context, cfg *c.TripbotConfig) (frozeMonth bool) {
 	if cfg.ReadOnly {
-		return
+		return false
 	}
 
+	froze := false
 	err := database.GormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Month-end snapshots run before the new-events check so a quiet
 		// month still gets frozen on the first tick after rollover.
@@ -188,6 +192,7 @@ func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
 				return res.Error
 			}
 			if res.RowsAffected > 0 {
+				froze = true
 				slog.InfoContext(ctx, "froze monthly scoreboard snapshot",
 					"scoreboard", board, "count", res.RowsAffected)
 			}
@@ -238,6 +243,9 @@ func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
 			maxID, watermarkName).Error
 	})
 	if err != nil {
+		// The transaction rolled back, the freeze with it.
 		slog.ErrorContext(ctx, "rollup reconcile failed", "err", err)
+		return false
 	}
+	return froze
 }
