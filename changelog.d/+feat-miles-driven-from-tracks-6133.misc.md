@@ -1,0 +1,1 @@
+`backfill-miles-driven` measures a clip along its own GPS track when the track is trustworthy, stepping over misread fixes, and falls back to the clip-to-clip chord otherwise; `videos.miles_driven_source` records which.
