@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/adanalife/tripbot/pkg/instrumentation"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/viewstats"
 )
@@ -104,19 +103,6 @@ func (t *Tripbot) refreshSubscribers(ctx context.Context) {
 		return
 	}
 	mytwitch.SetSubscribers(subs)
-}
-
-// refreshFollowerCount refreshes the follower-count gauge from the gateway.
-func (t *Tripbot) refreshFollowerCount(ctx context.Context) {
-	if t.gateway == nil {
-		return
-	}
-	total, err := t.gateway.Followers(ctx)
-	if err != nil {
-		slog.WarnContext(ctx, "gateway follower-count refresh failed", "err", err)
-		return
-	}
-	instrumentation.TwitchAudience.SetFollowers(int64(total))
 }
 
 // setAudience / audience hold the last concurrent-viewer reading. They live on

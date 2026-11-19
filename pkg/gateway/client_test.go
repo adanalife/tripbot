@@ -253,26 +253,6 @@ func TestSubscribers(t *testing.T) {
 	}
 }
 
-func TestFollowers(t *testing.T) {
-	var gotPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"total":42}`))
-	}))
-	defer srv.Close()
-
-	total, err := New(srv.URL).Followers(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gotPath != "/v1/followers" {
-		t.Errorf("path = %q, want /v1/followers", gotPath)
-	}
-	if total != 42 {
-		t.Errorf("total = %d, want 42", total)
-	}
-}
-
 func TestCachedReads_ErrorOnNon200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
@@ -284,9 +264,6 @@ func TestCachedReads_ErrorOnNon200(t *testing.T) {
 	}
 	if _, err := c.Subscribers(context.Background()); err == nil {
 		t.Error("Subscribers: expected error on non-200")
-	}
-	if _, err := c.Followers(context.Background()); err == nil {
-		t.Error("Followers: expected error on non-200")
 	}
 }
 

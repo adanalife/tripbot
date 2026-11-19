@@ -52,7 +52,6 @@
     "tripbot_scoreboard_writes_total",
     "tripbot_twitch_connected",
     "tripbot_twitch_token_expires_at_seconds",
-    "twitch_followers_total",
     "twitch_subscribers_total"
   ]
 }
