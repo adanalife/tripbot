@@ -234,6 +234,8 @@
   var isAnchored = root.dataset.anchored === 'true';
   var isHTML = root.dataset.html === 'true';
   var content = isAnchored ? root.querySelector('.content') : root;
+  var img = isImage ? root.querySelector('img') : null;
+  var drawnFor = '';
 
   var MAX_FONT_PX = {{.FontSizePx}};
   var MIN_FONT_PX = {{.MinFontSizePx}};
@@ -262,7 +264,15 @@
       return;
     }
     root.classList.remove('hidden');
-    if (!isImage) {
+    if (isImage) {
+      // A server-drawn image (the minimap) names what it was drawn for in its
+      // content, so a change there is the cue to fetch it again. A fixed image
+      // has no content and is never reloaded.
+      if (snap.content && snap.content !== drawnFor) {
+        drawnFor = snap.content;
+        img.src = '/onscreens/asset/' + name + '?v=' + encodeURIComponent(drawnFor);
+      }
+    } else {
       if (isHTML) {
         content.innerHTML = snap.content || '';
       } else {
