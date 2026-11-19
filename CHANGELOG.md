@@ -9,6 +9,32 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.16.0] — 2026-11-19
+
+### Chatbot
+
+- `!music` and `!song` name the artist and track on the radio without naming the station. ([#1824](https://github.com/adanalife/tripbot/pull/1824))
+- A `!guess` after someone jumps to a named state (`!state California`, `!jump ca`) is stamped with that jump as its reveal, like one after `!location` or a bare `!state`. ([#1826](https://github.com/adanalife/tripbot/pull/1826))
+- The rotating chat tips now suggest `!help <command>` for learning what a single command does. ([#1829](https://github.com/adanalife/tripbot/pull/1829))
+- Viewers now quietly earn milestone achievements for miles traveled, days watched and correct guesses, and a chatter's profile carries their per-state day counts for the console's passport. ([#1835](https://github.com/adanalife/tripbot/pull/1835))
+- The bot posts last month's final boards in chat on its own, once, when the month's standings are frozen: the same podium `!lastmonth` answers, with the final miles board on the overlay. ([#1839](https://github.com/adanalife/tripbot/pull/1839))
+
+### Onscreens
+
+- The middle-text overlay is written back to NATS after a reconnect, so a NATS restart that wiped its storage no longer leaves a later onscreens-server restart without the text. ([#1828](https://github.com/adanalife/tripbot/pull/1828))
+- onscreens-server no longer serves `POST /admin/shutdown`: nothing called it, and any pod in the cluster could restart the overlays with one unauthenticated request. ([#1832](https://github.com/adanalife/tripbot/pull/1832))
+
+### Console / API
+
+- `GET /admin/map/corpus?trimmed=1` serves the footage the trims left off the air — trimmed heads and tails of clips, and season-2 pieces dropped whole — as `trimmed` segments in the route's shape, each meeting the route where it was cut. The default response is unchanged. ([#1823](https://github.com/adanalife/tripbot/pull/1823))
+- `/api/insights/guesses` counts spoiled guesses: `revealed` is the correct guesses made after a chat command named the answer on the same clip, `piggybacked` those where someone else ran it. ([#1827](https://github.com/adanalife/tripbot/pull/1827))
+- `/api/insights/commands`, `/guesses` and `/sessions` take `?bucket=day|week` and add a zero-filled `series` of per-bucket counts (command runs, guesses with `correct`, closed visits) for a trend chart. ([#1831](https://github.com/adanalife/tripbot/pull/1831))
+- The console's find box jumps to a state when given its full name (`utah`), the way `!find utah` does in chat, instead of searching for a scene that looks like the word. ([#1836](https://github.com/adanalife/tripbot/pull/1836))
+
+### Fixes
+
+- Add obs_background_audio_level_fresh and radio_reachable_fresh gauges so dashboards can tell a live background-audio level or radio probe result from a stale last value. ([#1830](https://github.com/adanalife/tripbot/pull/1830))
+
 ## [v6.15.0] — 2026-11-18
 
 ### Console / API

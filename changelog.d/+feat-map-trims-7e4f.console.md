@@ -1,1 +1,0 @@
-`GET /admin/map/corpus?trimmed=1` serves the footage the trims left off the air — trimmed heads and tails of clips, and season-2 pieces dropped whole — as `trimmed` segments in the route's shape, each meeting the route where it was cut. The default response is unchanged.
