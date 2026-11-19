@@ -73,6 +73,16 @@ func TimewarpHideSubject(env, platform string) string {
 func GPSShowSubject(env, platform string) string { return subject(env, platform, "gps", "show") }
 func GPSHideSubject(env, platform string) string { return subject(env, platform, "gps", "hide") }
 
+// MinimapShowSubject and MinimapHideSubject turn the minimap overlay on and off
+// for one platform. They flip a switch rather than paint anything: the map
+// itself is drawn from the location feed.
+func MinimapShowSubject(env, platform string) string {
+	return subject(env, platform, "minimap", "show")
+}
+func MinimapHideSubject(env, platform string) string {
+	return subject(env, platform, "minimap", "hide")
+}
+
 // LocationUpdateSubject carries the currently-playing clip's location + date
 // from tripbot to onscreens-server, which caches it and feeds it into the
 // rotators. On a bot-less YouTube stream the rotators surface this in place of

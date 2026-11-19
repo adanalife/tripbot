@@ -167,6 +167,19 @@ func (osc *Onscreen) ShowFor(content string, dur time.Duration) {
 	osc.content = content
 }
 
+// Refresh makes an Onscreen visible until ttl from now, replacing any expiry an
+// earlier call set. It suits an overlay fed on a timer: each update pushes the
+// deadline out, and the overlay ages out once the feed stops (ShowFor would
+// instead add every ttl onto the last).
+func (osc *Onscreen) Refresh(content string, ttl time.Duration) {
+	osc.mu.Lock()
+	defer osc.mu.Unlock()
+	osc.dontExpire = false
+	osc.expires = time.Now().Add(ttl)
+	osc.isShowing = true
+	osc.content = content
+}
+
 // Hide will remove an onscreen from the screen
 func (osc *Onscreen) Hide() {
 	osc.mu.Lock()
