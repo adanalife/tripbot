@@ -1,0 +1,1 @@
+A top-tier gift (100+ value) runs a find for what the gifter last said in chat, in the minute before the gift, instead of a random timewarp. With no recent comment or no close match it still timewarps.

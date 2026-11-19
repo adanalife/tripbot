@@ -39,6 +39,10 @@ type App struct {
 	// zero value (false) keeps the normal per-platform command-filtered help,
 	// so directly-constructed test Apps are unaffected unless they opt in.
 	botless bool
+	// recentComments is each chatter's latest comment, which a gift's find
+	// effect takes as its query (see effectFind).
+	recentCommentsMu sync.Mutex
+	recentComments   map[string]recentComment
 	// Onscreens drives the OBS browser-source overlays for chat-triggered
 	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
 	Onscreens Onscreens
