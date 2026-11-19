@@ -376,3 +376,15 @@ def test_stage_obs_feeders_colocate_with_obs():
     assert any(t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", []))
     # ... but carries no independent rpi5 board pull.
     assert not _prefers_rpi5(spec)
+
+
+@pytest.mark.parametrize(
+    "env,platform",
+    [p for p in ENV_PLATFORM_PAIRS if p[0] != "prod-1"],
+    ids=lambda v: str(v),
+)
+def test_tripbot_never_runs_two_pods_through_a_rollout(env, platform):
+    """Two tripbots on one platform both save viewers' lifetime miles as
+    absolute values, and the last writer erases the other's accrual."""
+    (dep,) = _by_kind(_objects(f"{env}-tripbot-{platform}"), "Deployment")
+    assert dep["spec"]["strategy"] == {"type": "Recreate"}
