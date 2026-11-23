@@ -128,7 +128,13 @@ func (su sessionUser) IsMod() bool {
 // the alias, state shortcut, or misspelling as the viewer wrote it — which the
 // command_run event keeps when it differs from the canonical trigger.
 func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
-	incChatCommandCounter(cmd.Trigger)
+	// A bangless trigger ("hello") is a greeting the bot returns, not a
+	// command: reached without a bang it is conversation, which the chat log
+	// already holds, so it counts as no command and leaves no command_run.
+	greeting := !strings.HasPrefix(cmd.Trigger, "!") && !strings.HasPrefix(typed, "!")
+	if !greeting {
+		incChatCommandCounter(cmd.Trigger)
+	}
 	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, func(m string) { a.Reply(ctx, m) }); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
 			Username: user.Username,
@@ -156,7 +162,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 	cmd.Handler(ctx, user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
 
-	if *refused {
+	if *refused || greeting {
 		return
 	}
 	if typed == cmd.Trigger {
