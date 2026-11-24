@@ -108,15 +108,15 @@ type Config struct {
 // stranded on the fallback, and stranded means probing forever.
 const maxProbeSkip = 31
 
-// DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down media
+// DefaultConfig waits ~20s of confirmed-down media
 // before falling back (3 × 7s ≈ a clear signal, not a momentary reconnect),
 // ~30s of radio-healthy before swapping back, and a 2-minute cooldown so a
 // flapping edge can't whipsaw the bed.
 //
 // Silence alone waits ~1 minute instead: the radio's own quiet passages sit at
 // the meter's -60 floor for 20s and more (a week of prod read 51 runs of three
-// silent ticks against a radio that answered every probe), so a 3-tick
-// silence debounce pulled the stream off healthy music onto the fallback.
+// silent ticks against a radio that answered every probe), so debouncing
+// silence at FailThreshold pulls the stream off healthy music onto the fallback.
 func DefaultConfig() Config {
 	return Config{
 		Interval:         7 * time.Second,
@@ -229,8 +229,10 @@ func defaultRadioReachable(ctx context.Context, url string) bool {
 
 // Watch evaluates the background-audio source every cfg.Interval and keeps
 // audible music on the stream: it swaps to the local bed after cfg.FailThreshold
-// consecutive down ticks and swaps back after cfg.RecoverThreshold consecutive
-// ticks of the radio being reachable, with cfg.Cooldown between any two swaps.
+// consecutive down ticks (cfg.SilenceThreshold when the media still reads
+// PLAYING and only the level is quiet) and swaps back after
+// cfg.RecoverThreshold consecutive ticks of the radio being reachable, with
+// cfg.Cooldown between any two swaps.
 // Records the playing / level-fresh / on-fallback / radio-probing gauges every
 // tick; the level only while it is fresh, and radio_reachable only on the ticks
 // that probe. The SDK re-exports a gauge's last value, so those two hold their

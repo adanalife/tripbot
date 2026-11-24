@@ -586,7 +586,8 @@ func playbackDailyHandler(w http.ResponseWriter, r *http.Request) {
 
 // communityStatsHandler serves GET /api/stats/community: subscription and
 // correction counts over the ?days window, the lifetime miles top 10 with
-// each row's place 24 hours ago, and the latest month's frozen scoreboards for this instance's platform.
+// each row's place ?top_miles_days ago (1, 7 or 30; a day by default), and
+// the latest month's frozen scoreboards for this instance's platform.
 func (s *Server) communityStatsHandler(w http.ResponseWriter, r *http.Request) {
 	days := insightsDays(r, communityStatsDefaultDays)
 	topMilesDays := queryInt(r, "top_miles_days", topMilesDefaultDays, 1, 30)
