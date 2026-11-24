@@ -541,11 +541,19 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 	// which differs from the canonical trigger the dispatch span records under
 	// chat.command, and it is set even when nothing resolves — which is how a
 	// trace shows a typo'd command going nowhere.
+	cmd, typed, params := a.findCommand(message)
+
+	// A leading "1" is only an unshifted "!" when it lands on a command the
+	// bot has: "1location" is, "1st time here" is someone talking to the room
+	// and leaves no trace as a command.
+	if cmd == nil && strings.HasPrefix(strings.TrimSpace(message), "1") && a.unindexedCommand(command) == nil {
+		return
+	}
+
 	if strings.HasPrefix(command, "!") {
 		trace.SpanFromContext(ctx).SetAttributes(attribute.String("chat.command.typed", command))
 	}
 
-	cmd, typed, params := a.findCommand(message)
 	if cmd != nil {
 		a.dispatch(ctx, cmd, typed, user, params)
 		return
