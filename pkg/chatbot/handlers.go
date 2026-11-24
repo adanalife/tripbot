@@ -128,7 +128,17 @@ func (su sessionUser) IsMod() bool {
 // the alias, state shortcut, or misspelling as the viewer wrote it — which the
 // command_run event keeps when it differs from the canonical trigger.
 func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
-	incChatCommandCounter(cmd.Trigger)
+	// A message with no bang ("hi", "where is this", "no audio") was said to
+	// the room, and the bot answering it doesn't make it a command: it is
+	// conversation, which the chat log already holds, so it counts as no
+	// command and leaves no command_run. findCommand hands back a banged typed
+	// for every form that addresses the bot ("! miles", "1miles", a lone "help").
+	organic := !strings.HasPrefix(typed, "!")
+	if organic {
+		ctx = context.WithValue(ctx, organicKey{}, true)
+	} else {
+		incChatCommandCounter(cmd.Trigger)
+	}
 	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.Sessions, user}, func(m string) { a.Reply(ctx, m) }); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
 			Username: user.Username,
@@ -156,7 +166,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 	cmd.Handler(ctx, user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
 
-	if *refused {
+	if *refused || organic {
 		return
 	}
 	if typed == cmd.Trigger {
@@ -170,6 +180,10 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *us
 		Detail:   *detail,
 	})
 }
+
+// organicKey marks a dispatch of a bangless message: chat the bot answered,
+// which leaves no command_run and no command_refused.
+type organicKey struct{}
 
 // runDetailKey carries the per-dispatch slot setRunDetail fills with what a
 // handler answered, for the command_run row.
@@ -276,7 +290,7 @@ func (a *App) recordRefusal(ctx context.Context, r events.CommandRefusal) {
 	if refused, ok := ctx.Value(refusalMarkKey{}).(*bool); ok {
 		*refused = true
 	}
-	if a.Events == nil {
+	if a.Events == nil || ctx.Value(organicKey{}) != nil {
 		return
 	}
 	// Current() is the cached notion of what's playing — no I/O, because a
