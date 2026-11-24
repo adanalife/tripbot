@@ -560,26 +560,26 @@ func TestRunCommand_AliasRunKeepsTypedToken(t *testing.T) {
 	}
 }
 
-// A greeting is conversation even though the bot answers it: no command_run,
-// however it is spelled or continued.
-func TestRunCommand_GreetingIsNotACommandRun(t *testing.T) {
+// A message with no bang was said to the room, even when the bot answers it:
+// no command_run, however it is spelled or continued.
+func TestRunCommand_BanglessChatIsNotACommandRun(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingEvents{}
 	app.Events = rec
 
-	for _, msg := range []string{"hi", "hello", "Hey", "hi everyone"} {
+	for _, msg := range []string{"hi", "hello", "Hey", "hi everyone", "where is this?", "no audio", "is this live", "frozen again"} {
 		app.runCommand(context.Background(), newTestUser("viewer1"), msg)
 	}
 
 	if len(rec.Runs) != 0 || len(rec.Refusals) != 0 {
-		t.Errorf("runs = %+v, refusals = %+v, want none for a greeting", rec.Runs, rec.Refusals)
+		t.Errorf("runs = %+v, refusals = %+v, want none for bangless chat", rec.Runs, rec.Refusals)
 	}
 }
 
-// The spellings of a command that reach it without a plain "!word" still
-// leave a command_run under the canonical trigger.
+// The spellings that address the bot without a plain "!word" still leave a
+// command_run under the canonical trigger.
 func TestRunCommand_UnconventionalSpellingsAreRecorded(t *testing.T) {
-	for _, msg := range []string{"! miles", "¡miles", "1miles", "!MILES", "help", "no audio"} {
+	for _, msg := range []string{"! miles", "¡miles", "1miles", "!MILES", "help", "commands"} {
 		app := newTestApp(video.Video{})
 		rec := &recordingEvents{}
 		app.Events = rec
