@@ -160,8 +160,10 @@ const raidFoldWindow = 5 * time.Minute
 func (a *App) RecordRaid(from string, viewers int) {
 	ctx := context.Background()
 	now := time.Now()
+	a.raidMu.Lock()
 	repeat := from == a.lastRaidFrom && now.Sub(a.lastRaidAt) < raidFoldWindow
 	a.lastRaidFrom, a.lastRaidAt = from, now
+	a.raidMu.Unlock()
 	if !repeat {
 		a.Chat.Say(fmt.Sprintf("Thank you for the raid, @%s; welcome to all %d raider(s) bleedPurple", from, viewers))
 		instrumentation.Announcements.Inc(a.Platform, "raid")

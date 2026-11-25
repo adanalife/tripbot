@@ -46,8 +46,9 @@ type App struct {
 	// inject a no-op fake; production uses the realPlayout adapter.
 	Playout Playout
 	// lastRaidFrom / lastRaidAt remember the most recent raid so RecordRaid can
-	// fold a quick repeat from the same channel into one thank-you. Only the
-	// EventSub goroutine touches them.
+	// fold a quick repeat from the same channel into one thank-you. raidMu
+	// guards them: EventSub runs each event's handler on its own goroutine.
+	raidMu       sync.Mutex
 	lastRaidFrom string
 	lastRaidAt   time.Time
 	// Video reads / refreshes the currently-playing dashcam video. Tests
