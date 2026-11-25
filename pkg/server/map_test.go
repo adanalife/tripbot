@@ -263,6 +263,9 @@ func TestMapCorpusHandler_EmptyRouteIsNotCached(t *testing.T) {
 	if body := rec.Body.String(); body != "[]" {
 		t.Errorf("body = %q, want [] for an unavailable route", body)
 	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store so the browser asks again", cc)
+	}
 }
 
 // simplify has to keep the shape and drop the filler: a corner survives, the
