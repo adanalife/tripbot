@@ -236,7 +236,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// the viewer named the state themselves, so everyone in chat knows it
-	a.noteRevealOn(user, "jump", randomVid.ID)
+	a.noteReveal(user, "jump", randomVid.State)
 	// update our record of last time it ran
 	setLastTimewarpTime(time.Now())
 }
