@@ -1,1 +1,0 @@
-A message with no `!` is chat, not a command, even when tripbot answers it: a greeting (`hi`, `hello`) or a question to the room (`where is this`, `no audio`, `is this live`) no longer writes a `command_run` or counts toward the command metrics. `! miles`, `1miles` and a lone `help` still do.

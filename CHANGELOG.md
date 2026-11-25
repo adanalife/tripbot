@@ -9,6 +9,22 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.17.1] — 2026-11-25
+
+### Fixes
+
+- A message with no `!` is chat, not a command, even when tripbot answers it: a greeting (`hi`, `hello`) or a question to the room (`where is this`, `no audio`, `is this live`) no longer writes a `command_run` or counts toward the command metrics. `! miles`, `1miles` and a lone `help` still do. ([#1846](https://github.com/adanalife/tripbot/pull/1846))
+- Bump `gorilla/websocket` (indirect, via discordgo) past GO-2026-6278, a weak random source for the WebSocket mask key. ([#1848](https://github.com/adanalife/tripbot/pull/1848))
+- A chat line that opens with a 1 and names no command ("1st time here") is no longer recorded as a refused command. ([#1850](https://github.com/adanalife/tripbot/pull/1850))
+
+### CI / Tooling
+
+- Clear the codespell finding that turned the weekly super-linter run red. ([#1847](https://github.com/adanalife/tripbot/pull/1847))
+
+### Cleanup
+
+- Comments that had drifted from the code they describe are corrected: the miles top-10 comparison window, the audio watchdog's silence threshold, the reveal sources a guess is stamped with, and a doc comment attached to the wrong constant. ([#1851](https://github.com/adanalife/tripbot/pull/1851))
+
 ## [v6.17.0] — 2026-11-19
 
 ### Misc
