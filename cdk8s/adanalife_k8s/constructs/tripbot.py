@@ -50,8 +50,7 @@ from adanalife_k8s.network_policy import emit_http_ingress_policy
 IMAGE = "adanalife/tripbot"
 # The schema image (migrate CLI + db/migrate + seed), published by the same
 # release run under the same tag, so it rides tripbot's pin and needs none of
-# its own. The image gate probes only IMAGE: this one is a copy of files and
-# publishes first in the run.
+# its own. The image gate probes only IMAGE.
 MIGRATE_IMAGE = "adanalife/tripbot-migrate"
 DB_SECRET_NAME = "tripbot-database-creds"  # ESO-materialized DB creds (eso envs)
 LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)

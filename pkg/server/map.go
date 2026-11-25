@@ -67,8 +67,8 @@ var corpusCache struct {
 // Errors yield nil, which the handler serves as an empty route — the overlay is
 // decoration, so it degrades rather than failing the page.
 //
-// The route itself is split without the trimmed points, so it is the line the
-// map has always drawn. The trimmed stretches are cut out of a split with them
+// The route itself is split without the trimmed points, so a trim never moves
+// the line the map draws. The trimmed stretches are cut out of a split with them
 // in, which carries a shared point across each band change: each one meets the
 // route at the moment the trim cut it off.
 func corpusBody(ctx context.Context, trimmed bool) []byte {

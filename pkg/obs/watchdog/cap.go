@@ -113,6 +113,10 @@ func WatchBroadcastCap(ctx context.Context, deps BroadcastCapDeps, interval, max
 	}
 }
 
+// capRestartAttempts bounds the broadcast-cap loop's tries per broadcast, so a
+// restart that keeps failing doesn't cut the stream every tick until the cap.
+const capRestartAttempts = 3
+
 // How long a broadcast restart waits for the platform to report the channel
 // offline, how often it asks, and how many times it tries to start the output
 // again afterwards.
@@ -121,10 +125,6 @@ func WatchBroadcastCap(ctx context.Context, deps BroadcastCapDeps, interval, max
 // "not broadcasting for 10m" alert, and a platform that still reports live
 // after it gets the output back anyway: a gap with no fresh broadcast is
 // worse than no gap.
-// capRestartAttempts bounds the broadcast-cap loop's tries per broadcast, so a
-// restart that keeps failing doesn't cut the stream every tick until the cap.
-const capRestartAttempts = 3
-
 const (
 	offlineTimeout = 5 * time.Minute
 	offlinePoll    = 15 * time.Second

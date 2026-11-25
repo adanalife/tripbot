@@ -71,8 +71,8 @@ func giftWall(count int) string {
 
 // AnnounceGiftSub celebrates a gift once for the whole batch: a thank-you
 // sized to the gift with an emote wall, one mile per sub gifted to every
-// logged-in viewer (the total the per-recipient bonus used to add up to, in one
-// grant and one line), and a gift event to the console. count is how many subs
+// logged-in viewer (what a +1 per recipient would total, in one grant and one
+// line), and a gift event to the console. count is how many subs
 // were gifted in this event; gifter is empty (and isAnonymous true) for an
 // anonymous gift. Wired from pkg/eventsub on channel.subscription.gift events.
 // The recipients' subscribe events land separately and quietly (see
