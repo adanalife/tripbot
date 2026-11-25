@@ -576,6 +576,22 @@ func TestRunCommand_BanglessChatIsNotACommandRun(t *testing.T) {
 	}
 }
 
+// A message that opens with a "1" and lands on no command was said to the
+// room: the "1" reads as an unshifted bang only when a command follows it.
+func TestRunCommand_ALeadingOneThatIsNoCommandIsChat(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	for _, msg := range []string{"1st time here", "1k miles soon", "1more hour"} {
+		app.runCommand(context.Background(), newTestUser("viewer1"), msg)
+	}
+
+	if len(rec.Runs) != 0 || len(rec.Refusals) != 0 {
+		t.Errorf("runs = %+v, refusals = %+v, want none", rec.Runs, rec.Refusals)
+	}
+}
+
 // The spellings that address the bot without a plain "!word" still leave a
 // command_run under the canonical trigger.
 func TestRunCommand_UnconventionalSpellingsAreRecorded(t *testing.T) {
