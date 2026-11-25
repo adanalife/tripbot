@@ -1,1 +1,0 @@
-Comments that had drifted from the code they describe are corrected: the miles top-10 comparison window, the audio watchdog's silence threshold, the reveal sources a guess is stamped with, and a doc comment attached to the wrong constant.
