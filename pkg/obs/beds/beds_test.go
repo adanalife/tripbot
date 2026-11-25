@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -713,6 +714,37 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	}
 }
 
+// A second "do it now" while the first is still reaching OBS returns without
+// touching OBS: the switch is already landing, and applying it again would
+// restart the bed the first tap just started.
+func TestApplyNow_SecondTapMidApplyDoesNotApplyAgain(t *testing.T) {
+	switchDelay = time.Hour
+	t.Cleanup(func() { switchDelay = 0 })
+
+	o := &gatedOBS{entered: make(chan struct{}), release: make(chan struct{})}
+	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.SetStation(ctx, "lofi"); err != nil {
+		t.Fatal(err)
+	}
+	first := make(chan error, 1)
+	go func() { first <- s.ApplyNow(ctx) }()
+	<-o.entered // the first tap is now inside its OBS call
+	if err := s.ApplyNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	close(o.release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if n := o.calls.Load(); n != 1 {
+		t.Errorf("OBS was told to switch %d times, want 1", n)
+	}
+	if _, pending := s.Pending(); pending {
+		t.Error("the switch still reads as pending after landing")
+	}
+}
+
 // The reason the delay exists: a mis-click corrected inside the window lands
 // once, on the correction. Queueing both would play the mistake for a moment,
 // which on a live stream is the disruption being avoided.
@@ -1061,9 +1093,11 @@ type gatedOBS struct {
 	fakeOBS
 	entered, release chan struct{}
 	once             sync.Once
+	calls            atomic.Int32
 }
 
 func (g *gatedOBS) SetNetwork(ctx context.Context, input, url string) error {
+	g.calls.Add(1)
 	g.once.Do(func() {
 		close(g.entered)
 		<-g.release
