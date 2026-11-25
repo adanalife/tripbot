@@ -951,8 +951,9 @@ func TestGuessCmd_MissRecordsGuessSubmitted(t *testing.T) {
 
 // A guess made after someone named the location of the same clip carries who
 // gave it away and which command did — the guesser's own !location or
-// another viewer's !state alike. Once the clip changes, the old reveal names
-// nothing and the next guess carries none.
+// another viewer's !state alike. The reveal follows the state onto the next
+// clip, and stops counting once the van is somewhere else or revealWindow has
+// passed.
 func TestGuessCmd_StampsWhoRevealedTheAnswer(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	vid.ID = 77
@@ -975,12 +976,27 @@ func TestGuessCmd_StampsWhoRevealedTheAnswer(t *testing.T) {
 		t.Errorf("reveal = %+v, want bob's own !location", r)
 	}
 
+	sameState := newTestVideo("Colorado", 39.6, -105.1, time.Now())
+	sameState.ID = 78
+	app.Video = &recordingVideo{Vid: sameState}
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
+	if r := rec.Guesses[2].Reveal; r == nil || r.By != "bob" {
+		t.Errorf("reveal = %+v, want bob's !location carried onto the next Colorado clip", r)
+	}
+
+	app.lastReveal.at = time.Now().Add(-revealWindow - time.Second)
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
+	if r := rec.Guesses[3].Reveal; r != nil {
+		t.Errorf("reveal = %+v, want none past revealWindow", r)
+	}
+
+	app.lastReveal.at = time.Now()
 	next := newTestVideo("Utah", 39.3, -111.1, time.Now())
-	next.ID = 78
+	next.ID = 79
 	app.Video = &recordingVideo{Vid: next}
 	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
-	if r := rec.Guesses[2].Reveal; r != nil {
-		t.Errorf("reveal = %+v, want none once the clip changed", r)
+	if r := rec.Guesses[4].Reveal; r != nil {
+		t.Errorf("reveal = %+v, want none once the van is in another state", r)
 	}
 }
 
