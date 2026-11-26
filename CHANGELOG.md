@@ -9,6 +9,15 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.17.2] — 2026-11-25
+
+### Fixes
+
+- A raid delivered twice at the same moment is thanked once: the repeat-raid fold is guarded against concurrent EventSub handlers. ([#1852](https://github.com/adanalife/tripbot/pull/1852))
+- A guess is marked as following a reveal when someone named that state in the last ten minutes, even after the clip changed; a reveal no longer sticks to a clip that airs again later. ([#1854](https://github.com/adanalife/tripbot/pull/1854))
+- Tapping "now" on a background-audio switch that is already landing no longer applies it a second time. ([#1855](https://github.com/adanalife/tripbot/pull/1855))
+- The map's route overlay asks again after a failed load instead of the browser keeping the empty answer for an hour. ([#1856](https://github.com/adanalife/tripbot/pull/1856))
+
 ## [v6.17.1] — 2026-11-25
 
 ### Fixes
