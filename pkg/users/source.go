@@ -56,3 +56,13 @@ type VideoSource interface {
 	// playhead sits.
 	CurrentProgressSec() float64
 }
+
+// BotRegistry names accounts an outside list already knows to be bots. It lets
+// a first login classify a view-bot without anyone running !makebot on it.
+//
+// The production implementation is pkg/knownbots. Optional: a Sessions with no
+// registry creates every new account as a person, which is the manual-only
+// behavior. IsKnownBot runs inline on a login, so it must be I/O-free.
+type BotRegistry interface {
+	IsKnownBot(username string) bool
+}
