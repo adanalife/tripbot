@@ -29,3 +29,27 @@ func (s *Server) all() map[string]*Onscreen {
 		SlugGPS:          s.GPS,
 	}
 }
+
+// graduated is the set of overlays a production stream shows. An overlay
+// outside it renders everywhere except production, so a new one can be judged
+// on stage before it reaches a live audience; adding its slug here is what
+// ships it.
+var graduated = map[string]bool{
+	SlugMiddleText:   true,
+	SlugLeaderboard:  true,
+	SlugLeftMessage:  true,
+	SlugRightMessage: true,
+	SlugTimewarp:     true,
+	SlugGPS:          true,
+}
+
+// hideUngraduated blanks every overlay in views that production doesn't show
+// yet. state.json is the one feed every overlay page draws from, so masking it
+// here covers an overlay whatever computes its state.
+func hideUngraduated(views map[string]onscreenView) {
+	for slug := range views {
+		if !graduated[slug] {
+			views[slug] = onscreenView{}
+		}
+	}
+}
