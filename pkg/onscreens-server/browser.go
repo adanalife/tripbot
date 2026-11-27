@@ -148,6 +148,10 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		out[slug] = view
 	}
+	// Last, so no overlay added to out above escapes it.
+	if s.cfg.IsProduction() {
+		hideUngraduated(out)
+	}
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		slog.ErrorContext(r.Context(), "encoding onscreens state", "err", err)
 	}
