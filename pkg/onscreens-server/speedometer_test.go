@@ -24,7 +24,7 @@ func TestHandleSpeedUpdate(t *testing.T) {
 
 // A feed re-arms the overlay every tick; each one must reset the window, not
 // add to it, or a speedometer whose feed stops stays up for as long as it ran.
-func TestRefreshResetsTheExpiry(t *testing.T) {
+func TestSpeedometerRefreshResetsTheExpiry(t *testing.T) {
 	osc := newOnscreen(time.Hour)
 	defer osc.stop()
 	for range 5 {
