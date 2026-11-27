@@ -26,6 +26,7 @@ type rollup struct {
 	Platform     string
 	Username     string
 	EventsMiles  float64
+	RealMiles    float64
 	SessionCount int
 	FirstSeen    time.Time
 	LastSeen     time.Time
@@ -90,7 +91,7 @@ func addSession(t *testing.T, db *gorm.DB, username string, startOffset, length 
 func getRollup(t *testing.T, db *gorm.DB, platform, username string) rollup {
 	t.Helper()
 	var r rollup
-	err := db.Raw(`SELECT id, platform, username, events_miles, session_count, first_seen, last_seen, extra_miles
+	err := db.Raw(`SELECT id, platform, username, events_miles, real_miles, session_count, first_seen, last_seen, extra_miles
 	               FROM user_rollups WHERE platform = ? AND username = ?`, platform, username).Scan(&r).Error
 	if err != nil {
 		t.Fatalf("read rollup for %s/%s: %v", platform, username, err)
@@ -531,6 +532,72 @@ func TestReconcile_PrunesOldDailySnapshots(t *testing.T) {
 	}
 }
 
+// addVideo writes one videos row carrying a miles_driven value (NULL when
+// miles is 0) and returns its id.
+func addVideo(t *testing.T, db *gorm.DB, slug string, miles float64) int64 {
+	t.Helper()
+	var m any
+	if miles != 0 {
+		m = miles
+	}
+	var id int64
+	err := db.Raw(`INSERT INTO videos (slug, lat, lng, date_filmed, miles_driven)
+	               VALUES (?, 40.0, -111.0, ?, ?) RETURNING id`, slug, base, m).Scan(&id).Error
+	if err != nil {
+		t.Fatalf("insert video %s: %v", slug, err)
+	}
+	return id
+}
+
+// addPlay writes one video_plays row at `at`.
+func addPlay(t *testing.T, db *gorm.DB, platform string, videoID int64, at time.Time) {
+	t.Helper()
+	err := db.Exec(`INSERT INTO video_plays (platform, video_id, started_at)
+	                VALUES (?, ?, ?)`, platform, videoID, at).Error
+	if err != nil {
+		t.Fatalf("insert play of video %d: %v", videoID, err)
+	}
+}
+
+func TestReconcile_ComputesRealMilesFromVideoPlays(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+
+	shortClip := addVideo(t, db, "rm_short", 1.5)
+	longClip := addVideo(t, db, "rm_long", 2.25)
+	unknownClip := addVideo(t, db, "rm_unknown", 0) // miles_driven NULL
+
+	// 60-minute session; plays inside the window sum to 1.5 + 2.25.
+	addSession(t, db, "roadtripper", 0, 60*time.Minute)
+	addPlay(t, db, "twitch", shortClip, base.Add(5*time.Minute))
+	addPlay(t, db, "twitch", longClip, base.Add(10*time.Minute))
+	// None of these count: unknown distance, before login, after logout,
+	// and another platform's stream.
+	addPlay(t, db, "twitch", unknownClip, base.Add(15*time.Minute))
+	addPlay(t, db, "twitch", shortClip, base.Add(-5*time.Minute))
+	addPlay(t, db, "twitch", shortClip, base.Add(65*time.Minute))
+	addPlay(t, db, "youtube", longClip, base.Add(20*time.Minute))
+
+	Reconcile(context.Background(), testConf)
+
+	got := getRollup(t, db, "twitch", "roadtripper")
+	closeTo(t, "real_miles", got.RealMiles, 3.75)
+	// The plain time-based rate is untouched by the plays.
+	closeTo(t, "events_miles", got.EventsMiles, 2.0)
+}
+
+func TestReconcile_RealMilesZeroWithoutPlays(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+
+	addSession(t, db, "quiet_watcher", 0, 30*time.Minute)
+
+	Reconcile(context.Background(), testConf)
+
+	got := getRollup(t, db, "twitch", "quiet_watcher")
+	closeTo(t, "real_miles", got.RealMiles, 0)
+}
+
 // TestMilesGainedMatchesReconcile keeps events.MilesGained and reconcile from
 // drifting apart: over all time, on closed keyed sessions (the only kind both
 // pair the same way), the two agree on a user's miles.
@@ -565,4 +632,35 @@ func TestMilesGainedMatchesReconcile(t *testing.T) {
 	}
 	closeTo(t, "MilesGained vs events_miles + extra_miles", got["drift"], r.EventsMiles+r.ExtraMiles)
 	closeTo(t, "fixture total", got["drift"], 1.5+2.0+1.5-0.5)
+}
+
+// A play cut short credits only the share of the clip that aired: measured
+// against the clip's track length when it has one, three minutes otherwise.
+func TestReconcile_RealMilesProrateSkippedPlays(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+
+	tracked := addVideo(t, db, "rm_tracked", 4.0)
+	if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+	                   VALUES (?, 0, 0, 40, -111, 'ocr'), (?, 200, 200, 40.05, -111, 'ocr')`,
+		tracked, tracked).Error; err != nil {
+		t.Fatalf("insert track: %v", err)
+	}
+	trackless := addVideo(t, db, "rm_trackless", 1.8)
+	endPlay := func(videoID int64, at time.Time, aired time.Duration) {
+		t.Helper()
+		if err := db.Exec(`INSERT INTO video_plays (platform, video_id, started_at, ended_at)
+		                   VALUES ('twitch', ?, ?, ?)`, videoID, at, at.Add(aired)).Error; err != nil {
+			t.Fatalf("insert play: %v", err)
+		}
+	}
+
+	addSession(t, db, "skipper", 0, 60*time.Minute)
+	endPlay(tracked, base.Add(5*time.Minute), 50*time.Second)    // 50s of 200s: 1.0
+	endPlay(trackless, base.Add(10*time.Minute), 90*time.Second) // 90s of 180s: 0.9
+	endPlay(tracked, base.Add(20*time.Minute), 10*time.Minute)   // overran: the whole 4.0
+
+	Reconcile(context.Background(), testConf)
+
+	closeTo(t, "real_miles", getRollup(t, db, "twitch", "skipper").RealMiles, 5.9)
 }
