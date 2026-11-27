@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -119,4 +120,32 @@ func codeText(code int) string {
 	default:
 		return "Unknown conditions"
 	}
+}
+
+// Icon is the emoji for a description Historical returned, keyed on the phrase
+// codeText produced, so an overlay can draw the conditions without re-asking
+// the archive. Empty for a phrase it does not know.
+func Icon(description string) string {
+	phrase, _, _ := strings.Cut(description, ",")
+	switch phrase {
+	case "Clear sky":
+		return "☀️"
+	case "Mainly clear":
+		return "🌤️"
+	case "Partly cloudy":
+		return "⛅"
+	case "Overcast":
+		return "☁️"
+	case "Foggy":
+		return "🌫️"
+	case "Drizzle", "Freezing drizzle":
+		return "🌦️"
+	case "Rain", "Freezing rain", "Rain showers":
+		return "🌧️"
+	case "Snow", "Snow grains", "Snow showers":
+		return "🌨️"
+	case "Thunderstorm", "Thunderstorm with hail":
+		return "⛈️"
+	}
+	return ""
 }

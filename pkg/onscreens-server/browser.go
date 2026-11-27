@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"time"
 
 	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/gorilla/mux"
@@ -97,6 +98,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugWeather: {
+		// Server emits the icon and the temperature as HTML (see weatherView).
+		Name: SlugWeather, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, ColorCSS: "#ffffff", DropShadow: true,
+		RenderAsHTML: true,
+	},
 	SlugMinimap: {
 		// An image the server draws (see minimapSVG). Its content is the
 		// position it was drawn for, which the page uses to reload it.
@@ -153,6 +159,7 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		out[slug] = view
 	}
+	out[SlugWeather] = weatherView(liveLocation.snapshot(time.Now()))
 	// Last, so no overlay added to out above escapes it.
 	if s.cfg.IsProduction() {
 		hideUngraduated(out)
