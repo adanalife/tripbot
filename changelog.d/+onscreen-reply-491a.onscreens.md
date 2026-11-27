@@ -1,1 +1,0 @@
-A reply overlay shows a command's answer on screen, credited to the chatter who asked, on the platforms whose chat the bot can read but not post to (TikTok, Instagram). Answers queue and show one at a time.

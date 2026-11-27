@@ -9,6 +9,15 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.18.0] — 2026-11-27
+
+### Onscreens
+
+- The backdrop-free timewarp overlay is the default on every platform, with a dark outline on the wordmark and streaks so it reads over bright footage. ([#1799](https://github.com/adanalife/tripbot/pull/1799))
+- A reply overlay shows a command's answer on screen, credited to the chatter who asked, on the platforms whose chat the bot can read but not post to (TikTok, Instagram). Answers queue and show one at a time. ([#1842](https://github.com/adanalife/tripbot/pull/1842))
+- A minimap overlay shows where the van is on a map of the lower 48, with the current state lit up. It is on by default where chat can't ask for the location (TikTok, Instagram, a bot-less YouTube) and off elsewhere until switched on. ([#1844](https://github.com/adanalife/tripbot/pull/1844))
+- An overlay that hasn't been added to the server's graduated list now renders everywhere except production, so a new one can be judged on stage before it reaches a live stream. The six overlays already on stream are graduated. ([#1857](https://github.com/adanalife/tripbot/pull/1857))
+
 ## [v6.17.2] — 2026-11-25
 
 ### Fixes
