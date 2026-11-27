@@ -97,6 +97,12 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugReply: {
+		// Server emits the card's HTML (see renderReply). Sized to read over
+		// video rather than inside the bottom strip the other text sits in.
+		Name: SlugReply, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 26, ColorCSS: "#ffffff",
+		RenderAsHTML: true,
+	},
 	SlugMinimap: {
 		// An image the server draws (see minimapSVG). Its content is the
 		// position it was drawn for, which the page uses to reload it.

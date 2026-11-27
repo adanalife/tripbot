@@ -72,6 +72,15 @@ type TimewarpShow struct {
 	NoBackground bool `json:"no_background,omitempty"`
 }
 
+// ReplyShow is the payload for the reply.show subject: one command answer and
+// the chatter it answers. The server queues these and shows them one at a time,
+// so the wire carries no duration.
+type ReplyShow struct {
+	Envelope
+	Username string `json:"username"`
+	Msg      string `json:"msg"`
+}
+
 // LocationData is the payload for the location.update subject — everything
 // onscreens-server knows about the currently-playing clip, pre-formatted for
 // display: the location ("City, State", or a bare state when geocoding is

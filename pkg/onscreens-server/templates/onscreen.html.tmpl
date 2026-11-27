@@ -145,6 +145,22 @@
   }
   .lb-score, .lb-user { white-space: nowrap; }
   .lb-score { text-align: right; }
+  /* Reply onscreen (RenderAsHTML): a command's answer on a platform with no
+     chat to post it to. A dark card keeps it legible over any footage; the
+     asker's name leads in an accent color so a viewer can spot their own. Three
+     lines at most — a longer answer is cut rather than covering the road.
+     The card hugs the bottom-left of its browser source and grows upward, so
+     a one-line answer sits where a three-line one ends. renderReply emits the
+     matching markup. */
+  #root[data-name="reply"] { justify-content: flex-start; align-items: flex-end; padding: 0; }
+  .reply-card {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    overflow: hidden; max-width: 100%; box-sizing: border-box;
+    padding: 8px 14px; border-radius: 10px;
+    background: rgba(0,0,0,0.62);
+    text-align: left; line-height: 1.3; white-space: normal;
+  }
+  .reply-who { color: #ffd166; font-weight: bold; margin-right: 0.4em; }
 {{end}}
 </style>
 </head>

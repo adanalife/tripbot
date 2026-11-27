@@ -62,6 +62,12 @@ func TestConnectViaGatewayInstallsThePlatformsClient(t *testing.T) {
 				t.Errorf("mirror platform = %q, want %q", mirror.platform, tt.platform)
 			}
 
+			// A platform that can't post is the one whose command answers need
+			// the reply overlay; one that can would show every answer twice.
+			if a.repliesOnScreen == tt.wantPost {
+				t.Errorf("repliesOnScreen = %v on a platform with wantPost=%v", a.repliesOnScreen, tt.wantPost)
+			}
+
 			switch inner := mirror.inner.(type) {
 			case gatewayChat:
 				if !tt.wantPost {

@@ -14,6 +14,7 @@ type Onscreens interface {
 	HideMiddleText(ctx context.Context) error
 	ShowMiddleText(ctx context.Context, msg string) error
 	ShowTimewarp(ctx context.Context, username string, noBackground bool) error
+	ShowReply(ctx context.Context, username, msg string) error
 }
 
 // realOnscreens delegates to a constructed *onscreensClient.Client. The
@@ -37,4 +38,7 @@ func (r realOnscreens) ShowMiddleText(ctx context.Context, msg string) error {
 }
 func (r realOnscreens) ShowTimewarp(ctx context.Context, username string, noBackground bool) error {
 	return r.c.ShowTimewarp(ctx, username, noBackground)
+}
+func (r realOnscreens) ShowReply(ctx context.Context, username, msg string) error {
+	return r.c.ShowReply(ctx, username, msg)
 }

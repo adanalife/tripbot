@@ -73,6 +73,12 @@ func TimewarpHideSubject(env, platform string) string {
 func GPSShowSubject(env, platform string) string { return subject(env, platform, "gps", "show") }
 func GPSHideSubject(env, platform string) string { return subject(env, platform, "gps", "hide") }
 
+// ReplyShowSubject carries a command's answer to the platform's onscreens-server
+// for the reply overlay — the route a reply takes on a platform whose chat the
+// bot can read but not post to. There is no hide: the server times each reply
+// out itself.
+func ReplyShowSubject(env, platform string) string { return subject(env, platform, "reply", "show") }
+
 // MinimapShowSubject and MinimapHideSubject turn the minimap overlay on and off
 // for one platform. They flip a switch rather than paint anything: the map
 // itself is drawn from the location feed.

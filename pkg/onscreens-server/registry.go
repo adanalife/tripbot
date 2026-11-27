@@ -10,6 +10,7 @@ const (
 	SlugRightMessage = "right-message"
 	SlugTimewarp     = "timewarp"
 	SlugGPS          = "gps"
+	SlugReply        = "reply"
 	SlugMinimap      = "minimap"
 )
 
@@ -28,6 +29,7 @@ func (s *Server) all() map[string]*Onscreen {
 		SlugRightMessage: s.RightRotator,
 		SlugTimewarp:     s.Timewarp,
 		SlugGPS:          s.GPS,
+		SlugReply:        s.Reply,
 		SlugMinimap:      s.Minimap,
 	}
 }

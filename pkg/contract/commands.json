@@ -166,6 +166,31 @@
         ]
       }
     },
+    "reply_show": {
+      "subject": "tripbot.{env}.onscreens.reply.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "ReplyShow",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "username": {
+            "type": "string"
+          },
+          "msg": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emitted_at",
+          "username",
+          "msg"
+        ]
+      }
+    },
     "minimap_show": {
       "subject": "tripbot.{env}.onscreens.minimap.show.{platform}",
       "transport": "core",

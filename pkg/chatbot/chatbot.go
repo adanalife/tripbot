@@ -39,6 +39,10 @@ type App struct {
 	// zero value (false) keeps the normal per-platform command-filtered help,
 	// so directly-constructed test Apps are unaffected unless they opt in.
 	botless bool
+	// repliesOnScreen routes a command's answer to the reply overlay as well as
+	// to Chat. Set by the Connect* of a platform the bot can read but not post
+	// to, where the overlay is the only place a viewer can see the answer.
+	repliesOnScreen bool
 	// Onscreens drives the OBS browser-source overlays for chat-triggered
 	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
 	Onscreens Onscreens
