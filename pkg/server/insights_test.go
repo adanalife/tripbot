@@ -1326,7 +1326,7 @@ func seriesDays() [3]time.Time {
 }
 
 // checkDaySeries asserts a 7-day window's day series: a row per calendar day
-// from the window's first through today, with want's counts on the seeded days
+// from the window's first through today, with the wanted counts on the seeded days
 // and zero everywhere else.
 func checkDaySeries(t *testing.T, series []guessBucket, want map[string]guessBucket) {
 	t.Helper()

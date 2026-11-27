@@ -50,8 +50,9 @@ type App struct {
 	// inject a no-op fake; production uses the realPlayout adapter.
 	Playout Playout
 	// lastRaidFrom / lastRaidAt remember the most recent raid so RecordRaid can
-	// fold a quick repeat from the same channel into one thank-you. Only the
-	// EventSub goroutine touches them.
+	// fold a quick repeat from the same channel into one thank-you. raidMu
+	// guards them: EventSub runs each event's handler on its own goroutine.
+	raidMu       sync.Mutex
 	lastRaidFrom string
 	lastRaidAt   time.Time
 	// Video reads / refreshes the currently-playing dashcam video. Tests
@@ -145,21 +146,28 @@ type App struct {
 	// inside reportCooldown can't spam Discord and Sentry.
 	reportedAtMu sync.Mutex
 	reportedAt   map[string]time.Time
-	// lastReveal is the most recent chat command that named the airing
-	// location (!location, !state), so a guess on the same clip is stamped
-	// with who gave the answer away and how long before. Channel-wide, unlike
-	// the per-viewer guess cooldown: the piggyback on someone else's answer
-	// is the thing being measured.
+	// lastReveal is the most recent chat command that named where the van is
+	// (!location, !state, or a !jump to a named state), so a guess at that
+	// state soon after is stamped with who gave the answer away and how long
+	// before.
+	// Channel-wide, unlike the per-viewer guess cooldown: the piggyback on
+	// someone else's answer is the thing being measured.
 	lastRevealMu sync.Mutex
 	lastReveal   reveal
 }
 
-// reveal is one answer-naming command: who, which, when, and on which clip.
+// reveal is one answer-naming command: who, which, when, and the state it
+// named.
 type reveal struct {
-	by, command string
-	at          time.Time
-	videoID     int
+	by, command, state string
+	at                 time.Time
 }
+
+// revealWindow is how long a reveal keeps counting against guesses at the
+// state it named. Clips run three minutes and a drive stays in one state for
+// many of them, so the answer outlives the clip it was given on; past the
+// window, the same state back on screen is footage chat has to place afresh.
+const revealWindow = 10 * time.Minute
 
 // New constructs an App wired with the production (realX) dependency adapters,
 // with its command registry built and indexed. version is the build-time stamp

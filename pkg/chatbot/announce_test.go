@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -155,6 +158,39 @@ func TestRecordRaid_RepeatWithinWindowIsFoldedIntoOne(t *testing.T) {
 	}
 	if evs := emitted(); len(evs) != 2 {
 		t.Errorf("subscriber events = %+v, want one per distinct raider", evs)
+	}
+}
+
+// countingChat and discardEvents are goroutine-safe stand-ins for the
+// recording fakes, for tests that call the app from several goroutines.
+type countingChat struct {
+	recordingChat
+	says atomic.Int32
+}
+
+func (c *countingChat) Say(string) { c.says.Add(1) }
+
+type discardEvents struct{ recordingEvents }
+
+func (*discardEvents) Raided(context.Context, events.Raid) error { return nil }
+
+// EventSub hands each event to its own goroutine, so a redelivered raid can
+// arrive alongside the original: the fold still thanks the raider once.
+func TestRecordRaid_ConcurrentRepeatsAreThankedOnce(t *testing.T) {
+	app := newTestApp(video.Video{ID: 77})
+	app.Events = &discardEvents{}
+	app.Video = nil // the recording fake logs its calls unguarded
+	chat := &countingChat{}
+	app.Chat = chat
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() { app.RecordRaid("somechannel", 5) })
+	}
+	wg.Wait()
+
+	if got := chat.says.Load(); got != 1 {
+		t.Errorf("chat says = %d, want 1", got)
 	}
 }
 

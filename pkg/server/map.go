@@ -67,8 +67,8 @@ var corpusCache struct {
 // Errors yield nil, which the handler serves as an empty route — the overlay is
 // decoration, so it degrades rather than failing the page.
 //
-// The route itself is split without the trimmed points, so it is the line the
-// map has always drawn. The trimmed stretches are cut out of a split with them
+// The route itself is split without the trimmed points, so a trim never moves
+// the line the map draws. The trimmed stretches are cut out of a split with them
 // in, which carries a shared point across each band change: each one meets the
 // route at the moment the trim cut it off.
 func corpusBody(ctx context.Context, trimmed bool) []byte {
@@ -134,11 +134,15 @@ func encodeSegments(segs []routeSegment) ([]byte, error) {
 // trusted or untrusted stretch of the route.
 func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
 	body := corpusBody(r.Context(), r.URL.Query().Get("trimmed") == "1")
-	if body == nil {
-		body = []byte("[]")
-	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if body == nil {
+		// An unavailable route is retried on the next ask here, so the browser
+		// must not hold the empty answer for the hour a built one is good for.
+		body = []byte("[]")
+		w.Header().Set("Cache-Control", "no-store")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
 	if _, err := w.Write(body); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't write corpus route", "err", err)
 	}

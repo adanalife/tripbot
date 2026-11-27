@@ -71,8 +71,8 @@ func giftWall(count int) string {
 
 // AnnounceGiftSub celebrates a gift once for the whole batch: a thank-you
 // sized to the gift with an emote wall, one mile per sub gifted to every
-// logged-in viewer (the total the per-recipient bonus used to add up to, in one
-// grant and one line), and a gift event to the console. count is how many subs
+// logged-in viewer (what a +1 per recipient would total, in one grant and one
+// line), and a gift event to the console. count is how many subs
 // were gifted in this event; gifter is empty (and isAnonymous true) for an
 // anonymous gift. Wired from pkg/eventsub on channel.subscription.gift events.
 // The recipients' subscribe events land separately and quietly (see
@@ -160,8 +160,10 @@ const raidFoldWindow = 5 * time.Minute
 func (a *App) RecordRaid(from string, viewers int) {
 	ctx := context.Background()
 	now := time.Now()
+	a.raidMu.Lock()
 	repeat := from == a.lastRaidFrom && now.Sub(a.lastRaidAt) < raidFoldWindow
 	a.lastRaidFrom, a.lastRaidAt = from, now
+	a.raidMu.Unlock()
 	if !repeat {
 		a.Chat.Say(fmt.Sprintf("Thank you for the raid, @%s; welcome to all %d raider(s) bleedPurple", from, viewers))
 		instrumentation.Announcements.Inc(a.Platform, "raid")

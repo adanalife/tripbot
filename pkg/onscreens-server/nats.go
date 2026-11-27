@@ -46,6 +46,8 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.GPSShowSubject(env, platform), s.handleGPSShow},
 		{oe.GPSHideSubject(env, platform), s.handleGPSHide},
 		{oe.ReplyShowSubject(env, platform), s.handleReplyShow},
+		{oe.MinimapShowSubject(env, platform), s.handleMinimapShow},
+		{oe.MinimapHideSubject(env, platform), s.handleMinimapHide},
 		{oe.LocationUpdateSubject(env, platform), s.handleLocationUpdate},
 		{oe.RotatorConfigSubject(env, platform), s.handleRotatorConfig},
 	}
@@ -160,11 +162,13 @@ func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
 func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
 func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
+func (s *Server) handleMinimapShow(_ *nats.Msg)     { s.setMinimap(true, time.Now()) }
+func (s *Server) handleMinimapHide(_ *nats.Msg)     { s.setMinimap(false, time.Now()) }
 
 // handleLocationUpdate caches the currently-playing clip's data as the values the
-// rotators' $variables resolve to. Lenient: a malformed body is dropped; empty
-// fields are allowed, and a line referencing an empty one is simply passed over
-// until its data arrives.
+// rotators' $variables resolve to, and plots its coordinate on the minimap.
+// Lenient: a malformed body is dropped; empty fields are allowed, and a line
+// referencing an empty one is simply passed over until its data arrives.
 func (s *Server) handleLocationUpdate(m *nats.Msg) {
 	var ev oe.LocationData
 	if err := json.Unmarshal(m.Data, &ev); err != nil {
@@ -178,6 +182,7 @@ func (s *Server) handleLocationUpdate(m *nats.Msg) {
 		"weather":  ev.Weather,
 		"sunset":   ev.Sunset,
 	}, time.Now())
+	s.plotMinimap(ev.Lat, ev.Lng, ev.State, time.Now())
 }
 
 // handleTimewarpShow triggers the full-screen warp. The overlay's Content

@@ -39,6 +39,7 @@ type Server struct {
 	LeftRotator  *Onscreen
 	MiddleText   *Onscreen
 	Reply        *Onscreen
+	Minimap      *Onscreen
 	RightRotator *Onscreen
 	Timewarp     *Onscreen
 
@@ -64,6 +65,13 @@ type Server struct {
 	middleExpiryMu sync.Mutex
 	middleExpiry   *time.Timer
 
+	// minimapOn is whether the minimap may show, and minimapFix the last
+	// position the location feed reported (nil before the first, or once the
+	// footage leaves the map).
+	minimapMu  sync.Mutex
+	minimapOn  bool
+	minimapFix *minimapFix
+
 	http *http.Server
 }
 
@@ -88,10 +96,15 @@ func New(cfg Config) *Server {
 		Leaderboard:  newLeaderboardOnscreen(),
 		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
+		Minimap:      newMinimap(),
 		RightRotator: right.osc,
 		Timewarp:     newTimewarp(),
 		left:         left,
 		right:        right,
+		// On by default exactly where the corners stop advertising commands:
+		// nobody there can ask !location, and there is no !guess for a map to
+		// give away. Everywhere else it waits for a minimap.show.
+		minimapOn: left.promoMode(),
 	}
 }
 
@@ -124,7 +137,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", httpmw.Tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps)
+	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps / minimap)
 	// arrive over NATS now (see nats.go); only the browser-source feeds
 	// remain on HTTP: state JSON, per-onscreen HTML pages, and image assets.
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()

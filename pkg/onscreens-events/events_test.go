@@ -22,6 +22,8 @@ func TestSubjects(t *testing.T) {
 		{"reply.show", ReplyShowSubject("development", "tiktok"), "tripbot.development.onscreens.reply.show.tiktok"},
 		{"gps.show", GPSShowSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.show.twitch"},
 		{"gps.hide", GPSHideSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.hide.twitch"},
+		{"minimap.show", MinimapShowSubject("staging", "twitch"), "tripbot.staging.onscreens.minimap.show.twitch"},
+		{"minimap.hide", MinimapHideSubject("staging", "twitch"), "tripbot.staging.onscreens.minimap.hide.twitch"},
 		{"location.update", LocationUpdateSubject("prod", "youtube"), "tripbot.prod.onscreens.location.update.youtube"},
 	}
 	for _, tc := range cases {

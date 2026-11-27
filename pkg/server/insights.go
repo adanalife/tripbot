@@ -392,8 +392,8 @@ type guessInsightsResponse struct {
 	Total   int64  `json:"total"`
 	Correct int64  `json:"correct"`
 	// Revealed counts the correct guesses made after a chat command named the
-	// answer on the same clip; Piggybacked is the share of those where someone
-	// other than the guesser ran it.
+	// answer on the same clip; Piggybacked is how many of those someone other
+	// than the guesser revealed.
 	Revealed    int64          `json:"revealed"`
 	Piggybacked int64          `json:"piggybacked"`
 	Players     int64          `json:"players"`
