@@ -290,17 +290,6 @@ func (c *Client) Subscribers(ctx context.Context) (map[string]int, error) {
 	return subs, nil
 }
 
-// Followers returns the channel's total follower count (GET /v1/followers).
-func (c *Client) Followers(ctx context.Context) (int, error) {
-	var body struct {
-		Total int `json:"total"`
-	}
-	if err := c.getJSON(ctx, "/v1/followers", &body); err != nil {
-		return 0, err
-	}
-	return body.Total, nil
-}
-
 // InboundKind says what a viewer did. It mirrors the gateway's provider.InboundKind
 // — duplicated by hand across the two repos, same convention as the eventbus
 // envelopes; keep in sync.

@@ -319,7 +319,6 @@ var breadcrumbSkipPrefixes = []string{
 	"session snapshot", // every 5min via cron.users.PrintCurrentSession
 	"subscribers",      // every 5min via cron.twitch.GetSubscribers
 	"no subscribers",   // ditto
-	"follower count",   // every 5min via cron.twitch.GetFollowerCount
 }
 
 func (breadcrumbHandler) Enabled(_ context.Context, level slog.Level) bool {

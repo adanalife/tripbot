@@ -1378,7 +1378,6 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
-	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
 	// Run publishes the first snapshot once NATS is connected; this keeps it
 	// fresh. Registered here rather than as its own goroutine so a panic in the
 	// token read is recovered and each publish gets a span and duration metric.
