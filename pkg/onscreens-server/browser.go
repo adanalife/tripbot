@@ -97,6 +97,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugMinimap: {
+		// An image the server draws (see minimapSVG). Its content is the
+		// position it was drawn for, which the page uses to reload it.
+		Name: SlugMinimap, IsImage: true,
+	},
 }
 
 // rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
@@ -175,7 +180,8 @@ func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
-// `gps` resolves to the embedded GPS overlay.
+// `gps` resolves to the embedded GPS overlay; `minimap` is drawn per request
+// from the last position the location feed reported.
 func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case SlugGPS:
@@ -183,6 +189,12 @@ func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if _, err := w.Write(gpsPNG); err != nil {
 			slog.ErrorContext(r.Context(), "writing gps image", "err", err)
+		}
+	case SlugMinimap:
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "no-store")
+		if _, err := w.Write([]byte(s.minimapSVG())); err != nil {
+			slog.ErrorContext(r.Context(), "writing minimap image", "err", err)
 		}
 	default:
 		http.NotFound(w, r)

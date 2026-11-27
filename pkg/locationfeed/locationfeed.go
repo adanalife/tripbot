@@ -128,6 +128,11 @@ func (e *Emitter) Emit(ctx context.Context, vid video.Video) {
 		Date:     local.Format("January 2, 2006"),
 		Weather:  conditions,
 		Sunset:   helpers.SunsetAt(vid.DateFilmed, lat, lng).Format("3:04 PM"),
+		// shortcut: the clip's coordinate, not the playhead's — under a pixel
+		// apart on a map of the whole country; use video.CoordAt if the minimap
+		// ever zooms to a state.
+		Lat: lat,
+		Lng: lng,
 	})
 }
 

@@ -6,7 +6,7 @@ import (
 )
 
 // This file declares the onscreens *command* registry — the NATS subjects that
-// drive the on-screen overlays (timewarp, middle text, leaderboard, GPS)
+// drive the on-screen overlays (timewarp, middle text, leaderboard, GPS, minimap)
 // plus the passive location feed, with each payload as a JSON Schema (draft
 // 2020-12). It is emitted as the sibling commands.json by
 // `go generate ./pkg/contract`, exactly like eventbus.json.
@@ -60,6 +60,8 @@ var (
 		{"date", strType(), true},
 		{"weather", strType(), true},
 		{"sunset", strType(), true},
+		{"lat", numType(), true},
+		{"lng", numType(), true},
 	}
 	// One rotator line: the text plus its optional platform scoping and
 	// selection weight. Mirrors pkg/rotator.Message.
@@ -81,7 +83,8 @@ var (
 		{"right", objectSchema("RotatorCorner", rotatorCornerFields), true},
 		{"rare_message", strType(), false},
 	}
-	// commandFields is the bare envelope shared by every hide plus gps.show —
+	// commandFields is the bare envelope shared by every hide plus gps.show and
+	// minimap.show —
 	// the pkg/onscreens-events Command type (no data beyond the envelope).
 	commandFields = []field{
 		{"emitted_at", dateType(), true},
@@ -125,6 +128,8 @@ func commandsContract() orderedObject {
 			{"timewarp_hide", commandSubject("timewarp", "hide", "Command", commandFields)},
 			{"gps_show", commandSubject("gps", "show", "Command", commandFields)},
 			{"gps_hide", commandSubject("gps", "hide", "Command", commandFields)},
+			{"minimap_show", commandSubject("minimap", "show", "Command", commandFields)},
+			{"minimap_hide", commandSubject("minimap", "hide", "Command", commandFields)},
 			{"location_update", commandSubject("location", "update", "LocationData", locationUpdateFields)},
 			{"rotator_config", commandSubject("rotator", "config", "RotatorConfig", rotatorConfigFields)},
 		}},
