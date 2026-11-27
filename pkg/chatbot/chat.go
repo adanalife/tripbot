@@ -4,6 +4,7 @@ import (
 	"context"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
+	"github.com/adanalife/tripbot/pkg/denylist"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 )
 
@@ -24,7 +25,9 @@ type ChatClient interface {
 // logged to Loki and mirrored onto the event bus — the admin live console,
 // since streaming platforms don't echo our sent messages back to us. It's
 // provider-neutral: every platform's Say() flows through here before reaching
-// the platform client, so the console shows all of them uniformly.
+// the platform client, so the console shows all of them uniformly. It is also
+// where the output denylist is applied, so the platform, the log and the
+// console all get the masked line.
 type consoleMirror struct {
 	inner       ChatClient
 	env         string
@@ -39,6 +42,7 @@ type consoleMirror struct {
 }
 
 func (m consoleMirror) Say(msg string) {
+	msg = denylist.Redact(msg)
 	m.mirror(msg, nil)
 	m.inner.Say(msg)
 }
@@ -46,6 +50,7 @@ func (m consoleMirror) Say(msg string) {
 // Reply mirrors like Say, with the parent id on the bus line so the console
 // can show which viewer's message the bot answered.
 func (m consoleMirror) Reply(parentID, msg string) {
+	msg = denylist.Redact(msg)
 	m.mirror(msg, &eventbus.ChatReply{ParentMessageID: parentID})
 	m.inner.Reply(parentID, msg)
 }

@@ -141,6 +141,7 @@ def test_identity_unit_emits_app_secrets(env):
     # twitch is a required app cred in every env; maps follows env.maps.
     assert "tripbot-twitch-creds" in es_names
     assert ("tripbot-google-maps-api-key" in es_names) == ENVS[env].maps
+    assert ("tripbot-output-denylist" in es_names) == ENVS[env].denylist
     if env == "local":
         # laptop carries on-disk DB creds, not an ESO ExternalSecret.
         assert "tripbot-secret" in secret_names
@@ -238,6 +239,7 @@ def test_maps_secret_mount_follows_the_env_flag(env):
     for platform in ENV_PLATFORMS[env]:
         mounted = _env_from_secrets(f"{env}-tripbot-{platform}")
         assert ("tripbot-google-maps-api-key" in mounted) == ENVS[env].maps
+        assert ("tripbot-output-denylist" in mounted) == ENVS[env].denylist
 
 
 def test_youtube_tripbot_emits_youtube_creds():

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/adanalife/tripbot/pkg/denylist"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/bwmarrin/discordgo"
 )
@@ -12,7 +13,7 @@ import (
 // list. The shape mirrors the chat text format used in
 // pkg/chatbot/commands.go for the three leaderboard commands. Returns
 // nil when entries is empty — caller decides whether to send a fallback
-// message instead.
+// message instead. The usernames pass the output denylist, as they do in chat.
 func leaderboardEmbed(title string, entries [][]string) *discordgo.MessageEmbed {
 	if len(entries) == 0 {
 		return nil
@@ -38,7 +39,7 @@ func leaderboardEmbed(title string, entries [][]string) *discordgo.MessageEmbed 
 	}
 	return &discordgo.MessageEmbed{
 		Title:       title,
-		Description: b.String(),
+		Description: denylist.Redact(b.String()),
 		Color:       0xff7a00,
 	}
 }
