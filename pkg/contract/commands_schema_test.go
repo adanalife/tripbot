@@ -24,6 +24,7 @@ func TestCommandsSchemaMatchesStructs(t *testing.T) {
 		"MiddleShow":      reflect.TypeOf(oe.MiddleShow{}),
 		"TimewarpShow":    reflect.TypeOf(oe.TimewarpShow{}),
 		"LeaderboardShow": reflect.TypeOf(oe.LeaderboardShow{}),
+		"GaugeShow":       reflect.TypeOf(oe.GaugeShow{}),
 		"LocationData":    reflect.TypeOf(oe.LocationData{}),
 		"RotatorConfig":   reflect.TypeOf(oe.RotatorConfig{}),
 		"Command":         reflect.TypeOf(oe.Command{}),

@@ -53,6 +53,11 @@ var (
 		{"title", strType(), true},
 		{"rows", arrayType(arrayType(strType())), true},
 	}
+	gaugeShowFields = []field{
+		{"emitted_at", dateType(), true},
+		{"fraction", numType(), true},
+		{"label", strType(), false},
+	}
 	locationUpdateFields = []field{
 		{"emitted_at", dateType(), true},
 		{"location", strType(), true},
@@ -97,6 +102,7 @@ var commandEnvelopeFields = map[string][]field{
 	"MiddleShow":      middleShowFields,
 	"TimewarpShow":    timewarpShowFields,
 	"LeaderboardShow": leaderboardShowFields,
+	"GaugeShow":       gaugeShowFields,
 	"LocationData":    locationUpdateFields,
 	"RotatorConfig":   rotatorConfigFields,
 	"Command":         commandFields,
@@ -130,6 +136,8 @@ func commandsContract() orderedObject {
 			{"gps_hide", commandSubject("gps", "hide", "Command", commandFields)},
 			{"minimap_show", commandSubject("minimap", "show", "Command", commandFields)},
 			{"minimap_hide", commandSubject("minimap", "hide", "Command", commandFields)},
+			{"gauge_show", commandSubject("gauge", "show", "GaugeShow", gaugeShowFields)},
+			{"gauge_hide", commandSubject("gauge", "hide", "Command", commandFields)},
 			{"location_update", commandSubject("location", "update", "LocationData", locationUpdateFields)},
 			{"rotator_config", commandSubject("rotator", "config", "RotatorConfig", rotatorConfigFields)},
 		}},

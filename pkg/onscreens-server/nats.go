@@ -47,6 +47,8 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.GPSHideSubject(env, platform), s.handleGPSHide},
 		{oe.MinimapShowSubject(env, platform), s.handleMinimapShow},
 		{oe.MinimapHideSubject(env, platform), s.handleMinimapHide},
+		{oe.GaugeShowSubject(env, platform), s.handleGaugeShow},
+		{oe.GaugeHideSubject(env, platform), s.handleGaugeHide},
 		{oe.LocationUpdateSubject(env, platform), s.handleLocationUpdate},
 		{oe.RotatorConfigSubject(env, platform), s.handleRotatorConfig},
 	}

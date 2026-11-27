@@ -11,6 +11,7 @@ const (
 	SlugTimewarp     = "timewarp"
 	SlugGPS          = "gps"
 	SlugMinimap      = "minimap"
+	SlugGasGauge     = "gas-gauge"
 )
 
 // Snapshot returns a fresh map of every registered onscreen keyed by slug.
@@ -29,6 +30,7 @@ func (s *Server) all() map[string]*Onscreen {
 		SlugTimewarp:     s.Timewarp,
 		SlugGPS:          s.GPS,
 		SlugMinimap:      s.Minimap,
+		SlugGasGauge:     s.GasGauge,
 	}
 }
 

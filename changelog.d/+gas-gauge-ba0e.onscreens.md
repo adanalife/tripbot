@@ -1,0 +1,1 @@
+A gas gauge overlay: an E-to-F bar set by a `gauge.show` command (a level from 0 to 1 and an optional caption), drawn red when nearly empty. Nothing publishes to it yet, and it shows only off production until it graduates.

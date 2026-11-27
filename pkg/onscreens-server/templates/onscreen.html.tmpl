@@ -145,6 +145,17 @@
   }
   .lb-score, .lb-user { white-space: nowrap; }
   .lb-score { text-align: right; }
+  /* Gas gauge (RenderAsHTML): an E-to-F bar with an optional caption.
+     renderGasGauge emits the markup and sets the fill's width. */
+  .gas { display: inline-flex; align-items: center; gap: 0.45em; font-weight: bold; }
+  .gas-track {
+    width: 220px; height: 14px; border: 2px solid #ffffff; border-radius: 4px;
+    background: rgba(0,0,0,0.45); overflow: hidden;
+  }
+  .gas-fill { height: 100%; background: #ffd23f; }
+  .gas.low .gas-fill { background: #ff5a4f; }
+  .gas.low .gas-e { color: #ff5a4f; }
+  .gas-label { font-weight: normal; margin-left: 0.3em; }
 {{end}}
 </style>
 </head>

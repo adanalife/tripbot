@@ -119,6 +119,16 @@ type RotatorConfig struct {
 // reads its copy straight back instead of falling to the compiled-in defaults.
 const RotatorConfigStreamName = "TRIPBOT_ONSCREENS_ROTATOR"
 
+// GaugeShow is the payload for the gauge.show subject: how full the gas gauge
+// reads, from 0 (empty) to 1 (full), and an optional caption beside it. What a
+// full tank stands for is the publisher's business; the overlay only draws the
+// level it is told.
+type GaugeShow struct {
+	Envelope
+	Fraction float64 `json:"fraction"`
+	Label    string  `json:"label,omitempty"`
+}
+
 // Command is the payload for events that carry no data beyond the
 // envelope: every hide, plus gps.show and minimap.show (the server supplies
 // its content and duration). A single type rather than a swarm of identical empty structs —

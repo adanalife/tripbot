@@ -35,6 +35,7 @@ type Server struct {
 	cfg     *c.OnscreensServerConfig
 
 	GPS          *Onscreen
+	GasGauge     *Onscreen
 	Leaderboard  *Onscreen
 	LeftRotator  *Onscreen
 	MiddleText   *Onscreen
@@ -87,6 +88,7 @@ func New(cfg Config) *Server {
 		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
 		Minimap:      newMinimap(),
+		GasGauge:     newOnscreen(defaultSleepInterval),
 		RightRotator: right.osc,
 		Timewarp:     newTimewarp(),
 		left:         left,

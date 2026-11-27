@@ -83,6 +83,11 @@ func MinimapHideSubject(env, platform string) string {
 	return subject(env, platform, "minimap", "hide")
 }
 
+// GaugeShowSubject sets the gas gauge's level and shows it; GaugeHideSubject
+// takes it off screen.
+func GaugeShowSubject(env, platform string) string { return subject(env, platform, "gauge", "show") }
+func GaugeHideSubject(env, platform string) string { return subject(env, platform, "gauge", "hide") }
+
 // LocationUpdateSubject carries the currently-playing clip's location + date
 // from tripbot to onscreens-server, which caches it and feeds it into the
 // rotators. On a bot-less YouTube stream the rotators surface this in place of

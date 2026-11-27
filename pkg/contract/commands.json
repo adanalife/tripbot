@@ -200,6 +200,47 @@
         ]
       }
     },
+    "gauge_show": {
+      "subject": "tripbot.{env}.onscreens.gauge.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "GaugeShow",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fraction": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emitted_at",
+          "fraction"
+        ]
+      }
+    },
+    "gauge_hide": {
+      "subject": "tripbot.{env}.onscreens.gauge.hide.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
     "location_update": {
       "subject": "tripbot.{env}.onscreens.location.update.{platform}",
       "transport": "core",

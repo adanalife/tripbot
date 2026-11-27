@@ -102,6 +102,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 		// position it was drawn for, which the page uses to reload it.
 		Name: SlugMinimap, IsImage: true,
 	},
+	SlugGasGauge: {
+		// Server emits the bar's HTML (see renderGasGauge).
+		Name: SlugGasGauge, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+		RenderAsHTML: true,
+	},
 }
 
 // rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
