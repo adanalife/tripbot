@@ -42,6 +42,8 @@ spec:
   selector:
     matchLabels:
       app: tripbot-tiktok
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
