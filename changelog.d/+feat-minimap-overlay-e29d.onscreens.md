@@ -1,1 +1,0 @@
-A minimap overlay shows where the van is on a map of the lower 48, with the current state lit up. It is on by default where chat can't ask for the location (TikTok, Instagram, a bot-less YouTube) and off elsewhere until switched on.
