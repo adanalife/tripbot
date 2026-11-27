@@ -696,6 +696,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	a.stampAiring(&line)
 	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, line)
 	a.recordChat(ctx, line)
+	a.noteComment(msg.User, msg.UserID, msg.Text)
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.
