@@ -134,6 +134,9 @@
   }
   .lb-score, .lb-user { white-space: nowrap; }
   .lb-score { text-align: right; }
+  /* The board's row count varies, so it hangs from the top of its browser
+     source; centered, a short board floats partway down the box. */
+  #root[data-name="leaderboard"] { align-items: flex-start; }
 {{end}}
 </style>
 </head>
