@@ -20,20 +20,23 @@ func TestMarkMoment(t *testing.T) {
 
 	app.favoriteCmd(ctx, newTestUser("ada"), []string{"the", "canyon", "opens", "up"})
 	app.trimCmd(ctx, newTestUser("bo"), nil)
+	app.boringCmd(ctx, newTestUser("cy"), []string{"nothing", "happens"})
 
 	want := []video.Mark{
 		{VideoID: 7, Kind: "star", Sec: 192.5, Note: "the canyon opens up", By: "ada", Platform: "youtube"},
 		{VideoID: 7, Kind: "trim", Sec: 192.5, By: "bo", Platform: "youtube"},
+		{VideoID: 7, Kind: "boring", Sec: 192.5, ClipLevel: true, Note: "nothing happens", By: "cy", Platform: "youtube"},
 	}
-	if len(v.Marks) != 2 || v.Marks[0] != want[0] || v.Marks[1] != want[1] {
+	if len(v.Marks) != 3 || v.Marks[0] != want[0] || v.Marks[1] != want[1] || v.Marks[2] != want[2] {
 		t.Errorf("marks = %+v, want %+v", v.Marks, want)
 	}
-	if got := out(); !strings.Contains(got, "starred 3:12") || !strings.Contains(got, "3:12 of this clip for a trim, thanks @bo") {
+	if got := out(); !strings.Contains(got, "starred 3:12") || !strings.Contains(got, "3:12 of this clip for a trim, thanks @bo") ||
+		!strings.Contains(got, "noted all of this clip as boring, thanks @cy") {
 		t.Errorf("replies = %q", got)
 	}
 
 	app.favoriteCmd(ctx, newTestUser("ada"), []string{strings.Repeat("é", maxMarkNoteRunes+5)})
-	if got := []rune(v.Marks[2].Note); len(got) != maxMarkNoteRunes {
+	if got := []rune(v.Marks[3].Note); len(got) != maxMarkNoteRunes {
 		t.Errorf("note kept %d runes, want %d", len(got), maxMarkNoteRunes)
 	}
 	out()
@@ -46,7 +49,7 @@ func TestMarkMoment(t *testing.T) {
 
 	v.Vid = video.Video{}
 	app.trimCmd(ctx, newTestUser("bo"), nil)
-	if got := out(); !strings.Contains(got, "can't tell what's on screen") || len(v.Marks) != 3 {
+	if got := out(); !strings.Contains(got, "can't tell what's on screen") || len(v.Marks) != 4 {
 		t.Errorf("no clip: replied %q, %d marks", got, len(v.Marks))
 	}
 }
