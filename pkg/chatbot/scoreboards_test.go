@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
@@ -19,6 +20,9 @@ func (noopScoreboards) LastMonthMiles(_ context.Context, _ int) [][]string   { r
 func (noopScoreboards) LastMonthGuesses(_ context.Context, _ int) [][]string { return nil }
 func (noopScoreboards) LastMonth() time.Time                                 { return time.Time{} }
 func (noopScoreboards) CreditGuess(_ context.Context, _ *users.User)         {}
+func (noopScoreboards) Wrapped(_ context.Context, _ string, _ time.Time) (scoreboards.Wrapped, error) {
+	return scoreboards.Wrapped{}, nil
+}
 
 // recordingScoreboards stages what each board returns and records the credits
 // written to it, so a leaderboard test asserts on rows rather than on the SQL
@@ -37,6 +41,9 @@ type recordingScoreboards struct {
 	Last                   time.Time
 	// Credited lists the usernames CreditGuess was called for, in order.
 	Credited []string
+	// WrappedStats / WrappedErr are what Wrapped answers.
+	WrappedStats scoreboards.Wrapped
+	WrappedErr   error
 }
 
 func (r *recordingScoreboards) TopMiles(_ context.Context, size int) [][]string {
@@ -76,4 +83,9 @@ func (r *recordingScoreboards) LastMonth() time.Time {
 func (r *recordingScoreboards) CreditGuess(_ context.Context, u *users.User) {
 	r.Calls = append(r.Calls, fmt.Sprintf("CreditGuess(%q)", u.Username))
 	r.Credited = append(r.Credited, u.Username)
+}
+
+func (r *recordingScoreboards) Wrapped(_ context.Context, username string, at time.Time) (scoreboards.Wrapped, error) {
+	r.Calls = append(r.Calls, fmt.Sprintf("Wrapped(%q, %s)", username, at.UTC().Format("2006-01")))
+	return r.WrappedStats, r.WrappedErr
 }
