@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -399,30 +400,30 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	// record that they know the location now
 	user.SetLastLocationTime()
-	a.noteReveal(user, "location")
+	// the clip's own state when the playhead carries none: no geocoder
+	// round-trip just to label the reveal
+	a.noteReveal(user, "location", cmp.Or(s.at.State, s.vid.State))
 	a.Reply(ctx, msg)
 }
 
-// noteReveal remembers that user just named the airing clip's location, for
-// recordGuess to stamp onto the guesses that follow on the same clip.
-func (a *App) noteReveal(user *users.User, command string) {
-	var vid int
-	if a.Video != nil {
-		vid = a.Video.Current().ID
-	}
+// noteReveal remembers that user just told chat the van is in state, for
+// recordGuess to stamp onto the guesses at that state that follow.
+func (a *App) noteReveal(user *users.User, command, state string) {
 	a.lastRevealMu.Lock()
-	a.lastReveal = reveal{by: user.Username, command: command, at: time.Now(), videoID: vid}
+	a.lastReveal = reveal{by: user.Username, command: command, state: state, at: time.Now()}
 	a.lastRevealMu.Unlock()
 }
 
-// revealFor is the reveal that applies to a guess on videoID — the last one,
-// if it named that same clip — or nil. A clip the player hasn't identified
-// (0) never matches: a reveal there names nothing a guess could lean on.
-func (a *App) revealFor(videoID int) *events.GuessReveal {
+// revealFor is the reveal that applies to a guess whose answer is state — the
+// last one, if it named that state within revealWindow — or nil. Matching on
+// the state rather than the clip follows the answer across a clip boundary and
+// drops it once a warp lands somewhere else. An unnamed state never matches: a
+// reveal there gave nothing a guess could lean on.
+func (a *App) revealFor(state string) *events.GuessReveal {
 	a.lastRevealMu.Lock()
 	r := a.lastReveal
 	a.lastRevealMu.Unlock()
-	if videoID == 0 || r.videoID != videoID {
+	if state == "" || !strings.EqualFold(r.state, state) || time.Since(r.at) > revealWindow {
 		return nil
 	}
 	return &events.GuessReveal{By: r.by, Command: r.command, SecsBefore: time.Since(r.at).Seconds()}
@@ -497,13 +498,34 @@ const podiumRows = 3
 func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !lastmonth", "username", user.Username)
 
+	line, ok := a.lastMonthBoards(ctx, user.Username)
+	if !ok {
+		a.Reply(ctx, "No final boards for "+a.Scoreboards.LastMonth().Format("January")+" yet — they're frozen shortly after the month ends.")
+		return
+	}
+	a.Reply(ctx, line)
+}
+
+// AnnounceLastMonth posts last month's final boards to chat unprompted, with
+// the miles board on the overlay — what !lastmonth answers, said once when the
+// rollup tick freezes the month.
+func (a *App) AnnounceLastMonth(ctx context.Context) {
+	if line, ok := a.lastMonthBoards(ctx, a.Cfg.ChannelName); ok {
+		a.Chat.Say("🏆 " + line)
+	}
+}
+
+// lastMonthBoards puts last month's final miles board on the overlay and
+// returns the one-line podium of all three boards. ok is false while nothing
+// is frozen for the month. username is who the guessr-board flag is evaluated
+// for.
+func (a *App) lastMonthBoards(ctx context.Context, username string) (line string, ok bool) {
 	month := a.Scoreboards.LastMonth()
 	name := month.Format("January")
 	miles := a.Scoreboards.LastMonthMiles(ctx, leaderboardSize)
 	guesses := a.Scoreboards.LastMonthGuesses(ctx, leaderboardSize)
 	if len(miles) == 0 && len(guesses) == 0 {
-		a.Reply(ctx, "No final boards for "+name+" yet — they're frozen shortly after the month ends.")
-		return
+		return "", false
 	}
 
 	var parts []string
@@ -517,7 +539,7 @@ func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 	// The same flag !guessr and the rotation read: off means the game's board
 	// stays off every surface, this one included.
 	if a.Flags.Bool(ctx, guessrBoardFlagKey, feature.EvalContext{
-		Username: user.Username,
+		Username: username,
 		Channel:  a.Cfg.ChannelName,
 		Env:      a.Cfg.Environment,
 	}) {
@@ -528,7 +550,7 @@ func (a *App) lastMonthCmd(ctx context.Context, user *users.User, _ []string) {
 			parts = append(parts, "Guessr: "+rankedList(overlayRows(rows, podiumRows), ""))
 		}
 	}
-	a.Reply(ctx, name+" final boards — "+strings.Join(parts, "; "))
+	return name + " final boards — " + strings.Join(parts, "; "), true
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
@@ -684,7 +706,7 @@ func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
 		secs := a.Video.CurrentProgress().Seconds()
 		g.TsSec = &secs
 	}
-	g.Reveal = a.revealFor(g.VideoID)
+	g.Reveal = a.revealFor(g.Actual)
 	if err := a.Events.GuessSubmitted(ctx, g); err != nil {
 		slog.ErrorContext(ctx, "error recording guess", "err", err,
 			"username", g.Username)
@@ -795,7 +817,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, params []string) {
 	msg := fmt.Sprintf("We're in %s", state)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	a.noteReveal(user, "state")
+	a.noteReveal(user, "state", state)
 	a.Reply(ctx, msg)
 }
 

@@ -1,0 +1,1 @@
+An overlay that hasn't been added to the server's graduated list now renders everywhere except production, so a new one can be judged on stage before it reaches a live stream. The six overlays already on stream are graduated.

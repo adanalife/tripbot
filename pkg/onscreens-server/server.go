@@ -38,6 +38,7 @@ type Server struct {
 	Leaderboard  *Onscreen
 	LeftRotator  *Onscreen
 	MiddleText   *Onscreen
+	Minimap      *Onscreen
 	RightRotator *Onscreen
 	Timewarp     *Onscreen
 
@@ -59,10 +60,17 @@ type Server struct {
 	middleExpiryMu sync.Mutex
 	middleExpiry   *time.Timer
 
+	// minimapOn is whether the minimap may show, and minimapFix the last
+	// position the location feed reported (nil before the first, or once the
+	// footage leaves the map).
+	minimapMu  sync.Mutex
+	minimapOn  bool
+	minimapFix *minimapFix
+
 	http *http.Server
 }
 
-// New constructs a *Server with all six onscreens initialized and
+// New constructs a *Server with every onscreen initialized and
 // their background loops (rotators, expiry sweepers) running. It does
 // not bind any sockets — Start does that.
 func New(cfg Config) *Server {
@@ -78,10 +86,15 @@ func New(cfg Config) *Server {
 		Leaderboard:  newLeaderboardOnscreen(),
 		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
+		Minimap:      newMinimap(),
 		RightRotator: right.osc,
 		Timewarp:     newTimewarp(),
 		left:         left,
 		right:        right,
+		// On by default exactly where the corners stop advertising commands:
+		// nobody there can ask !location, and there is no !guess for a map to
+		// give away. Everywhere else it waits for a minimap.show.
+		minimapOn: left.promoMode(),
 	}
 }
 
@@ -114,21 +127,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", httpmw.Tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps)
+	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps / minimap)
 	// arrive over NATS now (see nats.go); only the browser-source feeds
 	// remain on HTTP: state JSON, per-onscreen HTML pages, and image assets.
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
 	osc.Handle("/state.json", httpmw.Tagged("/onscreens/state.json", s.onscreensStateHandler))
 	osc.Handle("/render/{name}", httpmw.Tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
 	osc.Handle("/asset/{name}", httpmw.Tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
-
-	// admin actions — no app-layer auth gate. onscreens-server publishes no
-	// Ingress, so this is reachable only in-cluster (Service DNS) or through a
-	// port-forward. /admin/shutdown is the admin panel's "restart
-	// onscreens-server" surface; the shared handler SIGTERMs the process and
-	// k8s restartPolicy: Always brings the pod back.
-	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
-	admin.Handle("/shutdown", httpmw.Tagged("/admin/shutdown", httpmw.ShutdownHandler()))
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(httpmw.Tagged("/metrics", promhttp.Handler().ServeHTTP))

@@ -48,7 +48,7 @@ func trusted(pts [][2]float64) []video.RoutePoint {
 func resetCorpusCache() {
 	corpusCache.Lock()
 	defer corpusCache.Unlock()
-	corpusCache.body, corpusCache.builtAt = nil, time.Time{}
+	corpusCache.body, corpusCache.trimmed, corpusCache.builtAt = nil, nil, time.Time{}
 }
 
 func TestMapCorpusHandler(t *testing.T) {
@@ -104,6 +104,54 @@ func TestSplitOnGaps_SplitsWhereTheBandChanges(t *testing.T) {
 	}
 	if segs[1].Points[len(segs[1].Points)-1] != segs[2].Points[0] {
 		t.Errorf("segments 1 and 2 do not meet: %v vs %v", segs[1].Points, segs[2].Points)
+	}
+}
+
+// Trimmed footage stays out of the default route, which is the same line it
+// was without it, and ?trimmed=1 serves only those stretches — each one
+// carrying the aired point it meets, so the map draws it touching the route.
+func TestMapCorpusHandler_TrimmedIsItsOwnAsk(t *testing.T) {
+	withRoutePoints(t, []video.RoutePoint{
+		{Lat: 41.50, Lng: -110.20, Band: video.BandTrimmed, Season: video.CorpusS2},
+		{Lat: 41.51, Lng: -110.21, Band: video.BandTrusted, Season: video.CorpusS2},
+		{Lat: 41.52, Lng: -110.22, Band: video.BandTrusted, Season: video.CorpusS2},
+		{Lat: 41.53, Lng: -110.23, Band: video.BandTrimmed, Season: video.CorpusS2},
+	})
+	get := func(url string) []routeSegment {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		mapCorpusHandler(rec, httptest.NewRequest(http.MethodGet, url, nil))
+		var got []routeSegment
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("%s: body not valid JSON: %v\n%s", url, err, rec.Body.String())
+		}
+		return got
+	}
+
+	route := get("/admin/map/corpus")
+	if want := [][2]float64{{41.51, -110.21}, {41.52, -110.22}}; len(route) != 1 ||
+		route[0].Band != video.BandTrusted || !reflect.DeepEqual(route[0].Points, want) {
+		t.Errorf("route = %v, want one trusted segment of the two aired points", route)
+	}
+
+	trims := get("/admin/map/corpus?trimmed=1")
+	want := []routeSegment{
+		{Band: video.BandTrimmed, Season: video.CorpusS2, Points: [][2]float64{{41.50, -110.20}, {41.51, -110.21}}},
+		{Band: video.BandTrimmed, Season: video.CorpusS2, Points: [][2]float64{{41.53, -110.23}}},
+	}
+	if !reflect.DeepEqual(trims, want) {
+		t.Errorf("trims = %v, want %v", trims, want)
+	}
+}
+
+// A corpus with nothing trimmed answers the trimmed ask with an empty array,
+// not null.
+func TestMapCorpusHandler_NothingTrimmedIsAnEmptyArray(t *testing.T) {
+	withCorpusRoute(t, [][2]float64{{41.5, -110.2}, {41.6, -110.3}})
+	rec := httptest.NewRecorder()
+	mapCorpusHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/map/corpus?trimmed=1", nil))
+	if body := rec.Body.String(); body != "[]" {
+		t.Errorf("body = %q, want []", body)
 	}
 }
 
@@ -214,6 +262,9 @@ func TestMapCorpusHandler_EmptyRouteIsNotCached(t *testing.T) {
 	}
 	if body := rec.Body.String(); body != "[]" {
 		t.Errorf("body = %q, want [] for an unavailable route", body)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store so the browser asks again", cc)
 	}
 }
 

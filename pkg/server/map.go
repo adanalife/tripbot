@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -54,37 +55,69 @@ const maxRouteGapMiles = 25
 var corpusCache struct {
 	sync.Mutex
 	body []byte
+	// trimmed is the trimmed-footage body, built from the same read.
+	trimmed []byte
 	// builtAt is zero until the first successful build; a failed read isn't
 	// cached, so a DB blip doesn't pin an empty route for an hour.
 	builtAt time.Time
 }
 
-// corpusBody returns the encoded route, building it if the cache is cold or
-// stale. Errors yield nil, which the handler serves as an empty route — the
-// overlay is decoration, so it degrades rather than failing the page.
-func corpusBody(ctx context.Context) []byte {
+// corpusBody returns the encoded route — or, with trimmed, only the stretches
+// the trims left off the air — building both if the cache is cold or stale.
+// Errors yield nil, which the handler serves as an empty route — the overlay is
+// decoration, so it degrades rather than failing the page.
+//
+// The route itself is split without the trimmed points, so a trim never moves
+// the line the map draws. The trimmed stretches are cut out of a split with them
+// in, which carries a shared point across each band change: each one meets the
+// route at the moment the trim cut it off.
+func corpusBody(ctx context.Context, trimmed bool) []byte {
 	corpusCache.Lock()
 	defer corpusCache.Unlock()
-	if corpusCache.body != nil && time.Since(corpusCache.builtAt) < corpusTTL {
-		return corpusCache.body
+	if corpusCache.body == nil || time.Since(corpusCache.builtAt) >= corpusTTL {
+		pts := corpusRoute(ctx)
+		if len(pts) == 0 {
+			return nil
+		}
+		aired := make([]video.RoutePoint, 0, len(pts))
+		for _, p := range pts {
+			if p.Band != video.BandTrimmed {
+				aired = append(aired, p)
+			}
+		}
+		var cut []routeSegment
+		for _, seg := range splitOnGaps(pts, maxRouteGapMiles) {
+			if seg.Band == video.BandTrimmed {
+				cut = append(cut, seg)
+			}
+		}
+		body, errBody := encodeSegments(splitOnGaps(aired, maxRouteGapMiles))
+		trimmedBody, errTrimmed := encodeSegments(cut)
+		if errBody != nil || errTrimmed != nil {
+			slog.ErrorContext(ctx, "couldn't encode corpus route", "err", cmp.Or(errBody, errTrimmed))
+			return nil
+		}
+		slog.InfoContext(ctx, "built corpus route",
+			"raw_points", len(pts), "trimmed_points", len(pts)-len(aired),
+			"bytes", len(body), "trimmed_bytes", len(trimmedBody))
+		corpusCache.body, corpusCache.trimmed, corpusCache.builtAt = body, trimmedBody, time.Now()
 	}
-	pts := corpusRoute(ctx)
-	if len(pts) == 0 {
-		return nil
+	if trimmed {
+		return corpusCache.trimmed
 	}
-	segs := splitOnGaps(pts, maxRouteGapMiles)
+	return corpusCache.body
+}
+
+// encodeSegments simplifies each segment in place and encodes the list; nil
+// encodes as [] so a corpus with nothing trimmed still serves a JSON array.
+func encodeSegments(segs []routeSegment) ([]byte, error) {
+	if segs == nil {
+		segs = []routeSegment{}
+	}
 	for i, seg := range segs {
 		segs[i].Points = downsample(simplify(seg.Points, corpusEpsilonMeters), maxCorpusPoints)
 	}
-	body, err := json.Marshal(segs)
-	if err != nil {
-		slog.ErrorContext(ctx, "couldn't encode corpus route", "err", err)
-		return nil
-	}
-	slog.InfoContext(ctx, "built corpus route",
-		"raw_points", len(pts), "segments", len(segs), "bytes", len(body))
-	corpusCache.body, corpusCache.builtAt = body, time.Now()
-	return body
+	return json.Marshal(segs)
 }
 
 // mapCorpusHandler serves GET /admin/map/corpus: the full dashcam route as JSON
@@ -94,13 +127,22 @@ func corpusBody(ctx context.Context) []byte {
 // Leaflet color it: a polyline is a single color, so the split does the work
 // a gradient would otherwise. Loaded lazily by the map's per-season route
 // toggles, cached an hour (the corpus rarely changes).
+//
+// ?trimmed=1 serves, in the same shape, only the "trimmed" segments: footage
+// the trims left off the air. It is a separate ask rather than a band in the
+// default response because a reader that doesn't know the band draws it as a
+// trusted or untrusted stretch of the route.
 func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
-	body := corpusBody(r.Context())
-	if body == nil {
-		body = []byte("[]")
-	}
+	body := corpusBody(r.Context(), r.URL.Query().Get("trimmed") == "1")
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if body == nil {
+		// An unavailable route is retried on the next ask here, so the browser
+		// must not hold the empty answer for the hour a built one is good for.
+		body = []byte("[]")
+		w.Header().Set("Cache-Control", "no-store")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
 	if _, err := w.Write(body); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't write corpus route", "err", err)
 	}

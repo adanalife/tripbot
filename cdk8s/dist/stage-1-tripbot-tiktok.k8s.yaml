@@ -128,7 +128,7 @@ spec:
                 name: tripbot-tiktok-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:main
+          image: adanalife/tripbot-migrate:main
           imagePullPolicy: Always
           name: migrate
           resources:

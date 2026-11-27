@@ -83,13 +83,18 @@ type TimewarpShow struct {
 // field may be empty (no geocode yet, an archive lookup that failed), and a
 // rotator line referencing an empty one simply isn't eligible to render — so
 // the wire carries "unknown" as an absent value rather than a placeholder.
+//
+// Lat and Lng are the clip's coordinate, which the minimap overlay plots. The
+// feed only publishes for a clip with a fix, so they are always a real place.
 type LocationData struct {
 	Envelope
-	Location string `json:"location"`
-	State    string `json:"state"`
-	Date     string `json:"date"`
-	Weather  string `json:"weather"`
-	Sunset   string `json:"sunset"`
+	Location string  `json:"location"`
+	State    string  `json:"state"`
+	Date     string  `json:"date"`
+	Weather  string  `json:"weather"`
+	Sunset   string  `json:"sunset"`
+	Lat      float64 `json:"lat"`
+	Lng      float64 `json:"lng"`
 }
 
 // RotatorConfig is the payload for the rotator.config subject: the full
@@ -115,8 +120,8 @@ type RotatorConfig struct {
 const RotatorConfigStreamName = "TRIPBOT_ONSCREENS_ROTATOR"
 
 // Command is the payload for events that carry no data beyond the
-// envelope: every hide, plus gps.show (the server supplies its content and
-// duration). A single type rather than a swarm of identical empty structs —
+// envelope: every hide, plus gps.show and minimap.show (the server supplies
+// its content and duration). A single type rather than a swarm of identical empty structs —
 // the subject distinguishes them, and any event that grows a field
 // graduates to its own named type then (as timewarp.show did).
 type Command struct {

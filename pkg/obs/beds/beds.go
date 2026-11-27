@@ -197,6 +197,10 @@ type Store struct {
 	pending *Switch
 	timer   *time.Timer
 	gen     uint64
+	// landing is true while a switch is inside its OBS call. pending stays set
+	// through that call, so this is what tells ApplyNow the switch it would
+	// land is already on its way.
+	landing bool
 
 	// albums caches the library read, guarded by its own lock: the listings are
 	// taken while s.mu is already held (see loadFallbackLocked).
@@ -602,17 +606,20 @@ func (s *Store) applyPending(ctx context.Context, sw Switch, gen uint64) error {
 	s.mu.Lock()
 	prevStation, prevVoicing := s.station, s.voicing
 	s.station, s.voicing = sw.Station, sw.Voicing
+	s.landing = true
 	s.mu.Unlock()
 
 	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
 		s.station, s.voicing = prevStation, prevVoicing
+		s.landing = false
 		s.clearPendingLocked(gen)
 		s.mu.Unlock()
 		return err
 	}
 
 	s.mu.Lock()
+	s.landing = false
 	s.clearPendingLocked(gen)
 	s.mu.Unlock()
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
@@ -631,11 +638,13 @@ func (s *Store) clearPendingLocked(gen uint64) {
 // ApplyNow lands the switch waiting out switchDelay without waiting for the
 // rest of it — the operator who sees the countdown and is sure. Synchronous, so
 // OBS's answer is the caller's, as with a zero delay. Nothing pending is a
-// no-op. Bumping gen first makes the timer, if it already fired and is waiting
-// on the lock, read itself as superseded rather than land the switch twice.
+// no-op, and so is a switch already inside its OBS call: a second tap, or one
+// that arrives as the timer lands it, must not apply it again. Bumping gen
+// first makes the timer, if it already fired and is waiting on the lock, read
+// itself as superseded rather than land the switch twice.
 func (s *Store) ApplyNow(ctx context.Context) error {
 	s.mu.Lock()
-	if s.pending == nil {
+	if s.pending == nil || s.landing {
 		s.mu.Unlock()
 		return nil
 	}
@@ -653,7 +662,7 @@ func (s *Store) ApplyNow(ctx context.Context) error {
 func (s *Store) Pending() (Switch, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.pending == nil {
+	if s.pending == nil || s.landing {
 		return Switch{}, false
 	}
 	return *s.pending, true

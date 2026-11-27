@@ -102,6 +102,9 @@ func TestEmitPublishesEveryVariable(t *testing.T) {
 	if want := helpers.SunsetAt(vid.DateFilmed, lat, lng).Format("3:04 PM"); got.Sunset != want {
 		t.Errorf("sunset = %q, want %q", got.Sunset, want)
 	}
+	if got.Lat != lat || got.Lng != lng {
+		t.Errorf("coordinate = %v,%v, want the clip's %v,%v", got.Lat, got.Lng, lat, lng)
+	}
 }
 
 // The archive is asked about the clip's *local* time, not the stored UTC — the

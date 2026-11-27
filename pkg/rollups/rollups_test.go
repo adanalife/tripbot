@@ -9,6 +9,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -375,7 +376,9 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	addScore(t, db, boardID, "tripbot4000", true, 999)
 	addOptedOutScore(t, db, boardID, "adanalife_", 998)
 
-	Reconcile(context.Background(), testConf)
+	if !Reconcile(context.Background(), testConf) {
+		t.Error("the tick that froze the month did not report it")
+	}
 
 	type snapshotRow struct {
 		Rank     int
@@ -406,7 +409,9 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	// The NOT EXISTS guard makes the freeze once-only: a later tick must not
 	// re-snapshot, even after the board gains a score.
 	addScore(t, db, boardID, "latecomer", false, 100)
-	Reconcile(context.Background(), testConf)
+	if Reconcile(context.Background(), testConf) {
+		t.Error("a later tick reported a freeze again")
+	}
 
 	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_snapshots WHERE scoreboard_name = ?`, board); n != 2 {
 		t.Errorf("snapshot re-ran: got %d rows, want 2", n)
@@ -524,4 +529,40 @@ func TestReconcile_PrunesOldDailySnapshots(t *testing.T) {
 	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_daily_snapshots WHERE day = ?`, recent); n != 1 {
 		t.Errorf("39-day-old snapshot was pruned: %d rows, want 1", n)
 	}
+}
+
+// TestMilesGainedMatchesReconcile keeps events.MilesGained and reconcile from
+// drifting apart: over all time, on closed keyed sessions (the only kind both
+// pair the same way), the two agree on a user's miles.
+func TestMilesGainedMatchesReconcile(t *testing.T) {
+	db := testdb.New(t)
+	parkWatermark(t, db)
+	key := func(event string, at time.Time, sid string, extra any) {
+		t.Helper()
+		err := db.Exec(`INSERT INTO events (platform, username, event, date_created, session_id, extra_miles_earned)
+		                VALUES ('twitch', 'drift', ?, ?, ?, ?)`, event, at, sid, extra).Error
+		if err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	s1, s2, s3 := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	key("login", base, s1, nil)
+	key("logout", base.Add(45*time.Minute), s1, 1.5)
+	key("logout", base.Add(50*time.Minute), s1, nil) // doubled logout: MIN wins
+	key("login", base.Add(2*time.Hour), s2, nil)
+	key("logout", base.Add(27*time.Hour), s2, nil) // over the cap: dropped by both
+	key("login", base.Add(30*time.Hour), s3, nil)
+	key("logout", base.Add(31*time.Hour), s3, nil)
+	addEvent(t, db, "twitch", "drift", "correction", base.Add(32*time.Hour), -0.5)
+
+	Reconcile(context.Background(), testConf)
+	r := getRollup(t, db, "twitch", "drift")
+
+	got, err := events.MilesGained(context.Background(), "twitch", []string{"drift"},
+		base.Add(-time.Hour), base.Add(48*time.Hour))
+	if err != nil {
+		t.Fatalf("MilesGained: %v", err)
+	}
+	closeTo(t, "MilesGained vs events_miles + extra_miles", got["drift"], r.EventsMiles+r.ExtraMiles)
+	closeTo(t, "fixture total", got["drift"], 1.5+2.0+1.5-0.5)
 }

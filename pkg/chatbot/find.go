@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -353,7 +354,8 @@ func (a *App) jumpToHit(ctx context.Context, username string, hit SearchHit) err
 // Find is !find for an operator: the same search and jump with nothing said in
 // chat, answering with a verdict worth reading back instead. Unlike the chat
 // command it skips the rate limit (operators are admins) and names the state,
-// which only viewers playing along need kept from them.
+// which only viewers playing along need kept from them. A state's full name is
+// the state, as it is for the chat command.
 func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -361,6 +363,9 @@ func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
 	}
 	if runningOnDarwin() {
 		return false, "Find isn't available on this machine."
+	}
+	if helpers.StateToStateAbbrev(query) != "" {
+		return a.jumpToState(ctx, query)
 	}
 	hit, err := a.findHit(ctx, query)
 	if errors.Is(err, errFindMiss) {
@@ -377,4 +382,26 @@ func (a *App) Find(ctx context.Context, query string) (ok bool, detail string) {
 		return false, fmt.Sprintf("Found %s%s, but couldn't jump there.", query, where)
 	}
 	return true, fmt.Sprintf("Found %s%s. Jumping there.", query, where)
+}
+
+// jumpToState is !jump for an operator: a random clip from the named state,
+// with nothing said in chat and a verdict worth reading back.
+func (a *App) jumpToState(ctx context.Context, name string) (ok bool, detail string) {
+	state := helpers.NormalizeStateInput(name)
+	title := helpers.TitlecaseState(state)
+	vid, err := a.Video.FindRandomByState(ctx, state)
+	if errors.Is(err, terrors.ErrNoFootageForState) {
+		return false, fmt.Sprintf("No footage for %s yet.", title)
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "error from finding random video for state", "err", err)
+		return false, fmt.Sprintf("Couldn't look up footage for %s.", title)
+	}
+	if err := a.Playout.PlayFileInPlaylist(ctx, vid.File()); err != nil {
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
+		return false, fmt.Sprintf("Found footage for %s, but couldn't jump there.", title)
+	}
+	a.Video.GetCurrentlyPlaying(ctx)
+	setLastTimewarpTime(time.Now())
+	return true, fmt.Sprintf("Jumping to %s.", title)
 }

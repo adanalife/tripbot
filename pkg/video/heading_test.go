@@ -179,6 +179,17 @@ func TestTrack(t *testing.T) {
 		t.Errorf("SourceTrack = %v, want %v", got, wantSource)
 	}
 
+	// A list reads in one query: an untrusted clip in it has no entry.
+	untrusted := insertVideo(t, db, Video{Slug: "2018_0514_225101_082", CoordConfidence: &lo})
+	if err := db.Exec(`INSERT INTO video_coords (video_id, ts_sec, source_ts_sec, lat, lng, source)
+		VALUES (?, 0, 0, 41, -110, 'ocr')`, untrusted.ID).Error; err != nil {
+		t.Fatalf("insert coord: %v", err)
+	}
+	track, source := Tracks(ctx, []Video{untrusted, vid})
+	if !reflect.DeepEqual(track, map[int][]TrackPoint{vid.ID: want}) || !reflect.DeepEqual(source, map[int][]TrackPoint{vid.ID: wantSource}) {
+		t.Errorf("Tracks = %v, %v; want only clip %d's %v, %v", track, source, vid.ID, want, wantSource)
+	}
+
 	vid.CoordConfidence = &lo
 	if got := Track(ctx, vid); got != nil {
 		t.Errorf("Track on an untrusted clip = %v, want nil", got)

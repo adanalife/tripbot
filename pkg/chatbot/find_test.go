@@ -3,11 +3,13 @@ package chatbot
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -301,6 +303,48 @@ func TestFind_OperatorVerdicts(t *testing.T) {
 			}
 			if jumped := len(recPlayout.Calls) > 0; jumped != c.wantJump {
 				t.Errorf("jumped = %v, want %v (calls %v)", jumped, c.wantJump, recPlayout.Calls)
+			}
+			if got := recChat.Output(); got != "" {
+				t.Errorf("Find should say nothing in chat, got %q", got)
+			}
+		})
+	}
+}
+
+func TestFind_OperatorStateNameJumpsToTheState(t *testing.T) {
+	cases := []struct {
+		name       string
+		video      *recordingVideo
+		wantOK     bool
+		wantDetail string
+		wantCalls  []string
+	}{
+		{"jumps", &recordingVideo{RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "Utah"}},
+			true, "Jumping to Utah.", []string{`PlayFileInPlaylist("2019_0615_183000_001.MP4")`}},
+		{"no footage", &recordingVideo{RandomErr: terrors.ErrNoFootageForState},
+			false, "No footage for Utah yet.", nil},
+		{"lookup down", &recordingVideo{RandomErr: errors.New("db down")},
+			false, "Couldn't look up footage for Utah.", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			enablePlayback(t)
+			search := &recordingSearch{}
+			app, recPlayout, recChat := newFindTestApp(t, search)
+			app.Video = c.video
+
+			var ok bool
+			var detail string
+			runAsAdmin(t, func() { ok, detail = app.Find(context.Background(), " Utah ") })
+
+			if ok != c.wantOK || detail != c.wantDetail {
+				t.Errorf("Find = %v, %q; want %v, %q", ok, detail, c.wantOK, c.wantDetail)
+			}
+			if !slices.Equal(recPlayout.Calls, c.wantCalls) {
+				t.Errorf("playout calls = %v, want %v", recPlayout.Calls, c.wantCalls)
+			}
+			if len(search.Queries) != 0 {
+				t.Errorf("a state name should not reach the scene search, got %v", search.Queries)
 			}
 			if got := recChat.Output(); got != "" {
 				t.Errorf("Find should say nothing in chat, got %q", got)

@@ -951,8 +951,9 @@ func TestGuessCmd_MissRecordsGuessSubmitted(t *testing.T) {
 
 // A guess made after someone named the location of the same clip carries who
 // gave it away and which command did — the guesser's own !location or
-// another viewer's !state alike. Once the clip changes, the old reveal names
-// nothing and the next guess carries none.
+// another viewer's !state alike. The reveal follows the state onto the next
+// clip, and stops counting once the van is somewhere else or revealWindow has
+// passed.
 func TestGuessCmd_StampsWhoRevealedTheAnswer(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	vid.ID = 77
@@ -975,12 +976,53 @@ func TestGuessCmd_StampsWhoRevealedTheAnswer(t *testing.T) {
 		t.Errorf("reveal = %+v, want bob's own !location", r)
 	}
 
+	sameState := newTestVideo("Colorado", 39.6, -105.1, time.Now())
+	sameState.ID = 78
+	app.Video = &recordingVideo{Vid: sameState}
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
+	if r := rec.Guesses[2].Reveal; r == nil || r.By != "bob" {
+		t.Errorf("reveal = %+v, want bob's !location carried onto the next Colorado clip", r)
+	}
+
+	app.lastReveal.at = time.Now().Add(-revealWindow - time.Second)
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
+	if r := rec.Guesses[3].Reveal; r != nil {
+		t.Errorf("reveal = %+v, want none past revealWindow", r)
+	}
+
+	app.lastReveal.at = time.Now()
 	next := newTestVideo("Utah", 39.3, -111.1, time.Now())
-	next.ID = 78
+	next.ID = 79
 	app.Video = &recordingVideo{Vid: next}
 	app.guessCmd(context.Background(), newTestUser("bob"), []string{"WY"})
-	if r := rec.Guesses[2].Reveal; r != nil {
-		t.Errorf("reveal = %+v, want none once the clip changed", r)
+	if r := rec.Guesses[4].Reveal; r != nil {
+		t.Errorf("reveal = %+v, want none once the van is in another state", r)
+	}
+}
+
+// "!state California" then "!guess ca": a jump to a named state gives the
+// answer away for the clip it lands on, to the jumper and to everyone in chat.
+func TestGuessCmd_StampsAJumpToANamedState(t *testing.T) {
+	enablePlayback(t)
+	landed := newTestVideo("California", 36.7, -119.4, time.Now())
+	landed.ID = 91
+	landed.Slug = "2019_0615_183000_001"
+	app := newTestApp(video.Video{})
+	app.Playout = &recordingPlayout{}
+	app.Video = &recordingVideo{RandomVid: landed, RefreshedVid: &landed}
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	runAsAdmin(t, func() {
+		app.stateCmd(context.Background(), newAdminUser(), []string{"california"})
+	})
+	app.guessCmd(context.Background(), newTestUser("bob"), []string{"CA"})
+
+	if len(rec.Guesses) != 1 {
+		t.Fatalf("guesses = %d, want 1", len(rec.Guesses))
+	}
+	if r := rec.Guesses[0].Reveal; r == nil || r.Command != "jump" || r.By == "bob" {
+		t.Errorf("reveal = %+v, want the admin's jump", r)
 	}
 }
 
@@ -1831,6 +1873,31 @@ func TestLastMonthCmd_NoSnapshotYet(t *testing.T) {
 	}
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay call, got %v", rec.Calls)
+	}
+}
+
+// The unprompted month-end post says what !lastmonth answers and puts the
+// final miles board on the overlay; with nothing frozen it stays silent.
+func TestAnnounceLastMonth(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{}
+	app.Scoreboards = &recordingScoreboards{}
+	out, says := captureSay(t, app)
+
+	app.AnnounceLastMonth(context.Background())
+	if says() != 0 || len(rec.Calls) != 0 {
+		t.Fatalf("announced with no frozen boards: %q, overlay %v", out(), rec.Calls)
+	}
+
+	app.Scoreboards = &recordingScoreboards{LastMiles: [][]string{{"a", "12.0"}, {"b", "11.0"}}}
+	app.AnnounceLastMonth(context.Background())
+	if want := "🏆 August final boards — Miles: 1. a (12.0mi), 2. b (11.0mi)"; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
+	}
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August Miles (final)", 2 rows)`) {
+		t.Errorf("expected one final-miles overlay call, got %v", rec.Calls)
 	}
 }
 

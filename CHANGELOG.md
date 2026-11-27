@@ -9,6 +9,117 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v6.17.2] — 2026-11-25
+
+### Fixes
+
+- A raid delivered twice at the same moment is thanked once: the repeat-raid fold is guarded against concurrent EventSub handlers. ([#1852](https://github.com/adanalife/tripbot/pull/1852))
+- A guess is marked as following a reveal when someone named that state in the last ten minutes, even after the clip changed; a reveal no longer sticks to a clip that airs again later. ([#1854](https://github.com/adanalife/tripbot/pull/1854))
+- Tapping "now" on a background-audio switch that is already landing no longer applies it a second time. ([#1855](https://github.com/adanalife/tripbot/pull/1855))
+- The map's route overlay asks again after a failed load instead of the browser keeping the empty answer for an hour. ([#1856](https://github.com/adanalife/tripbot/pull/1856))
+
+## [v6.17.1] — 2026-11-25
+
+### Fixes
+
+- A message with no `!` is chat, not a command, even when tripbot answers it: a greeting (`hi`, `hello`) or a question to the room (`where is this`, `no audio`, `is this live`) no longer writes a `command_run` or counts toward the command metrics. `! miles`, `1miles` and a lone `help` still do. ([#1846](https://github.com/adanalife/tripbot/pull/1846))
+- Bump `gorilla/websocket` (indirect, via discordgo) past GO-2026-6278, a weak random source for the WebSocket mask key. ([#1848](https://github.com/adanalife/tripbot/pull/1848))
+- A chat line that opens with a 1 and names no command ("1st time here") is no longer recorded as a refused command. ([#1850](https://github.com/adanalife/tripbot/pull/1850))
+
+### CI / Tooling
+
+- Clear the codespell finding that turned the weekly super-linter run red. ([#1847](https://github.com/adanalife/tripbot/pull/1847))
+
+### Cleanup
+
+- Comments that had drifted from the code they describe are corrected: the miles top-10 comparison window, the audio watchdog's silence threshold, the reveal sources a guess is stamped with, and a doc comment attached to the wrong constant. ([#1851](https://github.com/adanalife/tripbot/pull/1851))
+
+## [v6.17.0] — 2026-11-19
+
+### Misc
+
+- `backfill-miles-driven` measures a clip along its own GPS track when the track is trustworthy, stepping over misread fixes, and falls back to the clip-to-clip chord otherwise; `videos.miles_driven_source` records which. ([#1840](https://github.com/adanalife/tripbot/pull/1840))
+
+## [v6.16.0] — 2026-11-19
+
+### Chatbot
+
+- `!music` and `!song` name the artist and track on the radio without naming the station. ([#1824](https://github.com/adanalife/tripbot/pull/1824))
+- A `!guess` after someone jumps to a named state (`!state California`, `!jump ca`) is stamped with that jump as its reveal, like one after `!location` or a bare `!state`. ([#1826](https://github.com/adanalife/tripbot/pull/1826))
+- The rotating chat tips now suggest `!help <command>` for learning what a single command does. ([#1829](https://github.com/adanalife/tripbot/pull/1829))
+- Viewers now quietly earn milestone achievements for miles traveled, days watched and correct guesses, and a chatter's profile carries their per-state day counts for the console's passport. ([#1835](https://github.com/adanalife/tripbot/pull/1835))
+- The bot posts last month's final boards in chat on its own, once, when the month's standings are frozen: the same podium `!lastmonth` answers, with the final miles board on the overlay. ([#1839](https://github.com/adanalife/tripbot/pull/1839))
+
+### Onscreens
+
+- The middle-text overlay is written back to NATS after a reconnect, so a NATS restart that wiped its storage no longer leaves a later onscreens-server restart without the text. ([#1828](https://github.com/adanalife/tripbot/pull/1828))
+- onscreens-server no longer serves `POST /admin/shutdown`: nothing called it, and any pod in the cluster could restart the overlays with one unauthenticated request. ([#1832](https://github.com/adanalife/tripbot/pull/1832))
+
+### Console / API
+
+- `GET /admin/map/corpus?trimmed=1` serves the footage the trims left off the air — trimmed heads and tails of clips, and season-2 pieces dropped whole — as `trimmed` segments in the route's shape, each meeting the route where it was cut. The default response is unchanged. ([#1823](https://github.com/adanalife/tripbot/pull/1823))
+- `/api/insights/guesses` counts spoiled guesses: `revealed` is the correct guesses made after a chat command named the answer on the same clip, `piggybacked` those where someone else ran it. ([#1827](https://github.com/adanalife/tripbot/pull/1827))
+- `/api/insights/commands`, `/guesses` and `/sessions` take `?bucket=day|week` and add a zero-filled `series` of per-bucket counts (command runs, guesses with `correct`, closed visits) for a trend chart. ([#1831](https://github.com/adanalife/tripbot/pull/1831))
+- The console's find box jumps to a state when given its full name (`utah`), the way `!find utah` does in chat, instead of searching for a scene that looks like the word. ([#1836](https://github.com/adanalife/tripbot/pull/1836))
+
+### Fixes
+
+- Add obs_background_audio_level_fresh and radio_reachable_fresh gauges so dashboards can tell a live background-audio level or radio probe result from a stale last value. ([#1830](https://github.com/adanalife/tripbot/pull/1830))
+
+## [v6.15.0] — 2026-11-18
+
+### Console / API
+
+- The guessed-states board in `/api/insights/guesses` carries `prev_rank` on a `?days` window and on all time too, ranked over the same-length window ending a day earlier; `?month=current` keeps comparing against the month through yesterday. ([#1821](https://github.com/adanalife/tripbot/pull/1821))
+
+## [v6.14.0] — 2026-11-18
+
+### Console / API
+
+- The lifetime miles leaderboard in /api/stats/community carries each row's prev_rank: its place 24 hours ago, reconstructed from the miles earned since. ([#1817](https://github.com/adanalife/tripbot/pull/1817))
+- The command, unknown-command, footage, region and `!song` rankings carry each row's `prev_rank` — its place on the same board a day earlier — so the console can draw trend chevrons on them. ([#1818](https://github.com/adanalife/tripbot/pull/1818))
+- `/api/stats/community` takes `?top_miles_days=1|7|30` to pick the window each top-miles row's `prev_rank` is measured over, and echoes it as `top_miles_days`. ([#1820](https://github.com/adanalife/tripbot/pull/1820))
+
+## [v6.13.0] — 2026-11-16
+
+### Chatbot
+
+- A gift bomb gets one celebration in chat, scaled to the gift (an emote per sub gifted, up to 25, and one mile per sub for everyone in a single grant), instead of two bot lines and a mile grant per recipient, which a big bomb pushed past Twitch's chat rate limit. ([#1803](https://github.com/adanalife/tripbot/pull/1803))
+
+## [v6.12.0] — 2026-11-15
+
+### Console / API
+
+- `GET /api/insights/guesses` ranks states by correct guesses, and with `?month=current` gives each a `prev_rank`: its place through the end of yesterday, for the console's trend chevrons. ([#1806](https://github.com/adanalife/tripbot/pull/1806))
+- Footage day, source and nearby-footage reads fetch every clip's track in one query instead of two per clip (386 round trips for the busiest day). ([#1808](https://github.com/adanalife/tripbot/pull/1808))
+
+### Fixes
+
+- Build with Go 1.26.11, which fixes a net/http vulnerability (GO-2026-6859) in the standard library. ([#1807](https://github.com/adanalife/tripbot/pull/1807))
+
+## [v6.11.0] — 2026-11-08
+
+### Deploy / Infra
+
+- The schema ships in its own `adanalife/tripbot-migrate` image (migrate CLI + `db/migrate` + seed), tagged with the tripbot release; the migrate initContainer and the seed Job run from it and the bot image no longer bundles them. ([#1804](https://github.com/adanalife/tripbot/pull/1804))
+
+## [v6.10.0] — 2026-11-07
+
+### Chatbot
+
+- `!jump` with a word that isn't a state says so, instead of claiming there's no footage for it yet. ([#1789](https://github.com/adanalife/tripbot/pull/1789))
+- Spaceless commands only split when the glued-on word is a state, so `!staterequest` stays an unknown command instead of running `!state request`. ([#1789](https://github.com/adanalife/tripbot/pull/1789))
+- Each guess records who named the clip's location before it (!location / !state) and how long before, so piggybacked guesses can be told apart ([#1794](https://github.com/adanalife/tripbot/pull/1794))
+
+### Console / API
+
+- `GET /api/footage/near?lat=&lng=&n=` lists the clips filmed closest to a point, nearest first, each with its fix and track, for the app's map. ([#1797](https://github.com/adanalife/tripbot/pull/1797))
+
+### Fixes
+
+- The audio watchdog waits about a minute of silence before swapping the radio out for the fallback bed (a wedged source still swaps in ~20s), so the radio's quiet passages no longer pull the stream onto the album. ([#1801](https://github.com/adanalife/tripbot/pull/1801))
+- The broadcast-cap watchdog tries a failed pre-cap restart up to three times instead of giving the broadcast up after the first refusal, so one OBS hiccup at hour 47 no longer lets Twitch's 48-hour cut land. ([#1802](https://github.com/adanalife/tripbot/pull/1802))
+
 ## [v6.9.0] — 2026-11-04
 
 ### Chatbot

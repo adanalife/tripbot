@@ -166,6 +166,40 @@
         ]
       }
     },
+    "minimap_show": {
+      "subject": "tripbot.{env}.onscreens.minimap.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
+    "minimap_hide": {
+      "subject": "tripbot.{env}.onscreens.minimap.hide.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
     "location_update": {
       "subject": "tripbot.{env}.onscreens.location.update.{platform}",
       "transport": "core",
@@ -191,6 +225,12 @@
           },
           "sunset": {
             "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
           }
         },
         "required": [
@@ -199,7 +239,9 @@
           "state",
           "date",
           "weather",
-          "sunset"
+          "sunset",
+          "lat",
+          "lng"
         ]
       }
     },
