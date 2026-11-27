@@ -187,7 +187,7 @@
     },
     {
       "trigger": "!givemiles",
-      "requires_admin": true,
+      "requires_mod": true,
       "platforms": [
         "twitch"
       ]

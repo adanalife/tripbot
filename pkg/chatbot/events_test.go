@@ -10,11 +10,11 @@ import (
 // event trail; every write succeeds and is discarded.
 type noopEvents struct{}
 
-func (noopEvents) Follow(_ context.Context, _ string) error                { return nil }
-func (noopEvents) Subscribe(_ context.Context, _ string) error             { return nil }
-func (noopEvents) Unsubscribe(_ context.Context, _ string) error           { return nil }
-func (noopEvents) Raided(_ context.Context, _ events.Raid) error           { return nil }
-func (noopEvents) Correction(_ context.Context, _ string, _ float64) error { return nil }
+func (noopEvents) Follow(_ context.Context, _ string) error                   { return nil }
+func (noopEvents) Subscribe(_ context.Context, _ string) error                { return nil }
+func (noopEvents) Unsubscribe(_ context.Context, _ string) error              { return nil }
+func (noopEvents) Raided(_ context.Context, _ events.Raid) error              { return nil }
+func (noopEvents) Correction(_ context.Context, _, _ string, _ float64) error { return nil }
 func (noopEvents) GuessSubmitted(_ context.Context, _ events.GuessSubmission) error {
 	return nil
 }
@@ -36,6 +36,7 @@ func (noopEvents) GuessRecord(_ context.Context, _, _ string) (int64, int64) {
 // rather than a struct, so the recorder names them here.
 type recordedCorrection struct {
 	Username string
+	IssuedBy string
 	Delta    float64
 }
 
@@ -68,8 +69,8 @@ func (r *recordingEvents) GuessRecord(_ context.Context, _, _ string) (int64, in
 	return r.GuessTotal, r.GuessCorrect
 }
 
-func (r *recordingEvents) Correction(_ context.Context, username string, delta float64) error {
-	r.Corrections = append(r.Corrections, recordedCorrection{username, delta})
+func (r *recordingEvents) Correction(_ context.Context, username, issuedBy string, delta float64) error {
+	r.Corrections = append(r.Corrections, recordedCorrection{username, issuedBy, delta})
 	return nil
 }
 
