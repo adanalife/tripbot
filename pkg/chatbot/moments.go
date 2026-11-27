@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -12,6 +13,10 @@ import (
 
 // maxMarkNoteRunes matches the console's cap on a moment's note.
 const maxMarkNoteRunes = 200
+
+// trimRollover is how soon after a clip starts a !trim is taken to mean the
+// clip that just left the screen too: a viewer reacts after the bad stretch.
+const trimRollover = 5 * time.Second
 
 // favoriteCmd stars the moment on screen for the viewer, the same mark the
 // console's ⭐ sets, with the rest of the line as its note.
@@ -46,6 +51,22 @@ func (a *App) markMoment(ctx context.Context, user *users.User, kind string, par
 		a.Reply(ctx, "I couldn't save that, sorry!")
 		return
 	}
+	if kind == "trim" && elapsed < trimRollover {
+		a.markPreviousEnd(ctx, user, string(note))
+	}
 	secs := int(elapsed.Seconds())
 	a.Reply(ctx, fmt.Sprintf(reply, fmt.Sprintf("%d:%02d", secs/60, secs%60), user.Username))
+}
+
+// markPreviousEnd marks the last aired second of the clip before the one on
+// screen as a trim too. Best effort: the reply is about the clip on screen.
+func (a *App) markPreviousEnd(ctx context.Context, user *users.User, note string) {
+	id, aired, ok, err := a.Video.PreviousPlay(ctx, a.platform())
+	if err == nil && ok {
+		err = a.Video.SetMark(ctx, video.Mark{VideoID: id, Kind: "trim", Sec: aired,
+			Note: note, By: user.Username, Platform: a.platform()})
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "error marking the previous clip", "err", err, "username", user.Username)
+	}
 }
