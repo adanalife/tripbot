@@ -62,6 +62,8 @@ type Sessions interface {
 	GiveEveryoneMiles(gift float32)
 	// LoggedInCount is the number of viewers with a live session.
 	LoggedInCount() int
+	// OnlineUsers is every viewer with a live session, in no order.
+	OnlineUsers() []users.User
 }
 
 // realSessions delegates to its *users.Sessions, plus pkg/users' standalone DB
@@ -177,4 +179,11 @@ func (r realSessions) LoggedInCount() int {
 		return 0
 	}
 	return r.s.LoggedInCount()
+}
+
+func (r realSessions) OnlineUsers() []users.User {
+	if r.s == nil {
+		return nil
+	}
+	return r.s.OnlineUsers()
 }
