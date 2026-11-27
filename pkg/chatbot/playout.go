@@ -13,7 +13,9 @@ import (
 // realPlayout adapter wired in New(). Mirrors the Onscreens injection
 // pattern.
 type Playout interface {
-	PlayRandom(ctx context.Context) error
+	// PlayRandom plays a random clip: from playout's current mode when corpus
+	// is empty, else from that corpus.
+	PlayRandom(ctx context.Context, corpus string) error
 	PlayFileInPlaylist(ctx context.Context, filename string) error
 	// PlayFileAtTimestamp plays filename and seeks to tsSec seconds in — the
 	// jump-to-moment path behind !find.
@@ -38,9 +40,9 @@ type realPlayout struct {
 	platform string
 }
 
-func (r realPlayout) PlayRandom(ctx context.Context) error {
+func (r realPlayout) PlayRandom(ctx context.Context, corpus string) error {
 	viewstats.NoteCause(r.platform, viewstats.CauseTimewarp)
-	return r.c.PlayRandom(ctx)
+	return r.c.PlayRandom(ctx, corpus)
 }
 func (r realPlayout) PlayFileInPlaylist(ctx context.Context, filename string) error {
 	viewstats.NoteCause(r.platform, viewstats.CauseJump)
